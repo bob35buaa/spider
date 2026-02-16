@@ -220,3 +220,7 @@ spider/assets/robots/sharpa/
 MJMODEL.TXT
 MJDATA.TXT
 devel/
+example_video_data/
+example_video_data
+tmp_datasets/
+.claude/
