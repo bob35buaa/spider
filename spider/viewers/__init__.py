@@ -214,15 +214,15 @@ def update_viewer(
 
     # update viser scene
     if use_viser:
-        if mj_data is not None:
-            viser_viewer.log_frame(
-                mj_data,
-                sim_time=mj_data.time,
-                viewer_body_entity_and_ids=config.viewer_body_entity_and_ids,
-            )
         if "trace_sample" in info:
+            opt_steps = info.get("opt_steps")
+            num_iters = int(opt_steps[0]) if opt_steps is not None else None
             viser_viewer.log_traces_from_info(
-                info["trace_sample"], sim_time=mj_data.time
+                info["trace_sample"],
+                trace_ref=info.get("trace_ref"),
+                trace_cost=info.get("trace_cost"),
+                sim_time=mj_data.time,
+                num_iters=num_iters,
             )
 
 
@@ -230,6 +230,7 @@ def log_frame(
     data: mujoco.MjData,
     sim_time: float,
     viewer_body_entity_and_ids: list,
+    data_ref: mujoco.MjData | None = None,
 ) -> None:
     if not viewer_body_entity_and_ids:
         return
@@ -245,6 +246,7 @@ def log_frame(
             data,
             sim_time=sim_time,
             viewer_body_entity_and_ids=viewer_body_entity_and_ids,
+            data_ref=data_ref,
         )
 
 

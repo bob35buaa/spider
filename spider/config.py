@@ -141,6 +141,7 @@ class Config:
     # === VISUALIZATION CONFIGURATION ===
     show_viewer: bool = True
     viewer: str = "mujoco"  # "mujoco" | "rerun" | "viser" | "isaac"
+    wait_on_finish: bool = True  # block after optimization to keep viewer alive
     rerun_spawn: bool = False
     save_video: bool = True
     save_info: bool = True
