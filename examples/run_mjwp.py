@@ -443,6 +443,21 @@ def main(config: Config):
                 config.noise_scale = base_noise_scale
                 ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
 
+            # Compute trace_ref from reference qpos over the horizon
+            if len(config.trace_site_ids) > 0:
+                trace_ref = []
+                qpos_ref_horizon = ref_slice[0]
+                for h in range(config.horizon_steps):
+                    mj_data_ref.qpos[:] = qpos_ref_horizon[h].detach().cpu().numpy()
+                    mujoco.mj_kinematics(mj_model, mj_data_ref)
+                    site_xpos = np.array(
+                        [mj_data_ref.site_xpos[sid] for sid in config.trace_site_ids]
+                    )
+                    trace_ref.append(site_xpos)
+                # (H, K, 3) -> (1, 1, H, K, 3) to match trace_sample shape
+                trace_ref_np = np.stack(trace_ref, axis=0)[None, None, :, :, :]
+                infos["trace_ref"] = trace_ref_np
+
             # step environment for ctrl_steps
             step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}
             for i in range(config.ctrl_steps):
@@ -467,11 +482,13 @@ def main(config: Config):
                         )
                         images.append(image)
                 if "rerun" in config.viewer or "viser" in config.viewer:
-                    # manually log the state
+                    mj_data_ref.qpos[:] = qpos_ref[sim_step + i].detach().cpu().numpy()
+                    mujoco.mj_kinematics(mj_model, mj_data_ref)
                     log_frame(
                         mj_data,
                         sim_time=mj_data.time,
                         viewer_body_entity_and_ids=config.viewer_body_entity_and_ids,
+                        data_ref=mj_data_ref,
                     )
                 step_info["qpos"].append(mj_data.qpos.copy())
                 step_info["qvel"].append(mj_data.qvel.copy())
@@ -555,6 +572,16 @@ def main(config: Config):
         )
 
     _assert_object_actuator_gains_zero(env, config, "end")
+
+    if "viser" in config.viewer and config.wait_on_finish:
+        loguru.logger.info(
+            "Optimization complete! Keeping Viser server alive. Press Ctrl+C to exit."
+        )
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
 
     return errors
 

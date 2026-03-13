@@ -356,6 +356,7 @@ def make_optimize_once_fn(
             info["trace_sample"] = (
                 rollout_info["trace"][sel_idx].cpu().numpy()
             )  # (M, H, n_trace, 3)
+            info["trace_cost"] = -rews[sel_idx].cpu().numpy()
 
         return ctrls_mean, terminate, info
 
