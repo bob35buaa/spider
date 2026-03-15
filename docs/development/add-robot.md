@@ -184,7 +184,7 @@ Add trace sites for fingertip visualization:
 
 **Naming convention:** `trace_hand_{side}_{finger}_tip`
 
-### Step 8: Add Tracking Sites
+### Step 8: Add IK Tracking Sites
 
 Add tracking sites for end-effector control:
 
@@ -212,6 +212,17 @@ Add tracking sites for end-effector control:
 - X-axis: pointing down (toward ground)
 
 ![Base Definition](/figs/base_def.png)
+
+Optional: Add contact tracking sites for contact tracking.
+
+```xml
+<body name="left_thumb_tip">
+  <site name="track_hand_left_thumb_tip" pos="0.02 0 0"
+        size="0.01" type="sphere" rgba="0 1 1 1" group="3" />
+</body>
+
+<!-- Repeat for all fingertips -->
+```
 
 ### Step 9: Add Actuators
 
