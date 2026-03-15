@@ -181,7 +181,18 @@ example_datasets/processed/oakink/allegro/bimanual/pick_spoon_bowl/0/
 
 ### Step 6: Inverse Kinematics (IK)
 
-Convert human hand poses to robot joint angles:
+A minimum IK scripts based on mink can be used by:
+
+```bash
+uv run spider/preprocess/ik_fast.py \
+  --task=${TASK} \
+  --dataset-name=${DATASET_NAME} \
+  --data-id=${DATA_ID} \
+  --embodiment-type=${HAND_TYPE} \
+  --robot-type=${ROBOT_TYPE}
+```
+
+You can also use the original IK script with mujoco by:
 
 ```bash
 uv run spider/preprocess/ik.py \
@@ -252,6 +263,11 @@ example_datasets/processed/oakink/allegro/bimanual/pick_spoon_bowl/0/
 ├── visualization_mjwp.mp4   # Rendered video
 └── metrics.json             # Success metrics
 ```
+
+## Augmentation Methods
+
+The original `mjwp_eq` pipeline is no longer supported due to latest mujoco warp release make it unstable.
+The newer guidance methods are supported by the `mjwp_act` (e.g. `configs/override/oakink_act.yaml`) configuration instead. You will also need to add the `--act-scene` flag when running the `generate_xml.py` and `ik.py` scripts to ensure the necessary assets and logic are generated properly. This approach will provide the fair comparison you are looking for. Related assets is also available in our huggingface repo.
 
 ## Dataset-Specific Examples
 

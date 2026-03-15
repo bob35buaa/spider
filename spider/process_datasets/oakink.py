@@ -11,7 +11,7 @@ Process:
 2. Convert original data to finger tip, object and wrist position and rotation
 3. Visualize the data in mujoco viewer
 
-Input: pickle file from Changhao.
+Input: pickle file from [Maniptrans](https://huggingface.co/datasets/kelvin34501/OakInk-v2/tree/main/anno_preview).
 
 Output: npz file containing:
     qpos_wrist_left, qpos_finger_left, qpos_obj_left, qpos_wrist_right, qpos_finger_right, qpos_obj_right
