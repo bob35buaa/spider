@@ -173,6 +173,8 @@ DATASET_NAME=gigahand
 uv run spider/process_datasets/gigahand.py --task=${TASK} --embodiment-type=${HAND_TYPE} --data-id=${DATA_ID}
 
 # decompose object
+# here we use fast decompose pipeline with mink
+# you can also use decompose.py for original decompose pipeline with CoACD for higher quality decomposition
 uv run spider/preprocess/decompose_fast.py --task=${TASK} --dataset-name=${DATASET_NAME} --data-id=${DATA_ID} --embodiment-type=${HAND_TYPE}
 
 # detect contact (optional)
@@ -182,7 +184,9 @@ uv run spider/preprocess/detect_contact.py --task=${TASK} --dataset-name=${DATAS
 uv run spider/preprocess/generate_xml.py --task=${TASK} --dataset-name=${DATASET_NAME} --data-id=${DATA_ID} --embodiment-type=${HAND_TYPE} --robot-type=${ROBOT_TYPE}
 
 # kinematic retargeting
-uv run spider/preprocess/ik.py --task=${TASK} --dataset-name=${DATASET_NAME} --data-id=${DATA_ID} --embodiment-type=${HAND_TYPE} --robot-type=${ROBOT_TYPE} --open-hand
+# here we use fast IK pipeline with mink
+# you can also use ik.py for original ik pipeline with mujoco (used in paper)
+uv run spider/preprocess/ik_fast.py --task=${TASK} --dataset-name=${DATASET_NAME} --data-id=${DATA_ID} --embodiment-type=${HAND_TYPE} --robot-type=${ROBOT_TYPE}
 
 # retargeting
 uv run examples/run_mjwp.py +override=${DATASET_NAME} task=${TASK} data_id=${DATA_ID} robot_type=${ROBOT_TYPE} embodiment_type=${HAND_TYPE}
