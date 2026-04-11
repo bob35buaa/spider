@@ -316,7 +316,7 @@ def main(
     # special case: allegro hand
     if robot_type in ["allegro", "metahand"]:
         sites_for_mimic.remove("right_pinky_tip")
-        sites_for_mimic.remove("left_pninky_tip")
+        sites_for_mimic.remove("left_pinky_tip")
 
     if embodiment_type == "right":
         sites_for_mimic = [s for s in sites_for_mimic if "right" in s]
