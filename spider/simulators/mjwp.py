@@ -179,27 +179,17 @@ def _weight_diff_qpos(config: Config) -> torch.Tensor:
         w[half_dof : half_dof + 3] = config.base_pos_rew_scale
         w[half_dof + 3 : half_dof + 6] = config.base_rot_rew_scale
         w[half_dof + 6 : config.nu] = config.joint_rew_scale
-        # object
-        if config.nq_obj == 12:
-            w[-12:-9] = config.pos_rew_scale
-            w[-9:-6] = config.rot_rew_scale
-            w[-6:-3] = config.pos_rew_scale
-            w[-3:] = config.rot_rew_scale
-        else:
-            w[-14:-11] = config.pos_rew_scale
-            w[-11:-7] = config.rot_rew_scale
-            w[-7:-4] = config.pos_rew_scale
-            w[-4:] = config.rot_rew_scale
+        # object: weights live in nv-space (6-dim per freejoint), regardless of nq_obj
+        w[-12:-9] = config.pos_rew_scale
+        w[-9:-6] = config.rot_rew_scale
+        w[-6:-3] = config.pos_rew_scale
+        w[-3:] = config.rot_rew_scale
     elif config.embodiment_type in ["right", "left"]:
         w[:3] = config.base_pos_rew_scale
         w[3:6] = config.base_rot_rew_scale
         w[6 : config.nu] = config.joint_rew_scale
-        if config.nq_obj == 6:
-            w[-6:-3] = config.pos_rew_scale
-            w[-3:] = config.rot_rew_scale
-        else:
-            w[-7:-4] = config.pos_rew_scale
-            w[-4:] = config.rot_rew_scale
+        w[-6:-3] = config.pos_rew_scale
+        w[-3:] = config.rot_rew_scale
     elif config.embodiment_type in ["humanoid"]:  # humanoid robot
         # robot pos and rot
         w[:3] = config.pos_rew_scale

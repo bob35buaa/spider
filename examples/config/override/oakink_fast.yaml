@@ -10,12 +10,14 @@ knot_dt: 1.0
 horizon: 3.0
 first_ctrl_noise_scale: 2.0
 last_ctrl_noise_scale: 4.0
-improvement_threshold: 0.01
+improvement_threshold: -1.0
 improvement_check_steps: 2
-max_num_iterations: 16
+max_num_iterations: 8
 base_pos_rew_scale: 0.1
 base_rot_rew_scale: 0.03
 joint_noise_scale: 0.1
 pos_noise_scale: 0.01
 rot_noise_scale: 0.01
 final_noise_scale: 0.01
+object_rot_threshold: 0.5
+max_revert_forward_attempts: 3

@@ -269,7 +269,6 @@ def render_image(
     options = mujoco.MjvOption()
     mujoco.mjv_defaultOption(options)
     options.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
-    options.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
 
     # render sim
     mujoco.mj_forward(mj_model, mj_data)
