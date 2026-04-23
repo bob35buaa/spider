@@ -1,0 +1,35 @@
+# Override for holosoma Box025 humanoid_object task
+# Higher reward weights + terminate_resample for better tracking
+dataset_name: holosoma
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+task: box025
+ref_dt: 0.0333333
+
+# Timing (same as humanoid_object)
+sim_dt: 0.0166667
+ctrl_dt: 0.1
+knot_dt: 0.1
+horizon: 0.8
+
+# Sampling
+num_samples: 2048
+max_num_iterations: 16
+temperature: 0.3
+
+# Higher reward weights to keep robot close to reference
+base_pos_rew_scale: 3.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 3.0
+rot_rew_scale: 0.3
+contact_rew_scale: 1.0
+
+# Enable terminate+resample: bad samples get replaced by good ones
+terminate_resample: true
+base_pos_threshold: 0.3
+object_pos_threshold: 0.3
+
+# Viewer off for headless
+viewer: none
+save_video: false

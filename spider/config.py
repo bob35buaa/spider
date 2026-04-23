@@ -267,6 +267,15 @@ def build_hand_contact_site_ids(
                 ("left", "pinky"),
             ]
         )
+    if embodiment_type == "humanoid_object":
+        # Humanoid hands use wrist tracking sites (no finger tips)
+        # Use "hand" as finger placeholder — matches "track_hand_right" / "track_hand_left"
+        contact_order.extend(
+            [
+                ("right", "hand"),
+                ("left", "hand"),
+            ]
+        )
 
     site_ids: list[int | None] = [None] * len(contact_order)
     for sid in range(mj_model.nsite):
@@ -306,6 +315,10 @@ def get_object_pos_ctrl_indices(config: Config) -> tuple[list[int], list[int]]:
                 right_ids.append(int(aid))
             elif "left" in name_l:
                 left_ids.append(int(aid))
+            elif config.embodiment_type == "humanoid_object":
+                # Single object: assign pos actuators to both right and left
+                right_ids.append(int(aid))
+                left_ids.append(int(aid))
 
     if right_ids or left_ids:
         return right_ids, left_ids
@@ -317,6 +330,10 @@ def get_object_pos_ctrl_indices(config: Config) -> tuple[list[int], list[int]]:
     if config.embodiment_type == "bimanual" and obj_dims >= 12:
         right_ids = list(range(start, start + 3))
         left_ids = list(range(start + 3, start + 6))
+    elif config.embodiment_type == "humanoid_object":
+        # Single object: same 3 pos actuators for both hands
+        right_ids = list(range(start, start + 3))
+        left_ids = list(range(start, start + 3))
     else:
         if config.embodiment_type == "right":
             right_ids = list(range(start, start + 3))
@@ -415,12 +432,14 @@ def process_config(config: Config):
             "bimanual": 12,
             "right": 6,
             "left": 6,
+            "humanoid_object": 6,
         }.get(config.embodiment_type, 0)
     else:
         config.nq_obj = {
             "bimanual": 14,
             "right": 7,
             "left": 7,
+            "humanoid_object": 7,
         }.get(config.embodiment_type, 0)
 
     # resolve processed directories for this trial
@@ -473,16 +492,29 @@ def process_config(config: Config):
             config.contact_order, config.hand_contact_site_ids = (
                 build_hand_contact_site_ids(model, config.embodiment_type)
             )
-            config.right_contact_indices = [
-                idx
-                for idx, (side, finger) in enumerate(config.contact_order)
-                if (side == "right") and (finger in ["thumb"])
-            ]
-            config.left_contact_indices = [
-                idx
-                for idx, (side, finger) in enumerate(config.contact_order)
-                if side == "left" and (finger in ["thumb"])
-            ]
+            if config.embodiment_type == "humanoid_object":
+                # Humanoid: use all hand contacts (no finger distinction)
+                config.right_contact_indices = [
+                    idx
+                    for idx, (side, finger) in enumerate(config.contact_order)
+                    if side == "right"
+                ]
+                config.left_contact_indices = [
+                    idx
+                    for idx, (side, finger) in enumerate(config.contact_order)
+                    if side == "left"
+                ]
+            else:
+                config.right_contact_indices = [
+                    idx
+                    for idx, (side, finger) in enumerate(config.contact_order)
+                    if (side == "right") and (finger in ["thumb"])
+                ]
+                config.left_contact_indices = [
+                    idx
+                    for idx, (side, finger) in enumerate(config.contact_order)
+                    if side == "left" and (finger in ["thumb"])
+                ]
 
     # get noise scale
     config = compute_noise_schedule(config)

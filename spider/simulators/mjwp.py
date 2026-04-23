@@ -254,10 +254,11 @@ def _diff_qpos(
         # rotation
         qpos_diff[:, 3:6] = quat_sub(qpos_sim[:, 3:7], qpos_ref[:, 3:7])
     elif config.embodiment_type in ["humanoid_object"]:
-        qpos_humanoid = qpos_sim[:, :-7]
-        qpos_object = qpos_sim[:, -7:]
-        qpos_ref_humanoid = qpos_ref[:, :-7]
-        qpos_ref_object = qpos_ref[:, -7:]
+        nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
+        qpos_humanoid = qpos_sim[:, :-nq_obj]
+        qpos_object = qpos_sim[:, -nq_obj:]
+        qpos_ref_humanoid = qpos_ref[:, :-nq_obj]
+        qpos_ref_object = qpos_ref[:, -nq_obj:]
         # position
         qpos_diff[:, :3] = qpos_humanoid[:, :3] - qpos_ref_humanoid[:, :3]
         # rotation
@@ -265,8 +266,14 @@ def _diff_qpos(
         # joint
         qpos_diff[:, 6:-6] = qpos_humanoid[:, 7:] - qpos_ref_humanoid[:, 7:]
         # object
-        qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
-        qpos_diff[:, -3:] = quat_sub(qpos_object[:, 3:7], qpos_ref_object[:, 3:7])
+        if nq_obj == 7:
+            # freejoint: pos(3) + quat(4)
+            qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
+            qpos_diff[:, -3:] = quat_sub(qpos_object[:, 3:7], qpos_ref_object[:, 3:7])
+        else:
+            # contact_guidance: pos(3) + rpy(3), all direct subtraction
+            qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
+            qpos_diff[:, -3:] = qpos_object[:, 3:6] - qpos_ref_object[:, 3:6]
     else:
         raise ValueError(f"Invalid embodiment_type: {config.embodiment_type}")
     return qpos_diff
@@ -692,6 +699,11 @@ def load_env_params(config: Config, env: MJWPEnv, env_param: dict):
         elif config.embodiment_type in ["right", "left"]:
             qpos_override_th[:, -7:-5] = (
                 qpos_override_th[:, -7:-5] + env_param["xy_offset"]
+            )
+        elif config.embodiment_type == "humanoid_object":
+            nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
+            qpos_override_th[:, -nq_obj:-nq_obj + 2] = (
+                qpos_override_th[:, -nq_obj:-nq_obj + 2] + env_param["xy_offset"]
             )
 
         wp.copy(env.data_wp.qpos, wp.from_torch(qpos_override_th))

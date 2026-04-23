@@ -59,6 +59,14 @@ def load_data(
         )
         if config.embodiment_type in ["bimanual", "right", "left"]:
             ctrl_ref = qpos_ref[:, : -config.nq_obj]
+        elif config.embodiment_type in ["humanoid", "humanoid_object"]:
+            nq_obj = config.nq_obj if config.nq_obj > 0 else 0
+            if nq_obj > 0:
+                ctrl_ref = np.concatenate(
+                    [qpos_ref[:, 7:-nq_obj], qpos_ref[:, -nq_obj:]], axis=-1
+                )
+            else:
+                ctrl_ref = qpos_ref[:, 7:]
         elif config.embodiment_type in ["CMU", "DanceDB"]:
             ctrl_ref = qpos_ref[:, 7:]
         else:
