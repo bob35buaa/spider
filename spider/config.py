@@ -467,7 +467,10 @@ def process_config(config: Config):
         config.data_path = f"{processed_dir_robot}/trajectory_kinematic.npz"
 
     # get model data
-    if config.simulator == "mjwp":
+    if config.simulator == "hdmi":
+        # HDMI simulator: nq/nv/nu are set in setup_env, skip model loading
+        pass
+    elif config.simulator == "mjwp":
         model = mujoco.MjModel.from_xml_path(config.model_path)
         config.nq = model.nq
         config.nv = model.nv

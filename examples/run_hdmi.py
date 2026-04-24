@@ -71,6 +71,17 @@ def main(config: Config):
     # Process config, set defaults and derived fields
     config = process_config(config)
 
+    # Override output_dir to experiment workspace (don't overwrite HF data)
+    import os as _os
+
+    exp_output = _os.environ.get(
+        "HDMI_OUTPUT_DIR",
+        f"workspace/hdmi_reproduce/results/R002",
+    )
+    config.output_dir = exp_output
+    _os.makedirs(config.output_dir, exist_ok=True)
+    loguru.logger.info(f"Output dir: {config.output_dir}")
+
     # Create placeholder reference data for compatibility
     ref_data = (
         torch.zeros(

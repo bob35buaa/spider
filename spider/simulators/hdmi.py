@@ -66,6 +66,9 @@ class HDMIWarpEnv:
     # Environment state tracking
     episode_length_buf: torch.Tensor
     timestamp: int
+    # MuJoCo qpos layout addresses
+    pelvis_qpos_adr: int = 7  # default for suitcase scene
+    obj_qpos_adr: int = 0  # object freejoint at front
 
 
 def _compile_step(
@@ -199,6 +202,56 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIWarpEnv
     config.nq = mj_model.nq
     config.nv = mj_model.nv
 
+    # --- Initialize sim state to match reference trajectory first frame ---
+    # This aligns sim and ref so MPC doesn't fight a large initial error.
+    # (Same pattern as MJWP: mjwp.py:120-124)
+    command_manager = hdmi_env.command_manager
+    action_manager = hdmi_env.action_manager
+    motion_data = command_manager.dataset.get_slice(
+        command_manager.motion_ids, 0, steps=10  # only need first frame
+    )
+    root_body_idx = command_manager.root_body_idx_motion
+    root_pos_0 = motion_data.body_pos_w[0, 0, root_body_idx, :]
+    root_quat_0 = motion_data.body_quat_w[0, 0, root_body_idx, :]
+
+    # Build qpos_init matching MuJoCo qpos layout
+    qpos_init = torch.zeros(mj_model.nq)
+
+    # Pelvis freejoint
+    pelvis_jnt_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, "pelvis_root")
+    pelvis_qpos_adr = mj_model.jnt_qposadr[pelvis_jnt_id]
+    qpos_init[pelvis_qpos_adr:pelvis_qpos_adr + 3] = root_pos_0
+    qpos_init[pelvis_qpos_adr + 3:pelvis_qpos_adr + 7] = root_quat_0
+
+    # Robot joints — map from motion data to MuJoCo qpos addresses
+    motion_joint_names = command_manager.dataset.joint_names
+    for i, jname in enumerate(motion_joint_names):
+        jnt_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        if jnt_id < 0:
+            continue
+        qpos_adr = mj_model.jnt_qposadr[jnt_id]
+        qpos_init[qpos_adr] = motion_data.joint_pos[0, 0, i]
+
+    # Object freejoint
+    if hasattr(command_manager, "object_body_id_motion"):
+        obj_idx = command_manager.object_body_id_motion
+        obj_pos_0 = motion_data.body_pos_w[0, 0, obj_idx, :]
+        obj_quat_0 = motion_data.body_quat_w[0, 0, obj_idx, :]
+        for jname_candidate in [f"{command_manager.object_asset_name}_root", "suitcase_root"]:
+            obj_jnt_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, jname_candidate)
+            if obj_jnt_id >= 0:
+                break
+        if obj_jnt_id >= 0:
+            obj_qpos_adr = mj_model.jnt_qposadr[obj_jnt_id]
+            qpos_init[obj_qpos_adr:obj_qpos_adr + 3] = obj_pos_0
+            qpos_init[obj_qpos_adr + 3:obj_qpos_adr + 7] = obj_quat_0
+
+    # Apply to mj_data and forward
+    mj_data.qpos[:] = qpos_init.detach().cpu().numpy()
+    mj_data.qvel[:] = 0.0
+    mujoco.mj_forward(mj_model, mj_data)
+    print(f"[HDMI] Initialized sim to ref frame 0: pelvis Z={qpos_init[pelvis_qpos_adr + 2]:.3f}")
+
     # Create Warp batch model/data/graph
     nconmax = int(config.nconmax_per_env)
     njmax = int(config.njmax_per_env)
@@ -250,6 +303,8 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIWarpEnv
         jnt_mjc2isaac=jnt_mjc2isaac,
         episode_length_buf=hdmi_env.episode_length_buf.clone(),
         timestamp=0,
+        pelvis_qpos_adr=pelvis_qpos_adr,
+        obj_qpos_adr=mj_model.jnt_qposadr[obj_jnt_id] if obj_jnt_id >= 0 else 0,
     )
 
     return env
@@ -343,39 +398,39 @@ def _update_viewer(env: HDMIWarpEnv):
 
 
 def _diff_qpos(
-    config: Config, qpos_sim: torch.Tensor, qpos_ref: torch.Tensor
+    config: Config, qpos_sim: torch.Tensor, qpos_ref: torch.Tensor,
+    pelvis_qpos_adr: int = 7, obj_qpos_adr: int = 0,
 ) -> torch.Tensor:
-    """Compute qpos difference handling quaternions properly for humanoid_object."""
+    """Compute qpos difference handling quaternions properly.
+
+    Uses actual MuJoCo qpos layout:
+      [obj_freejoint(7), pelvis_freejoint(7), hinge_joints(29)]
+    """
     batch_size = qpos_sim.shape[0]
     qpos_diff = torch.zeros((batch_size, config.nv), device=config.device)
 
-    if config.embodiment_type == "humanoid_object":
-        nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
-        qpos_humanoid = qpos_sim[:, :-nq_obj]
-        qpos_ref_humanoid = qpos_ref[:, :-nq_obj]
-        qpos_object = qpos_sim[:, -nq_obj:]
-        qpos_ref_object = qpos_ref[:, -nq_obj:]
-        # humanoid position
-        qpos_diff[:, :3] = qpos_humanoid[:, :3] - qpos_ref_humanoid[:, :3]
-        # humanoid rotation (quaternion)
-        qpos_diff[:, 3:6] = quat_sub(
-            qpos_humanoid[:, 3:7], qpos_ref_humanoid[:, 3:7]
-        )
-        # humanoid joints
-        qpos_diff[:, 6:-6] = qpos_humanoid[:, 7:] - qpos_ref_humanoid[:, 7:]
-        # object
-        if nq_obj == 7:
-            qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
-            qpos_diff[:, -3:] = quat_sub(
-                qpos_object[:, 3:7], qpos_ref_object[:, 3:7]
-            )
-        else:
-            qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
-            qpos_diff[:, -3:] = qpos_object[:, 3:6] - qpos_ref_object[:, 3:6]
-    elif config.embodiment_type == "humanoid":
-        qpos_diff[:, 6:] = qpos_sim[:, 7:] - qpos_ref[:, 7:]
-        qpos_diff[:, :3] = qpos_sim[:, :3] - qpos_ref[:, :3]
-        qpos_diff[:, 3:6] = quat_sub(qpos_sim[:, 3:7], qpos_ref[:, 3:7])
+    if config.embodiment_type in ["humanoid_object", "humanoid"]:
+        # Pelvis position (3 DOF)
+        p = pelvis_qpos_adr
+        qpos_diff[:, :3] = qpos_sim[:, p:p+3] - qpos_ref[:, p:p+3]
+        # Pelvis rotation (quat→3 DOF)
+        qpos_diff[:, 3:6] = quat_sub(qpos_sim[:, p+3:p+7], qpos_ref[:, p+3:p+7])
+        # Hinge joints (direct subtraction)
+        # In qpos: after pelvis freejoint (p+7 to end or before object)
+        joint_start_q = p + 7  # qpos index of first hinge joint
+        nj = config.nv - 12 if config.embodiment_type == "humanoid_object" else config.nv - 6
+        qpos_diff[:, 6:6+nj] = qpos_sim[:, joint_start_q:joint_start_q+nj] - qpos_ref[:, joint_start_q:joint_start_q+nj]
+
+        if config.embodiment_type == "humanoid_object":
+            # Object position (3 DOF)
+            o = obj_qpos_adr
+            qpos_diff[:, -6:-3] = qpos_sim[:, o:o+3] - qpos_ref[:, o:o+3]
+            # Object rotation (quat→3 DOF)
+            nq_obj = config.nq_obj
+            if nq_obj == 7:
+                qpos_diff[:, -3:] = quat_sub(qpos_sim[:, o+3:o+7], qpos_ref[:, o+3:o+7])
+            else:
+                qpos_diff[:, -3:] = qpos_sim[:, o+3:o+6] - qpos_ref[:, o+3:o+6]
     else:
         raise ValueError(f"Unsupported embodiment_type: {config.embodiment_type}")
 
@@ -424,7 +479,11 @@ def get_reward(
     qvel_ref_batch = qvel_ref.unsqueeze(0).repeat(qvel_sim.shape[0], 1)
 
     # Weighted qpos tracking
-    qpos_diff = _diff_qpos(config, qpos_sim, qpos_ref_batch)
+    qpos_diff = _diff_qpos(
+        config, qpos_sim, qpos_ref_batch,
+        pelvis_qpos_adr=env.pelvis_qpos_adr,
+        obj_qpos_adr=env.obj_qpos_adr,
+    )
     qpos_weight = _weight_diff_qpos(config)
     delta_qpos = qpos_diff * qpos_weight
     qpos_dist = torch.norm(delta_qpos, p=2, dim=1)
@@ -573,48 +632,77 @@ def get_reference(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Get full reference motion data from HDMI command manager.
 
+    Builds qpos_ref/qvel_ref matching the MuJoCo model's qpos/qvel layout.
+
     Returns tuple of:
-        - qpos_ref: (max_sim_steps, nq)
-        - qvel_ref: (max_sim_steps, nv)
-        - ctrl_ref: (max_sim_steps, nu_action)
+        - qpos_ref: (max_sim_steps + padding, nq)
+        - qvel_ref: (max_sim_steps + padding, nv)
+        - ctrl_ref: (max_sim_steps + padding, nu_action)
     """
     hdmi_env = env.hdmi_env
     action_manager = hdmi_env.action_manager
     command_manager = hdmi_env.command_manager
+    robot = hdmi_env.scene.articulations["robot"]
 
     # Get full motion data slice
     motion_data = command_manager.dataset.get_slice(
         command_manager.motion_ids, 0, steps=config.max_sim_steps
     )
+    T = motion_data.joint_pos.shape[1]  # number of timesteps
 
-    # Get action joint indices in motion data
+    # --- ctrl_ref (action space) ---
     action_indices_motion = [
         command_manager.dataset.joint_names.index(joint_name)
         for joint_name in action_manager.joint_names
     ]
-
-    # Get reference joint positions for control
     ref_joint_pos = motion_data.joint_pos[0, :, action_indices_motion]
-
-    # Convert to actions using action manager's normalization
     default_joint_pos = action_manager.default_joint_pos[0, action_manager.joint_ids]
     action_scaling = action_manager.action_scaling
     ctrl_ref = (ref_joint_pos - default_joint_pos) / action_scaling
 
-    # Extract reference qpos and qvel for all bodies
-    robot_joint_pos = motion_data.joint_pos[0]
-    robot_joint_vel = motion_data.joint_vel[0]
+    # --- Build qpos_ref/qvel_ref matching MuJoCo qpos layout ---
+    # MuJoCo qpos layout for suitcase scene:
+    #   [obj_freejoint(7), robot_freejoint(7), robot_hinges(29)]
+    # MuJoCo qvel layout:
+    #   [obj_freejoint(6), robot_freejoint(6), robot_hinges(29)]
+    nq = env.mj_model.nq
+    nv = env.mj_model.nv
+    qpos_ref = torch.zeros(T, nq)
+    qvel_ref = torch.zeros(T, nv)
 
+    # Robot root body (pelvis)
     root_body_idx = command_manager.root_body_idx_motion
-    root_pos = motion_data.body_pos_w[0, :, root_body_idx, :]
-    root_quat = motion_data.body_quat_w[0, :, root_body_idx, :]
+    root_pos = motion_data.body_pos_w[0, :, root_body_idx, :]      # (T, 3)
+    root_quat = motion_data.body_quat_w[0, :, root_body_idx, :]    # (T, 4)
     root_lin_vel = motion_data.body_lin_vel_w[0, :, root_body_idx, :]
     root_ang_vel = motion_data.body_ang_vel_w[0, :, root_body_idx, :]
 
-    qpos_ref = torch.cat([root_pos, root_quat, robot_joint_pos], dim=-1)
-    qvel_ref = torch.cat([root_lin_vel, root_ang_vel, robot_joint_vel], dim=-1)
+    # Find pelvis freejoint qpos address
+    pelvis_jnt_id = mujoco.mj_name2id(
+        env.mj_model, mujoco.mjtObj.mjOBJ_JOINT, "pelvis_root"
+    )
+    pelvis_qpos_adr = env.mj_model.jnt_qposadr[pelvis_jnt_id]
+    pelvis_qvel_adr = env.mj_model.jnt_dofadr[pelvis_jnt_id]
 
-    # Add object states if available
+    qpos_ref[:, pelvis_qpos_adr:pelvis_qpos_adr + 3] = root_pos
+    qpos_ref[:, pelvis_qpos_adr + 3:pelvis_qpos_adr + 7] = root_quat
+    qvel_ref[:, pelvis_qvel_adr:pelvis_qvel_adr + 3] = root_lin_vel
+    qvel_ref[:, pelvis_qvel_adr + 3:pelvis_qvel_adr + 6] = root_ang_vel
+
+    # Robot joints — map from motion data joint names to MuJoCo qpos addresses
+    motion_joint_names = command_manager.dataset.joint_names
+    for i, jname in enumerate(motion_joint_names):
+        jnt_id = mujoco.mj_name2id(
+            env.mj_model, mujoco.mjtObj.mjOBJ_JOINT, jname
+        )
+        if jnt_id < 0:
+            continue
+        qpos_adr = env.mj_model.jnt_qposadr[jnt_id]
+        qvel_adr = env.mj_model.jnt_dofadr[jnt_id]
+        qpos_ref[:, qpos_adr] = motion_data.joint_pos[0, :, i]
+        qvel_ref[:, qvel_adr] = motion_data.joint_vel[0, :, i]
+
+    # Object states
     if hasattr(command_manager, "object_body_id_motion"):
         object_body_idx = command_manager.object_body_id_motion
         object_pos = motion_data.body_pos_w[0, :, object_body_idx, :]
@@ -622,21 +710,26 @@ def get_reference(
         object_lin_vel = motion_data.body_lin_vel_w[0, :, object_body_idx, :]
         object_ang_vel = motion_data.body_ang_vel_w[0, :, object_body_idx, :]
 
-        qpos_ref = torch.cat([qpos_ref, object_pos, object_quat], dim=-1)
-        qvel_ref = torch.cat([qvel_ref, object_lin_vel, object_ang_vel], dim=-1)
+        # Find object freejoint qpos address
+        obj_body_name = command_manager.object_asset_name
+        # Try common joint naming patterns
+        for jname_candidate in [
+            f"{obj_body_name}_root",
+            f"suitcase_root",
+        ]:
+            obj_jnt_id = mujoco.mj_name2id(
+                env.mj_model, mujoco.mjtObj.mjOBJ_JOINT, jname_candidate
+            )
+            if obj_jnt_id >= 0:
+                break
 
-        if (
-            hasattr(command_manager, "object_joint_idx_motion")
-            and command_manager.object_joint_idx_motion is not None
-        ):
-            object_joint_pos = motion_data.joint_pos[
-                0, :, command_manager.object_joint_idx_motion
-            ].unsqueeze(-1)
-            object_joint_vel = motion_data.joint_vel[
-                0, :, command_manager.object_joint_idx_motion
-            ].unsqueeze(-1)
-            qpos_ref = torch.cat([qpos_ref, object_joint_pos], dim=-1)
-            qvel_ref = torch.cat([qvel_ref, object_joint_vel], dim=-1)
+        if obj_jnt_id >= 0:
+            obj_qpos_adr = env.mj_model.jnt_qposadr[obj_jnt_id]
+            obj_qvel_adr = env.mj_model.jnt_dofadr[obj_jnt_id]
+            qpos_ref[:, obj_qpos_adr:obj_qpos_adr + 3] = object_pos
+            qpos_ref[:, obj_qpos_adr + 3:obj_qpos_adr + 7] = object_quat
+            qvel_ref[:, obj_qvel_adr:obj_qvel_adr + 3] = object_lin_vel
+            qvel_ref[:, obj_qvel_adr + 3:obj_qvel_adr + 6] = object_ang_vel
 
     # Pad last frames to avoid overflow
     pad_len = config.horizon_steps + config.ctrl_steps
