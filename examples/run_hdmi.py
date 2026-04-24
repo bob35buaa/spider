@@ -21,6 +21,7 @@ import loguru
 import mujoco
 import numpy as np
 import torch
+import warp as wp
 from omegaconf import DictConfig
 
 from spider.config import Config, process_config
@@ -58,11 +59,14 @@ def main(config: Config):
     """Run the SPIDER using HDMI backend."""
     # Setup env (ref_data set to None since environment has built-in reference)
     env = setup_env(config, None)
+
+    # Access HDMI env properties through the wrapper
+    hdmi_env = env.hdmi_env
     if config.max_sim_steps == -1:
-        config.max_sim_steps = env.max_episode_length
+        config.max_sim_steps = hdmi_env.max_episode_length
         loguru.logger.info(f"Max simulation steps set to {config.max_sim_steps}")
 
-    config.nu = env.action_spec.shape[-1]
+    config.nu = hdmi_env.action_spec.shape[-1]
 
     # Process config, set defaults and derived fields
     config = process_config(config)
@@ -91,8 +95,6 @@ def main(config: Config):
         qvel=qvel_ref.detach().cpu().numpy(),
         ctrl=ctrl_ref.detach().cpu().numpy(),
     )
-    # optional: also save env xml
-    # env.scene.to_zip(Path(config.output_dir) / "../scene.zip")
 
     # Setup mujoco model and data from HDMI env (for rendering)
     default_xml_path = Path(
@@ -105,19 +107,16 @@ def main(config: Config):
         loguru.logger.warning(
             f"Default XML path {default_xml_path} does not exist, using env model"
         )
-        mj_model = env.sim.mj_model
+        mj_model = env.mj_model
         config.model_path = "hdmi_scene_from_env"
     mj_data = mujoco.MjData(mj_model)
     mj_data_ref = mujoco.MjData(mj_model)
 
-    # Initialize mj_data with current env state
-    if hasattr(env.sim, 'data') and hasattr(env.sim.data, 'qpos'):
-        sim_data = env.sim.data
-        mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-        mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
-    else:
-        mj_data.qpos[:] = env.sim.mj_data.qpos[:]
-        mj_data.qvel[:] = env.sim.mj_data.qvel[:]
+    # Initialize mj_data with current env state (from wp_data first world)
+    qpos0 = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+    qvel0 = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+    mj_data.qpos[:] = qpos0
+    mj_data.qvel[:] = qvel0
     mujoco.mj_step(mj_model, mj_data)
     mj_data.time = 0.0
 
@@ -130,30 +129,6 @@ def main(config: Config):
     images = []
 
     # Setup viewer and renderer
-    # Note: mjlab viewer is disabled via cfg.viewer.headless in setup_env
-    # For HDMI with rerun, build scene directly from spec and model
-    # if "rerun" in config.viewer:
-    #     # Build and log 3D scene from HDMI's spec and model
-    #     if default_xml_path.exists():
-    #         xml_path = default_xml_path
-    #     else:
-    #         loguru.logger.info(
-    #             f"Default scene path {default_xml_path} does not exist, using None"
-    #         )
-    #         xml_path = None
-    #     loguru.logger.info("Building Rerun scene from HDMI spec and model...")
-    #     config.viewer_body_entity_and_ids = build_and_log_scene_from_spec(
-    #         spec=mj_spec,
-    #         model=mj_model,
-    #         xml_path=xml_path,
-    #         entity_root="mujoco",
-    #     )
-    #     loguru.logger.info(
-    #         f"Rerun scene built with {len(config.viewer_body_entity_and_ids)} body entities"
-    #     )
-    #     # Set model_path to dummy value to indicate scene is already built
-    #     config.model_path = "hdmi_scene_from_spec"
-
     run_viewer = setup_viewer(config, mj_model, mj_data)
     renderer = setup_renderer(config, mj_model)
 
@@ -176,6 +151,11 @@ def main(config: Config):
     # Initial controls - first horizon_steps from reference
     ctrls = ctrl_ref[: config.horizon_steps].to(config.device)
 
+    # Move reference data to device for reward computation and control
+    qpos_ref_dev = qpos_ref.to(config.device)
+    qvel_ref_dev = qvel_ref.to(config.device)
+    ctrl_ref_dev = ctrl_ref.to(config.device)
+
     # Buffers for saving info and trajectory
     info_list = []
 
@@ -185,6 +165,11 @@ def main(config: Config):
     with run_viewer() as viewer:
         while viewer.is_running():
             t0 = time.perf_counter()
+
+            # Set current reference for reward computation
+            ref_idx = min(sim_step, qpos_ref_dev.shape[0] - 1)
+            env._current_qpos_ref = qpos_ref_dev[ref_idx]
+            env._current_qvel_ref = qvel_ref_dev[ref_idx]
 
             # Optimize using future reference window at control-rate (+1 lookahead)
             ref_slice = get_slice(
@@ -201,14 +186,21 @@ def main(config: Config):
             for i in range(config.ctrl_steps):
                 ctrl = ctrls[i]
                 ctrl_repeat = ctrl.unsqueeze(0).repeat(
-                    int(config.num_samples), 1
-                )  # (batch_size, num_actions)
+                    env.num_worlds, 1
+                )
+
+                # Update reference for reward at this timestep
+                ref_idx = min(sim_step + 1, qpos_ref_dev.shape[0] - 1)
+                env._current_qpos_ref = qpos_ref_dev[ref_idx]
+                env._current_qvel_ref = qvel_ref_dev[ref_idx]
+
                 step_env(config, env, ctrl_repeat)
 
-                # Update mj_data with current state
-                sim_data = env.sim.data
-                mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-                mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
+                # Read state from wp_data for mj_data update
+                qpos_cur = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+                qvel_cur = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+                mj_data.qpos[:] = qpos_cur
+                mj_data.qvel[:] = qvel_cur
                 mj_data.time = (sim_step + 1) * config.sim_dt
 
                 # Render video if enabled
@@ -218,7 +210,6 @@ def main(config: Config):
                     and i % int(np.round(config.render_dt / config.sim_dt)) == 0
                 )
                 if should_render:
-                    # Get reference state from reference data
                     ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
                     mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
                     mj_data_ref.qvel[:] = qvel_ref[ref_idx].detach().cpu().numpy()
@@ -228,7 +219,6 @@ def main(config: Config):
                     )
                     images.append(image)
                 if "rerun" in config.viewer or "viser" in config.viewer:
-                    # manually log the state
                     log_frame(
                         mj_data,
                         sim_time=mj_data.time,
@@ -254,18 +244,18 @@ def main(config: Config):
 
             # Receding horizon update
             prev_ctrl = ctrls[config.ctrl_steps :]
-            new_ctrl = ctrl_ref[
+            new_ctrl = ctrl_ref_dev[
                 sim_step + prev_ctrl.shape[0] : sim_step
                 + prev_ctrl.shape[0]
                 + config.ctrl_steps
             ]
             ctrls = torch.cat([prev_ctrl, new_ctrl], dim=0)
 
-            # Sync viewer state and render
-            sim_data = env.sim.data
-            mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-            mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
-            # Update reference state
+            # Update mj_data and reference for viewer
+            qpos_cur = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+            qvel_cur = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+            mj_data.qpos[:] = qpos_cur
+            mj_data.qvel[:] = qvel_cur
             ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
             mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
             mj_data_ref.qvel[:] = qvel_ref[ref_idx].detach().cpu().numpy()
@@ -313,14 +303,11 @@ def main(config: Config):
 @hydra.main(version_base=None, config_path="config", config_name="hdmi")
 def run_main(cfg: DictConfig) -> None:
     """Main entry point for HDMI retargeting."""
-    # Convert DictConfig to Config dataclass, handling special fields
     config_dict = dict(cfg)
 
-    # Handle special conversions
     if "noise_scale" in config_dict and config_dict["noise_scale"] is None:
-        config_dict.pop("noise_scale")  # Let the default factory handle it
+        config_dict.pop("noise_scale")
 
-    # Convert lists to tuples where needed
     if "pair_margin_range" in config_dict:
         config_dict["pair_margin_range"] = tuple(config_dict["pair_margin_range"])
     if "xy_offset_range" in config_dict:

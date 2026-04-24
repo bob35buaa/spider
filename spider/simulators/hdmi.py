@@ -4,42 +4,100 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Simulator for sampling with HDMI based on mjlab.
+"""Simulator for sampling with HDMI based on MuJoCo Warp batch stepping.
 
 Reference: https://github.com/LeCAR-Lab/HDMI
 
 This module provides humanoid whole-body retargeting support with SPIDER.
+Uses MuJoCo Warp for GPU-batched parallel rollouts instead of HDMI's single-env step.
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 
 import mujoco
 import mujoco_warp as mjwarp
+import numpy as np
 import torch
 import warp as wp
 from omegaconf import OmegaConf
-from tensordict import TensorDict
 
 from spider.config import Config
+from spider.math import quat_sub
 from spider.simulators.mjwp import _broadcast_state, _copy_state
+
+# --
+# Data structures
+# --
+
+
+@dataclass
+class HDMIWarpEnv:
+    """Holds Warp batch simulation state for HDMI."""
+
+    # HDMI environment (for initialization, command manager, action manager)
+    hdmi_env: object
+    # CPU MuJoCo model/data (for viewer)
+    mj_model: mujoco.MjModel
+    mj_data: mujoco.MjData
+    # Warp batch simulation
+    model_wp: mjwarp.Model
+    data_wp: mjwarp.Data
+    data_wp_prev: mjwarp.Data
+    graph: object  # wp.ScopedCapture.Graph
+    # Configuration
+    device: str
+    num_worlds: int
+    decimation: int
+    physics_dt: float
+    # PD control parameters (all in isaac joint order)
+    joint_stiffness: torch.Tensor  # (nu_action,)
+    joint_damping: torch.Tensor  # (nu_action,)
+    action_scaling: torch.Tensor  # (nu_action,)
+    default_joint_pos: torch.Tensor  # (1, num_all_joints)
+    action_joint_ids: list  # indices into all joints for action joints
+    # Joint address mappings (mujoco qpos/qvel addresses in isaac order)
+    joint_qposadr_read: np.ndarray
+    joint_qveladr_read: np.ndarray
+    # Ctrl mapping: for each isaac joint i, _jnt_mjc2isaac[i] = mjc actuator index
+    jnt_mjc2isaac: list
+    # Environment state tracking
+    episode_length_buf: torch.Tensor
+    timestamp: int
+
+
+def _compile_step(
+    model_wp: mjwarp.Model, data_wp: mjwarp.Data
+) -> object:
+    """Compile a CUDA graph for a single mjwarp.step."""
+
+    def _step_once():
+        mjwarp.step(model_wp, data_wp)
+
+    with wp.ScopedCapture() as capture:
+        _step_once()
+    wp.synchronize()
+    return capture.graph
+
 
 # --
 # Key functions
 # --
 
 
-def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
-    """Setup and reset the environment backed by mjlab.
+def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIWarpEnv:
+    """Setup and reset the environment backed by HDMI + MuJoCo Warp batch stepping.
 
-    Returns a SimpleEnv instance.
+    Creates the HDMI environment for initialization and config,
+    then sets up Warp batch model/data/graph for parallel rollouts.
     """
-    # reference data is stored in environment
-    del ref_data
+    del ref_data  # not used
 
     # Import HDMI dependencies
     import active_adaptation
+
     active_adaptation.set_backend("mujoco")
     from active_adaptation.envs.locomotion import SimpleEnv
 
@@ -51,7 +109,9 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
     base_cfg = OmegaConf.load(base_config_path)
 
     # Load task-specific config (e.g., move_suitcase)
-    task_config_path = os.path.join(hdmi_dir, f"cfg/task/G1/hdmi/{config.task}.yaml")
+    task_config_path = os.path.join(
+        hdmi_dir, f"cfg/task/G1/hdmi/{config.task}.yaml"
+    )
     print(f"task_config_path: {task_config_path}")
     task_cfg = OmegaConf.load(task_config_path)
 
@@ -59,20 +119,13 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
     cfg = OmegaConf.merge(base_cfg, task_cfg)
 
     # Override with SPIDER config parameters
-    # MuJoCo backend is single-env; SPIDER handles batching via Warp
     cfg.num_envs = 1
-    # Disable mjlab viewer if "mjlab" is not in viewer string (e.g., "mujoco-rerun")
     cfg.viewer.headless = "mjlab" not in config.viewer.lower()
-
-    # Set env_spacing to 0 so all environments share the same spatial location
-    # This avoids needing to handle position offsets during state synchronization
     cfg.viewer.env_spacing = 0.0
 
-    # Disable struct mode to allow modifications
     OmegaConf.set_struct(cfg, False)
 
-    # Remove observation groups that are not needed for sampling
-    # Keep only minimal observations for reward computation
+    # Remove observation groups not needed for sampling
     for obs_group_key in list(cfg.observation.keys()):
         if obs_group_key not in [
             "command",
@@ -96,435 +149,384 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
     if "init_joint_vel_noise" in cfg.command:
         cfg.command.init_joint_vel_noise = 0.0
 
-    # Disable motion sampling for deterministic resets
     cfg.command.sample_motion = False
-    # Set reset_range to None so it uses start_t.fill_(0) in eval mode
     cfg.command.reset_range = None
 
-    # Disable action delay and alpha randomization
     if "action" in cfg:
         cfg.action.min_delay = 0
         cfg.action.max_delay = 0
-        cfg.action.alpha = [1.0, 1.0]  # Set to fixed value
+        cfg.action.alpha = [1.0, 1.0]
 
-    # Remove randomizations - they use PhysX APIs not available in MuJoCo backend
     cfg.randomization = {}
 
-    # Filter out tracking reward groups and debug rewards
+    # Filter to tracking rewards only
     filtered_rewards = {}
     for group_name, group_params in cfg.reward.items():
         if "tracking" in group_name.lower():
-            # if group_name.lower() in ["tracking"]:
-            # filter out tracking reward, only keep keypoint tracking
             filtered_rewards[group_name] = group_params
-            # filter out reward term which has contact in the name
-            for key, value in group_params.items():
+            for key in list(group_params.keys()):
                 if "vel" in key.lower():
                     del filtered_rewards[group_name][key]
-
     cfg.reward = filtered_rewards
-    # redefine tracking reward
-    # cfg.reward = {
-    #     "tracking": {
-    #         "tracking_body_pos(keypoint_pos_tracking_local_product)": {
-    #             "body_names": [
-    #                 ".*_shoulder_pitch_link",
-    #                 ".*_elbow_link",
-    #                 ".*_wrist_yaw_link",
-    #                 ".*_hip_pitch_link",
-    #                 ".*_knee_link",
-    #                 ".*_ankle_roll_link",
-    #             ],
-    #             "weight": 0.3,
-    #             "sigma": 1.0,  # make it linear
-    #         },
-    #         "tracking_body_ori(keypoint_ori_tracking_local_product)": {
-    #             "body_names": [
-    #                 ".*_shoulder_pitch_link",
-    #                 ".*_elbow_link",
-    #                 ".*_wrist_yaw_link",
-    #                 ".*_hip_pitch_link",
-    #                 ".*_knee_link",
-    #                 ".*_ankle_roll_link",
-    #             ],
-    #             "weight": 0.3,
-    #             "sigma": 1.0,  # make it linear
-    #         },
-    #         "tracking_root_pos(keypoint_pos_tracking_product)": {
-    #             "body_names": ["pelvis"],
-    #             "weight": 1.0,
-    #             "sigma": 1.0,  # make it linear
-    #         },
-    #         "tracking_root_ori(keypoint_ori_tracking_product)": {
-    #             "body_names": ["pelvis"],
-    #             "weight": 1.0,
-    #             "sigma": 1.0,  # make it linear
-    #         },
-    #     },
-    # }
 
-    # Create environment
-    env = SimpleEnv(cfg)
+    # Create HDMI environment (single-env for initialization)
+    hdmi_env = SimpleEnv(cfg)
+    hdmi_env.eval()
+    hdmi_env.reset()
 
-    # Set environment to eval mode for deterministic resets
-    env.eval()
+    # Extract PD control parameters from HDMI's articulation
+    robot = hdmi_env.scene.articulations["robot"]
+    action_mgr = hdmi_env.action_manager
 
-    env.reset()
+    joint_stiffness = robot.data.joint_stiffness[0].clone()  # (num_all_joints,)
+    joint_damping = robot.data.joint_damping[0].clone()  # (num_all_joints,)
+    action_scaling = action_mgr.action_scaling.clone()  # (nu_action,)
+    default_joint_pos = action_mgr.default_joint_pos.clone()  # (1, num_all_joints)
+    action_joint_ids = list(action_mgr.joint_ids)
 
-    # Create Warp data structures for state save/load
-    nconmax = getattr(getattr(env.sim, 'cfg', None), 'nconmax', config.nconmax_per_env)
-    njmax = getattr(getattr(env.sim, 'cfg', None), 'njmax', config.njmax_per_env)
-    with wp.ScopedDevice(env.sim.device):
-        env.sim.wp_data = mjwarp.put_data(
-            env.sim.mj_model,
-            env.sim.mj_data,
-            nworld=env.num_envs,
-            nconmax=int(nconmax),
-            njmax=int(njmax),
+    # Get joint address mappings
+    joint_qposadr_read = robot.joint_qposadr_read.copy()
+    joint_qveladr_read = robot.joint_qveladr_read.copy()
+    jnt_mjc2isaac = list(robot._jnt_mjc2isaac)
+
+    # Get simulation parameters
+    mj_model = hdmi_env.sim.mj_model
+    mj_data = hdmi_env.sim.mj_data
+    decimation = hdmi_env.decimation
+    physics_dt = hdmi_env.physics_dt
+
+    # Set config fields that process_config normally sets for mjwp
+    config.nq = mj_model.nq
+    config.nv = mj_model.nv
+
+    # Create Warp batch model/data/graph
+    nconmax = int(config.nconmax_per_env)
+    njmax = int(config.njmax_per_env)
+    num_worlds = int(config.num_samples)
+    dev = str(config.device)
+
+    wp.set_device(dev)
+    with wp.ScopedDevice(dev):
+        model_wp = mjwarp.put_model(mj_model)
+        data_wp = mjwarp.put_data(
+            mj_model, mj_data,
+            nworld=num_worlds,
+            nconmax=nconmax,
+            njmax=njmax,
         )
-        env.data_wp_prev = mjwarp.put_data(
-            env.sim.mj_model,
-            env.sim.mj_data,
-            nworld=env.num_envs,
-            nconmax=int(nconmax),
-            njmax=int(njmax),
+        data_wp_prev = mjwarp.put_data(
+            mj_model, mj_data,
+            nworld=num_worlds,
+            nconmax=nconmax,
+            njmax=njmax,
         )
+        graph = _compile_step(model_wp, data_wp)
+
+    # Move PD parameters to device
+    joint_stiffness = joint_stiffness.to(config.device)
+    joint_damping = joint_damping.to(config.device)
+    action_scaling = action_scaling.to(config.device)
+    default_joint_pos = default_joint_pos.to(config.device)
+
+    env = HDMIWarpEnv(
+        hdmi_env=hdmi_env,
+        mj_model=mj_model,
+        mj_data=mj_data,
+        model_wp=model_wp,
+        data_wp=data_wp,
+        data_wp_prev=data_wp_prev,
+        graph=graph,
+        device=dev,
+        num_worlds=num_worlds,
+        decimation=decimation,
+        physics_dt=physics_dt,
+        joint_stiffness=joint_stiffness,
+        joint_damping=joint_damping,
+        action_scaling=action_scaling,
+        default_joint_pos=default_joint_pos,
+        action_joint_ids=action_joint_ids,
+        joint_qposadr_read=joint_qposadr_read,
+        joint_qveladr_read=joint_qveladr_read,
+        jnt_mjc2isaac=jnt_mjc2isaac,
+        episode_length_buf=hdmi_env.episode_length_buf.clone(),
+        timestamp=0,
+    )
 
     return env
 
 
-def save_state(env):
-    """Save the state of the environment."""
-    # reset method 1: use mjlab api
-    # robot = env.scene.entities["robot"]
-
-    # state = {
-    #     # Robot state
-    #     "robot_root_pos": robot.data.root_link_pos_w.clone(),
-    #     "robot_root_quat": robot.data.root_link_quat_w.clone(),
-    #     "robot_root_lin_vel": robot.data.root_com_lin_vel_w.clone(),
-    #     "robot_root_ang_vel": robot.data.root_com_ang_vel_w.clone(),
-    #     "robot_joint_pos": robot.data.joint_pos.clone(),
-    #     "robot_joint_vel": robot.data.joint_vel.clone(),
-    # }
-
-    # # Save object state if available
-    # for entity_name, entity in env.scene.entities.items():
-    #     if entity_name != "robot":
-    #         state[f"{entity_name}_root_pos"] = entity.data.root_link_pos_w.clone()
-    #         state[f"{entity_name}_root_quat"] = entity.data.root_link_quat_w.clone()
-    #         state[f"{entity_name}_root_lin_vel"] = (
-    #             entity.data.root_com_lin_vel_w.clone()
-    #         )
-    #         state[f"{entity_name}_root_ang_vel"] = (
-    #             entity.data.root_com_ang_vel_w.clone()
-    #         )
-    #         if hasattr(entity.data, "joint_pos") and entity.data.joint_pos is not None:
-    #             state[f"{entity_name}_joint_pos"] = entity.data.joint_pos.clone()
-    #             state[f"{entity_name}_joint_vel"] = entity.data.joint_vel.clone()
-
-    # reset method 2: directly sync mujoco warp data
-    # Copy current simulation state to backup using _copy_state
-    _copy_state(env.sim.wp_data, env.data_wp_prev)
-
-    # Also save environment-specific state like command manager
+def save_state(env: HDMIWarpEnv):
+    """Save the Warp simulation state."""
+    _copy_state(env.data_wp, env.data_wp_prev)
     state = {
-        "data_wp_prev": env.data_wp_prev,  # Reference to backup data
+        "data_wp_prev": env.data_wp_prev,
+        "episode_length_buf": env.episode_length_buf.clone(),
+        "timestamp": env.timestamp,
     }
-
     # Save command manager state
-    if hasattr(env.command_manager, "t"):
-        state["command_t"] = env.command_manager.t.clone()
-    if hasattr(env, "episode_length_buf"):
-        state["episode_length_buf"] = env.episode_length_buf.clone()
-    if hasattr(env, "timestamp"):
-        state["timestamp"] = env.timestamp
-
+    if hasattr(env.hdmi_env.command_manager, "t"):
+        state["command_t"] = env.hdmi_env.command_manager.t.clone()
     return state
 
 
-def load_state(env, state):
-    """Load the state of the environment by restoring from backup.
-
-    Args:
-        env: The environment instance
-        state: Dict containing 'data_wp_prev' backup reference and other state
-    """
-    # reset method 1: use mjlab api (commented out, kept for reference)
-    # robot = env.scene.entities["robot"]
-    # env_ids = None
-    # # Load robot state
-    # robot_root_pose = torch.cat(
-    #     [state["robot_root_pos"], state["robot_root_quat"]], dim=-1
-    # )
-    # robot.write_root_link_pose_to_sim(robot_root_pose, env_ids=env_ids)
-    # robot_root_velocity = torch.cat(
-    #     [state["robot_root_lin_vel"], state["robot_root_ang_vel"]], dim=-1
-    # )
-    # robot.write_root_com_velocity_to_sim(robot_root_velocity, env_ids=env_ids)
-    # robot.write_joint_state_to_sim(
-    #     state["robot_joint_pos"], state["robot_joint_vel"], env_ids=env_ids
-    # )
-    # # Load object states
-    # for entity_name, entity in env.scene.entities.items():
-    #     if entity_name != "robot" and f"{entity_name}_root_pos" in state:
-    #         obj_root_pose = torch.cat(
-    #             [state[f"{entity_name}_root_pos"], state[f"{entity_name}_root_quat"]],
-    #             dim=-1,
-    #         )
-    #         entity.write_root_link_pose_to_sim(obj_root_pose, env_ids=env_ids)
-    #         obj_root_velocity = torch.cat(
-    #             [
-    #                 state[f"{entity_name}_root_lin_vel"],
-    #                 state[f"{entity_name}_root_ang_vel"],
-    #             ],
-    #             dim=-1,
-    #         )
-    #         entity.write_root_com_velocity_to_sim(obj_root_velocity, env_ids=env_ids)
-    #         # Only write joint state if entity has joints
-    #         if (
-    #             f"{entity_name}_joint_pos" in state
-    #             and hasattr(entity.data, "joint_pos")
-    #             and entity.data.joint_pos is not None
-    #             and entity.data.joint_pos.numel() > 0
-    #         ):
-    #             entity.write_joint_state_to_sim(
-    #                 state[f"{entity_name}_joint_pos"],
-    #                 state[f"{entity_name}_joint_vel"],
-    #                 env_ids=env_ids,
-    #             )
-
-    # reset method 2: directly sync mujoco warp data (active implementation)
-    _copy_state(state["data_wp_prev"], env.sim.wp_data)
-
-    # Restore environment-specific state like command manager
-    env.command_manager.t[:] = state["command_t"]
+def load_state(env: HDMIWarpEnv, state):
+    """Load the Warp simulation state from backup."""
+    _copy_state(state["data_wp_prev"], env.data_wp)
     env.episode_length_buf[:] = state["episode_length_buf"]
     env.timestamp = state["timestamp"]
-
+    if "command_t" in state:
+        env.hdmi_env.command_manager.t[:] = state["command_t"]
     return env
 
 
-def step_env(config: Config, env, ctrl: torch.Tensor):
-    """Step all worlds with provided controls of shape (N, nu)."""
+def step_env(config: Config, env: HDMIWarpEnv, ctrl: torch.Tensor):
+    """Step all worlds with provided controls of shape (N, nu_action).
+
+    Converts actions to PD torques and steps via Warp graph.
+    """
     if ctrl.dim() == 1:
-        ctrl = ctrl.unsqueeze(0).repeat(int(config.num_samples), 1)
+        ctrl = ctrl.unsqueeze(0).repeat(env.num_worlds, 1)
 
-    tensordict = TensorDict(
-        {"action": ctrl},
-        batch_size=[env.num_envs],
-        device=ctrl.device,
-    )
+    # Convert actions to joint position targets
+    # action * scaling + default_pos at action joint indices
+    joint_pos_target_all = env.default_joint_pos.repeat(env.num_worlds, 1)  # (N, num_joints)
+    joint_pos_target_all[:, env.action_joint_ids] += ctrl * env.action_scaling
 
-    # Step physics with decimation
-    for substep in range(env.decimation):
-        # Apply action (this handles action delays and scaling)
-        env.apply_action(tensordict, substep)
+    with wp.ScopedDevice(env.device):
+        for _substep in range(env.decimation):
+            # Read current joint state from wp_data
+            qpos = wp.to_torch(env.data_wp.qpos)  # (N, nq)
+            qvel = wp.to_torch(env.data_wp.qvel)  # (N, nv)
 
-        # Write data to simulation
-        env.scene.write_data_to_sim()
+            # Extract ALL joint positions/velocities in isaac order
+            current_jpos = qpos[:, env.joint_qposadr_read]  # (N, num_all_joints)
+            current_jvel = qvel[:, env.joint_qveladr_read]  # (N, num_all_joints)
 
-        # Step physics
-        env.sim.step()
+            # Compute PD torques for ALL joints
+            pos_error = joint_pos_target_all - current_jpos
+            vel_error = -current_jvel  # target vel = 0
 
-        # Update scene (read from simulation)
-        env.scene.update(env.physics_dt)
+            torque = env.joint_stiffness * pos_error + env.joint_damping * vel_error
 
-    # Update viewer if enabled
-    _update_viewer(env)
+            # Map torques to mujoco ctrl order (isaac → mjc)
+            mj_ctrl = torch.zeros(
+                env.num_worlds, env.mj_model.nu,
+                device=config.device, dtype=torch.float32,
+            )
+            mj_ctrl[:, env.jnt_mjc2isaac] = torque.float()
 
-    # Update command manager
-    env.command_manager.update()
+            # Write ctrl and step
+            wp.copy(env.data_wp.ctrl, wp.from_torch(mj_ctrl))
+            wp.capture_launch(env.graph)
 
-    # Update episode length
     env.episode_length_buf.add_(1)
     env.timestamp += 1
-
     return env
 
 
-def _update_viewer(env):
-    """Update mjlab viewer.
-
-    Args:
-        env (_type_): _description_
-    """
-    if not env._viewer_enabled or env.viewer is None:
+def _update_viewer(env: HDMIWarpEnv):
+    """Update mjlab viewer from wp_data state."""
+    hdmi_env = env.hdmi_env
+    if not hdmi_env._viewer_enabled or hdmi_env.viewer is None:
         return
 
-    idx = min(env.viewer_env_index, max(env.num_envs - 1, 0))
-    sim_data = env.sim.data
-    base_qpos = sim_data.qpos[idx].detach().cpu().numpy()
-    base_qvel = sim_data.qvel[idx].detach().cpu().numpy()
+    # Copy first world state back to CPU mj_data for viewer
+    qpos = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+    qvel = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+    env.mj_data.qpos[:] = qpos
+    env.mj_data.qvel[:] = qvel
+    mujoco.mj_forward(env.mj_model, env.mj_data)
 
-    # Render the focused environment.
-    env.sim.mj_data.qpos[:] = base_qpos
-    env.sim.mj_data.qvel[:] = base_qvel
-    mujoco.mj_forward(env.sim.mj_model, env.sim.mj_data)
+    hdmi_env.viewer.user_scn.ngeom = 0
+    if getattr(hdmi_env.viewer, "is_running", lambda: True)():
+        hdmi_env.viewer.sync(state_only=True)
 
-    # Clear scene geoms so we can append the rest.
-    env.viewer.user_scn.ngeom = 0
 
-    # Overlay remaining environments as ghost geoms.
-    num_render = min(env.num_envs, 8)
-    if (
-        env.num_envs > 1
-        and env._viewer_vd is not None
-        and env._viewer_vopt is not None
-        and env._viewer_pert is not None
-        and env._viewer_catmask is not None
-    ):
-        sim_data = env.sim.data
-        for i in range(num_render):
-            if i == idx:
-                continue
-            try:
-                qpos_i = sim_data.qpos[i].detach().cpu().numpy()
-                qvel_i = sim_data.qvel[i].detach().cpu().numpy()
-            except Exception:
-                continue
-            env._viewer_vd.qpos[:] = qpos_i
-            env._viewer_vd.qvel[:] = qvel_i
-            mujoco.mj_forward(env.sim.mj_model, env._viewer_vd)
-            mujoco.mjv_addGeoms(
-                env.sim.mj_model,
-                env._viewer_vd,
-                env._viewer_vopt,
-                env._viewer_pert,
-                env._viewer_catmask,
-                env.viewer.user_scn,
+def _diff_qpos(
+    config: Config, qpos_sim: torch.Tensor, qpos_ref: torch.Tensor
+) -> torch.Tensor:
+    """Compute qpos difference handling quaternions properly for humanoid_object."""
+    batch_size = qpos_sim.shape[0]
+    qpos_diff = torch.zeros((batch_size, config.nv), device=config.device)
+
+    if config.embodiment_type == "humanoid_object":
+        nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
+        qpos_humanoid = qpos_sim[:, :-nq_obj]
+        qpos_ref_humanoid = qpos_ref[:, :-nq_obj]
+        qpos_object = qpos_sim[:, -nq_obj:]
+        qpos_ref_object = qpos_ref[:, -nq_obj:]
+        # humanoid position
+        qpos_diff[:, :3] = qpos_humanoid[:, :3] - qpos_ref_humanoid[:, :3]
+        # humanoid rotation (quaternion)
+        qpos_diff[:, 3:6] = quat_sub(
+            qpos_humanoid[:, 3:7], qpos_ref_humanoid[:, 3:7]
+        )
+        # humanoid joints
+        qpos_diff[:, 6:-6] = qpos_humanoid[:, 7:] - qpos_ref_humanoid[:, 7:]
+        # object
+        if nq_obj == 7:
+            qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
+            qpos_diff[:, -3:] = quat_sub(
+                qpos_object[:, 3:7], qpos_ref_object[:, 3:7]
             )
+        else:
+            qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
+            qpos_diff[:, -3:] = qpos_object[:, 3:6] - qpos_ref_object[:, 3:6]
+    elif config.embodiment_type == "humanoid":
+        qpos_diff[:, 6:] = qpos_sim[:, 7:] - qpos_ref[:, 7:]
+        qpos_diff[:, :3] = qpos_sim[:, :3] - qpos_ref[:, :3]
+        qpos_diff[:, 3:6] = quat_sub(qpos_sim[:, 3:7], qpos_ref[:, 3:7])
+    else:
+        raise ValueError(f"Unsupported embodiment_type: {config.embodiment_type}")
 
-    if getattr(env.viewer, "is_running", lambda: True)():
-        env.viewer.sync(state_only=True)
+    return qpos_diff
+
+
+def _weight_diff_qpos(config: Config) -> torch.Tensor:
+    """Per-DOF weights for humanoid_object tracking."""
+    w = torch.ones(config.nv, device=config.device)
+    if config.embodiment_type == "humanoid_object":
+        w[:3] = config.base_pos_rew_scale
+        w[3:6] = config.base_rot_rew_scale
+        w[6:-6] = config.joint_rew_scale
+        w[-6:-3] = config.pos_rew_scale
+        w[-3:] = config.rot_rew_scale
+    elif config.embodiment_type == "humanoid":
+        w[:3] = config.pos_rew_scale
+        w[3:6] = config.rot_rew_scale
+        w[6:] = config.joint_rew_scale
+    return w
 
 
 def get_reward(
     config: Config,
-    env,
+    env: HDMIWarpEnv,
     ref: tuple[torch.Tensor, ...],
 ) -> tuple[torch.Tensor, dict]:
-    """Get reward for the current state.
+    """Compute tracking reward from Warp batched state.
 
-    Returns (N,) shaped tensor and info dict with (N,) shaped values.
+    Uses qpos/qvel tracking similar to mjwp.py get_reward.
+    ref is a tuple: (qpos_ref, qvel_ref, ctrl_ref, ...) but we only
+    use first element as placeholder - actual ref comes from get_reference.
     """
-    del config, ref  # Not used
+    # Read batched state from Warp
+    qpos_sim = wp.to_torch(env.data_wp.qpos)  # (N, nq)
+    qvel_sim = wp.to_torch(env.data_wp.qvel)  # (N, nv)
 
-    # Compute rewards from all reward groups
-    total_reward = torch.zeros(env.num_envs, device=env.device)
-    info = {}
+    # Get reference from command manager's current timestep
+    # The ref_slice from the optimizer is based on the placeholder ref_data
+    # We need the actual reference qpos/qvel stored on the env
+    qpos_ref = env._current_qpos_ref  # (nq,) set by run_hdmi before optimize
+    qvel_ref = env._current_qvel_ref  # (nv,)
 
-    for group_name, reward_group in env.reward_groups.items():
-        for key, func in reward_group.funcs.items():
-            func.update()
-        #     # rew = torch.log(func.compute()) * func.sigma
-        #     # rew = func.weight * rew
-        #     rew = func().squeeze(-1)
-        #     total_reward += rew
-        #     info[key] = rew
-        group_reward = reward_group.compute()
-        # Ensure reward is 1D with shape (num_envs,)
-        if group_reward.dim() > 1:
-            group_reward = group_reward.squeeze(-1)
-        total_reward += group_reward
-        # Store per-env rewards with shape (num_envs,)
-        info[group_name] = group_reward
+    # Broadcast reference to batch
+    qpos_ref_batch = qpos_ref.unsqueeze(0).repeat(qpos_sim.shape[0], 1)
+    qvel_ref_batch = qvel_ref.unsqueeze(0).repeat(qvel_sim.shape[0], 1)
 
-    return total_reward, info
+    # Weighted qpos tracking
+    qpos_diff = _diff_qpos(config, qpos_sim, qpos_ref_batch)
+    qpos_weight = _weight_diff_qpos(config)
+    delta_qpos = qpos_diff * qpos_weight
+    qpos_dist = torch.norm(delta_qpos, p=2, dim=1)
+    qvel_dist = torch.norm(qvel_sim - qvel_ref_batch, p=2, dim=1)
+
+    qpos_rew = -qpos_dist
+    qvel_rew = -config.vel_rew_scale * qvel_dist
+
+    reward = qpos_rew + qvel_rew
+
+    info = {
+        "qpos_dist": qpos_dist,
+        "qvel_dist": qvel_dist,
+        "qpos_rew": qpos_rew,
+        "qvel_rew": qvel_rew,
+    }
+    return reward, info
 
 
 def get_terminate(
-    config: Config, env, ref_slice: tuple[torch.Tensor, ...]
+    config: Config, env: HDMIWarpEnv, ref_slice: tuple[torch.Tensor, ...]
 ) -> torch.Tensor:
-    return torch.zeros(env.num_envs, device=env.device)
+    return torch.zeros(env.num_worlds, device=env.device)
 
 
 def get_terminal_reward(
     config: Config,
-    env,
+    env: HDMIWarpEnv,
     ref_slice: tuple[torch.Tensor, ...],
 ) -> tuple[torch.Tensor, dict]:
-    """Terminal reward focusing on object tracking."""
+    """Terminal reward."""
     rew, info = get_reward(config, env, ref_slice)
     return config.terminal_rew_scale * rew, info
 
 
-def get_trace(config: Config, env) -> torch.Tensor:
-    """Get trace information for visualization.
+def get_trace(config: Config, env: HDMIWarpEnv) -> torch.Tensor:
+    """Get trace information for visualization from Warp batched state.
 
-    Returns trace points including hand positions, foot positions, and object position.
-    Returns (N, num_trace_points, 3) shaped tensor.
+    Returns (N, num_trace_points, 3) shaped tensor with body positions.
     """
-    robot = env.scene.entities["robot"]
+    xpos = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+
+    robot = env.hdmi_env.scene.articulations["robot"]
 
     # Get hand positions (wrist yaw links)
     hand_ids = robot.find_bodies(".*_wrist_yaw_link")[0]
-    hand_pos = robot.data.body_com_pos_w[:, hand_ids, :]  # (N, 2, 3) for left and right
+    # Map isaac body ids to mujoco body addresses
+    hand_body_adrs = robot.body_adrs_read[hand_ids]
+    hand_pos = xpos[:, hand_body_adrs, :]  # (N, 2, 3)
 
     # Get foot positions (ankle roll links)
     foot_ids = robot.find_bodies(".*_ankle_roll_link")[0]
-    foot_pos = robot.data.body_com_pos_w[:, foot_ids, :]  # (N, 2, 3) for left and right
+    foot_body_adrs = robot.body_adrs_read[foot_ids]
+    foot_pos = xpos[:, foot_body_adrs, :]  # (N, 2, 3)
 
-    # Get object position if available
     trace_points = [hand_pos, foot_pos]
 
-    for entity_name, entity in env.scene.entities.items():
-        if entity_name != "robot":
-            # Get object root position
-            obj_pos = entity.data.root_link_pos_w.unsqueeze(1)  # (N, 1, 3)
-            trace_points.append(obj_pos)
-            break  # Only get first object
+    # Get object position if available (look for rigid objects in the scene)
+    # The object is typically the second free body in the model
+    # For humanoid_object, the object qpos is at the end
+    if config.nq_obj > 0:
+        qpos = wp.to_torch(env.data_wp.qpos)  # (N, nq)
+        obj_pos = qpos[:, -config.nq_obj : -config.nq_obj + 3].unsqueeze(1)  # (N, 1, 3)
+        trace_points.append(obj_pos)
 
-    # Concatenate all trace points: hands (2) + feet (2) + object (1) = 5 points
     trace = torch.cat(trace_points, dim=1)
-
     return trace
 
 
-def save_env_params(config: Config, env):
-    """Save environment parameters (for domain randomization).
-
-    For HDMI, we don't use domain randomization, so return empty dict.
-    """
+def save_env_params(config: Config, env: HDMIWarpEnv):
+    """Save environment parameters (no domain randomization for HDMI)."""
     return {}
 
 
-def load_env_params(config: Config, env, env_param: dict):
-    """Load environment parameters (for domain randomization).
-
-    For HDMI, we don't use domain randomization, so this is a no-op.
-    """
+def load_env_params(config: Config, env: HDMIWarpEnv, env_param: dict):
+    """Load environment parameters (no-op for HDMI)."""
     return env
 
 
 def copy_sample_state(
-    config: Config, env, src_indices: torch.Tensor, dst_indices: torch.Tensor
+    config: Config,
+    env: HDMIWarpEnv,
+    src_indices: torch.Tensor,
+    dst_indices: torch.Tensor,
 ):
-    """Copy simulation state from source samples to destination samples.
-
-    Args:
-        config: Config
-        env: HDMI environment
-        src_indices: Tensor of shape (n,) containing source sample indices
-        dst_indices: Tensor of shape (n,) containing destination sample indices
-    """
-    # Convert to numpy for indexing
+    """Copy simulation state from source samples to destination samples."""
     src_idx = src_indices.cpu().numpy()
     dst_idx = dst_indices.cpu().numpy()
 
-    # Get all state data as torch tensors from sim.wp_data
-    qpos = wp.to_torch(env.sim.wp_data.qpos)
-    qvel = wp.to_torch(env.sim.wp_data.qvel)
-    qacc = wp.to_torch(env.sim.wp_data.qacc)
-    time_arr = wp.to_torch(env.sim.wp_data.time)
-    ctrl = wp.to_torch(env.sim.wp_data.ctrl)
-    act = wp.to_torch(env.sim.wp_data.act)
-    act_dot = wp.to_torch(env.sim.wp_data.act_dot)
-    qacc_warmstart = wp.to_torch(env.sim.wp_data.qacc_warmstart)
-    qfrc_applied = wp.to_torch(env.sim.wp_data.qfrc_applied)
-    xfrc_applied = wp.to_torch(env.sim.wp_data.xfrc_applied)
+    # Get state as torch tensors
+    qpos = wp.to_torch(env.data_wp.qpos)
+    qvel = wp.to_torch(env.data_wp.qvel)
+    qacc = wp.to_torch(env.data_wp.qacc)
+    time_arr = wp.to_torch(env.data_wp.time)
+    ctrl = wp.to_torch(env.data_wp.ctrl)
+    act = wp.to_torch(env.data_wp.act)
+    act_dot = wp.to_torch(env.data_wp.act_dot)
+    qacc_warmstart = wp.to_torch(env.data_wp.qacc_warmstart)
+    qfrc_applied = wp.to_torch(env.data_wp.qfrc_applied)
+    xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
 
-    # Copy from src to dst (core state only for efficiency)
+    # Copy from src to dst
     qpos[dst_idx] = qpos[src_idx]
     qvel[dst_idx] = qvel[src_idx]
     qacc[dst_idx] = qacc[src_idx]
@@ -536,43 +538,49 @@ def copy_sample_state(
     qfrc_applied[dst_idx] = qfrc_applied[src_idx]
     xfrc_applied[dst_idx] = xfrc_applied[src_idx]
 
-    # Copy back to warp arrays
-    wp.copy(env.sim.wp_data.qpos, wp.from_torch(qpos))
-    wp.copy(env.sim.wp_data.qvel, wp.from_torch(qvel))
-    wp.copy(env.sim.wp_data.qacc, wp.from_torch(qacc))
-    wp.copy(env.sim.wp_data.time, wp.from_torch(time_arr))
-    wp.copy(env.sim.wp_data.ctrl, wp.from_torch(ctrl))
-    wp.copy(env.sim.wp_data.act, wp.from_torch(act))
-    wp.copy(env.sim.wp_data.act_dot, wp.from_torch(act_dot))
-    wp.copy(env.sim.wp_data.qacc_warmstart, wp.from_torch(qacc_warmstart))
-    wp.copy(env.sim.wp_data.qfrc_applied, wp.from_torch(qfrc_applied))
-    wp.copy(env.sim.wp_data.xfrc_applied, wp.from_torch(xfrc_applied))
+    # Copy back to warp
+    wp.copy(env.data_wp.qpos, wp.from_torch(qpos))
+    wp.copy(env.data_wp.qvel, wp.from_torch(qvel))
+    wp.copy(env.data_wp.qacc, wp.from_torch(qacc))
+    wp.copy(env.data_wp.time, wp.from_torch(time_arr))
+    wp.copy(env.data_wp.ctrl, wp.from_torch(ctrl))
+    wp.copy(env.data_wp.act, wp.from_torch(act))
+    wp.copy(env.data_wp.act_dot, wp.from_torch(act_dot))
+    wp.copy(env.data_wp.qacc_warmstart, wp.from_torch(qacc_warmstart))
+    wp.copy(env.data_wp.qfrc_applied, wp.from_torch(qfrc_applied))
+    wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
 
 
-def sync_env(config: Config, env):
-    """Broadcast the state from first env to all envs.
+def sync_env(config: Config, env: HDMIWarpEnv):
+    """Broadcast state from first world to all worlds, and sync to CPU mj_data."""
+    _broadcast_state(env.data_wp, env.num_worlds)
 
-    This function synchronizes states from the first environment to all environments.
-    Since env_spacing is set to 0, all environments share the same spatial location,
-    so no position offset handling is needed.
-    """
-    # Use shared broadcast function from mjwp
-    _broadcast_state(env.sim.wp_data, env.num_envs)
+    # Copy first world state back to CPU mj_data (for viewer and run_hdmi.py)
+    qpos = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+    qvel = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+    env.mj_data.qpos[:] = qpos
+    env.mj_data.qvel[:] = qvel
+    mujoco.mj_forward(env.mj_model, env.mj_data)
+
+    # Update HDMI env's articulation data from mj_data (for command manager)
+    env.hdmi_env.scene.update(env.physics_dt)
+
     return env
 
 
 def get_reference(
-    config: Config, env
+    config: Config, env: HDMIWarpEnv,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Get full reference motion data (states and controls) from command manager.
+    """Get full reference motion data from HDMI command manager.
 
     Returns tuple of:
-        - qpos_ref: (max_sim_steps, nq) shaped tensor with full state including robot and objects
-        - qvel_ref: (max_sim_steps, nv) shaped tensor with full velocities
-        - ctrl_ref: (max_sim_steps, nu) shaped tensor with control actions
+        - qpos_ref: (max_sim_steps, nq)
+        - qvel_ref: (max_sim_steps, nv)
+        - ctrl_ref: (max_sim_steps, nu_action)
     """
-    action_manager = env.action_manager
-    command_manager = env.command_manager
+    hdmi_env = env.hdmi_env
+    action_manager = hdmi_env.action_manager
+    command_manager = hdmi_env.command_manager
 
     # Get full motion data slice
     motion_data = command_manager.dataset.get_slice(
@@ -589,76 +597,65 @@ def get_reference(
     ref_joint_pos = motion_data.joint_pos[0, :, action_indices_motion]
 
     # Convert to actions using action manager's normalization
-    # action = (joint_pos - default_joint_pos) / action_scaling
     default_joint_pos = action_manager.default_joint_pos[0, action_manager.joint_ids]
     action_scaling = action_manager.action_scaling
     ctrl_ref = (ref_joint_pos - default_joint_pos) / action_scaling
 
     # Extract reference qpos and qvel for all bodies
-    # Robot joint positions and velocities
-    robot_joint_pos = motion_data.joint_pos[0]  # (steps, num_joints)
-    robot_joint_vel = motion_data.joint_vel[0]  # (steps, num_joints)
+    robot_joint_pos = motion_data.joint_pos[0]
+    robot_joint_vel = motion_data.joint_vel[0]
 
-    # Root body (pelvis) states
     root_body_idx = command_manager.root_body_idx_motion
-    root_pos = motion_data.body_pos_w[0, :, root_body_idx, :]  # (steps, 3)
-    root_quat = motion_data.body_quat_w[0, :, root_body_idx, :]  # (steps, 4)
-    root_lin_vel = motion_data.body_lin_vel_w[0, :, root_body_idx, :]  # (steps, 3)
-    root_ang_vel = motion_data.body_ang_vel_w[0, :, root_body_idx, :]  # (steps, 3)
+    root_pos = motion_data.body_pos_w[0, :, root_body_idx, :]
+    root_quat = motion_data.body_quat_w[0, :, root_body_idx, :]
+    root_lin_vel = motion_data.body_lin_vel_w[0, :, root_body_idx, :]
+    root_ang_vel = motion_data.body_ang_vel_w[0, :, root_body_idx, :]
 
-    # Build qpos: [root_pos (3), root_quat (4), joint_pos (n_joints)]
     qpos_ref = torch.cat([root_pos, root_quat, robot_joint_pos], dim=-1)
-
-    # Build qvel: [root_lin_vel (3), root_ang_vel (3), joint_vel (n_joints)]
     qvel_ref = torch.cat([root_lin_vel, root_ang_vel, robot_joint_vel], dim=-1)
 
     # Add object states if available
     if hasattr(command_manager, "object_body_id_motion"):
         object_body_idx = command_manager.object_body_id_motion
-        object_pos = motion_data.body_pos_w[0, :, object_body_idx, :]  # (steps, 3)
-        object_quat = motion_data.body_quat_w[0, :, object_body_idx, :]  # (steps, 4)
-        object_lin_vel = motion_data.body_lin_vel_w[
-            0, :, object_body_idx, :
-        ]  # (steps, 3)
-        object_ang_vel = motion_data.body_ang_vel_w[
-            0, :, object_body_idx, :
-        ]  # (steps, 3)
+        object_pos = motion_data.body_pos_w[0, :, object_body_idx, :]
+        object_quat = motion_data.body_quat_w[0, :, object_body_idx, :]
+        object_lin_vel = motion_data.body_lin_vel_w[0, :, object_body_idx, :]
+        object_ang_vel = motion_data.body_ang_vel_w[0, :, object_body_idx, :]
 
-        # Append object states to qpos and qvel
         qpos_ref = torch.cat([qpos_ref, object_pos, object_quat], dim=-1)
         qvel_ref = torch.cat([qvel_ref, object_lin_vel, object_ang_vel], dim=-1)
 
-        # Add object joint if available
         if (
             hasattr(command_manager, "object_joint_idx_motion")
             and command_manager.object_joint_idx_motion is not None
         ):
             object_joint_pos = motion_data.joint_pos[
                 0, :, command_manager.object_joint_idx_motion
-            ].unsqueeze(-1)  # (steps, 1)
+            ].unsqueeze(-1)
             object_joint_vel = motion_data.joint_vel[
                 0, :, command_manager.object_joint_idx_motion
-            ].unsqueeze(-1)  # (steps, 1)
+            ].unsqueeze(-1)
             qpos_ref = torch.cat([qpos_ref, object_joint_pos], dim=-1)
             qvel_ref = torch.cat([qvel_ref, object_joint_vel], dim=-1)
 
-    # repeat last frame by config.horizon_steps + config.ctrl_steps times to avoid overflow
-    last_frame = qpos_ref[-1:].repeat(config.horizon_steps + config.ctrl_steps, 1)
-    qpos_ref = torch.cat([qpos_ref, last_frame], dim=0)
-    last_frame = qvel_ref[-1:].repeat(config.horizon_steps + config.ctrl_steps, 1) * 0.0
-    qvel_ref = torch.cat([qvel_ref, last_frame], dim=0)
-    last_frame = ctrl_ref[-1:].repeat(config.horizon_steps + config.ctrl_steps, 1)
-    ctrl_ref = torch.cat([ctrl_ref, last_frame], dim=0)
+    # Pad last frames to avoid overflow
+    pad_len = config.horizon_steps + config.ctrl_steps
+    last_qpos = qpos_ref[-1:].repeat(pad_len, 1)
+    qpos_ref = torch.cat([qpos_ref, last_qpos], dim=0)
+    last_qvel = qvel_ref[-1:].repeat(pad_len, 1) * 0.0
+    qvel_ref = torch.cat([qvel_ref, last_qvel], dim=0)
+    last_ctrl = ctrl_ref[-1:].repeat(pad_len, 1)
+    ctrl_ref = torch.cat([ctrl_ref, last_ctrl], dim=0)
 
-    # verify shape
-    nq_ref = qpos_ref.shape[-1]
-    nq_env = env.sim.mj_model.nq
-    assert nq_ref == nq_env, f"nq_ref: {nq_ref}, nq_env: {nq_env}"
-    nv_ref = qvel_ref.shape[-1]
-    nv_env = env.sim.mj_model.nv
-    assert nv_ref == nv_env, f"nv_ref: {nv_ref}, nv_env: {nv_env}"
-    nu_ref = ctrl_ref.shape[-1]
-    nu_env = config.nu  # NOTE: the action dimension in action manager is different from the one in simulator
-    assert nu_ref == nu_env, f"nu_ref: {nu_ref}, nu_env: {nu_env}"
+    # Verify shapes
+    assert qpos_ref.shape[-1] == env.mj_model.nq, (
+        f"nq_ref: {qpos_ref.shape[-1]}, nq_env: {env.mj_model.nq}"
+    )
+    assert qvel_ref.shape[-1] == env.mj_model.nv, (
+        f"nv_ref: {qvel_ref.shape[-1]}, nv_env: {env.mj_model.nv}"
+    )
+    assert ctrl_ref.shape[-1] == config.nu, (
+        f"nu_ref: {ctrl_ref.shape[-1]}, nu_env: {config.nu}"
+    )
 
     return qpos_ref, qvel_ref, ctrl_ref
