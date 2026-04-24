@@ -35,6 +35,7 @@ from spider.simulators.hdmi import (
     get_reference,
     get_reward,
     get_terminal_reward,
+    get_terminate,
     get_trace,
     load_env_params,
     load_state,
@@ -110,9 +111,14 @@ def main(config: Config):
     mj_data_ref = mujoco.MjData(mj_model)
 
     # Initialize mj_data with current env state
-    sim_data = env.sim.data
-    mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-    mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
+    if hasattr(env.sim, 'data'):
+        sim_data = env.sim.data
+        mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
+        mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
+    else:
+        # MuJoCo backend: read directly from mj_data
+        mj_data.qpos[:] = env.sim.mj_data.qpos[:]
+        mj_data.qvel[:] = env.sim.mj_data.qvel[:]
     mujoco.mj_step(mj_model, mj_data)
     mj_data.time = 0.0
 
@@ -159,6 +165,7 @@ def main(config: Config):
         load_state,
         get_reward,
         get_terminal_reward,
+        get_terminate,
         get_trace,
         save_env_params,
         load_env_params,
@@ -168,7 +175,7 @@ def main(config: Config):
     optimize = make_optimize_fn(optimize_once)
 
     # Initial controls - first horizon_steps from reference
-    ctrls = ctrl_ref[: config.horizon_steps]
+    ctrls = ctrl_ref[: config.horizon_steps].to(config.device)
 
     # Buffers for saving info and trajectory
     info_list = []

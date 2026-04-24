@@ -40,7 +40,8 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
 
     # Import HDMI dependencies
     import active_adaptation
-    from active_adaptation.envs import SimpleEnv
+    active_adaptation.set_backend("mujoco")
+    from active_adaptation.envs.locomotion import SimpleEnv
 
     # Use active_adaptation module path to find HDMI directory
     hdmi_dir = os.path.dirname(os.path.dirname(active_adaptation.__file__))
@@ -58,7 +59,8 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
     cfg = OmegaConf.merge(base_cfg, task_cfg)
 
     # Override with SPIDER config parameters
-    cfg.num_envs = int(config.num_samples)
+    # MuJoCo backend is single-env; SPIDER handles batching via Warp
+    cfg.num_envs = 1
     # Disable mjlab viewer if "mjlab" is not in viewer string (e.g., "mujoco-rerun")
     cfg.viewer.headless = "mjlab" not in config.viewer.lower()
 
@@ -105,22 +107,8 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
         cfg.action.max_delay = 0
         cfg.action.alpha = [1.0, 1.0]  # Set to fixed value
 
-    # Remove randomizations - set all ranges to their mean
-    for rand_key, rand_params in cfg.randomization.items():
-        if rand_params is not None and isinstance(rand_params, dict):
-            for param_key, param_value in rand_params.items():
-                if isinstance(param_value, (list, tuple)) and len(param_value) == 2:
-                    mean_val = (param_value[0] + param_value[1]) / 2.0
-                    cfg.randomization[rand_key][param_key] = [mean_val, mean_val]
-                elif isinstance(param_value, dict):
-                    # Handle nested dicts
-                    for sub_key, sub_value in param_value.items():
-                        if isinstance(sub_value, (list, tuple)) and len(sub_value) == 2:
-                            mean_val = (sub_value[0] + sub_value[1]) / 2.0
-                            cfg.randomization[rand_key][param_key][sub_key] = [
-                                mean_val,
-                                mean_val,
-                            ]
+    # Remove randomizations - they use PhysX APIs not available in MuJoCo backend
+    cfg.randomization = {}
 
     # Filter out tracking reward groups and debug rewards
     filtered_rewards = {}
@@ -183,15 +171,23 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]):
 
     env.reset()
 
-    # Create a backup data structure for save/load state
-    # This is similar to data_wp_prev in mjwp.py
+    # Create Warp data structures for state save/load
+    nconmax = getattr(getattr(env.sim, 'cfg', None), 'nconmax', config.nconmax_per_env)
+    njmax = getattr(getattr(env.sim, 'cfg', None), 'njmax', config.njmax_per_env)
     with wp.ScopedDevice(env.sim.device):
+        env.sim.wp_data = mjwarp.put_data(
+            env.sim.mj_model,
+            env.sim.mj_data,
+            nworld=env.num_envs,
+            nconmax=int(nconmax),
+            njmax=int(njmax),
+        )
         env.data_wp_prev = mjwarp.put_data(
             env.sim.mj_model,
             env.sim.mj_data,
             nworld=env.num_envs,
-            nconmax=env.sim.cfg.nconmax,
-            njmax=env.sim.cfg.njmax,
+            nconmax=int(nconmax),
+            njmax=int(njmax),
         )
 
     return env

@@ -110,6 +110,8 @@ class Config:
     improvement_check_steps: int = 1
     # Termination parameters
     terminate_resample: bool = False
+    num_resamples: int = 0
+    resample_ratio: float = 0.2
     object_pos_threshold: float = 0.1
     object_rot_threshold: float = 0.3
     max_revert_forward_attempts: int = 3
