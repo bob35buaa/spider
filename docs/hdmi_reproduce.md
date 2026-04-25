@@ -71,6 +71,8 @@ git checkout feat/spider-mujoco-v2
 
 # HDMI 分支push方法
 git push myfork feat/spider-mujoco-v2
+# spider push
+git push origin feat/hdmi-uv-env
 ```
 
 ---
