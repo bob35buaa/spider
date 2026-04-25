@@ -68,6 +68,9 @@ EOF
 # 确保 HDMI 在正确分支
 cd /path/to/HDMI
 git checkout feat/spider-mujoco-v2
+
+# HDMI 分支push方法
+git push myfork feat/spider-mujoco-v2
 ```
 
 ---
