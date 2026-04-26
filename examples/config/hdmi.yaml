@@ -41,6 +41,10 @@ temperature: 0.1
 num_resamples: 0
 resample_ratio: 0.2
 
+# MuJoCo Warp GPU parameters
+nconmax_per_env: 200  # max contacts per environment (humanoid + object)
+njmax_per_env: 600    # max constraints per environment
+
 # Domain randomization (not used for HDMI, kept for compatibility)
 num_dr: 1
 

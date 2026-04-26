@@ -21,6 +21,7 @@ import loguru
 import mujoco
 import numpy as np
 import torch
+import warp as wp
 from omegaconf import DictConfig
 
 from spider.config import Config, process_config
@@ -35,9 +36,11 @@ from spider.simulators.hdmi import (
     get_reference,
     get_reward,
     get_terminal_reward,
+    get_terminate,
     get_trace,
     load_env_params,
     load_state,
+    precompute_reward_reference,
     save_env_params,
     save_state,
     setup_env,
@@ -61,7 +64,8 @@ def main(config: Config):
         config.max_sim_steps = env.max_episode_length
         loguru.logger.info(f"Max simulation steps set to {config.max_sim_steps}")
 
-    config.nu = env.action_spec.shape[-1]
+    # nu = number of actuators in scene XML (joint position targets)
+    config.nu = env.model_cpu.nu
 
     # Process config, set defaults and derived fields
     config = process_config(config)
@@ -84,35 +88,37 @@ def main(config: Config):
 
     # Get reference data (states and controls)
     qpos_ref, qvel_ref, ctrl_ref = get_reference(config, env)
+    # Precompute all reward reference data on GPU (eliminates CPU sync in MPC)
+    precompute_reward_reference(config, env)
+    # Move to device for MPC
+    qpos_ref = qpos_ref.to(config.device)
+    qvel_ref = qvel_ref.to(config.device)
+    ctrl_ref = ctrl_ref.to(config.device)
     np.savez(
         f"{config.output_dir}/trajectory_kinematic.npz",
         qpos=qpos_ref.detach().cpu().numpy(),
         qvel=qvel_ref.detach().cpu().numpy(),
         ctrl=ctrl_ref.detach().cpu().numpy(),
     )
-    # optional: also save env xml
-    # env.scene.to_zip(Path(config.output_dir) / "../scene.zip")
 
-    # Setup mujoco model and data from HDMI env (for rendering)
-    default_xml_path = Path(
-        "example_datasets/processed/hdmi/unitree_g1/humanoid_object/move_suitcase/scene/mjlab scene.xml"
+    # Setup mujoco model and data for rendering (use scene XML model)
+    mj_model = env.model_cpu
+    config.model_path = str(
+        Path("example_datasets/processed/hdmi")
+        / config.robot_type
+        / config.embodiment_type
+        / config.task
+        / "scene"
+        / "mjlab scene.xml"
     )
-    if default_xml_path.exists():
-        mj_model = mujoco.MjModel.from_xml_path(str(default_xml_path))
-        config.model_path = default_xml_path
-    else:
-        loguru.logger.warning(
-            f"Default XML path {default_xml_path} does not exist, using env model"
-        )
-        mj_model = env.sim.mj_model
-        config.model_path = "hdmi_scene_from_env"
     mj_data = mujoco.MjData(mj_model)
     mj_data_ref = mujoco.MjData(mj_model)
 
-    # Initialize mj_data with current env state
-    sim_data = env.sim.data
-    mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-    mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
+    # Initialize mj_data with current env state (read from Warp)
+    qpos_wp = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+    qvel_wp = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+    mj_data.qpos[:] = qpos_wp
+    mj_data.qvel[:] = qvel_wp
     mujoco.mj_step(mj_model, mj_data)
     mj_data.time = 0.0
 
@@ -125,30 +131,6 @@ def main(config: Config):
     images = []
 
     # Setup viewer and renderer
-    # Note: mjlab viewer is disabled via cfg.viewer.headless in setup_env
-    # For HDMI with rerun, build scene directly from spec and model
-    # if "rerun" in config.viewer:
-    #     # Build and log 3D scene from HDMI's spec and model
-    #     if default_xml_path.exists():
-    #         xml_path = default_xml_path
-    #     else:
-    #         loguru.logger.info(
-    #             f"Default scene path {default_xml_path} does not exist, using None"
-    #         )
-    #         xml_path = None
-    #     loguru.logger.info("Building Rerun scene from HDMI spec and model...")
-    #     config.viewer_body_entity_and_ids = build_and_log_scene_from_spec(
-    #         spec=mj_spec,
-    #         model=mj_model,
-    #         xml_path=xml_path,
-    #         entity_root="mujoco",
-    #     )
-    #     loguru.logger.info(
-    #         f"Rerun scene built with {len(config.viewer_body_entity_and_ids)} body entities"
-    #     )
-    #     # Set model_path to dummy value to indicate scene is already built
-    #     config.model_path = "hdmi_scene_from_spec"
-
     run_viewer = setup_viewer(config, mj_model, mj_data)
     renderer = setup_renderer(config, mj_model)
 
@@ -159,6 +141,7 @@ def main(config: Config):
         load_state,
         get_reward,
         get_terminal_reward,
+        get_terminate,
         get_trace,
         save_env_params,
         load_env_params,
@@ -195,14 +178,15 @@ def main(config: Config):
             for i in range(config.ctrl_steps):
                 ctrl = ctrls[i]
                 ctrl_repeat = ctrl.unsqueeze(0).repeat(
-                    int(config.num_samples), 1
-                )  # (batch_size, num_actions)
+                    env.num_worlds, 1
+                )
                 step_env(config, env, ctrl_repeat)
 
-                # Update mj_data with current state
-                sim_data = env.sim.data
-                mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-                mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
+                # Update mj_data with current state (read from Warp world 0)
+                qpos_wp = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+                qvel_wp = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+                mj_data.qpos[:] = qpos_wp
+                mj_data.qvel[:] = qvel_wp
                 mj_data.time = (sim_step + 1) * config.sim_dt
 
                 # Render video if enabled
@@ -212,7 +196,6 @@ def main(config: Config):
                     and i % int(np.round(config.render_dt / config.sim_dt)) == 0
                 )
                 if should_render:
-                    # Get reference state from reference data
                     ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
                     mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
                     mj_data_ref.qvel[:] = qvel_ref[ref_idx].detach().cpu().numpy()
@@ -222,7 +205,6 @@ def main(config: Config):
                     )
                     images.append(image)
                 if "rerun" in config.viewer or "viser" in config.viewer:
-                    # manually log the state
                     log_frame(
                         mj_data,
                         sim_time=mj_data.time,
@@ -256,9 +238,10 @@ def main(config: Config):
             ctrls = torch.cat([prev_ctrl, new_ctrl], dim=0)
 
             # Sync viewer state and render
-            sim_data = env.sim.data
-            mj_data.qpos[:] = sim_data.qpos[0].detach().cpu().numpy()
-            mj_data.qvel[:] = sim_data.qvel[0].detach().cpu().numpy()
+            qpos_wp = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
+            qvel_wp = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
+            mj_data.qpos[:] = qpos_wp
+            mj_data.qvel[:] = qvel_wp
             # Update reference state
             ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
             mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
