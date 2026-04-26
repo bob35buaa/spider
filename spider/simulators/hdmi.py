@@ -183,15 +183,16 @@ def _find_in_scene(
 
 
 def _compile_step(
-    model_wp: mjwarp.Model, data_wp: mjwarp.Data
+    model_wp: mjwarp.Model, data_wp: mjwarp.Data, decimation: int = 1
 ) -> wp.ScopedCapture.Graph:
-    """Warm up and capture a CUDA graph that runs a single mjwarp.step."""
+    """Capture a CUDA graph that runs decimation × mjwarp.step."""
 
-    def _step_once():
-        mjwarp.step(model_wp, data_wp)
+    def _step_n():
+        for _ in range(decimation):
+            mjwarp.step(model_wp, data_wp)
 
     with wp.ScopedCapture() as capture:
-        _step_once()
+        _step_n()
     wp.synchronize()
     return capture.graph
 
@@ -446,7 +447,10 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         raise FileNotFoundError(f"Scene XML not found: {scene_xml_path}")
 
     model_cpu = mujoco.MjModel.from_xml_path(scene_xml_path)
-    model_cpu.opt.timestep = float(config.sim_dt)
+    # Use small physics timestep with decimation for stability (matches HDMI)
+    physics_dt = 0.002
+    decimation = int(round(config.sim_dt / physics_dt))
+    model_cpu.opt.timestep = physics_dt
     model_cpu.opt.iterations = 5
     model_cpu.opt.ls_iterations = 10
     model_cpu.opt.o_solref = [0.02, 1.0]
@@ -455,40 +459,91 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
 
     loguru.logger.info(
         f"Scene XML: nq={model_cpu.nq}, nv={model_cpu.nv}, nu={model_cpu.nu}, "
-        f"nbody={model_cpu.nbody}"
+        f"nbody={model_cpu.nbody}, physics_dt={physics_dt}, decimation={decimation}"
     )
 
-    # 3. Initialize CPU data with initial pose from HDMI env
+    # 3. Override actuator gains with HDMI's PD gains (scene XML gains are too weak)
+    robot = hdmi_env.scene["robot"]
+    hdmi_stiffness = robot._data.joint_stiffness[0].cpu().numpy()
+    hdmi_damping = robot._data.joint_damping[0].cpu().numpy()
+    hdmi_joint_names = [
+        mujoco.mj_id2name(hdmi_env.sim.mj_model, mujoco.mjtObj.mjOBJ_JOINT, ji)
+        for ji in range(hdmi_env.sim.mj_model.njnt)
+        if hdmi_env.sim.mj_model.jnt_type[ji] == 3  # hinge only
+    ]
+    for ai in range(model_cpu.nu):
+        act_name = mujoco.mj_id2name(model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, ai)
+        # Actuator name = "robot/{joint_name}" → strip prefix
+        joint_name = act_name.split("/", 1)[1] if "/" in act_name else act_name
+        if joint_name in hdmi_joint_names:
+            idx = hdmi_joint_names.index(joint_name)
+            kp = float(hdmi_stiffness[idx])
+            kd = float(hdmi_damping[idx])
+            # affine actuator: gainprm[0]=Kp, biasprm=[0, -Kp, -Kd]
+            model_cpu.actuator_gainprm[ai, 0] = kp
+            model_cpu.actuator_biasprm[ai, 1] = -kp
+            model_cpu.actuator_biasprm[ai, 2] = -kd
+
+    loguru.logger.info("Actuator gains overridden with HDMI PD gains")
+
+    # 4. Initialize CPU data with initial pose from HDMI env
     data_cpu = mujoco.MjData(model_cpu)
 
     # Get initial qpos from HDMI env and map to scene model
     hdmi_mj_data = hdmi_env.sim.mj_data
     hdmi_mj_model = hdmi_env.sim.mj_model
 
-    # Copy joint positions by name mapping
-    for ji in range(hdmi_mj_model.njnt):
-        jname = mujoco.mj_id2name(hdmi_mj_model, mujoco.mjtObj.mjOBJ_JOINT, ji)
-        if not jname:
-            continue
-        # Try direct, robot/, suitcase/ prefixes
-        scene_jid = _find_in_scene(model_cpu, mujoco.mjtObj.mjOBJ_JOINT, jname)
-        if scene_jid < 0:
-            continue
+    # Copy freejoint positions from MOTION DATA (HDMI mj_data has default pose)
+    cmd = hdmi_env.command_manager
+    motion_data_init = cmd.dataset.get_slice(cmd.motion_ids, 0, steps=1)
+    root_body_idx = cmd.root_body_idx_motion
+    obj_body_idx = cmd.object_body_id_motion
 
-        src_qadr = hdmi_mj_model.jnt_qposadr[ji]
-        dst_qadr = model_cpu.jnt_qposadr[scene_jid]
-        jtype = hdmi_mj_model.jnt_type[ji]
+    freejoint_init = {
+        "pelvis": {
+            "pos": motion_data_init.body_pos_w[0, 0, root_body_idx].numpy(),
+            "quat": motion_data_init.body_quat_w[0, 0, root_body_idx].numpy(),
+        },
+        "suitcase": {
+            "pos": motion_data_init.body_pos_w[0, 0, obj_body_idx].numpy(),
+            "quat": motion_data_init.body_quat_w[0, 0, obj_body_idx].numpy(),
+        },
+    }
 
-        if jtype == 0:  # freejoint: 7 qpos
-            data_cpu.qpos[dst_qadr : dst_qadr + 7] = hdmi_mj_data.qpos[
-                src_qadr : src_qadr + 7
-            ]
-        elif jtype == 3:  # hinge: 1 qpos
-            data_cpu.qpos[dst_qadr] = hdmi_mj_data.qpos[src_qadr]
+    for ji in range(model_cpu.njnt):
+        if model_cpu.jnt_type[ji] != 0:  # freejoint only
+            continue
+        scene_bid = model_cpu.jnt_bodyid[ji]
+        scene_bname = mujoco.mj_id2name(
+            model_cpu, mujoco.mjtObj.mjOBJ_BODY, scene_bid
+        )
+        bare_name = scene_bname.split("/")[-1] if scene_bname else ""
+        if bare_name not in freejoint_init:
+            continue
+        dst_qadr = model_cpu.jnt_qposadr[ji]
+        init = freejoint_init[bare_name]
+        data_cpu.qpos[dst_qadr : dst_qadr + 3] = init["pos"]
+        data_cpu.qpos[dst_qadr + 3 : dst_qadr + 7] = init["quat"]
+        loguru.logger.info(
+            f"Freejoint init from motion: {scene_bname} "
+            f"pos={init['pos'].tolist()}"
+        )
+
+    # Also set hinge joints from motion data initial frame
+    motion_joint_names = cmd.dataset.joint_names
+    joint_pos_init = motion_data_init.joint_pos[0, 0]  # (njoint,)
+    for mi, jname in enumerate(motion_joint_names):
+        mj_jid = _find_in_scene(model_cpu, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        if mj_jid < 0:
+            continue
+        if model_cpu.jnt_type[mj_jid] != 3:  # hinge only
+            continue
+        qadr = model_cpu.jnt_qposadr[mj_jid]
+        data_cpu.qpos[qadr] = float(joint_pos_init[mi])
 
     mujoco.mj_step(model_cpu, data_cpu)
 
-    # 4. Create MuJoCo Warp GPU environment
+    # 5. Create MuJoCo Warp GPU environment
     wp.set_device(device)
     with wp.ScopedDevice(device):
         model_wp = mjwarp.put_model(model_cpu)
@@ -506,13 +561,13 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
             nconmax=int(config.nconmax_per_env),
             njmax=int(config.njmax_per_env),
         )
-        graph = _compile_step(model_wp, data_wp)
+        graph = _compile_step(model_wp, data_wp, decimation=decimation)
 
     loguru.logger.info(
         f"MuJoCo Warp GPU env created: N={N}, device={device}"
     )
 
-    # 5. Build reward configuration
+    # 6. Build reward configuration
     cmd = hdmi_env.command_manager
     mj_model = model_cpu
     tracking_names = list(cmd.tracking_keypoint_names)

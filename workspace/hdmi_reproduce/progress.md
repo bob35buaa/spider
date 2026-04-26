@@ -64,10 +64,45 @@
 
 GPU pipeline 完整可用，性能达标。但 CEM 仍然早停，reward 未达目标。
 
-### 下一步 (R006)
-- 降低 joint_noise_scale: 0.05-0.1 (ctrl 现在是弧度不是归一化)
-- 增大 temperature: 0.5-1.0
-- 对比 HF 的 CEM 参数
+### R006 开始 (2026-04-26 续)
+
+计划: `workspace/hdmi_reproduce/plan/R006_plan.md`
+
+根因分析:
+1. 噪声 0.2 rad 比 HF 等效噪声 (0.014~0.11 rad) 大 2~14x
+2. improvement_threshold=0.02 太高 (HF mean improvement=0.011)
+3. data_id 应为 1 (HF 参考数据)
+
+改动: noise=0.05, threshold=0.005, check_steps=3, temp=0.3, data_id=1
+
+### R006 结果
+
+| 指标 | R006 (无decimation) | R006b (decimation=10) | HF (data_id=1) |
+|------|-------|-------|------|
+| rew_mean | 2.71 | 2.71 | 5.90 |
+| tracking | 0.83 | 0.83 | 2.19 |
+| obj_track | 1.88 | 1.88 | 3.71 |
+| opt_steps | 3.58 | 3.18 | 3.12 |
+
+opt_steps 修复成功 (1→3.18)，但 reward 没有实质改善。
+加了 decimation (physics_dt=0.002, 10 sub-steps) 后指标几乎不变。
+obj_track Q4=0.17 崩溃模式不变 — 非 CEM/decimation 问题。
+视频待检查：机器人是否还摔倒？
+
+### R006c: 修复 actuator gains (根因！)
+
+Scene XML 的 PD 增益比 HDMI 弱 2~5x (hip_pitch: Kp=40 vs HDMI=200)。
+在 setup_env 中用 HDMI 的 stiffness/damping 覆盖 scene XML actuator gains。
+
+| 指标 | R006b | **R006c** | HF (data_id=1) | 目标 |
+|------|-------|-----------|------|------|
+| rew_mean | 2.71 | **4.13** | 5.90 | > 4.0 ✅ |
+| tracking | 0.83 | **2.25** | 2.19 | > 1.5 ✅ |
+| obj_track | 1.88 | **1.88** | 3.71 | > 2.5 ❌ |
+| opt_steps | 3.18 | **4.84** | 3.12 | > 1.5 ✅ |
+
+tracking 直接翻 3x！增益修复是最关键的改动。
+剩余差距: obj_track Q4=0.17 (suitcase 后半程丢失)
 
 ---
 

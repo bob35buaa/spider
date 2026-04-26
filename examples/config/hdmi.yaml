@@ -10,7 +10,7 @@ viewer: "mujoco-rerun" # "mujoco" for visualization, "none" for headless
 rerun_spawn: false
 embodiment_type: "humanoid_object" # don't use specific noise scaling for hands
 device: "cuda:0"
-joint_noise_scale: 0.2 # disable specific noise scaling for robot
+joint_noise_scale: 0.05 # ~3 degrees; HF effective range was 0.014-0.11 rad
 
 # Simulation and control parameters
 simulator: hdmi
@@ -34,10 +34,10 @@ num_samples: 1024 # Number of parallel samples for sampling
 last_ctrl_noise_scale: 1.0
 first_ctrl_noise_scale: 1.0
 final_noise_scale: 0.1
-improvement_threshold: 0.02
-improvement_check_steps: 1
+improvement_threshold: 0.005
+improvement_check_steps: 3
 terminal_rew_scale: 1.0
-temperature: 0.1
+temperature: 0.3
 num_resamples: 0
 resample_ratio: 0.2
 

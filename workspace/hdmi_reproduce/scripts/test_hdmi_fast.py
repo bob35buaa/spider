@@ -9,7 +9,7 @@ import warp as wp
 sys.argv = [
     "test",
     "task=move_suitcase",
-    "+data_id=0",
+    "+data_id=1",
     "viewer=none",
     "save_video=false",
     "max_sim_steps=20",
@@ -40,17 +40,16 @@ def quick_test():
     """Quick functional + perf test."""
     from hydra import compose, initialize
 
-    with initialize(version_base=None, config_path="examples/config"):
+    with initialize(version_base=None, config_path="../../../examples/config"):
         cfg = compose(
             config_name="hdmi",
             overrides=[
                 "task=move_suitcase",
-                "+data_id=0",
+                "+data_id=1",
                 "viewer=none",
                 "save_video=false",
                 "max_sim_steps=20",
                 "num_samples=64",
-                "joint_noise_scale=0.2",
                 "knot_dt=0.2",
                 "ctrl_dt=0.04",
                 "horizon=0.8",

@@ -114,6 +114,14 @@ def main(config: Config):
     mj_data = mujoco.MjData(mj_model)
     mj_data_ref = mujoco.MjData(mj_model)
 
+    # Adjust tracking camera to see both robot and suitcase
+    cam_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_CAMERA, "robot/tracking")
+    if cam_id >= 0:
+        # Offset from pelvis: right-front, high up, looking down at scene
+        mj_model.cam_pos[cam_id] = [3.0, 0.5, 1.0]
+        # Quaternion for ~30° downward pitch from side view
+        mj_model.cam_quat[cam_id] = [0.60, 0.60, 0.36, 0.36]
+
     # Initialize mj_data with current env state (read from Warp)
     qpos_wp = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
     qvel_wp = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
@@ -188,6 +196,7 @@ def main(config: Config):
                 mj_data.qpos[:] = qpos_wp
                 mj_data.qvel[:] = qvel_wp
                 mj_data.time = (sim_step + 1) * config.sim_dt
+                mujoco.mj_forward(mj_model, mj_data)
 
                 # Render video if enabled
                 should_render = (
@@ -242,6 +251,7 @@ def main(config: Config):
             qvel_wp = wp.to_torch(env.data_wp.qvel)[0].detach().cpu().numpy()
             mj_data.qpos[:] = qpos_wp
             mj_data.qvel[:] = qvel_wp
+            mujoco.mj_forward(mj_model, mj_data)
             # Update reference state
             ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
             mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
