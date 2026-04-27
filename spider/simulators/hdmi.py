@@ -552,26 +552,25 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
     )
 
     # 3. Override actuator gains with HDMI's PD gains (scene XML gains are too weak)
+    # joint_stiffness/damping are in Isaac (breadth-first) order — must use
+    # robot.joint_names (Isaac order) for indexing, NOT MuJoCo joint order.
     robot = hdmi_env.scene["robot"]
     hdmi_stiffness = robot._data.joint_stiffness[0].cpu().numpy()
     hdmi_damping = robot._data.joint_damping[0].cpu().numpy()
-    hdmi_joint_names = [
-        mujoco.mj_id2name(hdmi_env.sim.mj_model, mujoco.mjtObj.mjOBJ_JOINT, ji)
-        for ji in range(hdmi_env.sim.mj_model.njnt)
-        if hdmi_env.sim.mj_model.jnt_type[ji] == 3  # hinge only
-    ]
+    isaac_joint_names = list(robot.joint_names)  # Isaac breadth-first order
     for ai in range(model_cpu.nu):
         act_name = mujoco.mj_id2name(model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, ai)
         # Actuator name = "robot/{joint_name}" → strip prefix
         joint_name = act_name.split("/", 1)[1] if "/" in act_name else act_name
-        if joint_name in hdmi_joint_names:
-            idx = hdmi_joint_names.index(joint_name)
+        if joint_name in isaac_joint_names:
+            idx = isaac_joint_names.index(joint_name)
             kp = float(hdmi_stiffness[idx])
             kd = float(hdmi_damping[idx])
             # affine actuator: gainprm[0]=Kp, biasprm=[0, -Kp, -Kd]
             model_cpu.actuator_gainprm[ai, 0] = kp
             model_cpu.actuator_biasprm[ai, 1] = -kp
             model_cpu.actuator_biasprm[ai, 2] = -kd
+            loguru.logger.debug(f"  {joint_name}: kp={kp:.1f}, kd={kd:.1f}")
 
     loguru.logger.info("Actuator gains overridden with HDMI PD gains")
 

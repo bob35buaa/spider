@@ -179,6 +179,34 @@ Claims 验证:
 3. ❌ 增强 guidance (kp=20, decay=0.85) 后 pelvis_z=0.63 < 0.7 (仍然弯腰)
 4. ✅ rew_mean=5.66 > 5.5 (HF=5.90 的 96%)
 
+### R012: 修复 PD 增益索引排序 bug + 完整 10s (2026-04-27)
+
+计划: `workspace/hdmi_reproduce/plan/R012_stiffness_index_fix_plan.md`
+
+#### 根因分析
+
+发现 `hdmi.py:558-574` 的 **PD 增益索引排序 bug**: 用 MuJoCo 深度优先关节顺序索引 IsaacLab 广度优先的 joint_stiffness 数组。29 个关节中 20 个获得错误增益。
+
+关键错误:
+- ankle 7.5-10x 过高 (20→150-200): 脚踝僵硬
+- waist 7.5x 过低 (150→20): 躯干无力
+- 右臂归零 (40→0): 右手搬箱子无力
+- 左腕异常僵硬 (0→40)
+
+额外发现: R011 只跑了 5s (max_sim_steps=250 是 sim 步), HF 跑 10s。
+
+#### 改动
+
+| Fix | 文件 | 改动 |
+|-----|------|------|
+| 1 | hdmi.py L555-574 | `robot.joint_names` (Isaac) 替代 MuJoCo joint list |
+| 2 | 命令行 | 不传 max_sim_steps, 用 yaml 默认 -1 (10s) |
+
+#### 运行中...
+
+- 命令: `uv run examples/run_hdmi.py +data_id=1 output_dir=workspace/hdmi_reproduce/results/R012 viewer=none show_viewer=false save_video=false`
+- max_sim_steps=500 (自动), 估计 ~4000s
+
 ---
 
 ## R003 历史记录 (2026-04-25)
