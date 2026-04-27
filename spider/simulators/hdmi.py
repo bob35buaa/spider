@@ -1367,11 +1367,19 @@ def load_env_params(config: Config, env: HDMIEnv, env_param: dict):
 
     import numpy as np
 
+    # Support per-actuator arrays (pos vs rot have different gains)
+    kp_arr = np.atleast_1d(np.asarray(kp, dtype=np.float32))
+    kd_arr = np.atleast_1d(np.asarray(kd, dtype=np.float32))
+    if kp_arr.size == 1:
+        kp_arr = np.full(len(object_actuator_ids), kp_arr.item(), dtype=np.float32)
+    if kd_arr.size == 1:
+        kd_arr = np.full(len(object_actuator_ids), kd_arr.item(), dtype=np.float32)
+
     # Update CPU model
-    for aid in object_actuator_ids:
-        env.model_cpu.actuator_gainprm[aid, 0] = kp
-        env.model_cpu.actuator_biasprm[aid, 1] = -kp
-        env.model_cpu.actuator_biasprm[aid, 2] = -kd
+    for i, aid in enumerate(object_actuator_ids):
+        env.model_cpu.actuator_gainprm[aid, 0] = kp_arr[i]
+        env.model_cpu.actuator_biasprm[aid, 1] = -kp_arr[i]
+        env.model_cpu.actuator_biasprm[aid, 2] = -kd_arr[i]
 
     # Propagate to MJWarp model
     if hasattr(env.model_wp, "actuator_gainprm"):

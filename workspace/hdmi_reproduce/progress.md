@@ -130,6 +130,55 @@ tracking 直接翻 3x！增益修复是最关键的改动。
 2. 腕关节噪声归零限制了搜索空间
 3. 需要调整 contact guidance 增益或 CEM 参数
 
+### R011 深度分析 + 优化 (2026-04-27)
+
+计划: `workspace/hdmi_reproduce/plan/R011_plan.md`
+
+#### 根因分析
+
+通过对比 R008/R010b NPZ 轨迹数据，发现三个独立退步因素：
+
+1. **contact guidance 增益 bug (最严重)**: `run_hdmi.py` 给所有 6 个 object actuator 传标量 kp=10.0，但 rot actuator 应该用 0.3。对比 `run_mjwp.py` 的正确实现是 per-actuator array。rot gain 高了 33x！
+2. **wrist noise 完全归零 (中等)**: reward 中 wrist_yaw_link 是 tracked body，noise=0 导致 Q4 tracking 从 2.27→0.97
+3. **正确 suitcase 位置更难 (不可避免)**: 多 0.4m 距离需要更强 guidance 补偿
+
+#### 改动
+
+| Fix | 文件 | 改动 |
+|-----|------|------|
+| 1 | run_hdmi.py | per-actuator kp/kd array (pos=20, rot=0.3) |
+| 2 | hdmi.py load_env_params | 支持 per-actuator array |
+| 3 | run_hdmi.py | wrist noise *= 0.3 (非归零) |
+| 4 | hdmi.yaml | pos_gain=20, decay=0.85 |
+
+#### R011 结果
+
+| 指标 | R008 (bug) | R010b (正确) | **R011** | HF 参考 | 目标 |
+|------|-----------|-------------|---------|--------|------|
+| rew_mean | 5.63 | 5.37 | **5.66** | 5.90 | > 5.5 ✅ |
+| tracking | 2.52 | 2.20 | **2.30** | 2.19 | > 2.3 ✅ |
+| obj_track | 3.10 | 3.17 | **3.36** | 3.71 | > 3.0 ✅ |
+| pelvis_z t=4s | 0.80 | 0.60 | **0.63** | — | > 0.7 ❌ |
+| runtime | ~2000s | ~2000s | 2018s | — | — |
+
+Per-quarter analysis:
+- Q1: rew=5.87, tracking=3.02, obj_track=2.85
+- Q2: rew=5.75, tracking=2.90, obj_track=2.85
+- Q3: rew=6.03, tracking=2.35, obj_track=3.68
+- Q4: rew=5.01, tracking=0.98, obj_track=4.04
+
+视频观察:
+- t=2s: 站立正常，匹配 ref
+- t=3s: 弯腰抓箱子，匹配 ref
+- t=4s: sim 弯腰抱着箱子但未完全站起 (pelvis_z=0.63 vs ref 站立)
+- obj_track Q4=4.04 最高！suitcase 最终被搬动 (不像 R010b 完全没搬)
+
+Claims 验证:
+1. ✅ per-actuator gain 修复后 obj_track=3.36 > 3.0 (HF=3.71 的 91%)
+2. ✅ wrist noise 30% 恢复后 tracking=2.30 > 2.3 (R010b=2.20)
+3. ❌ 增强 guidance (kp=20, decay=0.85) 后 pelvis_z=0.63 < 0.7 (仍然弯腰)
+4. ✅ rew_mean=5.66 > 5.5 (HF=5.90 的 96%)
+
 ---
 
 ## R003 历史记录 (2026-04-25)

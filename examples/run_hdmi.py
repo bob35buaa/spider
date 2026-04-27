@@ -106,7 +106,7 @@ def main(config: Config):
             for aid in obj_act_ids:
                 config.noise_scale[:, :, aid] *= 0.0
 
-        # Zero noise on wrist joints (not in HF 23-DOF action space)
+        # Reduce (not zero) noise on wrist joints — they affect wrist_yaw body tracking
         if hasattr(config, "noise_scale") and config.noise_scale is not None:
             wrist_keywords = ["wrist_roll", "wrist_pitch", "wrist_yaw"]
             for ai in range(env.model_cpu.nu):
@@ -114,21 +114,39 @@ def main(config: Config):
                     env.model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, ai
                 )
                 if aname and any(w in aname for w in wrist_keywords):
-                    config.noise_scale[:, :, ai] *= 0.0
-                    loguru.logger.info(f"Zeroed noise for wrist actuator {ai}: {aname}")
+                    config.noise_scale[:, :, ai] *= 0.3
+                    loguru.logger.info(f"Reduced noise (30%) for wrist actuator {ai}: {aname}")
 
         decay = getattr(config, "guidance_decay_ratio", 0.8)
         pos_kp = getattr(config, "init_pos_actuator_gain", 10.0)
         pos_kd = getattr(config, "init_pos_actuator_bias", 10.0)
         rot_kp = getattr(config, "init_rot_actuator_gain", 0.3)
         rot_kd = getattr(config, "init_rot_actuator_bias", 0.3)
+
+        # Build per-actuator base gains (pos vs rot), matching run_mjwp.py
+        base_kp = []
+        base_kd = []
+        for aid in obj_act_ids:
+            aname = mujoco.mj_id2name(
+                env.model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, aid
+            )
+            if aname and "_rot_" in aname:
+                base_kp.append(rot_kp)
+                base_kd.append(rot_kd)
+            else:
+                base_kp.append(pos_kp)
+                base_kd.append(pos_kd)
+        base_kp = np.array(base_kp, dtype=np.float32)
+        base_kd = np.array(base_kd, dtype=np.float32)
+        loguru.logger.info(f"Contact guidance base gains: kp={base_kp.tolist()}, kd={base_kd.tolist()}")
+
         for i in range(config.max_num_iterations):
             scale = decay ** i
             if i == config.max_num_iterations - 1:
                 scale = 0.0  # Release on last iteration
             env_params = [{
-                "kp": pos_kp * scale,
-                "kd": pos_kd * scale,
+                "kp": base_kp * scale,
+                "kd": base_kd * scale,
             }] * config.num_dr
             env_params_list.append(env_params)
     else:

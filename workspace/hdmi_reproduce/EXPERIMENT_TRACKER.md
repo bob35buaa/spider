@@ -12,24 +12,26 @@
 | **R008** | **2026-04-27** | **+contact guidance (suitcase 6 actuators)** | **5.63** | **2.52** | **3.10** | **完成** |
 | R009b | 2026-04-27 | fix output_dir + ref render + wrist noise + threshold=0.005 | 3.75 | 1.60 | 2.15 | 完成 |
 | R010b | 2026-04-27 | fix suitcase slide offset + threshold=0.0 | 5.37 | 2.20 | 3.17 | 完成 |
+| **R011** | **2026-04-27** | **per-actuator gain + wrist noise 30% + guidance kp=20** | **5.66** | **2.30** | **3.36** | **完成** |
 | HF ref | — | HuggingFace 参考 (data_id=1) | 5.90 | 2.19 | 3.71 | 参考 |
 
 ## 关键指标演进
 
 ```
-rew_mean:  R002(-0.3) → R003(1.93) → R005(2.65) → R006(4.13) → R007(5.33) → R008(5.63) → HF(5.90)
-tracking:  R002(N/A)  → R003(0.59) → R005(0.77) → R006(2.25) → R007(2.20) → R008(2.52) → HF(2.19)
-obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13) → R008(3.10) → HF(3.71)
+rew_mean:  R002(-0.3) → R003(1.93) → R005(2.65) → R006(4.13) → R007(5.33) → R008(5.63) → R011(5.66) → HF(5.90)
+tracking:  R002(N/A)  → R003(0.59) → R005(0.77) → R006(2.25) → R007(2.20) → R008(2.52) → R011(2.30) → HF(2.19)
+obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13) → R008(3.10) → R011(3.36) → HF(3.71)
 ```
 
-## R008 达标总结
+## R011 达标总结
 
-| 指标 | R008 | HF | 达标率 |
+| 指标 | R011 | HF | 达标率 |
 |------|------|-----|--------|
-| rew_mean | 5.63 | 5.90 | 95% ✅ |
-| tracking | 2.52 | 2.19 | 115% ✅ |
-| obj_track | 3.10 | 3.71 | 84% ✅ |
-| 视频 t=4s | 站立搬箱 | 站立搬箱 | ✅ |
+| rew_mean | 5.66 | 5.90 | 96% ✅ |
+| tracking | 2.30 | 2.19 | 105% ✅ |
+| obj_track | 3.36 | 3.71 | 91% ✅ |
+| 视频 t=3s | 弯腰抓箱子 | 弯腰抓箱子 | ✅ |
+| 视频 t=4s | 弯腰抱箱 | 站立搬箱 | 部分 |
 
 ## Logs
 
@@ -37,6 +39,7 @@ obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13
 - R006: `workspace/hdmi_reproduce/results/R006c/`
 - R007: `workspace/hdmi_reproduce/results/R007/`
 - R008: `workspace/hdmi_reproduce/results/R008/`
+- R011: `workspace/hdmi_reproduce/results/R011/`
 - HF ref: `example_datasets/processed/hdmi/unitree_g1/humanoid_object/move_suitcase/1/`
 
 ## 关键修复 (R005→R008)
@@ -49,6 +52,9 @@ obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13
 6. Contact guidance: suitcase 6 actuators + decaying gains (R008)
 7. Fix output_dir, ref render (freejoint model), wrist noise zeroed (R009)
 8. Fix suitcase slide joint offset (body_default_pos) (R010)
+9. Per-actuator contact guidance gains (pos=20 vs rot=0.3) (R011)
+10. Wrist noise 30% instead of zero (R011)
+11. Guidance kp=20, decay=0.85 (R011)
 
 ## 已知问题
 
