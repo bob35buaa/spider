@@ -10,6 +10,8 @@
 | R006 | 2026-04-26 | CEM 调优 + decimation + HDMI gains | 4.13 | 2.25 | 1.88 | 完成 |
 | **R007** | **2026-04-26** | **+freejoint init from motion data** | **5.33** | **2.20** | **3.13** | **完成** |
 | **R008** | **2026-04-27** | **+contact guidance (suitcase 6 actuators)** | **5.63** | **2.52** | **3.10** | **完成** |
+| R009b | 2026-04-27 | fix output_dir + ref render + wrist noise + threshold=0.005 | 3.75 | 1.60 | 2.15 | 完成 |
+| R010b | 2026-04-27 | fix suitcase slide offset + threshold=0.0 | 5.37 | 2.20 | 3.17 | 完成 |
 | HF ref | — | HuggingFace 参考 (data_id=1) | 5.90 | 2.19 | 3.71 | 参考 |
 
 ## 关键指标演进
@@ -45,3 +47,13 @@ obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13
 4. HDMI PD gains override (R006c)
 5. Freejoint init from motion data (R007)
 6. Contact guidance: suitcase 6 actuators + decaying gains (R008)
+7. Fix output_dir, ref render (freejoint model), wrist noise zeroed (R009)
+8. Fix suitcase slide joint offset (body_default_pos) (R010)
+
+## 已知问题
+
+- R010b (suitcase 位置修正后) 指标 5.37 不如 R008 (suitcase 位置偏移 0.4m) 的 5.63
+- R008 的 suitcase 初始位置虽然错误 (偏移 0.4m)，但机器人反而能搬起来
+- R010b 修正位置后机器人在 t=4s 仍然摔倒 — 可能 CEM 对 suitcase 起始位置敏感
+- 腕关节噪声归零可能过度限制了 CEM 的搜索空间
+- improvement_threshold=0.0 导致每步跑满 32 iter，运行时间 ~2000s

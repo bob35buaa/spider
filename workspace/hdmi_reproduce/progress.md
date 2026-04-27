@@ -104,6 +104,32 @@ Scene XML 的 PD 增益比 HDMI 弱 2~5x (hip_pitch: Kp=40 vs HDMI=200)。
 tracking 直接翻 3x！增益修复是最关键的改动。
 剩余差距: obj_track Q4=0.17 (suitcase 后半程丢失)
 
+### R009/R010 修复 (2026-04-27)
+
+| 修复 | 描述 |
+|------|------|
+| output_dir | process_config 后恢复用户 output_dir，用绝对路径 |
+| ref 渲染 | 用原始 freejoint 模型 (nq=43) 渲染 ref，避免 euler 误差 |
+| 腕关节噪声 | 6 个 wrist actuator noise 归零 |
+| suitcase slide offset | slide joint qpos = global_pos - body_default_pos |
+| tqdm 进度条 | 加了 pbar + render 时间统计 |
+| HF 数据恢复 | 从 HuggingFace 重新下载 data_id=1，创建 _hf_backup |
+
+### R010b 结果
+
+| 指标 | R008 | R010b | 对比 |
+|------|------|-------|------|
+| rew | 5.63 | 5.37 | -4.6% |
+| tracking | 2.52 | 2.20 | -12.7% |
+| obj_track | 3.10 | 3.17 | +2.3% |
+| 视频 t=4s | 站立搬箱 | 弯腰摔倒 | 退步 |
+
+分析：suitcase 位置修正后 (从偏移 0.4m 修正到精确位置)，CEM 反而搬不好。
+可能原因：
+1. R008 的 suitcase 偏移 0.4m 恰好在 robot 更容易够到的位置
+2. 腕关节噪声归零限制了搜索空间
+3. 需要调整 contact guidance 增益或 CEM 参数
+
 ---
 
 ## R003 历史记录 (2026-04-25)

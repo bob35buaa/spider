@@ -226,7 +226,10 @@ def main(config: Config):
 
     # Run viewer + control loop
     t_start = time.perf_counter()
+    t_render_total = 0.0
     sim_step = 0
+    from tqdm import tqdm
+    pbar = tqdm(total=config.max_sim_steps, desc="HDMI retarget", unit="step")
     with run_viewer() as viewer:
         while viewer.is_running():
             t0 = time.perf_counter()
@@ -249,6 +252,7 @@ def main(config: Config):
                     env.num_worlds, 1
                 )
                 step_env(config, env, ctrl_repeat)
+                pbar.update(1)
 
                 # Update mj_data with current state (read from Warp world 0)
                 qpos_wp = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
@@ -265,6 +269,7 @@ def main(config: Config):
                     and i % int(np.round(config.render_dt / config.sim_dt)) == 0
                 )
                 if should_render:
+                    t_render_start = time.perf_counter()
                     ref_idx = min(sim_step, qpos_ref_render.shape[0] - 1)
                     mj_data_ref.qpos[:] = qpos_ref_render[ref_idx].detach().cpu().numpy()
                     mujoco.mj_forward(mj_model_ref, mj_data_ref)
@@ -288,6 +293,7 @@ def main(config: Config):
                     ref_img = renderer_ref.render()
                     cv2.putText(ref_img, "ref", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
                     images.append(np.concatenate([ref_img, sim_img], axis=1))
+                    t_render_total += time.perf_counter() - t_render_start
                 if "rerun" in config.viewer or "viser" in config.viewer:
                     log_frame(
                         mj_data,
@@ -336,10 +342,7 @@ def main(config: Config):
             # Progress
             t1 = time.perf_counter()
             rtr = config.ctrl_dt / (t1 - t0)
-            print(
-                f"Realtime rate: {rtr:.2f}, plan time: {t1 - t0:.4f}s, sim_steps: {sim_step}/{config.max_sim_steps}, opt_steps: {infos['opt_steps'][0]}",
-                end="\r",
-            )
+            pbar.set_postfix(rtr=f"{rtr:.2f}", plan=f"{t1-t0:.2f}s", opt=infos['opt_steps'][0])
 
             # Record info/trajectory at control tick
             info_list.append({k: v for k, v in infos.items() if k != "trace_sample"})
@@ -348,7 +351,10 @@ def main(config: Config):
                 break
 
         t_end = time.perf_counter()
-        print(f"\nTotal time: {t_end - t_start:.4f}s")
+        pbar.close()
+        t_total = t_end - t_start
+        render_pct = t_render_total / t_total * 100 if t_total > 0 else 0
+        print(f"\nTotal time: {t_total:.1f}s (render: {t_render_total:.1f}s = {render_pct:.1f}%)")
 
     # Save retargeted trajectory
     if config.save_info and len(info_list) > 0:

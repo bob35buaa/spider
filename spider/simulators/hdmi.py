@@ -626,15 +626,18 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         import scipy.spatial.transform as spt
         init = freejoint_init["suitcase"]
         pos_qadr = model_cpu.jnt_qposadr[obj_pos_x_jid]
-        data_cpu.qpos[pos_qadr:pos_qadr + 3] = init["pos"]
+        # Slide joints are relative to body default pos, not global
+        obj_body_id = model_cpu.jnt_bodyid[obj_pos_x_jid]
+        body_default_pos = model_cpu.body_pos[obj_body_id].copy()
+        data_cpu.qpos[pos_qadr:pos_qadr + 3] = init["pos"] - body_default_pos
         # Convert quat (wxyz) to euler (rpy) for the 3 hinge joints
         q_wxyz = init["quat"]
         q_xyzw = [q_wxyz[1], q_wxyz[2], q_wxyz[3], q_wxyz[0]]
         rpy = spt.Rotation.from_quat(q_xyzw).as_euler("xyz")
         data_cpu.qpos[pos_qadr + 3:pos_qadr + 6] = rpy
         loguru.logger.info(
-            f"Contact guidance suitcase init: pos={init['pos'].tolist()} "
-            f"rpy={rpy.tolist()}"
+            f"Contact guidance suitcase init: global_pos={init['pos'].tolist()} "
+            f"slide_offset={body_default_pos.tolist()} rpy={rpy.tolist()}"
         )
 
     # Also set hinge joints from motion data initial frame
@@ -1264,7 +1267,12 @@ def get_reference(
         if obj_pos_x_jid >= 0:
             # Contact guidance mode: 6 joints (pos_x/y/z + rot_x/y/z)
             pos_qadr = mj_model.jnt_qposadr[obj_pos_x_jid]
-            qpos_ref[:, pos_qadr:pos_qadr + 3] = obj_pos
+            # Slide joints are relative to body default pos
+            obj_body_id = mj_model.jnt_bodyid[obj_pos_x_jid]
+            body_default_pos = torch.from_numpy(
+                mj_model.body_pos[obj_body_id].copy()
+            ).float()
+            qpos_ref[:, pos_qadr:pos_qadr + 3] = obj_pos - body_default_pos
             # Convert quat (wxyz) to euler rpy for rot joints (use scipy)
             from scipy.spatial.transform import Rotation as R
             q_np = obj_quat.numpy()
@@ -1276,9 +1284,9 @@ def get_reference(
             pos_vadr = mj_model.jnt_dofadr[obj_pos_x_jid]
             qvel_ref[:, pos_vadr:pos_vadr + 3] = obj_lin_vel
             qvel_ref[:, pos_vadr + 3:pos_vadr + 6] = obj_ang_vel
-            # Fill object actuator ctrl_ref with xyz+rpy
+            # Fill object actuator ctrl_ref with slide_offset + rpy
             if object_actuator_indices:
-                obj_ctrl = torch.cat([obj_pos, obj_rpy], dim=-1)  # (T, 6)
+                obj_ctrl = torch.cat([obj_pos - body_default_pos, obj_rpy], dim=-1)
                 for i, ai in enumerate(object_actuator_indices):
                     ctrl_ref[:, ai] = obj_ctrl[:, i]
         else:

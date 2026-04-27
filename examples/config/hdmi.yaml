@@ -43,7 +43,7 @@ init_rot_actuator_gain: 0.3
 init_rot_actuator_bias: 0.3
 object_pos_actuator_names: [object_pos_x, object_pos_y, object_pos_z]
 object_rot_actuator_names: [object_rot_x, object_rot_y, object_rot_z]
-improvement_threshold: 0.005  # small but non-zero to allow early stopping
+improvement_threshold: 0.0  # contact_guidance needs full iterations
 
 # MuJoCo Warp GPU parameters
 nconmax_per_env: 200  # max contacts per environment (humanoid + object)
