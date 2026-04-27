@@ -12,6 +12,7 @@ Date: 2025-10-18
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -68,7 +69,13 @@ def main(config: Config):
     config.nu = env.model_cpu.nu
 
     # Process config, set defaults and derived fields
+    user_output_dir = config.output_dir
     config = process_config(config)
+    # Restore user output_dir (process_config overwrites it with HF data path)
+    if user_output_dir and user_output_dir != "outputs/hdmi":
+        config.output_dir = str(Path(user_output_dir).resolve())
+        os.makedirs(config.output_dir, exist_ok=True)
+        loguru.logger.info(f"Output dir: {config.output_dir}")
 
     # Create placeholder reference data for compatibility
     ref_data = (
@@ -98,6 +105,17 @@ def main(config: Config):
         if hasattr(config, "noise_scale") and config.noise_scale is not None:
             for aid in obj_act_ids:
                 config.noise_scale[:, :, aid] *= 0.0
+
+        # Zero noise on wrist joints (not in HF 23-DOF action space)
+        if hasattr(config, "noise_scale") and config.noise_scale is not None:
+            wrist_keywords = ["wrist_roll", "wrist_pitch", "wrist_yaw"]
+            for ai in range(env.model_cpu.nu):
+                aname = mujoco.mj_id2name(
+                    env.model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, ai
+                )
+                if aname and any(w in aname for w in wrist_keywords):
+                    config.noise_scale[:, :, ai] *= 0.0
+                    loguru.logger.info(f"Zeroed noise for wrist actuator {ai}: {aname}")
 
         decay = getattr(config, "guidance_decay_ratio", 0.8)
         pos_kp = getattr(config, "init_pos_actuator_gain", 10.0)
@@ -135,9 +153,10 @@ def main(config: Config):
         ctrl=ctrl_ref.detach().cpu().numpy(),
     )
 
-    # Setup mujoco model and data for rendering (use scene XML model)
+    # Setup mujoco model and data for rendering
+    # Sim rendering uses env.model_cpu (may have contact guidance modifications)
     mj_model = env.model_cpu
-    config.model_path = str(
+    scene_xml_path = str(
         Path("example_datasets/processed/hdmi")
         / config.robot_type
         / config.embodiment_type
@@ -145,16 +164,22 @@ def main(config: Config):
         / "scene"
         / "mjlab scene.xml"
     )
+    config.model_path = scene_xml_path
     mj_data = mujoco.MjData(mj_model)
-    mj_data_ref = mujoco.MjData(mj_model)
 
-    # Adjust tracking camera to see both robot and suitcase
-    cam_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_CAMERA, "robot/tracking")
-    if cam_id >= 0:
-        # Offset from pelvis: right-front, high up, looking down at scene
-        mj_model.cam_pos[cam_id] = [3.0, 0.5, 1.0]
-        # Quaternion for ~30° downward pitch from side view
-        mj_model.cam_quat[cam_id] = [0.60, 0.60, 0.36, 0.36]
+    # Ref rendering uses ORIGINAL scene XML (freejoint, nq=43) for accurate suitcase pose
+    mj_model_ref = mujoco.MjModel.from_xml_path(scene_xml_path)
+    mj_data_ref = mujoco.MjData(mj_model_ref)
+    # Build qpos_ref in freejoint layout for ref rendering
+    qpos_ref_render, _, _ = get_reference(config, env, scene_model=mj_model_ref)
+    qpos_ref_render = qpos_ref_render.to(config.device)
+
+    # Adjust tracking camera on BOTH models
+    for m in [mj_model, mj_model_ref]:
+        cam_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_CAMERA, "robot/tracking")
+        if cam_id >= 0:
+            m.cam_pos[cam_id] = [3.0, 0.5, 1.0]
+            m.cam_quat[cam_id] = [0.60, 0.60, 0.36, 0.36]
 
     # Initialize mj_data with current env state (read from Warp)
     qpos_wp = wp.to_torch(env.data_wp.qpos)[0].detach().cpu().numpy()
@@ -164,10 +189,10 @@ def main(config: Config):
     mujoco.mj_step(mj_model, mj_data)
     mj_data.time = 0.0
 
-    # Initialize reference mj_data
-    mj_data_ref.qpos[:] = qpos_ref[0].detach().cpu().numpy()
-    mj_data_ref.qvel[:] = qvel_ref[0].detach().cpu().numpy()
-    mujoco.mj_step(mj_model, mj_data_ref)
+    # Initialize reference mj_data (uses freejoint model)
+    mj_data_ref.qpos[:] = qpos_ref_render[0].detach().cpu().numpy()
+    mj_data_ref.qvel[:] = 0  # ref rendering doesn't need velocities
+    mujoco.mj_step(mj_model_ref, mj_data_ref)
 
     # Setup for video rendering
     images = []
@@ -175,6 +200,7 @@ def main(config: Config):
     # Setup viewer and renderer
     run_viewer = setup_viewer(config, mj_model, mj_data)
     renderer = setup_renderer(config, mj_model)
+    renderer_ref = setup_renderer(config, mj_model_ref) if config.save_video else None
 
     # Setup optimizer
     rollout = make_rollout_fn(
@@ -239,14 +265,29 @@ def main(config: Config):
                     and i % int(np.round(config.render_dt / config.sim_dt)) == 0
                 )
                 if should_render:
-                    ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
-                    mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
-                    mj_data_ref.qvel[:] = qvel_ref[ref_idx].detach().cpu().numpy()
-                    mujoco.mj_step(mj_model, mj_data_ref)
-                    image = render_image(
-                        config, renderer, mj_model, mj_data, mj_data_ref
-                    )
-                    images.append(image)
+                    ref_idx = min(sim_step, qpos_ref_render.shape[0] - 1)
+                    mj_data_ref.qpos[:] = qpos_ref_render[ref_idx].detach().cpu().numpy()
+                    mujoco.mj_forward(mj_model_ref, mj_data_ref)
+                    # Render sim and ref side-by-side
+                    import cv2
+                    options = mujoco.MjvOption()
+                    mujoco.mjv_defaultOption(options)
+                    # Sim frame
+                    mujoco.mj_forward(mj_model, mj_data)
+                    try:
+                        renderer.update_scene(mj_data, "front", options)
+                    except Exception:
+                        renderer.update_scene(mj_data, 0, options)
+                    sim_img = renderer.render()
+                    cv2.putText(sim_img, "sim", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
+                    # Ref frame (separate model/renderer)
+                    try:
+                        renderer_ref.update_scene(mj_data_ref, "front", options)
+                    except Exception:
+                        renderer_ref.update_scene(mj_data_ref, 0, options)
+                    ref_img = renderer_ref.render()
+                    cv2.putText(ref_img, "ref", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
+                    images.append(np.concatenate([ref_img, sim_img], axis=1))
                 if "rerun" in config.viewer or "viser" in config.viewer:
                     log_frame(
                         mj_data,
@@ -286,11 +327,10 @@ def main(config: Config):
             mj_data.qpos[:] = qpos_wp
             mj_data.qvel[:] = qvel_wp
             mujoco.mj_forward(mj_model, mj_data)
-            # Update reference state
-            ref_idx = min(sim_step, qpos_ref.shape[0] - 1)
-            mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
-            mj_data_ref.qvel[:] = qvel_ref[ref_idx].detach().cpu().numpy()
-            mujoco.mj_step(mj_model, mj_data_ref)
+            # Update reference state (uses freejoint model)
+            ref_idx = min(sim_step, qpos_ref_render.shape[0] - 1)
+            mj_data_ref.qpos[:] = qpos_ref_render[ref_idx].detach().cpu().numpy()
+            mujoco.mj_forward(mj_model_ref, mj_data_ref)
             update_viewer(config, viewer, mj_model, mj_data, mj_data_ref, infos)
 
             # Progress

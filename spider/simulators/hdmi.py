@@ -1265,8 +1265,12 @@ def get_reference(
             # Contact guidance mode: 6 joints (pos_x/y/z + rot_x/y/z)
             pos_qadr = mj_model.jnt_qposadr[obj_pos_x_jid]
             qpos_ref[:, pos_qadr:pos_qadr + 3] = obj_pos
-            # Convert quat (wxyz) to euler rpy for rot joints
-            obj_rpy = _quat_to_euler(obj_quat)
+            # Convert quat (wxyz) to euler rpy for rot joints (use scipy)
+            from scipy.spatial.transform import Rotation as R
+            q_np = obj_quat.numpy()
+            q_xyzw = np.stack([q_np[:, 1], q_np[:, 2], q_np[:, 3], q_np[:, 0]], axis=-1)
+            rpy = R.from_quat(q_xyzw).as_euler("xyz")
+            obj_rpy = torch.from_numpy(rpy).float()
             qpos_ref[:, pos_qadr + 3:pos_qadr + 6] = obj_rpy
             # Velocity: direct mapping (6 DOF)
             pos_vadr = mj_model.jnt_dofadr[obj_pos_x_jid]
