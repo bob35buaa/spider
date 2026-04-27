@@ -34,12 +34,16 @@ num_samples: 1024 # Number of parallel samples for sampling
 last_ctrl_noise_scale: 1.0
 first_ctrl_noise_scale: 1.0
 final_noise_scale: 0.1
-improvement_threshold: 0.005
-improvement_check_steps: 3
-terminal_rew_scale: 1.0
-temperature: 0.3
-num_resamples: 0
-resample_ratio: 0.2
+# Contact guidance (object actuators with decaying gains)
+contact_guidance: true
+guidance_decay_ratio: 0.8
+init_pos_actuator_gain: 10.0
+init_pos_actuator_bias: 10.0
+init_rot_actuator_gain: 0.3
+init_rot_actuator_bias: 0.3
+object_pos_actuator_names: [object_pos_x, object_pos_y, object_pos_z]
+object_rot_actuator_names: [object_rot_x, object_rot_y, object_rot_z]
+improvement_threshold: 0.0  # contact_guidance requires 0
 
 # MuJoCo Warp GPU parameters
 nconmax_per_env: 200  # max contacts per environment (humanoid + object)

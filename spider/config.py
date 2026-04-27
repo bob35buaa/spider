@@ -139,6 +139,8 @@ class Config:
     vel_rew_scale: float = 0.0001
     terminal_rew_scale: float = 1.0
     contact_rew_scale: float = 0.0
+    num_resamples: int = 0
+    resample_ratio: float = 0.2
 
     # === VISUALIZATION CONFIGURATION ===
     show_viewer: bool = True

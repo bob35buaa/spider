@@ -79,11 +79,45 @@ def main(config: Config):
         ),
     )
 
-    # Setup env params (empty for HDMI, no domain randomization)
+    # Setup env params — with guidance gain decay if contact_guidance is on
+    contact_guidance_enabled = getattr(config, "contact_guidance", False)
     env_params_list = []
-    for _ in range(config.max_num_iterations):
-        env_params = [{}] * config.num_dr
-        env_params_list.append(env_params)
+    if contact_guidance_enabled:
+        # Resolve object actuator IDs
+        obj_act_ids = []
+        for ai in range(env.model_cpu.nu):
+            aname = mujoco.mj_id2name(
+                env.model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, ai
+            )
+            if aname and aname.startswith("object_"):
+                obj_act_ids.append(ai)
+        config.object_actuator_ids = obj_act_ids
+        loguru.logger.info(f"Contact guidance: {len(obj_act_ids)} object actuators")
+
+        # Zero noise on object actuator dims
+        if hasattr(config, "noise_scale") and config.noise_scale is not None:
+            for aid in obj_act_ids:
+                config.noise_scale[:, :, aid] *= 0.0
+
+        decay = getattr(config, "guidance_decay_ratio", 0.8)
+        pos_kp = getattr(config, "init_pos_actuator_gain", 10.0)
+        pos_kd = getattr(config, "init_pos_actuator_bias", 10.0)
+        rot_kp = getattr(config, "init_rot_actuator_gain", 0.3)
+        rot_kd = getattr(config, "init_rot_actuator_bias", 0.3)
+        for i in range(config.max_num_iterations):
+            scale = decay ** i
+            if i == config.max_num_iterations - 1:
+                scale = 0.0  # Release on last iteration
+            env_params = [{
+                "kp": pos_kp * scale,
+                "kd": pos_kd * scale,
+            }] * config.num_dr
+            env_params_list.append(env_params)
+    else:
+        config.object_actuator_ids = []
+        for _ in range(config.max_num_iterations):
+            env_params = [{}] * config.num_dr
+            env_params_list.append(env_params)
     config.env_params_list = env_params_list
 
     # Get reference data (states and controls)

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -130,6 +131,27 @@ def _axis_angle_from_quat(q: torch.Tensor) -> torch.Tensor:
     angle = 2.0 * torch.atan2(sin_half, cos_half)
     axis = q[..., 1:] / sin_half
     return axis * angle
+
+
+def _quat_to_euler(q: torch.Tensor) -> torch.Tensor:
+    """Convert quaternion (wxyz) to Euler angles (roll, pitch, yaw).
+
+    Uses intrinsic XYZ convention matching MuJoCo's hinge joint axes.
+    q: (..., 4) wxyz -> (..., 3) rpy.
+    """
+    w, x, y, z = q.unbind(-1)
+    # Roll (x-axis rotation)
+    sinr = 2.0 * (w * x + y * z)
+    cosr = 1.0 - 2.0 * (x * x + y * y)
+    roll = torch.atan2(sinr, cosr)
+    # Pitch (y-axis rotation)
+    sinp = 2.0 * (w * y - z * x)
+    pitch = torch.asin(sinp.clamp(-1.0, 1.0))
+    # Yaw (z-axis rotation)
+    siny = 2.0 * (w * z + x * y)
+    cosy = 1.0 - 2.0 * (y * y + z * z)
+    yaw = torch.atan2(siny, cosy)
+    return torch.stack([roll, pitch, yaw], dim=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -420,6 +442,69 @@ def _create_hdmi_env(config: Config):
     return env
 
 
+def _make_contact_guidance_model(scene_xml_path: str) -> mujoco.MjModel:
+    """Replace suitcase freejoint with 6 slide/hinge joints + PD actuators.
+
+    Returns a model with nq=42 (was 43), nu=35 (was 29).
+    Object actuator gains are initialized to 0 — set at runtime.
+    """
+    scene_dir = os.path.dirname(os.path.abspath(scene_xml_path))
+    tree = ET.parse(scene_xml_path)
+    root = tree.getroot()
+
+    # Remove keyframe section (references old nq=43)
+    kf = root.find("keyframe")
+    if kf is not None:
+        root.remove(kf)
+
+    # Find suitcase body
+    suitcase_body = None
+    for body in root.find("worldbody").iter("body"):
+        if "suitcase" in body.get("name", ""):
+            # Pick the innermost suitcase body (not the namespace parent)
+            suitcase_body = body
+
+    # Remove freejoint
+    for joint in list(suitcase_body.findall("joint")):
+        suitcase_body.remove(joint)
+    for fj in list(suitcase_body.findall("freejoint")):
+        suitcase_body.remove(fj)
+
+    # Add 6 slide/hinge joints
+    joint_defs = [
+        ("object_pos_x", "slide", "1 0 0"),
+        ("object_pos_y", "slide", "0 1 0"),
+        ("object_pos_z", "slide", "0 0 1"),
+        ("object_rot_x", "hinge", "1 0 0"),
+        ("object_rot_y", "hinge", "0 1 0"),
+        ("object_rot_z", "hinge", "0 0 1"),
+    ]
+    for i, (name, jtype, axis) in enumerate(joint_defs):
+        suitcase_body.insert(
+            i,
+            ET.Element("joint", {
+                "name": name, "type": jtype, "axis": axis,
+                "armature": "0.01", "frictionloss": "0.01",
+            }),
+        )
+
+    # Add 6 position actuators (kp/kv=0, set at runtime via load_env_params)
+    actuator_elem = root.find("actuator")
+    if actuator_elem is None:
+        actuator_elem = ET.SubElement(root, "actuator")
+    for name, _, _ in joint_defs:
+        ET.SubElement(actuator_elem, "position", {
+            "name": name, "joint": name, "kp": "0", "kv": "0",
+        })
+
+    # Write temp file in scene dir (so relative mesh paths resolve)
+    tmp_path = os.path.join(scene_dir, "_scene_act_tmp.xml")
+    tree.write(tmp_path, encoding="unicode")
+    model = mujoco.MjModel.from_xml_path(tmp_path)
+    os.remove(tmp_path)
+    return model
+
+
 def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
     """Setup HDMI env + MuJoCo Warp GPU environment.
 
@@ -446,7 +531,11 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
     if not Path(scene_xml_path).exists():
         raise FileNotFoundError(f"Scene XML not found: {scene_xml_path}")
 
-    model_cpu = mujoco.MjModel.from_xml_path(scene_xml_path)
+    if getattr(config, "contact_guidance", False):
+        model_cpu = _make_contact_guidance_model(scene_xml_path)
+        loguru.logger.info("Contact guidance enabled: suitcase freejoint → 6 actuated joints")
+    else:
+        model_cpu = mujoco.MjModel.from_xml_path(scene_xml_path)
     # Use small physics timestep with decimation for stability (matches HDMI)
     physics_dt = 0.002
     decimation = int(round(config.sim_dt / physics_dt))
@@ -527,6 +616,25 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         loguru.logger.info(
             f"Freejoint init from motion: {scene_bname} "
             f"pos={init['pos'].tolist()}"
+        )
+
+    # Handle contact guidance suitcase init (6 slide/hinge joints, not freejoint)
+    obj_pos_x_jid = mujoco.mj_name2id(
+        model_cpu, mujoco.mjtObj.mjOBJ_JOINT, "object_pos_x"
+    )
+    if obj_pos_x_jid >= 0 and "suitcase" in freejoint_init:
+        import scipy.spatial.transform as spt
+        init = freejoint_init["suitcase"]
+        pos_qadr = model_cpu.jnt_qposadr[obj_pos_x_jid]
+        data_cpu.qpos[pos_qadr:pos_qadr + 3] = init["pos"]
+        # Convert quat (wxyz) to euler (rpy) for the 3 hinge joints
+        q_wxyz = init["quat"]
+        q_xyzw = [q_wxyz[1], q_wxyz[2], q_wxyz[3], q_wxyz[0]]
+        rpy = spt.Rotation.from_quat(q_xyzw).as_euler("xyz")
+        data_cpu.qpos[pos_qadr + 3:pos_qadr + 6] = rpy
+        loguru.logger.info(
+            f"Contact guidance suitcase init: pos={init['pos'].tolist()} "
+            f"rpy={rpy.tolist()}"
         )
 
     # Also set hinge joints from motion data initial frame
@@ -1061,9 +1169,15 @@ def get_reference(
     # --- ctrl_ref: joint position targets for scene XML actuators ---
     # Map actuator names to motion dataset joint names
     ctrl_ref_list = []
+    object_actuator_indices = []
     for ai in range(mj_model.nu):
         act_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, ai)
-        # Actuator names are "robot/{joint_name}" — strip prefix for motion lookup
+        # Object actuators (contact guidance) — handled separately below
+        if act_name and act_name.startswith("object_"):
+            object_actuator_indices.append(ai)
+            ctrl_ref_list.append(torch.zeros(motion_data.joint_pos.shape[1]))
+            continue
+        # Robot actuators: "robot/{joint_name}" — strip prefix for motion lookup
         if act_name and "/" in act_name:
             joint_name = act_name.split("/", 1)[1]
         else:
@@ -1135,7 +1249,7 @@ def get_reference(
         qpos_ref[:, qadr] = robot_joint_pos[:, mi]
         qvel_ref[:, vadr] = robot_joint_vel[:, mi]
 
-    # Object freejoint
+    # Object joints
     if hasattr(command_manager, "object_body_id_motion"):
         obj_idx = command_manager.object_body_id_motion
         obj_pos = motion_data.body_pos_w[0, :, obj_idx, :]
@@ -1143,40 +1257,61 @@ def get_reference(
         obj_lin_vel = motion_data.body_lin_vel_w[0, :, obj_idx, :]
         obj_ang_vel = motion_data.body_ang_vel_w[0, :, obj_idx, :]
 
-        obj_jnt_id = -1
-        obj_name = getattr(command_manager, "object_asset_name", "suitcase")
-        for candidate in [
-            f"{obj_name}_root",
-            "suitcase_root",
-            f"suitcase/{obj_name}",
-            f"suitcase/{obj_name}_root",
-            f"suitcase/suitcase_root",
-        ]:
-            obj_jnt_id = mujoco.mj_name2id(
-                mj_model, mujoco.mjtObj.mjOBJ_JOINT, candidate
-            )
-            if obj_jnt_id >= 0:
-                break
-        if obj_jnt_id < 0:
-            # Fallback: find freejoint on suitcase-like body
-            for ji in range(mj_model.njnt):
-                if mj_model.jnt_type[ji] == 0:
-                    bname = mujoco.mj_id2name(
-                        mj_model,
-                        mujoco.mjtObj.mjOBJ_BODY,
-                        mj_model.jnt_bodyid[ji],
-                    )
-                    if bname and "suitcase" in bname.lower():
-                        obj_jnt_id = ji
-                        break
+        # Check if contact guidance is on (6 slide/hinge joints, not freejoint)
+        obj_pos_x_jid = mujoco.mj_name2id(
+            mj_model, mujoco.mjtObj.mjOBJ_JOINT, "object_pos_x"
+        )
+        if obj_pos_x_jid >= 0:
+            # Contact guidance mode: 6 joints (pos_x/y/z + rot_x/y/z)
+            pos_qadr = mj_model.jnt_qposadr[obj_pos_x_jid]
+            qpos_ref[:, pos_qadr:pos_qadr + 3] = obj_pos
+            # Convert quat (wxyz) to euler rpy for rot joints
+            obj_rpy = _quat_to_euler(obj_quat)
+            qpos_ref[:, pos_qadr + 3:pos_qadr + 6] = obj_rpy
+            # Velocity: direct mapping (6 DOF)
+            pos_vadr = mj_model.jnt_dofadr[obj_pos_x_jid]
+            qvel_ref[:, pos_vadr:pos_vadr + 3] = obj_lin_vel
+            qvel_ref[:, pos_vadr + 3:pos_vadr + 6] = obj_ang_vel
+            # Fill object actuator ctrl_ref with xyz+rpy
+            if object_actuator_indices:
+                obj_ctrl = torch.cat([obj_pos, obj_rpy], dim=-1)  # (T, 6)
+                for i, ai in enumerate(object_actuator_indices):
+                    ctrl_ref[:, ai] = obj_ctrl[:, i]
+        else:
+            # Freejoint mode (original)
+            obj_jnt_id = -1
+            obj_name = getattr(command_manager, "object_asset_name", "suitcase")
+            for candidate in [
+                f"{obj_name}_root",
+                "suitcase_root",
+                f"suitcase/{obj_name}",
+                f"suitcase/{obj_name}_root",
+                f"suitcase/suitcase_root",
+            ]:
+                obj_jnt_id = mujoco.mj_name2id(
+                    mj_model, mujoco.mjtObj.mjOBJ_JOINT, candidate
+                )
+                if obj_jnt_id >= 0:
+                    break
+            if obj_jnt_id < 0:
+                for ji in range(mj_model.njnt):
+                    if mj_model.jnt_type[ji] == 0:
+                        bname = mujoco.mj_id2name(
+                            mj_model,
+                            mujoco.mjtObj.mjOBJ_BODY,
+                            mj_model.jnt_bodyid[ji],
+                        )
+                        if bname and "suitcase" in bname.lower():
+                            obj_jnt_id = ji
+                            break
 
-        if obj_jnt_id >= 0:
-            obj_qadr = mj_model.jnt_qposadr[obj_jnt_id]
-            obj_vadr = mj_model.jnt_dofadr[obj_jnt_id]
-            qpos_ref[:, obj_qadr:obj_qadr + 3] = obj_pos
-            qpos_ref[:, obj_qadr + 3:obj_qadr + 7] = obj_quat
-            qvel_ref[:, obj_vadr:obj_vadr + 3] = obj_lin_vel
-            qvel_ref[:, obj_vadr + 3:obj_vadr + 6] = obj_ang_vel
+            if obj_jnt_id >= 0:
+                obj_qadr = mj_model.jnt_qposadr[obj_jnt_id]
+                obj_vadr = mj_model.jnt_dofadr[obj_jnt_id]
+                qpos_ref[:, obj_qadr:obj_qadr + 3] = obj_pos
+                qpos_ref[:, obj_qadr + 3:obj_qadr + 7] = obj_quat
+                qvel_ref[:, obj_vadr:obj_vadr + 3] = obj_lin_vel
+                qvel_ref[:, obj_vadr + 3:obj_vadr + 6] = obj_ang_vel
 
     # Pad with repeated last frame
     pad = config.horizon_steps + config.ctrl_steps
@@ -1203,12 +1338,42 @@ def get_reference(
 
 
 def save_env_params(config: Config, env: HDMIEnv):
-    """No domain randomization for HDMI."""
-    return {}
+    """Save current object actuator gains."""
+    return {"kp": 0.0, "kd": 0.0}
 
 
 def load_env_params(config: Config, env: HDMIEnv, env_param: dict):
-    """No domain randomization for HDMI."""
+    """Update object actuator gains (for contact guidance decay)."""
+    if "kp" not in env_param and "kd" not in env_param:
+        return env
+    object_actuator_ids = getattr(config, "object_actuator_ids", [])
+    if not object_actuator_ids:
+        return env
+
+    kp = env_param.get("kp", 0.0)
+    kd = env_param.get("kd", 0.0)
+
+    import numpy as np
+
+    # Update CPU model
+    for aid in object_actuator_ids:
+        env.model_cpu.actuator_gainprm[aid, 0] = kp
+        env.model_cpu.actuator_biasprm[aid, 1] = -kp
+        env.model_cpu.actuator_biasprm[aid, 2] = -kd
+
+    # Propagate to MJWarp model
+    if hasattr(env.model_wp, "actuator_gainprm"):
+        gain_full = np.array(env.model_cpu.actuator_gainprm, dtype=np.float32)
+        bias_full = np.array(env.model_cpu.actuator_biasprm, dtype=np.float32)
+        wp.copy(
+            env.model_wp.actuator_gainprm,
+            wp.from_numpy(gain_full, dtype=wp.float32, device=config.device),
+        )
+        wp.copy(
+            env.model_wp.actuator_biasprm,
+            wp.from_numpy(bias_full, dtype=wp.float32, device=config.device),
+        )
+
     return env
 
 
