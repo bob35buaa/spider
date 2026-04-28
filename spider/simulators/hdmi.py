@@ -554,6 +554,8 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
     # 3. Override actuator gains with HDMI's PD gains (scene XML gains are too weak)
     # joint_stiffness/damping are in Isaac (breadth-first) order — must use
     # robot.joint_names (Isaac order) for indexing, NOT MuJoCo joint order.
+    # NOTE: HDMI's Isaac config has NO stiffness/damping entry for wrist joints,
+    # so they resolve to 0. Skip zero-gain overrides to keep scene XML defaults.
     robot = hdmi_env.scene["robot"]
     hdmi_stiffness = robot._data.joint_stiffness[0].cpu().numpy()
     hdmi_damping = robot._data.joint_damping[0].cpu().numpy()
@@ -566,6 +568,16 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
             idx = isaac_joint_names.index(joint_name)
             kp = float(hdmi_stiffness[idx])
             kd = float(hdmi_damping[idx])
+            if kp == 0.0 and kd == 0.0:
+                # Isaac config has no entry for this joint (e.g. wrist joints) —
+                # keep scene XML defaults instead of overriding with zeros.
+                orig_kp = model_cpu.actuator_gainprm[ai, 0]
+                orig_kd = -model_cpu.actuator_biasprm[ai, 2]
+                loguru.logger.debug(
+                    f"  {joint_name}: HDMI kp=0 kd=0, keeping scene XML "
+                    f"kp={orig_kp:.1f} kd={orig_kd:.1f}"
+                )
+                continue
             # affine actuator: gainprm[0]=Kp, biasprm=[0, -Kp, -Kd]
             model_cpu.actuator_gainprm[ai, 0] = kp
             model_cpu.actuator_biasprm[ai, 1] = -kp
@@ -573,6 +585,18 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
             loguru.logger.debug(f"  {joint_name}: kp={kp:.1f}, kd={kd:.1f}")
 
     loguru.logger.info("Actuator gains overridden with HDMI PD gains")
+
+    # 3b. Add joint-level damping on wrist joints to prevent oscillation from
+    # external forces (gravity, walking inertia). Scene XML wrist actuator
+    # Kp=14-17, Kd=0.9-1.1, effective inertia ~0.43 → zeta=0.20 (underdamped).
+    # Critical Kd ~5.4. Adding dof_damping=5.0 → total ~6.0 (slightly overdamped).
+    for ji in range(model_cpu.njnt):
+        jname = mujoco.mj_id2name(model_cpu, mujoco.mjtObj.mjOBJ_JOINT, ji)
+        if jname and "wrist" in jname:
+            dof_id = model_cpu.jnt_dofadr[ji]
+            model_cpu.dof_damping[dof_id] = 5.0
+            loguru.logger.debug(f"  Added dof damping: {jname} (dof {dof_id}) = 5.0")
+    loguru.logger.info("Wrist joint damping added (dof_damping=5.0)")
 
     # 4. Initialize CPU data with initial pose from HDMI env
     data_cpu = mujoco.MjData(model_cpu)

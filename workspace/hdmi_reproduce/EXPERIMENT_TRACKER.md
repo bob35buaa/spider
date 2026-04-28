@@ -14,14 +14,16 @@
 | R010b | 2026-04-27 | fix suitcase slide offset + threshold=0.0 | 5.37 | 2.20 | 3.17 | 完成 |
 | **R011** | **2026-04-27** | **per-actuator gain + wrist noise 30% + guidance kp=20** | **5.66** | **2.30** | **3.36** | **完成** |
 | **R012** | **2026-04-27** | **fix PD gain index ordering (Isaac vs MuJoCo) + full 10s** | **6.56** | **2.93** | **3.63** | **完成** |
+| **R013** | **2026-04-28** | **wrist jitter fix: noise=0 + dof_damping=5 + skip zero gains** | **6.83** | **3.07** | **3.75** | **完成** |
+| R013b | 2026-04-28 | same as R013 but threshold=0.001 (早停) | 6.50 | 2.83 | 3.67 | 完成 |
 | HF ref | — | HuggingFace 参考 (data_id=1) | 5.90 | 2.19 | 3.71 | 参考 |
 
 ## 关键指标演进
 
 ```
-rew_mean:  R002(-0.3) → R003(1.93) → R005(2.65) → R006(4.13) → R007(5.33) → R008(5.63) → R011(5.66) → R012(6.56) → HF(5.90)
-tracking:  R002(N/A)  → R003(0.59) → R005(0.77) → R006(2.25) → R007(2.20) → R008(2.52) → R011(2.30) → R012(2.93) → HF(2.19)
-obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13) → R008(3.10) → R011(3.36) → R012(3.63) → HF(3.71)
+rew_mean:  R002(-0.3) → R003(1.93) → R005(2.65) → R006(4.13) → R007(5.33) → R008(5.63) → R011(5.66) → R012(6.56) → R013(6.83) → HF(5.90)
+tracking:  R002(N/A)  → R003(0.59) → R005(0.77) → R006(2.25) → R007(2.20) → R008(2.52) → R011(2.30) → R012(2.93) → R013(3.07) → HF(2.19)
+obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13) → R008(3.10) → R011(3.36) → R012(3.63) → R013(3.75) → HF(3.71)
 ```
 
 ## R012 达标总结
@@ -59,11 +61,24 @@ obj_track: R002(N/A)  → R003(1.33) → R005(1.88) → R006(1.88) → R007(3.13
 11. Guidance kp=20, decay=0.85 (R011)
 12. Fix PD gain index ordering: Isaac breadth-first vs MuJoCo depth-first (R012)
 13. Full 10s simulation (500 sim steps, was 250) (R012)
+14. Wrist MPC noise → 0 (match HDMI/HF: wrists not in action space) (R013)
+15. Skip zero-gain override for wrist joints (keep scene XML Kp=14-17) (R013)
+16. Add dof_damping=5.0 for wrist joints (ζ=0.20 → ζ≈1.1, critical damping) (R013)
+
+## R013 腕关节抖动修复 (新 SOTA)
+
+| 指标 | R012 | **R013** | R013b | HF | 变化(R013 vs R012) |
+|------|------|----------|-------|-----|-------------------|
+| rew_mean | 6.56 | **6.83** | 6.50 | 5.90 | +4.1% |
+| tracking | 2.93 | **3.07** | 2.83 | 2.19 | +4.8% |
+| obj_track | 3.63 | **3.75** | 3.67 | 3.71 | +3.3% |
+| opt_steps | 32.0 | 32.0 | 6.56 | 3.12 | — |
+| 运行时间 | ~110min | 107min | ~23min | — | — |
+| wrist jitter (前2s) | 1.0-4.0° | **0.003-0.012°** | 0.02-0.07° | — | **-99%** |
+
+注: R013b 的 threshold=0.001 导致站立阶段优化不足 (opt=1-3)，产生摔倒倾向
 
 ## 已知问题
 
-- R010b (suitcase 位置修正后) 指标 5.37 不如 R008 (suitcase 位置偏移 0.4m) 的 5.63
-- R008 的 suitcase 初始位置虽然错误 (偏移 0.4m)，但机器人反而能搬起来
-- R010b 修正位置后机器人在 t=4s 仍然摔倒 — 可能 CEM 对 suitcase 起始位置敏感
-- 腕关节噪声归零可能过度限制了 CEM 的搜索空间
-- improvement_threshold=0.0 导致每步跑满 32 iter，运行时间 ~2000s
+- improvement_threshold=0.0 导致每步跑满 32 iter，运行时间 ~2000s (R013 验证中)
+- R013b 使用 threshold=0.001 可大幅减少运行时间但保持性能

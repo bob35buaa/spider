@@ -106,7 +106,8 @@ def main(config: Config):
             for aid in obj_act_ids:
                 config.noise_scale[:, :, aid] *= 0.0
 
-        # Reduce (not zero) noise on wrist joints — they affect wrist_yaw body tracking
+        # Zero noise on wrist joints — HDMI RL policy excludes wrists from action space
+        # (hdmi-base.yaml has wrist action_scaling commented out, HF uses nu=23)
         if hasattr(config, "noise_scale") and config.noise_scale is not None:
             wrist_keywords = ["wrist_roll", "wrist_pitch", "wrist_yaw"]
             for ai in range(env.model_cpu.nu):
@@ -114,8 +115,8 @@ def main(config: Config):
                     env.model_cpu, mujoco.mjtObj.mjOBJ_ACTUATOR, ai
                 )
                 if aname and any(w in aname for w in wrist_keywords):
-                    config.noise_scale[:, :, ai] *= 0.3
-                    loguru.logger.info(f"Reduced noise (30%) for wrist actuator {ai}: {aname}")
+                    config.noise_scale[:, :, ai] *= 0.0
+                    loguru.logger.info(f"Zeroed noise for wrist actuator {ai}: {aname}")
 
         decay = getattr(config, "guidance_decay_ratio", 0.8)
         pos_kp = getattr(config, "init_pos_actuator_gain", 10.0)

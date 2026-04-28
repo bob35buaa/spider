@@ -1,3 +1,65 @@
+# HDMI Reproduce Progress Log
+
+## 2026-04-28 Session — R013 腕关节抖动修复
+
+### 根因分析
+
+通过视频抽帧 + 轨迹数据量化分析发现:
+1. `left_wrist_yaw` qpos 振荡 ±44°, ctrl 仅偏离 ±0.3° → 147x 放大
+2. HF ctrl 只有 23 维 (scene 有 29 actuator), 不含腕关节
+3. HDMI RL 策略的 `hdmi-base.yaml` 中腕关节 action_scaling 被注释掉
+4. 腕关节 PD 严重欠阻尼: Kp=14-17, Kd=0.9-1.1, ζ=0.20
+5. MPC 30% 腕关节噪声激发共振
+
+### R013 改动
+1. `run_hdmi.py`: wrist noise 0.3 → 0.0 (匹配 HDMI/HF)
+2. `hdmi.py`: 添加 wrist jnt_damping=5.0 (临界阻尼)
+
+### R013 额外发现与修复
+
+运行 R013 时发现第三个 bug:
+3. `hdmi.py`: Isaac config 对腕关节返回 kp=0, kd=0 (无 stiffness/damping 条目),
+   增益覆盖循环将 scene XML 的有效 Kp=14-17 替换为 0 → 腕关节完全无控制。
+   修复: 添加 `if kp == 0.0 and kd == 0.0: continue` 跳过零增益覆盖。
+
+### R013b 结果 (threshold=0.001, GPU 1)
+
+| 指标 | R012 | R013b | HF | Claims |
+|------|------|-------|----|--------|
+| rew_mean | 6.56 | 6.50 | 5.90 | >= 6.0 ✅ |
+| tracking | 2.93 | 2.83 | 2.19 | >= 2.5 ✅ |
+| obj_track | 3.63 | 3.67 | 3.71 | >= 3.5 ✅ |
+| opt_steps | 32.0 | 6.56 | 3.12 | — |
+| 运行时间 | ~110min | ~23min | — | — |
+
+腕关节抖动 (前 2s, frame-diff std):
+| 关节 | R012 | R013b | 下降 |
+|------|------|-------|------|
+| left_wrist_roll | 1.07° | 0.02° | 98.1% |
+| left_wrist_pitch | 4.01° | 0.05° | 98.7% |
+| left_wrist_yaw | 1.59° | 0.03° | 98.0% |
+| right_wrist_roll | 0.67° | 0.01° | 98.2% |
+| right_wrist_pitch | 2.61° | 0.07° | 97.3% |
+| right_wrist_yaw | 1.07° | 0.02° | 98.2% |
+
+视频: `workspace/hdmi_reproduce/results/R013b/R013b_comparison.mp4`
+- t=0-2s: 前臂平滑，无可见抖动 ✅
+- t=4s: 弯腰抓箱子，与 ref 匹配
+- t=8s: 蹲下推箱子，与 ref 基本匹配
+
+Claims 验证:
+1. ✅ 腕关节抖动 0.02-0.07° < 0.5° (R012: 1.0-4.0°)
+2. ✅ rew_mean=6.50 >= 6.0
+3. ✅ tracking=2.83 >= 2.5
+4. ✅ obj_track=3.67 >= 3.5
+5. ✅ 视频无可见手臂抖动
+
+### R013 运行中... (threshold=0.0, GPU 0)
+- 命令: `python -u examples/run_hdmi.py task=move_suitcase +data_id=1 viewer=none save_video=false save_info=true output_dir=workspace/hdmi_reproduce/results/R013 use_torch_compile=false`
+- 进度: 62% (310/500 steps), ~43 min 剩余
+
+---
+
 # R005 Progress Log
 
 ## 2026-04-26 Session — MuJoCo Warp GPU 重写

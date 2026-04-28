@@ -31,6 +31,66 @@ def flatten_mjwp(phys_data: dict) -> np.ndarray:
     return qpos
 
 
+def _euler_xyz_to_quat_wxyz(euler: np.ndarray) -> np.ndarray:
+    """Convert intrinsic XYZ euler angles to wxyz quaternion."""
+    from scipy.spatial.transform import Rotation
+    r = Rotation.from_euler("xyz", euler)
+    q_xyzw = r.as_quat()  # scipy returns (x,y,z,w)
+    return np.array([q_xyzw[3], q_xyzw[0], q_xyzw[1], q_xyzw[2]])
+
+
+def adapt_qpos_to_model(
+    model: mujoco.MjModel, qpos_seq: np.ndarray
+) -> np.ndarray:
+    """Convert trajectory qpos to match model nq if needed.
+
+    Handles contact guidance (nq=42, 6 slide/hinge suitcase joints) →
+    freejoint (nq=43, 7-DOF suitcase freejoint) conversion.
+    """
+    traj_nq = qpos_seq.shape[1]
+    if traj_nq == model.nq:
+        return qpos_seq
+
+    if traj_nq == model.nq - 1:
+        # Contact guidance → freejoint: convert suitcase 6DOF to 7DOF
+        # Find suitcase body to get its default position
+        suitcase_bid = -1
+        for bi in range(model.nbody):
+            bname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, bi)
+            if bname and "suitcase" in bname:
+                suitcase_bid = bi
+        if suitcase_bid < 0:
+            print("Warning: no suitcase body found, zero-padding qpos")
+            pad = np.zeros((qpos_seq.shape[0], 1), dtype=qpos_seq.dtype)
+            return np.concatenate([qpos_seq, pad], axis=1)
+
+        body_default_pos = model.body_pos[suitcase_bid].copy()
+
+        # Robot part is qpos[:nq-7] in freejoint model
+        robot_nq = model.nq - 7  # 36 for freejoint suitcase
+        T = qpos_seq.shape[0]
+        out = np.zeros((T, model.nq), dtype=qpos_seq.dtype)
+        out[:, :robot_nq] = qpos_seq[:, :robot_nq]
+
+        for t in range(T):
+            # Suitcase slide offsets → absolute position
+            slide_offset = qpos_seq[t, robot_nq:robot_nq + 3]
+            out[t, robot_nq:robot_nq + 3] = slide_offset + body_default_pos
+            # Euler xyz → quaternion wxyz
+            euler = qpos_seq[t, robot_nq + 3:robot_nq + 6]
+            out[t, robot_nq + 3:robot_nq + 7] = _euler_xyz_to_quat_wxyz(euler)
+
+        print(f"Converted qpos: {traj_nq} → {model.nq} (contact guidance → freejoint)")
+        return out
+
+    print(f"Warning: trajectory nq={traj_nq} != model nq={model.nq}, truncating/padding")
+    T = qpos_seq.shape[0]
+    out = np.zeros((T, model.nq), dtype=qpos_seq.dtype)
+    n = min(traj_nq, model.nq)
+    out[:, :n] = qpos_seq[:, :n]
+    return out
+
+
 def render_frames(
     model: mujoco.MjModel,
     qpos_seq: np.ndarray,
@@ -39,6 +99,7 @@ def render_frames(
     camera_name: str | None = None,
 ) -> list[np.ndarray]:
     """Render trajectory frames using offscreen renderer."""
+    qpos_seq = adapt_qpos_to_model(model, qpos_seq)
     renderer = mujoco.Renderer(model, height=height, width=width)
     data = mujoco.MjData(model)
     frames = []
