@@ -2,7 +2,28 @@
 
 ## 当前会话: 2026-05-06
 
-### E021 突破: Pelvis XY Anchor — 行走是唯一瓶颈
+### E024 失败: Partner Force — CEM 不产生主动接触
+
+**实验**: box025 + anchored + partner force (50%/70%/90% gravity comp) + obj_rew=3.0
+**结果**: 
+- 90% force: obj lift=84% 但是失重飘移 (序列末尾, ref 已下降时箱子飘起)
+- 视频确认: 所有配置中 G1 手始终在体侧, 未伸向物体
+- pelvis tracking 良好 (0.15-0.21m), 但手不碰物体
+
+**根因**: CEM 在关节空间采样, 无法发现"伸手→接触→施力"的因果序列。contact_rew 只在"已接触"后给奖励, 不引导"去接近"。
+
+**Phase 5 总结论**: SPIDER CEM 能做 body tracking, 不能做 contact-rich manipulation。
+问题是结构性的: 关节空间随机采样 + 短 horizon + 高维精确接触空间 = 概率极低。
+
+**后续方向优先级**:
+1. Hand position task-space tracking (强制手到参考位置)
+2. Hand approach reward (手→物体距离梯度)
+3. Spring + approach 组合
+4. SBTO (全序列优化, DynaRetarget 路线)
+
+---
+
+### E023 Full Anchor (XY+Yaw)
 
 **诊断三步**:
 1. **Pelvis error 分解**: walk_err/pose_err = 3.4-15.5x → 行走贡献 87-96% 误差

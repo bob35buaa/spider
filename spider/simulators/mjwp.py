@@ -791,6 +791,53 @@ def apply_perturbation(config: Config, env: MJWPEnv):
     return env
 
 
+def _apply_partner_force(config: Config, env: MJWPEnv):
+    """Apply external force on the object body to simulate partner support.
+
+    Models the human partner holding one side of the object, providing:
+    1. Gravity compensation: upward force = partner_force_scale * object_weight
+    2. (Optional) Spring: pull toward reference position with partner_force_spring_kp
+
+    This enables single-robot retargeting of cooperative carrying tasks.
+    """
+    obj_body_id = mujoco.mj_name2id(
+        env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+    )
+    if obj_body_id == -1:
+        return
+
+    xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
+
+    # Gravity compensation: upward force on object
+    obj_mass = env.model_cpu.body_mass[obj_body_id]
+    gravity_z = -env.model_cpu.opt.gravity[2]  # positive (9.81)
+    upward_force = config.partner_force_scale * obj_mass * gravity_z
+    xfrc_applied[:, obj_body_id, 2] = upward_force
+
+    # Optional: spring toward reference position
+    if config.partner_force_spring_kp > 0 and hasattr(env, "partner_force_ref_pos"):
+        # Get current object position from qpos
+        qpos = wp.to_torch(env.data_wp.qpos)
+        # Object freejoint position: find the qpos address
+        obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
+        obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
+        obj_pos_sim = qpos[:, obj_qadr:obj_qadr + 3]  # (N, 3)
+
+        # Get reference pos for current time
+        time_arr = wp.to_torch(env.data_wp.time)
+        t = time_arr[0].item()
+        dt = 1.0 / 30.0  # ref fps
+        T = env.partner_force_ref_pos.shape[0]
+        idx = min(int(t / dt), T - 1)
+        ref_pos = env.partner_force_ref_pos[idx]  # (3,) on GPU
+
+        # Spring force toward reference
+        spring_force = config.partner_force_spring_kp * (ref_pos.unsqueeze(0) - obj_pos_sim)
+        xfrc_applied[:, obj_body_id, :3] += spring_force
+
+    wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+
+
 def _update_mocap_partner(env: MJWPEnv):
     """Update mocap body positions from partner trajectory based on current sim time.
 
@@ -851,6 +898,9 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
     with wp.ScopedDevice(env.device):
         # apply perturbation
         env = apply_perturbation(config, env)
+        # E024: apply partner force on object (simulating human partner support)
+        if config.partner_force_scale > 0:
+            _apply_partner_force(config, env)
         # step control
         wp.copy(env.data_wp.ctrl, wp.from_torch(ctrl_mujoco.to(torch.float32)))
         # Update partner mocap positions within rollout (E013: intra-rollout update)

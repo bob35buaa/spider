@@ -27,6 +27,9 @@
 | E018 | 2026-05-06 | Phase 4 | **Task-Space奖励(DynaRetarget)+Interaction(Harmanoid)**: obj_err↓49%, R1=95%/R2=100%stable | **最佳** |
 | E020 | 2026-05-06 | Phase 5 | **多Case诊断(5物体×2模式)**: 全部stable=100%, 仅bucket005 pelvis_err<0.20m; chair022碰撞推飞 | 诊断完成 |
 | E021 | 2026-05-06 | Phase 5 | **IK可达性+Anchor**: 行走是主因(87-96%), Pelvis XY Anchor使err↓47-72%, box025降至0.186m | **突破** |
+| E022 | 2026-05-06 | Phase 5 | **Anchored+ObjRew**: desk005 lift=37%+视频确认手接触; box025臂展限制不变; bucket010 strong崩溃 | 部分成功 |
+| E023 | 2026-05-06 | Phase 5 | **Full Anchor(XY+Yaw)**: bucket010 pelvis_err↓48%(0.15m), 但obj初始距离0.77m超臂展; 单人不可解 | 结构性结论 |
+| E024 | 2026-05-07 | Phase 5 | **Partner Force(50-90%grav)**: 手从未主动碰物体, 90%下obj因失重飘起=偶发碰撞; CEM不产生接触 | 失败(结构性) |
 
 ## 关键指标演进
 

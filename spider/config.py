@@ -73,6 +73,9 @@ class Config:
     xy_offset_range: tuple[float, float] = (-0.005, 0.005)
     perturb_force: float = 0.0
     perturb_torque: float = 0.0
+    # E024: partner force — external upward force on object simulating human partner support
+    partner_force_scale: float = 0.0  # fraction of object gravity to apply as upward force (0.5 = 50%)
+    partner_force_spring_kp: float = 0.0  # spring stiffness pulling object toward ref pos (0 = pure gravity comp)
     contact_guidance: bool = False
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [
