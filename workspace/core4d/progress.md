@@ -2,6 +2,25 @@
 
 ## 当前会话: 2026-05-07
 
+### E028 初步结果: 阻尼弹簧 — 物体开始沿 ref 移动
+
+**实验**: bucket010/chair022 + damped spring (kp=20-50, critical damping) + hand_approach
+**结果**:
+- **阻尼弹簧成功稳定** (E026 无阻尼 → NaN; E028 阻尼 → 正常运行)
+- bucket010 (kp=20): 物体横移 0.47m(ref 0.87m, 54%), 手接触 82%, 但 pelvis 仅 91% stable
+- bucket010 (kp=50): 更稳定 (100%), 但接触降至 55%
+- **chair022 (kp=30)**: lift=29.2cm (ref的93%), 手接触91%, 100% stable
+- 但视频显示椅子倾斜/翻转 — 弹簧驱动 position 不控制 orientation
+
+**状态**: 方向正确, 但需要进一步优化:
+1. 物体 orientation 不受控 (只有位置弹簧)
+2. 物体被"弹射"而非平稳跟踪 (初始位置误差大 → 大力)
+3. 需要 orientation spring (四元数 PD)
+
+**代码**: `_apply_partner_force()` 添加了阻尼项 (kd = 2√(mk))
+
+---
+
 ### Phase 6 修正评估: Hand Contact Guidance (E025-E027)
 
 **用户反馈**: 视频可视化证实 E025-E027 并非成功的搬运重定向:

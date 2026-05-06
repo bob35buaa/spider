@@ -76,6 +76,7 @@ class Config:
     # E024: partner force — external upward force on object simulating human partner support
     partner_force_scale: float = 0.0  # fraction of object gravity to apply as upward force (0.5 = 50%)
     partner_force_spring_kp: float = 0.0  # spring stiffness pulling object toward ref pos (0 = pure gravity comp)
+    partner_force_spring_kd: float = -1.0  # damping (-1 = auto critical damping = 2*sqrt(m*kp))
     # E025: hand approach reward — guides hands toward object surface
     hand_approach_rew_scale: float = 0.0  # weight of hand-to-object-surface distance reward
     hand_approach_sigma: float = 5.0  # steepness of exponential decay

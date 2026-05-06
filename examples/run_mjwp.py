@@ -357,13 +357,16 @@ def main(config: Config):
     # setup env with initial state from first sim qpos
     env = setup_env(config, ref_data)
 
-    # E025/E026: precompute partner force reference object positions for spring
+    # E025/E026/E028: precompute partner force reference object positions + quaternions for spring
     if config.partner_force_spring_kp > 0 and config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
-        # Object freejoint position is last 7 dof in qpos: [nq-7:nq-4] for pos
+        # Object freejoint: last 7 dof in qpos [nq-7:nq] = [pos(3), quat(4)]
         nq_obj = 7
         obj_pos_ref_np = qpos_ref[:, -nq_obj:-nq_obj+3].detach().cpu().numpy()  # (T, 3)
+        obj_quat_ref_np = qpos_ref[:, -nq_obj+3:].detach().cpu().numpy()  # (T, 4) wxyz
         env.partner_force_ref_pos = torch.tensor(obj_pos_ref_np, device=config.device, dtype=torch.float32)
-        loguru.logger.info("Partner force spring: ref_pos shape={}", tuple(env.partner_force_ref_pos.shape))
+        env.partner_force_ref_quat = torch.tensor(obj_quat_ref_np, device=config.device, dtype=torch.float32)
+        loguru.logger.info("Partner force spring: ref_pos shape={}, ref_quat shape={}",
+                          tuple(env.partner_force_ref_pos.shape), tuple(env.partner_force_ref_quat.shape))
 
     # setup mujoco (for viewer only)
     mj_model = setup_mj_model(config)
