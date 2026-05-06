@@ -23,11 +23,18 @@
 | — | 2026-05-03 | Phase 4 | **规划**: Phase 4 路线图 (E015-E016), 小物体验证+双机器人 | 规划完成 |
 | E015 | 2026-05-03 | Phase 4 | Bucket005小物体: body-only pelvis_err=0.129m, 物体未搬起; **修复scene_name bug** | 完成 |
 | E016 | 2026-05-04 | Phase 4 | **双机器人Gibbs CEM**: nq=79 nu=58, 两G1均稳定(≥0.70), obj_z=0.488(92%ref) | **通过** |
+| E017 | 2026-05-05 | Phase 4 | **双机器人 Soft 2-Connect**: obj_z>0.40持续98%帧, obj_z_max=0.597(112%ref) | **突破** |
+| E018 | 2026-05-06 | Phase 4 | **Task-Space奖励(DynaRetarget)+Interaction(Harmanoid)**: obj_err↓49%, R1=95%/R2=100%stable | **最佳** |
+| E020 | 2026-05-06 | Phase 5 | **多Case诊断(5物体×2模式)**: 全部stable=100%, 仅bucket005 pelvis_err<0.20m; chair022碰撞推飞 | 诊断完成 |
+| E021 | 2026-05-06 | Phase 5 | **IK可达性+Anchor**: 行走是主因(87-96%), Pelvis XY Anchor使err↓47-72%, box025降至0.186m | **突破** |
 
 ## 关键指标演进
 
 ```
 pelvis_err: E002(0.100) → E003(0.068) → E004(0.061) → E009a(0.115) → E012(0.083) → E015-d(0.129, bucket005)
+E020 多Case pelvis_err: bucket005(0.157) < bucket010(0.660) ≈ desk005(0.647) ≈ box025(0.660) < chair022(0.787)
+E020 多Case lift%: bucket005(60%) > bucket010(36%) > desk005(37%+obj) > chair022(130%碰撞推飞) > box025(1.5%)
+E021 Anchored pelvis_err: box025(0.186, ↓72%) < desk005(0.279, ↓58%) < bucket010(0.293, ↓58%) < chair022(0.417, ↓47%)
 joint_err:  E002(0.073) → E003(0.064) → E012(0.108 rad) → E015-d(0.202 rad, bucket005)
 obj z 实测 (npz qpos):
   Phase 1: 所有实验 sim max ≤ 0.460m (E011), 实际未持续离地

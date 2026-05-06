@@ -2,7 +2,55 @@
 
 ## 当前会话: 2026-05-06
 
-### E018 突破: Task-Space 奖励 (DynaRetarget/Harmanoid 启发)
+### E021 突破: Pelvis XY Anchor — 行走是唯一瓶颈
+
+**诊断三步**:
+1. **Pelvis error 分解**: walk_err/pose_err = 3.4-15.5x → 行走贡献 87-96% 误差
+2. **站定片段检测**: 全部 4 case 无站定帧 (均速 0.5-0.95 m/s) → 裁剪不可行
+3. **手-物体表面距离**: 69-84% 帧手到物体 < 0.05m → 手部可达不是问题
+
+**Pelvis XY Anchor 方案**: 每帧减去累积 pelvis xy 位移 → 原地搬运
+
+| Case | Original → Anchored | 改善 |
+|------|---------------------|------|
+| box025 | 0.660m → **0.186m** | **↓72%** |
+| bucket010 | 0.692m → **0.293m** | **↓58%** |
+| chair022 | 0.787m → **0.417m** | **↓47%** |
+| desk005 | 0.666m → **0.279m** | **↓58%** |
+
+**结论**: SPIDER CEM 有局部姿态跟踪能力, 只是被行走需求拖累。Anchor 是有效的预处理。
+
+### E020 诊断: 多 Case SPIDER 单人重定向能力验证
+
+**5 个 Case × 2 种模式 (body-only / with-obj) = 10 runs**:
+
+| Case | 物体特征 | body-only pelvis_err | body-only lift% | with-obj lift% |
+|------|----------|---------------------|-----------------|----------------|
+| box025 | 大箱 0.61×0.61×0.89m | 0.660 | 1.5% | 3.9% |
+| bucket005 | 小桶 0.30×0.41×0.29m | **0.157** | **59.6%** | 29.0% |
+| bucket010 | 中桶 0.40×0.74×0.40m | 0.692 | 36.2% | 3.8% |
+| chair022 | 椅子 0.57×0.86×0.53m | 0.787 | 129.6% (推飞) | 127.4% |
+| desk005 | 桌子 0.40×0.74×0.80m | 0.666 | 0.9% | **37.1%** |
+
+**关键诊断结论**:
+1. Body 稳定性全部 100% — SPIDER 核心能力 OK
+2. Body tracking 精度普遍差 (仅 bucket005 < 0.20m) — **参考动作对 G1 运动学不友好是根因**
+3. bucket005 是唯一表现好的 case (低 pelvis_err + 高 lift)
+4. obj_rew 效果不一致: 对 desk005 有帮助, 对 bucket005/bucket010 反而有害
+5. chair022 的 130% lift 是碰撞推飞, 非真实搬运
+
+**回答核心问题**: "是 case 难度还是 SPIDER 算法?"
+→ **是参考动作的 G1 运动学可达性问题**。当动作对 G1 友好时 (bucket005), body tracking 好, 碰撞位移也自然产生。当动作不友好时, 机器人选择"安全但不准确"的替代姿态, 手无法到达正确位置。
+
+**产出**:
+- 计划: `workspace/core4d/plan/20_E020_multicase_diagnosis_plan.md`
+- 日志: `workspace/core4d/log/18_E020_multicase_diagnosis_results.md`
+- 结果: `workspace/core4d/results/E020_multicase_diagnosis/{case}/{bodyonly,withobj}.{npz,mp4}`
+- Metrics: `workspace/core4d/results/E020_multicase_diagnosis/metrics_summary.csv`
+- 配置: `examples/config/override/core4d_{bucket010,chair022,desk005}.yaml`
+- 新 case 数据: 3 × scene.xml + trajectory_kinematic.npz
+
+---
 
 **E018 结果 (双机器人 + connect2 + 多奖励)**:
 - **物体跟踪误差减半**: obj_pos_err 0.599m → 0.308m (vs E017-d, ↓49%)

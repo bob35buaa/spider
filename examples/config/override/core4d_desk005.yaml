@@ -1,0 +1,28 @@
+# @package _global_
+# E020: Desk005 retargeting (easier, high initial pos, small lift)
+dataset_name: core4d
+task: desk005_person2
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+
+# Reward weights (body-only baseline)
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 0.0
+rot_rew_scale: 0.0
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 2048
+terminate_resample: true
+base_pos_threshold: 0.3
+object_pos_threshold: 0.3
+
+# Output
+viewer: none
+save_video: true
