@@ -1,0 +1,37 @@
+# @package _global_
+# E026-a: Hand approach + spring (object tracks ref pos via spring, robot pushes)
+dataset_name: core4d
+task: bucket010_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+data_path: /home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket010_person1/0/trajectory_kinematic_anchored.npz
+
+# E025: Hand approach reward
+hand_approach_rew_scale: 5.0
+hand_approach_sigma: 5.0
+
+# Partner force (85% gravity comp + spring toward ref)
+partner_force_scale: 0.85
+partner_force_spring_kp: 50.0
+
+# Body + object tracking
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 5.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 2048
+terminate_resample: true
+base_pos_threshold: 0.3
+object_pos_threshold: 0.3
+
+# Output
+viewer: none
+save_video: true

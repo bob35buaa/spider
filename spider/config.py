@@ -76,6 +76,14 @@ class Config:
     # E024: partner force — external upward force on object simulating human partner support
     partner_force_scale: float = 0.0  # fraction of object gravity to apply as upward force (0.5 = 50%)
     partner_force_spring_kp: float = 0.0  # spring stiffness pulling object toward ref pos (0 = pure gravity comp)
+    # E025: hand approach reward — guides hands toward object surface
+    hand_approach_rew_scale: float = 0.0  # weight of hand-to-object-surface distance reward
+    hand_approach_sigma: float = 5.0  # steepness of exponential decay
+    hand_approach_body_names: list[str] = field(
+        default_factory=lambda: ["left_wrist_yaw_link", "right_wrist_yaw_link"]
+    )
+    hand_approach_body_ids: list[int] = field(default_factory=list)  # resolved at runtime
+    hand_approach_obj_half_extents: list[float] = field(default_factory=list)  # resolved at runtime from geom
     contact_guidance: bool = False
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [
@@ -511,13 +519,14 @@ def process_config(config: Config):
     else:
         scene_xml = "scene.xml" if config.num_dyn == 1 else "scene_eq.xml"
     config.model_path = f"{processed_dir_robot}/../{scene_xml}"
-    # default to MJWP retargeted trajectory if available
-    if config.embodiment_type == "dual_humanoid_object":
-        config.data_path = f"{processed_dir_robot}/trajectory_kinematic_dual.npz"
-    elif config.contact_guidance:
-        config.data_path = f"{processed_dir_robot}/trajectory_kinematic_act.npz"
-    else:
-        config.data_path = f"{processed_dir_robot}/trajectory_kinematic.npz"
+    # default to MJWP retargeted trajectory if available (skip if data_path already set)
+    if not config.data_path:
+        if config.embodiment_type == "dual_humanoid_object":
+            config.data_path = f"{processed_dir_robot}/trajectory_kinematic_dual.npz"
+        elif config.contact_guidance:
+            config.data_path = f"{processed_dir_robot}/trajectory_kinematic_act.npz"
+        else:
+            config.data_path = f"{processed_dir_robot}/trajectory_kinematic.npz"
 
     # get model data
     if config.simulator == "mjwp":
@@ -596,6 +605,39 @@ def process_config(config: Config):
         loguru.logger.info(
             "Task-space body tracking: {} bodies resolved.",
             len(config.task_body_ids),
+        )
+
+    # Resolve hand_approach_body_ids and object half-extents for E025
+    if config.hand_approach_rew_scale > 0.0 and config.simulator == "mjwp":
+        resolved_ids = []
+        for name in config.hand_approach_body_names:
+            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+            if bid != -1:
+                resolved_ids.append(bid)
+            else:
+                loguru.logger.warning(
+                    "hand_approach_body_names: body '{}' not found.", name
+                )
+        config.hand_approach_body_ids = resolved_ids
+        # Resolve object half-extents from collision geom
+        obj_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+        if obj_body_id != -1:
+            for g in range(model.ngeom):
+                if model.geom_bodyid[g] == obj_body_id:
+                    gname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g)
+                    if gname and "collision" in gname:
+                        config.hand_approach_obj_half_extents = [float(x) for x in model.geom_size[g]]
+                        break
+            if not config.hand_approach_obj_half_extents:
+                # Fallback: use first object geom size
+                for g in range(model.ngeom):
+                    if model.geom_bodyid[g] == obj_body_id:
+                        config.hand_approach_obj_half_extents = [float(x) for x in model.geom_size[g]]
+                        break
+        loguru.logger.info(
+            "Hand approach: {} bodies, obj half_ext={}",
+            len(config.hand_approach_body_ids),
+            config.hand_approach_obj_half_extents,
         )
 
     # output dir: write artifacts alongside the trial

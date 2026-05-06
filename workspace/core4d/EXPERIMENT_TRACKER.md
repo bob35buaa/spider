@@ -30,6 +30,9 @@
 | E022 | 2026-05-06 | Phase 5 | **Anchored+ObjRew**: desk005 lift=37%+视频确认手接触; box025臂展限制不变; bucket010 strong崩溃 | 部分成功 |
 | E023 | 2026-05-06 | Phase 5 | **Full Anchor(XY+Yaw)**: bucket010 pelvis_err↓48%(0.15m), 但obj初始距离0.77m超臂展; 单人不可解 | 结构性结论 |
 | E024 | 2026-05-07 | Phase 5 | **Partner Force(50-90%grav)**: 手从未主动碰物体, 90%下obj因失重飘起=偶发碰撞; CEM不产生接触 | 失败(结构性) |
+| E025 | 2026-05-07 | Phase 6 | **Hand Approach Reward**: 手确实接近物体(dist 0.34→0.00), 但本质是推/碰静止物体, 非沿ref搬运; partner横向动态缺失 | 部分成功(技术有效, 目标未达) |
+| E026 | 2026-05-07 | Phase 6 | **Sustained Contact (4096samp/24iter)**: bucket直立+持续接触, 但仍是推静止物体; 长horizon(2.4s)反而保守 | 同上 |
+| E027 | 2026-05-07 | Phase 6 | **Partner Force Sweep + desk005**: 接触率不依赖pf强度(均64%); desk005也产生碰触但非搬运 | 同上 |
 
 ## 关键指标演进
 
@@ -37,6 +40,9 @@
 pelvis_err: E002(0.100) → E003(0.068) → E004(0.061) → E009a(0.115) → E012(0.083) → E015-d(0.129, bucket005)
 E020 多Case pelvis_err: bucket005(0.157) < bucket010(0.660) ≈ desk005(0.647) ≈ box025(0.660) < chair022(0.787)
 E020 多Case lift%: bucket005(60%) > bucket010(36%) > desk005(37%+obj) > chair022(130%碰撞推飞) > box025(1.5%)
+E025 hand approach: bucket010 contact=55%(6/11), lift_max=0.095m; desk005 contact=40%(4/10), lift_max=0.057m
+E026 sustained: bucket010 contact=64%(7/11), lift_max=0.093m, 4 consecutive >5cm
+E027 generalization: bucket010 pf=50% still 64% contact; desk005 contact=80%, lift_max=0.117m (best overall)
 E021 Anchored pelvis_err: box025(0.186, ↓72%) < desk005(0.279, ↓58%) < bucket010(0.293, ↓58%) < chair022(0.417, ↓47%)
 joint_err:  E002(0.073) → E003(0.064) → E012(0.108 rad) → E015-d(0.202 rad, bucket005)
 obj z 实测 (npz qpos):

@@ -439,7 +439,32 @@ def get_reward(
             -config.interact_sigma * pair_err_total
         )
 
-    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew
+    # E025: hand approach reward — exp decay of hand-to-object-surface distance
+    hand_approach_rew = torch.zeros(N, device=config.device)
+    if config.hand_approach_rew_scale > 0.0 and config.hand_approach_body_ids:
+        obj_body_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
+        if obj_body_id != -1 and config.hand_approach_obj_half_extents:
+            xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+            hand_pos = xpos_sim[:, config.hand_approach_body_ids]  # (N, K_hand, 3)
+            obj_pos = xpos_sim[:, obj_body_id:obj_body_id + 1]  # (N, 1, 3)
+            # Surface distance: clamp(|delta| - half_ext, min=0) then norm
+            half_ext = torch.tensor(
+                config.hand_approach_obj_half_extents,
+                device=config.device,
+                dtype=hand_pos.dtype,
+            )
+            delta = torch.abs(hand_pos - obj_pos)  # (N, K_hand, 3)
+            surface_dist = torch.clamp(delta - half_ext, min=0.0)  # (N, K_hand, 3)
+            # Min distance over hands (reward best hand)
+            dist_per_hand = surface_dist.norm(dim=-1)  # (N, K_hand)
+            min_dist = dist_per_hand.min(dim=1).values  # (N,)
+            hand_approach_rew = config.hand_approach_rew_scale * torch.exp(
+                -config.hand_approach_sigma * min_dist
+            )
+
+    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew
 
     info = {
         "qpos_dist": qpos_dist,
@@ -449,6 +474,7 @@ def get_reward(
         "task_body_rew": task_body_rew,
         "task_obj_rew": task_obj_rew,
         "interact_rew": interact_rew,
+        "hand_approach_rew": hand_approach_rew,
     }
     return reward, info
 

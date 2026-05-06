@@ -1,0 +1,41 @@
+# @package _global_
+# E026: Optimized CEM for sustained contact (more samples, longer horizon)
+# Based on E025-f best config + CEM improvements
+dataset_name: core4d
+task: bucket010_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+data_path: /home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket010_person1/0/trajectory_kinematic_anchored.npz
+
+# E025 best: Hand approach reward
+hand_approach_rew_scale: 5.0
+hand_approach_sigma: 5.0
+
+# Partner force (85% gravity comp)
+partner_force_scale: 0.85
+
+# Body + object tracking
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 5.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# E026: Enhanced CEM
+num_samples: 4096
+horizon: 2.4
+improvement_threshold: 0.0
+max_num_iterations: 24
+temperature: 0.2
+terminate_resample: true
+base_pos_threshold: 0.3
+object_pos_threshold: 0.3
+
+# Output
+viewer: none
+save_video: true

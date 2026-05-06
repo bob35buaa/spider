@@ -1,6 +1,57 @@
 # CORE4D 研究进度
 
-## 当前会话: 2026-05-06
+## 当前会话: 2026-05-07
+
+### Phase 6 修正评估: Hand Contact Guidance (E025-E027)
+
+**用户反馈**: 视频可视化证实 E025-E027 并非成功的搬运重定向:
+1. bucket010: 参考中物体在 0-1s 被 partner 横向移动 (xy=0.32m, lift=13cm), sim 中物体静止 → 机器人碰到静止物体
+2. desk005: 推/碰, 非协作搬运
+3. 接触本身是手部 (非腿/脚), 但本质是 body tracking 中的偶发碰撞
+
+**技术贡献 (有效)**:
+- hand_approach_rew 确实让 CEM 产生手-物体接近 (0.34→0.00m)
+- data_path override、表面距离近似、4096 samples 优化均有效
+
+**未达成的目标**:
+- 物体未沿参考轨迹运动 (partner 横向搬运动态完全缺失)
+- 不构成"接触重定向" — 只是"body tracking 中碰到了物体"
+
+**核心差距**: partner_force 只有竖直恒力, 缺少 partner 的横向搬运力。需要建模 partner 的完整搬运贡献。
+
+---
+
+### E025 Hand Approach Reward — CEM 手-物体接近 (技术有效, 目标未达)
+
+**实验**: bucket010/desk005 + anchored + hand_approach_rew=5.0 + partner_force=0.85
+**结果**:
+- **bucket010 (E025-f)**: 55% frames contact, lift_max=9.5cm, 视频确认手伸向/抱住 bucket
+- **desk005 (E025-g)**: 40% frames contact, lift_max=5.7cm, 跨 case 泛化成功
+- **因果关系**: contact(t=3-5) → lift(t=5 peak 9.5cm), 完美时间相关
+
+**机制**: `hand_approach_rew = scale * exp(-sigma * hand_to_surface_dist)`
+- 与 contact_rew (只在接触后奖励) 不同: approach 从任意距离提供梯度
+- 与 task_body_rew (跟踪参考手位) 不同: approach 直接拉向物体表面
+- CEM 2048 采样中, 一部分"手离物体较近"的采样被 approach 放大 → 逐步收敛
+
+**Phase 5 结论修正**: SPIDER CEM **可以做接触**, 但需要 approach reward 提供梯度引导。
+之前 E024 失败是因为缺少手→物体的显式梯度, 不是 CEM 的绝对限制。
+
+**代码改动**:
+- `spider/config.py`: +hand_approach_rew_scale/sigma/body_names/body_ids/obj_half_extents, data_path 不再无条件覆盖
+- `spider/simulators/mjwp.py`: +hand_approach_rew (surface distance + exp decay)
+- `examples/run_mjwp.py`: +partner_force_ref_pos setup (for spring)
+
+**后续优先级 (更新)**:
+1. ~~Hand approach reward~~ → **已验证有效!**
+2. 增加 samples (4096) + 更长 horizon (2.4s) → 更高接触率
+3. 两阶段 CEM (body-first + approach) → 更稳定
+4. 阻尼弹簧 → 修复 E026 不稳定
+5. SBTO (可选进一步提升)
+
+---
+
+## 历史: 2026-05-07 (earlier)
 
 ### E024 失败: Partner Force — CEM 不产生主动接触
 
