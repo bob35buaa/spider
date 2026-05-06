@@ -50,17 +50,14 @@ class MJWPEnv:
 
 
 def _compile_step(
-    model_wp: mjwarp.Model, data_wp: mjwarp.Data
+    model_wp: mjwarp.Model, data_wp: mjwarp.Data, decimation: int = 1
 ) -> wp.ScopedCapture.Graph:
-    """Warm up and capture a CUDA graph that runs a single mjwarp.step."""
+    """Warm up and capture a CUDA graph that runs `decimation` × mjwarp.step."""
 
     def _step_once():
-        mjwarp.step(model_wp, data_wp)
+        for _ in range(decimation):
+            mjwarp.step(model_wp, data_wp)
 
-    # Warmup/compile
-    # _step_once()
-    # _step_once()
-    # wp.synchronize()
     # Capture
     with wp.ScopedCapture() as capture:
         _step_once()
@@ -77,7 +74,11 @@ def _compile_step(
 
 def setup_mj_model(config: Config) -> mujoco.MjModel:
     model_cpu = mujoco.MjModel.from_xml_path(config.model_path)
-    model_cpu.opt.timestep = float(config.sim_dt)
+    # Path Y: physics_dt for Holosoma alignment (decimation handled in graph capture)
+    if config.physics_dt > 0:
+        model_cpu.opt.timestep = float(config.physics_dt)
+    else:
+        model_cpu.opt.timestep = float(config.sim_dt)
     if config.embodiment_type in ["left", "right", "bimanual"]:
         # setup for hand
         model_cpu.opt.iterations = 20
@@ -91,7 +92,7 @@ def setup_mj_model(config: Config) -> mujoco.MjModel:
             2,
         ]  # softer contact for sim2real
         model_cpu.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
-    elif config.embodiment_type in ["humanoid", "humanoid_object"]:
+    elif config.embodiment_type in ["humanoid", "humanoid_object", "dual_humanoid_object"]:
         # setup for humanoid
         model_cpu.opt.iterations = 5
         model_cpu.opt.ls_iterations = 10
@@ -104,6 +105,11 @@ def setup_mj_model(config: Config) -> mujoco.MjModel:
             2,
         ]  # softer contact for sim2real
         model_cpu.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    # Path Y: override PD gains with Holosoma values
+    if getattr(config, "apply_holosoma_pd", False):
+        from spider.mujoco_utils import apply_holosoma_g1_pd
+        n = apply_holosoma_g1_pd(model_cpu, verbose=False)
+        loguru.logger.info(f"Applied Holosoma G1 PD to {n} actuators")
     return model_cpu
 
 
@@ -154,10 +160,10 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> MJWPEnv:
             nconmax=int(config.nconmax_per_env),
             njmax=int(config.njmax_per_env),
         )
-        default_graph = _compile_step(default_model_wp, default_data_wp)
+        default_graph = _compile_step(default_model_wp, default_data_wp, decimation=config.sim_decimation)
 
     # Initialize env; default active is main
-    return MJWPEnv(
+    env = MJWPEnv(
         model_cpu=model_cpu,
         data_cpu=data_cpu,
         model_wp=default_model_wp,
@@ -167,6 +173,12 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> MJWPEnv:
         device=dev,
         num_worlds=int(config.num_samples),
     )
+
+    # Load mocap partner trajectory if configured
+    if config.mocap_partner_trajectory:
+        _load_mocap_partner(config, env)
+
+    return env
 
 
 def _weight_diff_qpos(config: Config) -> torch.Tensor:
@@ -203,6 +215,21 @@ def _weight_diff_qpos(config: Config) -> torch.Tensor:
         # robot joint
         w[6:-6] = config.joint_rew_scale
         # object pos and rot
+        w[-6:-3] = config.pos_rew_scale
+        w[-3:] = config.rot_rew_scale
+    elif config.embodiment_type == "dual_humanoid_object":
+        # Two robots + one shared object
+        # nv layout: robot1_base(3)+rot(3)+joints(29) + robot2_base(3)+rot(3)+joints(29) + obj_pos(3)+rot(3)
+        nv_robot = (config.nv - 6) // 2  # 35 per robot
+        # robot1
+        w[:3] = config.base_pos_rew_scale
+        w[3:6] = config.base_rot_rew_scale
+        w[6:nv_robot] = config.joint_rew_scale
+        # robot2
+        w[nv_robot:nv_robot + 3] = config.base_pos_rew_scale
+        w[nv_robot + 3:nv_robot + 6] = config.base_rot_rew_scale
+        w[nv_robot + 6:2 * nv_robot] = config.joint_rew_scale
+        # object
         w[-6:-3] = config.pos_rew_scale
         w[-3:] = config.rot_rew_scale
     else:
@@ -274,6 +301,32 @@ def _diff_qpos(
             # contact_guidance: pos(3) + rpy(3), all direct subtraction
             qpos_diff[:, -6:-3] = qpos_object[:, :3] - qpos_ref_object[:, :3]
             qpos_diff[:, -3:] = qpos_object[:, 3:6] - qpos_ref_object[:, 3:6]
+    elif config.embodiment_type == "dual_humanoid_object":
+        nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
+        nq_robot = (config.nq - nq_obj) // 2  # 36 per robot
+        nv_robot = (config.nv - 6) // 2  # 35 per robot
+        # robot1: nq[0:nq_robot], robot2: nq[nq_robot:2*nq_robot], obj: nq[-nq_obj:]
+        r1 = qpos_sim[:, :nq_robot]
+        r2 = qpos_sim[:, nq_robot:2 * nq_robot]
+        obj = qpos_sim[:, -nq_obj:]
+        r1_ref = qpos_ref[:, :nq_robot]
+        r2_ref = qpos_ref[:, nq_robot:2 * nq_robot]
+        obj_ref = qpos_ref[:, -nq_obj:]
+        # robot1: base pos/rot/joints
+        qpos_diff[:, :3] = r1[:, :3] - r1_ref[:, :3]
+        qpos_diff[:, 3:6] = quat_sub(r1[:, 3:7], r1_ref[:, 3:7])
+        qpos_diff[:, 6:nv_robot] = r1[:, 7:] - r1_ref[:, 7:]
+        # robot2: base pos/rot/joints
+        qpos_diff[:, nv_robot:nv_robot + 3] = r2[:, :3] - r2_ref[:, :3]
+        qpos_diff[:, nv_robot + 3:nv_robot + 6] = quat_sub(r2[:, 3:7], r2_ref[:, 3:7])
+        qpos_diff[:, nv_robot + 6:2 * nv_robot] = r2[:, 7:] - r2_ref[:, 7:]
+        # object
+        if nq_obj == 7:
+            qpos_diff[:, -6:-3] = obj[:, :3] - obj_ref[:, :3]
+            qpos_diff[:, -3:] = quat_sub(obj[:, 3:7], obj_ref[:, 3:7])
+        else:
+            qpos_diff[:, -6:-3] = obj[:, :3] - obj_ref[:, :3]
+            qpos_diff[:, -3:] = obj[:, 3:6] - obj_ref[:, 3:6]
     else:
         raise ValueError(f"Invalid embodiment_type: {config.embodiment_type}")
     return qpos_diff
@@ -285,18 +338,25 @@ def get_reward(
     ref: tuple[torch.Tensor, ...],
 ) -> torch.Tensor:
     """Non-terminal step reward for MJWP batched worlds.
-    ref is a tuple: (qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref)
+    ref is a tuple: (qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref,
+                     body_xpos_ref) where body_xpos_ref is (K, 3) per timestep
     Returns (N,)
 
     TODO: move reward computation to task-specific module
     """
-    qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref = ref
+    # Unpack with backward compatibility (5-tuple legacy or 6-tuple E018)
+    if len(ref) == 5:
+        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref = ref
+        body_xpos_ref = None
+    else:
+        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref = ref
     qpos_sim = wp.to_torch(env.data_wp.qpos)
     qvel_sim = wp.to_torch(env.data_wp.qvel)
+    N = qpos_sim.shape[0]
 
     # weighted qpos tracking
     qpos_diff = _diff_qpos(
-        config, qpos_sim, qpos_ref.unsqueeze(0).repeat(qpos_sim.shape[0], 1)
+        config, qpos_sim, qpos_ref.unsqueeze(0).repeat(N, 1)
     )
     qpos_weight = _weight_diff_qpos(config)
     delta_qpos = qpos_diff * qpos_weight
@@ -316,13 +376,79 @@ def get_reward(
     else:
         contact_rew = 0.0
 
-    reward = qpos_rew + qvel_rew + contact_rew
+    # E018: task-space body world-position tracking (DynaRetarget Table II)
+    task_body_rew = torch.zeros(N, device=config.device)
+    if (
+        config.task_body_rew_scale > 0.0
+        and config.task_body_ids
+        and body_xpos_ref is not None
+        and body_xpos_ref.shape[0] > 0
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+        body_pos_sim = xpos_sim[:, config.task_body_ids]  # (N, K, 3)
+        body_weights = torch.tensor(
+            config.task_body_weights, device=config.device, dtype=body_pos_sim.dtype
+        )  # (K,)
+        # body_xpos_ref is (K, 3) for this timestep
+        err = ((body_pos_sim - body_xpos_ref.unsqueeze(0)) ** 2).sum(dim=-1)  # (N, K)
+        task_body_rew = -config.task_body_rew_scale * (err * body_weights).sum(dim=1)
+
+    # E018: separate object position/orientation tracking with high weight
+    task_obj_rew = torch.zeros(N, device=config.device)
+    if (
+        config.task_obj_pos_rew_scale > 0.0 or config.task_obj_rot_rew_scale > 0.0
+    ) and config.embodiment_type in [
+        "humanoid_object",
+        "dual_humanoid_object",
+        "bimanual",
+        "right",
+        "left",
+    ]:
+        nq_obj = config.nq_obj
+        if nq_obj == 7:
+            obj_pos_sim = qpos_sim[:, -7:-4]
+            obj_pos_ref = qpos_ref[-7:-4].unsqueeze(0)
+            pos_err = ((obj_pos_sim - obj_pos_ref) ** 2).sum(dim=-1)
+            task_obj_rew = task_obj_rew - config.task_obj_pos_rew_scale * pos_err
+            if config.task_obj_rot_rew_scale > 0.0:
+                obj_quat_sim = qpos_sim[:, -4:]
+                obj_quat_ref = qpos_ref[-4:].unsqueeze(0).repeat(N, 1)
+                rot_err = (quat_sub(obj_quat_sim, obj_quat_ref) ** 2).sum(dim=-1)
+                task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+
+    # E018: interaction reward (Harmanoid Eq.15) — match relative offsets
+    # between pairs of bodies in task_body_ids
+    interact_rew = torch.zeros(N, device=config.device)
+    if (
+        config.interact_rew_scale > 0.0
+        and config.interact_pairs
+        and config.task_body_ids
+        and body_xpos_ref is not None
+        and body_xpos_ref.shape[0] > 0
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        body_pos_sim = xpos_sim[:, config.task_body_ids]  # (N, K, 3)
+        pair_err_total = torch.zeros(N, device=config.device)
+        for ia, ib in config.interact_pairs:
+            delta_sim = body_pos_sim[:, ia] - body_pos_sim[:, ib]  # (N, 3)
+            delta_ref = body_xpos_ref[ia] - body_xpos_ref[ib]  # (3,)
+            pair_err_total = (
+                pair_err_total + ((delta_sim - delta_ref.unsqueeze(0)) ** 2).sum(dim=-1)
+            )
+        interact_rew = config.interact_rew_scale * torch.exp(
+            -config.interact_sigma * pair_err_total
+        )
+
+    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew
 
     info = {
         "qpos_dist": qpos_dist,
         "qvel_dist": qvel_dist,
         "qpos_rew": qpos_rew,
         "qvel_rew": qvel_rew,
+        "task_body_rew": task_body_rew,
+        "task_obj_rew": task_obj_rew,
+        "interact_rew": interact_rew,
     }
     return reward, info
 
@@ -363,7 +489,12 @@ def get_terminate(
 ) -> torch.Tensor:
     # compute object position and orientation error, compare to thereshold
     qpos_sim = wp.to_torch(env.data_wp.qpos)
-    qpos_ref, qvel_ref, ctrl_ref, contact_ref, _contact_pos_ref = ref_slice
+    # Tolerate both legacy 5-tuple and E018 6-tuple (with body_xpos_ref).
+    qpos_ref = ref_slice[0]
+    qvel_ref = ref_slice[1]
+    ctrl_ref = ref_slice[2]
+    contact_ref = ref_slice[3]
+    _contact_pos_ref = ref_slice[4]
     if config.embodiment_type == "bimanual":
         if config.nq_obj == 12:
             right_obj_pos = qpos_sim[:, -12:-9]
@@ -463,6 +594,33 @@ def get_terminate(
         )
         terminate = (base_pos_error > config.base_pos_threshold) | (
             base_quat_error > config.base_rot_threshold
+        )
+    elif config.embodiment_type == "dual_humanoid_object":
+        nq_robot = (config.nq - config.nq_obj) // 2  # 36 per robot
+        N = qpos_sim.shape[0]
+        # robot1 base
+        r1_pos_err = torch.norm(qpos_sim[:, :3] - qpos_ref[:3].unsqueeze(0), p=2, dim=1)
+        r1_rot_err = torch.norm(
+            quat_sub(qpos_sim[:, 3:7], qpos_ref[3:7].unsqueeze(0).expand(N, -1)),
+            p=2, dim=1,
+        )
+        # robot2 base
+        r2_pos_err = torch.norm(
+            qpos_sim[:, nq_robot:nq_robot + 3] - qpos_ref[nq_robot:nq_robot + 3].unsqueeze(0),
+            p=2, dim=1,
+        )
+        r2_rot_err = torch.norm(
+            quat_sub(
+                qpos_sim[:, nq_robot + 3:nq_robot + 7],
+                qpos_ref[nq_robot + 3:nq_robot + 7].unsqueeze(0).expand(N, -1),
+            ),
+            p=2, dim=1,
+        )
+        terminate = (
+            (r1_pos_err > config.base_pos_threshold)
+            | (r1_rot_err > config.base_rot_threshold)
+            | (r2_pos_err > config.base_pos_threshold)
+            | (r2_rot_err > config.base_rot_threshold)
         )
     else:
         raise ValueError(f"Invalid embodiment_type: {config.embodiment_type}")
@@ -633,6 +791,58 @@ def apply_perturbation(config: Config, env: MJWPEnv):
     return env
 
 
+def _update_mocap_partner(env: MJWPEnv):
+    """Update mocap body positions from partner trajectory based on current sim time.
+
+    Uses wp.to_torch for shared-memory in-place writes (wp.copy fails after
+    CUDA graph capture because data_wp.mocap_pos.ptr becomes None).
+    """
+    # Get current time from data
+    time_arr = wp.to_torch(env.data_wp.time)  # (N,)
+    t = time_arr[0].item()  # all worlds share same time
+
+    # Map sim time to trajectory frame index
+    dt = env.mocap_partner_dt
+    T = env.mocap_partner_pos.shape[0]
+    idx = min(int(t / dt), T - 1)
+
+    # Get position and quaternion for this frame: (2, 3) and (2, 4)
+    pos = env.mocap_partner_pos[idx]  # (2, 3) on GPU
+    quat = env.mocap_partner_quat[idx]  # (2, 4) on GPU
+
+    # Write via shared-memory torch view (in-place, no wp.copy needed)
+    mocap_pos_all = wp.to_torch(env.data_wp.mocap_pos)  # (N, nmocap, 3)
+    if mocap_pos_all.shape[1] >= 2:
+        mocap_quat_all = wp.to_torch(env.data_wp.mocap_quat)  # (N, nmocap, 4)
+        N = mocap_pos_all.shape[0]
+        mocap_pos_all[:, :2] = pos.unsqueeze(0).expand(N, -1, -1)
+        mocap_quat_all[:, :2] = quat.unsqueeze(0).expand(N, -1, -1)
+
+
+def _load_mocap_partner(config: Config, env: MJWPEnv):
+    """Load partner trajectory data and attach to env for runtime updates."""
+    import os
+
+    path = config.mocap_partner_trajectory
+    if not os.path.isabs(path):
+        # Resolve relative to data directory (same dir as trajectory_kinematic.npz)
+        data_dir = os.path.dirname(config.data_path)
+        path = os.path.join(data_dir, path)
+
+    data = np.load(path)
+    partner_pos = data["partner_pos"]  # (T, 2, 3)
+    partner_quat = data["partner_quat"]  # (T, 2, 4) wxyz format
+
+    # Store as GPU tensors on env
+    env.mocap_partner_pos = torch.from_numpy(partner_pos).float().to(config.device)
+    env.mocap_partner_quat = torch.from_numpy(partner_quat).float().to(config.device)
+    env.mocap_partner_dt = config.ref_dt  # partner trajectory is at ref framerate
+
+    loguru.logger.info(
+        f"Loaded mocap partner trajectory: {partner_pos.shape[0]} frames @ {1/config.ref_dt:.0f}fps"
+    )
+
+
 def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
     """Step all worlds with provided MuJoCo-format controls of shape (N, nu)."""
     if ctrl_mujoco.dim() == 1:
@@ -643,6 +853,13 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         env = apply_perturbation(config, env)
         # step control
         wp.copy(env.data_wp.ctrl, wp.from_torch(ctrl_mujoco.to(torch.float32)))
+        # Update partner mocap positions within rollout (E013: intra-rollout update)
+        if (
+            config.mocap_partner_intra_step
+            and hasattr(env, "mocap_partner_pos")
+            and env.mocap_partner_pos is not None
+        ):
+            _update_mocap_partner(env)
         wp.capture_launch(env.graph)
 
 
@@ -700,7 +917,7 @@ def load_env_params(config: Config, env: MJWPEnv, env_param: dict):
             qpos_override_th[:, -7:-5] = (
                 qpos_override_th[:, -7:-5] + env_param["xy_offset"]
             )
-        elif config.embodiment_type == "humanoid_object":
+        elif config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
             nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
             qpos_override_th[:, -nq_obj:-nq_obj + 2] = (
                 qpos_override_th[:, -nq_obj:-nq_obj + 2] + env_param["xy_offset"]
@@ -850,6 +1067,21 @@ def sync_env(config: Config, env: MJWPEnv, mj_data: mujoco.MjData):
     This function synchronizes states from the first environment to all environments.
     Uses safe copying with buffer size validation to avoid mismatches.
     """
+    # Update mocap partner positions before broadcasting
+    if hasattr(env, "mocap_partner_pos") and env.mocap_partner_pos is not None:
+        t = mj_data.time
+        dt = env.mocap_partner_dt
+        T = env.mocap_partner_pos.shape[0]
+        idx = min(int(t / dt), T - 1)
+        pos = env.mocap_partner_pos[idx]  # (2, 3) GPU tensor
+        quat = env.mocap_partner_quat[idx]  # (2, 4) GPU tensor
+        # Write to world 0 of data_wp, _broadcast_state will copy to all worlds
+        mocap_pos_all = wp.to_torch(env.data_wp.mocap_pos)  # (N, nmocap, 3)
+        if mocap_pos_all.shape[1] > 0:
+            mocap_quat_all = wp.to_torch(env.data_wp.mocap_quat)  # (N, nmocap, 4)
+            mocap_pos_all[0] = pos
+            mocap_quat_all[0] = quat
+
     _broadcast_state(env.data_wp, env.num_worlds)
 
 

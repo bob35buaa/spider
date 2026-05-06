@@ -1,0 +1,23 @@
+# @package _global_
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+
+# Connect constraint scene (scene_forearm + equality connect)
+scene_name: scene_connect
+
+# Inherit E006 best reward config
+contact_rew_scale: 1.0
+pos_rew_scale: 3.0
+rot_rew_scale: 1.0
+base_pos_rew_scale: 3.0
+base_rot_rew_scale: 1.0
+
+# CEM parameters
+num_samples: 2048
+terminate_resample: true

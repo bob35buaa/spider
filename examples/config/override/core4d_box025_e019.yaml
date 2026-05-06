@@ -1,0 +1,41 @@
+# @package _global_
+# E019: SBTO (DynaRetarget-inspired incremental horizon optimization)
+# Uses full-trajectory optimization instead of receding-horizon MPC
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: dual_humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_dual_robot_connect2
+
+# SBTO mode
+use_sbto: true
+sbto_knot_dt: 0.25        # DynaRetarget default
+sbto_sigma_min: 0.01      # convergence threshold
+sbto_max_iter_per_knot: 30
+
+# Reward weights (DynaRetarget style: high object tracking, moderate body)
+base_pos_rew_scale: 15.0
+base_rot_rew_scale: 2.0
+joint_rew_scale: 1.0
+pos_rew_scale: 5.0       # joint-space object tracking
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM parameters
+num_samples: 1024         # reduced for memory with long horizon
+temperature: 0.15
+max_num_iterations: 16
+terminate_resample: true
+base_pos_threshold: 0.5
+object_pos_threshold: 0.5
+
+# Gibbs sampling for dual humanoid
+gibbs_sampling: true
+
+# Output
+viewer: none
+save_video: true

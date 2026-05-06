@@ -1,0 +1,29 @@
+# @package _global_
+# E008a: scene_forearm_act + decaying PD guidance (residual_gain_ratio=0)
+# Goal: actuator-driven object lift in early CEM iterations,
+#       hand off to forearm contact in last iteration
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_forearm_act
+contact_guidance: true
+guidance_decay_ratio: 0.85
+residual_gain_ratio: 0.0
+init_pos_actuator_gain: 20.0
+init_pos_actuator_bias: 20.0
+init_rot_actuator_gain: 0.5
+init_rot_actuator_bias: 0.5
+max_num_iterations: 32
+improvement_threshold: 0.0
+num_samples: 2048
+terminate_resample: true
+contact_rew_scale: 1.0
+pos_rew_scale: 3.0
+rot_rew_scale: 1.0
+base_pos_rew_scale: 3.0
+base_rot_rew_scale: 1.0

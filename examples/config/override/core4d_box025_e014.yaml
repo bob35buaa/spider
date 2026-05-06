@@ -1,0 +1,27 @@
+# @package _global_
+# E014: Large partner geometry + intra-rollout mocap
+# Partner: box geoms (15x15x5cm) instead of tiny capsules (r=4cm)
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_mocap_partner_large
+
+# Mocap partner trajectory + intra-rollout update
+mocap_partner_trajectory: trajectory_kinematic_partner.npz
+mocap_partner_intra_step: true
+
+# E013-r7 best reward config
+contact_rew_scale: 3.0
+pos_rew_scale: 2.0
+rot_rew_scale: 0.5
+base_pos_rew_scale: 5.0
+base_rot_rew_scale: 2.0
+
+# CEM
+num_samples: 2048
+terminate_resample: true

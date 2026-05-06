@@ -1,0 +1,52 @@
+# @package _global_
+# Override for CORE4D Box025 with contact guidance
+# Object actuators with decaying PD gains for physics-compliant retargeting
+dataset_name: core4d
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+task: box025_person1
+ref_dt: 0.0333333  # 30fps from CORE4D
+
+# Timing
+sim_dt: 0.0166667
+ctrl_dt: 0.1
+knot_dt: 0.1
+horizon: 0.8
+
+# Sampling — more iterations for contact guidance convergence
+num_samples: 2048
+max_num_iterations: 32
+temperature: 0.3
+improvement_threshold: 0.0  # contact guidance needs full iterations
+
+# Higher reward weights
+base_pos_rew_scale: 3.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 3.0
+rot_rew_scale: 0.3
+contact_rew_scale: 1.0
+
+# Contact guidance (object actuators with decaying gains)
+contact_guidance: true
+guidance_decay_ratio: 0.85
+init_pos_actuator_gain: 20.0
+init_pos_actuator_bias: 20.0
+init_rot_actuator_gain: 0.3
+init_rot_actuator_bias: 0.3
+object_pos_actuator_names: [object_pos_x, object_pos_y, object_pos_z]
+object_rot_actuator_names: [object_rot_x, object_rot_y, object_rot_z]
+
+# Enable terminate+resample
+terminate_resample: true
+base_pos_threshold: 0.3
+object_pos_threshold: 0.3
+
+# MuJoCo Warp GPU parameters
+nconmax_per_env: 200
+njmax_per_env: 600
+
+# Viewer off for headless
+viewer: none
+save_video: false
+trace_dt: 0.0333333  # match ref_dt

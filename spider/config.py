@@ -41,6 +41,7 @@ class Config:
     data_id: int = 0
     model_path: str = ""
     data_path: str = ""
+    scene_name: str = ""  # override scene XML basename (e.g. "scene_mocap_partner" → scene_mocap_partner.xml)
     # Optional config loader (used by CLI runner)
     load_config_path: str = ""
 
@@ -49,6 +50,8 @@ class Config:
     device: str = "cuda:0"
     # Simulation timing
     sim_dt: float = 0.01  # simulation timestep
+    physics_dt: float = -1.0  # if > 0, run physics at this dt with decimation = sim_dt/physics_dt (Path Y, Holosoma alignment)
+    sim_decimation: int = 1  # auto-set from physics_dt; do not set manually
     ctrl_dt: float = 0.4  # control timestep
     ref_dt: float = 0.02  # reference data timestep
     render_dt: float = 0.02  # rendering timestep
@@ -99,7 +102,23 @@ class Config:
     init_rot_actuator_gain: float = 0.1
     init_rot_actuator_bias: float = 0.1
     guidance_decay_ratio: float = 0.5
+    residual_gain_ratio: float = 0.0  # if > 0, last CEM iteration keeps this fraction of decayed gains
+    # Mocap partner trajectory (E011)
+    mocap_partner_trajectory: str = ""  # path to NPZ with partner_pos (T,2,3) and partner_quat (T,2,4)
+    mocap_partner_intra_step: bool = True  # update partner mocap within rollout steps (not just MPC steps)
     gibbs_sampling: bool = False
+
+    # === SBTO (Sampling-Based Trajectory Optimization, DynaRetarget) ===
+    use_sbto: bool = False  # if True, use incremental full-horizon optimization instead of MPC
+    sbto_sigma_min: float = 0.05  # convergence threshold per knot increment
+    sbto_max_iter_per_knot: int = 50  # max optimization iterations per knot increment
+    sbto_knot_dt: float = 0.25  # knot spacing for SBTO (independent of MPC knot_dt)
+
+    # === Path Y: Holosoma physics alignment ===
+    apply_holosoma_pd: bool = False  # override actuator gains using Holosoma G1 PD config (Isaac order)
+    use_local_contact_reward: bool = False  # add HDMI-style local-frame contact offset reward
+    local_contact_sigma: float = 0.3
+    local_contact_rew_scale: float = 5.0
 
     # === OPTIMIZER CONFIGURATION ===
     # Sampling parameters
@@ -141,6 +160,22 @@ class Config:
     contact_rew_scale: float = 0.0
     num_resamples: int = 0
     resample_ratio: float = 0.2
+
+    # === TASK-SPACE REWARDS (E018, DynaRetarget/Harmanoid inspired) ===
+    # Body world-position tracking (uses data_wp.xpos), DynaRetarget Table II
+    task_body_rew_scale: float = 0.0
+    task_body_names: list[str] = field(default_factory=list)
+    task_body_weights: list[float] = field(default_factory=list)
+    # Resolved at runtime from task_body_names
+    task_body_ids: list[int] = field(default_factory=list)
+    # Separate object pos/rot tracking weights (DynaRetarget uses obj_pos=40)
+    task_obj_pos_rew_scale: float = 0.0
+    task_obj_rot_rew_scale: float = 0.0
+    # Interaction reward (Harmanoid Eq.15): match relative offsets between two robots' bodies
+    interact_rew_scale: float = 0.0
+    interact_sigma: float = 1.0
+    # List of [body_idx_in_task_body_ids_a, body_idx_in_task_body_ids_b] pairs
+    interact_pairs: list[list[int]] = field(default_factory=list)
 
     # === VISUALIZATION CONFIGURATION ===
     show_viewer: bool = True
@@ -423,6 +458,15 @@ def compute_noise_schedule(config: Config) -> Config:
 def process_config(config: Config):
     """Process the configuration to fill in the missing fields."""
     config = compute_steps(config)
+    # Path Y: physics_dt + decimation
+    if config.physics_dt > 0:
+        decimation = int(round(config.sim_dt / config.physics_dt))
+        assert abs(config.sim_dt - decimation * config.physics_dt) < 1e-5, (
+            f"sim_dt ({config.sim_dt}) must be integer multiple of physics_dt ({config.physics_dt})"
+        )
+        config.sim_decimation = decimation
+    else:
+        config.sim_decimation = 1
     trace_steps_tmp = int(np.round(config.trace_dt / config.sim_dt))
     assert np.isclose(
         config.trace_dt - trace_steps_tmp * config.sim_dt, 0, atol=1e-3
@@ -435,6 +479,7 @@ def process_config(config: Config):
             "right": 6,
             "left": 6,
             "humanoid_object": 6,
+            "dual_humanoid_object": 6,
         }.get(config.embodiment_type, 0)
     else:
         config.nq_obj = {
@@ -442,6 +487,7 @@ def process_config(config: Config):
             "right": 7,
             "left": 7,
             "humanoid_object": 7,
+            "dual_humanoid_object": 7,
         }.get(config.embodiment_type, 0)
 
     # resolve processed directories for this trial
@@ -455,13 +501,17 @@ def process_config(config: Config):
         data_id=config.data_id,
     )
     # model and data within processed directory (scene_eq.xml support for annealing over equality constraints)
-    if config.contact_guidance:
+    if config.scene_name:
+        scene_xml = f"{config.scene_name}.xml"
+    elif config.contact_guidance:
         scene_xml = "scene_act.xml"
     else:
         scene_xml = "scene.xml" if config.num_dyn == 1 else "scene_eq.xml"
     config.model_path = f"{processed_dir_robot}/../{scene_xml}"
     # default to MJWP retargeted trajectory if available
-    if config.contact_guidance:
+    if config.embodiment_type == "dual_humanoid_object":
+        config.data_path = f"{processed_dir_robot}/trajectory_kinematic_dual.npz"
+    elif config.contact_guidance:
         config.data_path = f"{processed_dir_robot}/trajectory_kinematic_act.npz"
     else:
         config.data_path = f"{processed_dir_robot}/trajectory_kinematic.npz"
@@ -520,6 +570,30 @@ def process_config(config: Config):
 
     # get noise scale
     config = compute_noise_schedule(config)
+
+    # Resolve task_body_names → task_body_ids from model
+    if config.task_body_names and config.simulator == "mjwp":
+        resolved_ids = []
+        for name in config.task_body_names:
+            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+            if bid == -1:
+                loguru.logger.warning(
+                    "task_body_names: body '{}' not found in model, skipping.", name
+                )
+            else:
+                resolved_ids.append(bid)
+        config.task_body_ids = resolved_ids
+        if len(config.task_body_weights) != len(config.task_body_ids):
+            loguru.logger.warning(
+                "task_body_weights length ({}) != task_body_ids length ({}); using uniform weights.",
+                len(config.task_body_weights),
+                len(config.task_body_ids),
+            )
+            config.task_body_weights = [1.0] * len(config.task_body_ids)
+        loguru.logger.info(
+            "Task-space body tracking: {} bodies resolved.",
+            len(config.task_body_ids),
+        )
 
     # output dir: write artifacts alongside the trial
     config.output_dir = processed_dir_robot

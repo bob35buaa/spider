@@ -1,0 +1,32 @@
+# @package _global_
+# E016: Dual-robot retargeting (two G1 + shared box025)
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: dual_humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_dual_robot
+
+# Reward weights (body-focused for initial stability)
+base_pos_rew_scale: 5.0
+base_rot_rew_scale: 2.0
+joint_rew_scale: 3.0
+pos_rew_scale: 1.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 2048
+terminate_resample: true
+base_pos_threshold: 0.5
+object_pos_threshold: 0.5
+
+# Gibbs sampling: alternate between robot1 and robot2
+gibbs_sampling: true
+
+# Output
+viewer: none
+save_video: true

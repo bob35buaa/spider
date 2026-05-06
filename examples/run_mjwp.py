@@ -179,6 +179,141 @@ def _apply_noise_mask(
     return noise_scale
 
 
+def run_sbto(config, env, ref_data, mj_model, mj_data, mj_data_ref, qpos_ref, qvel_ref, ctrl_ref, renderer, images):
+    """SBTO: Sampling-Based Trajectory Optimization (DynaRetarget Algorithm 2).
+
+    Incrementally grows the optimization horizon from knot 0 to the full trajectory,
+    warm-starting each increment from the previous solution.
+    """
+    from spider.config import compute_noise_schedule
+    from spider.interp import get_slice
+    from spider.simulators.mjwp import (
+        step_env, save_state, load_state, get_reward, get_terminal_reward,
+        get_terminate, get_trace, save_env_params, load_env_params,
+        copy_sample_state, sync_env, get_qpos, get_qvel,
+    )
+    from spider.optimizers.sampling import make_rollout_fn, make_optimize_once_fn, make_optimize_fn
+    from spider.viewers import render_image
+
+    total_steps = config.max_sim_steps
+    sbto_knot_steps = int(np.round(config.sbto_knot_dt / config.sim_dt))
+    total_knots = total_steps // sbto_knot_steps
+    loguru.logger.info("SBTO: total_steps={}, knot_dt={}, total_knots={}", total_steps, config.sbto_knot_dt, total_knots)
+
+    # Build optimizer
+    rollout = make_rollout_fn(step_env, save_state, load_state, get_reward, get_terminal_reward,
+                              get_terminate, get_trace, save_env_params, load_env_params, copy_sample_state)
+    optimize_once = make_optimize_once_fn(rollout)
+    optimize = make_optimize_fn(optimize_once)
+
+    # Initialize controls from reference
+    full_ctrls = ctrl_ref[:total_steps].clone()
+
+    # Save original config for restore
+    orig_horizon = config.horizon
+    orig_horizon_steps = config.horizon_steps
+    orig_knot_dt = config.knot_dt
+    orig_knot_steps = config.knot_steps
+
+    config.knot_dt = config.sbto_knot_dt
+    config.knot_steps = sbto_knot_steps
+
+    # Gibbs for dual humanoid
+    gibbs_enabled = config.gibbs_sampling and config.embodiment_type == "dual_humanoid_object"
+    if gibbs_enabled:
+        half_nu = config.nu // 2
+        robot1_ids = list(range(0, half_nu))
+        robot2_ids = list(range(half_nu, config.nu))
+
+    t_start = time.perf_counter()
+    for k in range(1, total_knots):
+        active_steps = min((k + 1) * sbto_knot_steps, total_steps)
+        active_ctrls = full_ctrls[:active_steps]
+
+        # Update config for growing horizon
+        config.horizon = active_steps * config.sim_dt
+        config.horizon_steps = active_steps
+        config = compute_noise_schedule(config)
+
+        # Reference slice (offset +1 for lookahead)
+        end_idx = min(active_steps + 1, ref_data[0].shape[0])
+        ref_slice = get_slice(ref_data, 1, end_idx)
+        # Pad if ref is shorter than active horizon
+        if ref_slice[0].shape[0] < active_steps:
+            pad_len = active_steps - ref_slice[0].shape[0]
+            ref_slice = tuple(
+                torch.cat([s, s[-1:].repeat(pad_len, *([1] * (s.ndim - 1)))], dim=0)
+                for s in ref_slice
+            )
+
+        # Optimize this horizon increment using optimize_once (single CEM iterations)
+        # SBTO algorithm: the outer loop IS the iteration control, not optimize()
+        # NOTE: Do NOT anneal noise in SBTO — DynaRetarget uses constant σ₀.
+        # Convergence comes from elite narrowing, not noise decay.
+        for iteration in range(config.sbto_max_iter_per_knot):
+            sample_params = {"global_noise_scale": 1.0}  # constant noise (no annealing)
+
+            if gibbs_enabled:
+                base_ns = config.noise_scale.clone()
+                config.noise_scale = _apply_noise_mask(base_ns, robot2_ids)
+                active_ctrls, terminate, info = optimize_once(
+                    config, env, active_ctrls, ref_slice, config.env_params_list[min(iteration, len(config.env_params_list)-1)], sample_params)
+                config.noise_scale = _apply_noise_mask(base_ns, robot1_ids)
+                active_ctrls, terminate, info = optimize_once(
+                    config, env, active_ctrls, ref_slice, config.env_params_list[min(iteration, len(config.env_params_list)-1)], sample_params)
+                config.noise_scale = base_ns
+            else:
+                active_ctrls, terminate, info = optimize_once(
+                    config, env, active_ctrls, ref_slice, config.env_params_list[min(iteration, len(config.env_params_list)-1)], sample_params)
+
+            imp = info.get("improvement", 0.0)
+            if imp < config.sbto_sigma_min:
+                break
+
+        full_ctrls[:active_steps] = active_ctrls
+        elapsed = time.perf_counter() - t_start
+        rew_val = info.get("rew_max", 0.0)
+        print(f"SBTO: knot {k}/{total_knots}, h={active_steps*config.sim_dt:.2f}s, iter={iteration+1}, rew={rew_val:.3f}, imp={imp:.4f}, t={elapsed:.0f}s")
+
+    # Restore config
+    config.horizon = orig_horizon
+    config.horizon_steps = orig_horizon_steps
+    config.knot_dt = orig_knot_dt
+    config.knot_steps = orig_knot_steps
+    config = compute_noise_schedule(config)
+
+    # Execute optimized trajectory: collect qpos for saving + render video
+    mj_data.qpos[:] = qpos_ref[0].detach().cpu().numpy()
+    mj_data.qvel[:] = qvel_ref[0].detach().cpu().numpy()
+    mj_data.time = 0.0
+    sync_env(config, env, mj_data)
+
+    step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}
+    for step_idx in range(total_steps):
+        ctrl_step = full_ctrls[step_idx]
+        step_env(config, env, ctrl_step)
+        mj_data.qpos[:] = get_qpos(config, env)[0].detach().cpu().numpy()
+        mj_data.qvel[:] = get_qvel(config, env)[0].detach().cpu().numpy()
+        mj_data.ctrl[:] = ctrl_step.detach().cpu().numpy()
+        mj_data.time += config.sim_dt
+        step_info["qpos"].append(mj_data.qpos.copy())
+        step_info["qvel"].append(mj_data.qvel.copy())
+        step_info["time"].append(mj_data.time)
+        step_info["ctrl"].append(mj_data.ctrl.copy())
+        if config.save_video and renderer is not None:
+            if step_idx % int(np.round(config.render_dt / config.sim_dt)) == 0:
+                ref_idx = min(step_idx, qpos_ref.shape[0] - 1)
+                mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
+                image = render_image(config, renderer, mj_model, mj_data, mj_data_ref)
+                images.append(image)
+    for kk in step_info:
+        step_info[kk] = np.stack(step_info[kk], axis=0)
+
+    t_end = time.perf_counter()
+    print(f"SBTO total: {t_end - t_start:.1f}s")
+    return [step_info]
+
+
 def main(config: Config):
     """Run the SPIDER using MuJoCo Warp backend"""
     # process config, set defaults and derived fields
@@ -226,6 +361,21 @@ def main(config: Config):
     mj_model = setup_mj_model(config)
     mj_data = mujoco.MjData(mj_model)
     mj_data_ref = mujoco.MjData(mj_model)
+
+    # E018: precompute reference body world positions for task-space tracking
+    if config.task_body_ids:
+        T_body = qpos_ref.shape[0]
+        body_xpos_ref_np = np.zeros((T_body, len(config.task_body_ids), 3), dtype=np.float32)
+        for t in range(T_body):
+            mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
+            mujoco.mj_kinematics(mj_model, mj_data_ref)
+            for k, bid in enumerate(config.task_body_ids):
+                body_xpos_ref_np[t, k] = mj_data_ref.xpos[bid]
+        body_xpos_ref = torch.tensor(body_xpos_ref_np, device=config.device)
+        loguru.logger.info("Precomputed body_xpos_ref: shape={}", tuple(body_xpos_ref.shape))
+    else:
+        body_xpos_ref = torch.zeros((qpos_ref.shape[0], 0, 3), device=config.device, dtype=torch.float32)
+    ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref)
     mj_data.qpos[:] = qpos_ref[0].detach().cpu().numpy()
     mj_data.qvel[:] = qvel_ref[0].detach().cpu().numpy()
     mj_data.ctrl[:] = ctrl_ref[0].detach().cpu().numpy()
@@ -345,194 +495,204 @@ def main(config: Config):
     run_viewer = setup_viewer(config, mj_model, mj_data)
     renderer = setup_renderer(config, mj_model)
 
-    # setup optimizer
-    rollout = make_rollout_fn(
-        step_env,
-        save_state,
-        load_state,
-        get_reward,
-        get_terminal_reward,
-        get_terminate,
-        get_trace,
-        save_env_params,
-        load_env_params,
-        copy_sample_state,
-    )
-    optimize_once = make_optimize_once_fn(rollout)
-    optimize = make_optimize_fn(optimize_once)
-    base_noise_scale = config.noise_scale.clone()
-    gibbs_enabled = config.gibbs_sampling and config.embodiment_type == "bimanual"
-    if config.gibbs_sampling and not gibbs_enabled:
-        loguru.logger.warning(
-            "gibbs_sampling is enabled but embodiment_type is {}, disabling.",
-            config.embodiment_type,
+    # ─── SBTO mode ──────────────────────────────────────────────────────────
+    if config.use_sbto:
+        info_list = run_sbto(
+            config, env, ref_data, mj_model, mj_data, mj_data_ref,
+            qpos_ref, qvel_ref, ctrl_ref, renderer, images,
         )
-    if gibbs_enabled:
-        right_ids, left_ids = _get_bimanual_hand_indices(config)
-        right_only_zero = left_ids
-        left_only_zero = right_ids
+        # Jump directly to save section (shared with MPC)
+    else:
+        # ─── Standard MPC mode ──────────────────────────────────────────────
 
-    # initial controls
-    ctrls = ctrl_ref[: config.horizon_steps]
-    # buffers for saving info and trajectory
-    info_list = []
-
-    # run viewer + control loop
-    t_start = time.perf_counter()
-    with run_viewer() as viewer:
-        while viewer.is_running():
-            t0 = time.perf_counter()
-
-            # optimize using future reference window at control-rate (+1 lookahead)
-            sim_step = int(np.round(mj_data.time / config.sim_dt))
-            ref_slice = get_slice(
-                ref_data, sim_step + 1, sim_step + config.horizon_steps + 1
+        # setup optimizer
+        rollout = make_rollout_fn(
+            step_env,
+            save_state,
+            load_state,
+            get_reward,
+            get_terminal_reward,
+            get_terminate,
+            get_trace,
+            save_env_params,
+            load_env_params,
+            copy_sample_state,
+        )
+        optimize_once = make_optimize_once_fn(rollout)
+        optimize = make_optimize_fn(optimize_once)
+        base_noise_scale = config.noise_scale.clone()
+        gibbs_enabled = config.gibbs_sampling and config.embodiment_type == "bimanual"
+        if config.gibbs_sampling and not gibbs_enabled:
+            loguru.logger.warning(
+                "gibbs_sampling is enabled but embodiment_type is {}, disabling.",
+                config.embodiment_type,
             )
-            ctrls_for_opt = ctrls
-            if contact_guidance_enabled and config.contact_len > 0:
-                contact_mask_step = contact[sim_step][
-                    contact_offset : contact_offset + config.contact_len
-                ]
-                contact_pos_ref_step = contact_pos[sim_step]
-                site_xpos = wp.to_torch(env.data_wp.site_xpos)[0]
+        if gibbs_enabled:
+            right_ids, left_ids = _get_bimanual_hand_indices(config)
+            right_only_zero = left_ids
+            left_only_zero = right_ids
 
-                right_delta = compute_contact_point_delta(
-                    contact_mask_step,
-                    contact_pos_ref_step,
-                    site_xpos,
-                    config.hand_contact_site_ids,
-                    config.right_contact_indices,
+        # initial controls
+        ctrls = ctrl_ref[: config.horizon_steps]
+        # buffers for saving info and trajectory
+        info_list = []
+
+        # run viewer + control loop
+        t_start = time.perf_counter()
+        with run_viewer() as viewer:
+            while viewer.is_running():
+                t0 = time.perf_counter()
+
+                # optimize using future reference window at control-rate (+1 lookahead)
+                sim_step = int(np.round(mj_data.time / config.sim_dt))
+                ref_slice = get_slice(
+                    ref_data, sim_step + 1, sim_step + config.horizon_steps + 1
                 )
-                left_delta = compute_contact_point_delta(
-                    contact_mask_step,
-                    contact_pos_ref_step,
-                    site_xpos,
-                    config.hand_contact_site_ids,
-                    config.left_contact_indices,
-                )
-                if (
-                    right_delta is not None
-                    and config.right_pos_ctrl_ids
-                    and sim_step + ctrls.shape[0] <= ctrl_ref.shape[0]
-                ):
-                    ctrls_for_opt = ctrls_for_opt.clone()
-                    ref_ctrl_slice = ctrl_ref[sim_step : sim_step + ctrls.shape[0]]
-                    ctrls_for_opt[:, config.right_pos_ctrl_ids] = ref_ctrl_slice[
-                        :, config.right_pos_ctrl_ids
-                    ] + torch.clip(right_delta, -0.01, 0.01)
-                if (
-                    left_delta is not None
-                    and config.left_pos_ctrl_ids
-                    and sim_step + ctrls.shape[0] <= ctrl_ref.shape[0]
-                ):
-                    if ctrls_for_opt is ctrls:
+                ctrls_for_opt = ctrls
+                if contact_guidance_enabled and config.contact_len > 0:
+                    contact_mask_step = contact[sim_step][
+                        contact_offset : contact_offset + config.contact_len
+                    ]
+                    contact_pos_ref_step = contact_pos[sim_step]
+                    site_xpos = wp.to_torch(env.data_wp.site_xpos)[0]
+
+                    right_delta = compute_contact_point_delta(
+                        contact_mask_step,
+                        contact_pos_ref_step,
+                        site_xpos,
+                        config.hand_contact_site_ids,
+                        config.right_contact_indices,
+                    )
+                    left_delta = compute_contact_point_delta(
+                        contact_mask_step,
+                        contact_pos_ref_step,
+                        site_xpos,
+                        config.hand_contact_site_ids,
+                        config.left_contact_indices,
+                    )
+                    if (
+                        right_delta is not None
+                        and config.right_pos_ctrl_ids
+                        and sim_step + ctrls.shape[0] <= ctrl_ref.shape[0]
+                    ):
                         ctrls_for_opt = ctrls_for_opt.clone()
                         ref_ctrl_slice = ctrl_ref[sim_step : sim_step + ctrls.shape[0]]
-                    ctrls_for_opt[:, config.left_pos_ctrl_ids] = ref_ctrl_slice[
-                        :, config.left_pos_ctrl_ids
-                    ] + torch.clip(left_delta, -0.01, 0.01)
-            if gibbs_enabled:
-                config.noise_scale = _apply_noise_mask(
-                    base_noise_scale, right_only_zero
-                )
-                ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
-                config.noise_scale = _apply_noise_mask(base_noise_scale, left_only_zero)
-                ctrls, infos = optimize(config, env, ctrls, ref_slice)
-                config.noise_scale = base_noise_scale
-            else:
-                config.noise_scale = base_noise_scale
-                ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
-
-            # Compute trace_ref from reference qpos over the horizon
-            if len(config.trace_site_ids) > 0:
-                trace_ref = []
-                qpos_ref_horizon = ref_slice[0]
-                for h in range(config.horizon_steps):
-                    mj_data_ref.qpos[:] = qpos_ref_horizon[h].detach().cpu().numpy()
-                    mujoco.mj_kinematics(mj_model, mj_data_ref)
-                    site_xpos = np.array(
-                        [mj_data_ref.site_xpos[sid] for sid in config.trace_site_ids]
+                        ctrls_for_opt[:, config.right_pos_ctrl_ids] = ref_ctrl_slice[
+                            :, config.right_pos_ctrl_ids
+                        ] + torch.clip(right_delta, -0.01, 0.01)
+                    if (
+                        left_delta is not None
+                        and config.left_pos_ctrl_ids
+                        and sim_step + ctrls.shape[0] <= ctrl_ref.shape[0]
+                    ):
+                        if ctrls_for_opt is ctrls:
+                            ctrls_for_opt = ctrls_for_opt.clone()
+                            ref_ctrl_slice = ctrl_ref[sim_step : sim_step + ctrls.shape[0]]
+                        ctrls_for_opt[:, config.left_pos_ctrl_ids] = ref_ctrl_slice[
+                            :, config.left_pos_ctrl_ids
+                        ] + torch.clip(left_delta, -0.01, 0.01)
+                if gibbs_enabled:
+                    config.noise_scale = _apply_noise_mask(
+                        base_noise_scale, right_only_zero
                     )
-                    trace_ref.append(site_xpos)
-                # (H, K, 3) -> (1, 1, H, K, 3) to match trace_sample shape
-                trace_ref_np = np.stack(trace_ref, axis=0)[None, None, :, :, :]
-                infos["trace_ref"] = trace_ref_np
+                    ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
+                    config.noise_scale = _apply_noise_mask(base_noise_scale, left_only_zero)
+                    ctrls, infos = optimize(config, env, ctrls, ref_slice)
+                    config.noise_scale = base_noise_scale
+                else:
+                    config.noise_scale = base_noise_scale
+                    ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
 
-            # step environment for ctrl_steps
-            step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}
-            for i in range(config.ctrl_steps):
-                ctrl_step = ctrls[i]
+                # Compute trace_ref from reference qpos over the horizon
+                if len(config.trace_site_ids) > 0:
+                    trace_ref = []
+                    qpos_ref_horizon = ref_slice[0]
+                    for h in range(config.horizon_steps):
+                        mj_data_ref.qpos[:] = qpos_ref_horizon[h].detach().cpu().numpy()
+                        mujoco.mj_kinematics(mj_model, mj_data_ref)
+                        site_xpos = np.array(
+                            [mj_data_ref.site_xpos[sid] for sid in config.trace_site_ids]
+                        )
+                        trace_ref.append(site_xpos)
+                    # (H, K, 3) -> (1, 1, H, K, 3) to match trace_sample shape
+                    trace_ref_np = np.stack(trace_ref, axis=0)[None, None, :, :, :]
+                    infos["trace_ref"] = trace_ref_np
 
-                # option 1: use mujoco step
-                # mj_data.ctrl[:] = ctrls[i].detach().cpu().numpy()
-                # mujoco.mj_step(mj_model, mj_data)
-                # option 2: use warp step
-                step_env(config, env, ctrl_step)
+                # step environment for ctrl_steps
+                step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}
+                for i in range(config.ctrl_steps):
+                    ctrl_step = ctrls[i]
+
+                    # option 1: use mujoco step
+                    # mj_data.ctrl[:] = ctrls[i].detach().cpu().numpy()
+                    # mujoco.mj_step(mj_model, mj_data)
+                    # option 2: use warp step
+                    step_env(config, env, ctrl_step)
+                    mj_data.qpos[:] = get_qpos(config, env)[0].detach().cpu().numpy()
+                    mj_data.qvel[:] = get_qvel(config, env)[0].detach().cpu().numpy()
+                    mj_data.ctrl[:] = ctrl_step.detach().cpu().numpy()
+                    mj_data.time += config.sim_dt
+                    if config.save_video and renderer is not None:
+                        if i % int(np.round(config.render_dt / config.sim_dt)) == 0:
+                            mj_data_ref.qpos[:] = (
+                                qpos_ref[sim_step + i].detach().cpu().numpy()
+                            )
+                            image = render_image(
+                                config, renderer, mj_model, mj_data, mj_data_ref
+                            )
+                            images.append(image)
+                    if "rerun" in config.viewer or "viser" in config.viewer:
+                        mj_data_ref.qpos[:] = qpos_ref[sim_step + i].detach().cpu().numpy()
+                        mujoco.mj_kinematics(mj_model, mj_data_ref)
+                        log_frame(
+                            mj_data,
+                            sim_time=mj_data.time,
+                            viewer_body_entity_and_ids=config.viewer_body_entity_and_ids,
+                            data_ref=mj_data_ref,
+                        )
+                    step_info["qpos"].append(mj_data.qpos.copy())
+                    step_info["qvel"].append(mj_data.qvel.copy())
+                    step_info["time"].append(mj_data.time)
+                    step_info["ctrl"].append(mj_data.ctrl.copy())
+                for k in step_info:
+                    step_info[k] = np.stack(step_info[k], axis=0)
+                infos.update(step_info)
+                # sync env state
+                sync_env(config, env, mj_data)
+
+                # receding horizon update
+                sim_step = int(np.round(mj_data.time / config.sim_dt))
+                prev_ctrl = ctrls[config.ctrl_steps :]
+                new_ctrl = ctrl_ref[
+                    sim_step + prev_ctrl.shape[0] : sim_step
+                    + prev_ctrl.shape[0]
+                    + config.ctrl_steps
+                ]
+                ctrls = torch.cat([prev_ctrl, new_ctrl], dim=0)
+
+                # sync viewer state and render
                 mj_data.qpos[:] = get_qpos(config, env)[0].detach().cpu().numpy()
                 mj_data.qvel[:] = get_qvel(config, env)[0].detach().cpu().numpy()
-                mj_data.ctrl[:] = ctrl_step.detach().cpu().numpy()
-                mj_data.time += config.sim_dt
-                if config.save_video and renderer is not None:
-                    if i % int(np.round(config.render_dt / config.sim_dt)) == 0:
-                        mj_data_ref.qpos[:] = (
-                            qpos_ref[sim_step + i].detach().cpu().numpy()
-                        )
-                        image = render_image(
-                            config, renderer, mj_model, mj_data, mj_data_ref
-                        )
-                        images.append(image)
-                if "rerun" in config.viewer or "viser" in config.viewer:
-                    mj_data_ref.qpos[:] = qpos_ref[sim_step + i].detach().cpu().numpy()
-                    mujoco.mj_kinematics(mj_model, mj_data_ref)
-                    log_frame(
-                        mj_data,
-                        sim_time=mj_data.time,
-                        viewer_body_entity_and_ids=config.viewer_body_entity_and_ids,
-                        data_ref=mj_data_ref,
-                    )
-                step_info["qpos"].append(mj_data.qpos.copy())
-                step_info["qvel"].append(mj_data.qvel.copy())
-                step_info["time"].append(mj_data.time)
-                step_info["ctrl"].append(mj_data.ctrl.copy())
-            for k in step_info:
-                step_info[k] = np.stack(step_info[k], axis=0)
-            infos.update(step_info)
-            # sync env state
-            sync_env(config, env, mj_data)
+                mj_data_ref.qpos[:] = qpos_ref[sim_step].detach().cpu().numpy()
+                update_viewer(config, viewer, mj_model, mj_data, mj_data_ref, infos)
 
-            # receding horizon update
-            sim_step = int(np.round(mj_data.time / config.sim_dt))
-            prev_ctrl = ctrls[config.ctrl_steps :]
-            new_ctrl = ctrl_ref[
-                sim_step + prev_ctrl.shape[0] : sim_step
-                + prev_ctrl.shape[0]
-                + config.ctrl_steps
-            ]
-            ctrls = torch.cat([prev_ctrl, new_ctrl], dim=0)
+                # progress
+                t1 = time.perf_counter()
+                rtr = config.ctrl_dt / (t1 - t0)
+                print(
+                    f"Realtime rate: {rtr:.2f}, plan time: {t1 - t0:.4f}s, sim_steps: {sim_step}/{config.max_sim_steps}, opt_steps: {infos['opt_steps'][0]}",
+                    end="\r",
+                )
 
-            # sync viewer state and render
-            mj_data.qpos[:] = get_qpos(config, env)[0].detach().cpu().numpy()
-            mj_data.qvel[:] = get_qvel(config, env)[0].detach().cpu().numpy()
-            mj_data_ref.qpos[:] = qpos_ref[sim_step].detach().cpu().numpy()
-            update_viewer(config, viewer, mj_model, mj_data, mj_data_ref, infos)
+                # record info/trajectory at control tick
+                # rule out "trace"
+                info_list.append({k: v for k, v in infos.items() if k != "trace_sample"})
 
-            # progress
-            t1 = time.perf_counter()
-            rtr = config.ctrl_dt / (t1 - t0)
-            print(
-                f"Realtime rate: {rtr:.2f}, plan time: {t1 - t0:.4f}s, sim_steps: {sim_step}/{config.max_sim_steps}, opt_steps: {infos['opt_steps'][0]}",
-                end="\r",
-            )
+                if sim_step >= config.max_sim_steps:
+                    break
 
-            # record info/trajectory at control tick
-            # rule out "trace"
-            info_list.append({k: v for k, v in infos.items() if k != "trace_sample"})
-
-            if sim_step >= config.max_sim_steps:
-                break
-
-        t_end = time.perf_counter()
-        print(f"Total time: {t_end - t_start:.4f}s")
+            t_end = time.perf_counter()
+            print(f"Total time: {t_end - t_start:.4f}s")
 
     # save retargeted trajectory
     if config.save_info and len(info_list) > 0:
