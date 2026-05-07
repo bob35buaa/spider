@@ -952,6 +952,20 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         ):
             _update_mocap_partner(env)
         wp.capture_launch(env.graph)
+        # E029: kinematic object override AFTER physics step
+        if hasattr(env, "partner_force_ref_pos") and config.partner_force_spring_kp < 0:
+            qpos = wp.to_torch(env.data_wp.qpos)
+            time_arr = wp.to_torch(env.data_wp.time)
+            t = time_arr[0].item()
+            dt = 1.0 / 30.0
+            T = env.partner_force_ref_pos.shape[0]
+            idx = min(int(t / dt), T - 1)
+            ref_pos = env.partner_force_ref_pos[idx]
+            qpos[:, 36:39] = ref_pos.unsqueeze(0)
+            if hasattr(env, "partner_force_ref_quat"):
+                ref_quat = env.partner_force_ref_quat[idx]
+                qpos[:, 39:43] = ref_quat.unsqueeze(0)
+            wp.copy(env.data_wp.qpos, wp.from_torch(qpos))
 
 
 def save_env_params(config: Config, env: MJWPEnv):
