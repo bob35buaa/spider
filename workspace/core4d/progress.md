@@ -1,8 +1,28 @@
 # CORE4D 研究进度
 
-## 当前会话: 2026-05-07 (续2)
+## 当前会话: 2026-05-08 (续3)
 
-### E027b: Object PD Override — 突破性方案
+### E027d2: Contact Guidance — Body-Frame Fix — 突破性进展
+
+**修复的 3 个 Bug**:
+1. **Slide 坐标系 (根本原因)**: `world_pos - body_pos` → `R_body.inv() @ (world_pos - body_pos)`
+2. **Commit Phase Gain 归零**: 最后 CEM 迭代设 kp=0 → commit 时恢复初始 gains
+3. **预转换数据**: contact_guidance 加载旧 _act.npz → 改为运行时从 freejoint 转换
+
+**结果 (4 Case 全覆盖)**:
+| Case | stable% | obj_disp | pos_err | quat_err | 特点 |
+|------|---------|----------|---------|----------|------|
+| box025 | **100%** | 1.46m | **0.131** | 0.110 | ★★★ 最佳: 走路+搬箱 |
+| desk005 | 87% | 1.54m | 0.152 | 0.065 | ★★★ 中间摔一次恢复 |
+| bucket010 | **100%** | 0.92m | **0.111** | 0.249 | ★★ 旋转偏大 |
+| chair022 | 81% | 0.76m | 0.156 | 1.581 | ★ 大幅旋转 |
+
+**关键突破**: 首次实现 **非 anchored** 的 locomotion + manipulation:
+- 机器人实际在走路 (pelvis XY disp 1.0-1.5m)
+- 物体沿参考轨迹移动 (displacement 0.76-1.54m)
+- 对比 E027b (anchored): pos tracking 相当，但机器人在走路!
+
+**配置**: `guidance_decay_ratio=1.0`, `residual_gain_ratio=1.0`, `base_pos_rew_scale=5.0`
 
 **实验路径**:
 1. 使用 `scene_act.xml` (6 position actuators: 3slide+3hinge, armature=1.0)

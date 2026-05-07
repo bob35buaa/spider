@@ -41,6 +41,7 @@
 | E027b | 2026-05-07 | Phase 8 | **Object PD Override(scene_act+grav_comp+relative_euler)**: desk005 pos=0.10/rot=8.8°★★★, box025 rot=7.6°★★; 4/4 stable=100%; 修复3个bug(euler约定/slide偏移/body_quat相对旋转) | **desk005成功** |
 | E027c | 2026-05-07 | Phase 8 | **Contact Guidance(OMOMO方案)on CORE4D**: 机器人走路(pelvis=1.6m)但物体不跟随; **关键发现:论文loco-manipulation用HDMI simulator不是MJWP**; MJWP contact_guidance的gain更新可能不生效 | FAIL (simulator限制) |
 | E027d | 2026-05-08 | Phase 8 | **HDMI Physics+Debug**: 验证CUDA graph gains有效; 根因=object ctrl未重置为ref+noise_scale=0; 修复后仍需debug rollout内部state reset | 调试中 |
+| E027d2 | 2026-05-08 | Phase 8 | **Body-Frame Fix+Commit Gain Restore**: 3个bug(slide坐标系/commit归零/预转换数据); box025=100%stable+1.46m; desk005=87%+1.54m; bucket010=100%+0.92m; chair022=81%+0.76m; **首次实现非anchored locomotion+manipulation** | **突破** |
 
 ## 关键指标演进
 

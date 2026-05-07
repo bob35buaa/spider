@@ -349,7 +349,7 @@ def main(config: Config):
     # contact_pos = contact_pos[500:]
     ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos)
     # E027b: convert freejoint ref (nq=43) to scene_act format (nq=42) by quat→euler
-    if config.object_pd_override and qpos_ref.shape[1] > config.nq:
+    if (config.object_pd_override or config.contact_guidance) and qpos_ref.shape[1] > config.nq:
         from scipy.spatial.transform import Rotation as R
         import mujoco as _mj
         import json as _json
@@ -363,8 +363,13 @@ def main(config: Config):
         _m_act = _mj.MjModel.from_xml_path(config.model_path)
         _obj_body_id = _mj.mj_name2id(_m_act, _mj.mjtObj.mjOBJ_BODY, "object")
         body_pos = _m_act.body_pos[_obj_body_id]
-        # Slide position = world_pos - body_pos
-        obj_slide_pos = obj_pos_world - body_pos[np.newaxis, :]
+        # Slide position = R_body^-1 * (world_pos - body_pos)
+        # Slide joints operate in the body frame, not world frame
+        body_quat_wxyz_pos = _m_act.body_quat[_obj_body_id]
+        body_quat_xyzw_pos = [body_quat_wxyz_pos[1], body_quat_wxyz_pos[2], body_quat_wxyz_pos[3], body_quat_wxyz_pos[0]]
+        R_body_pos = R.from_quat(body_quat_xyzw_pos)
+        world_offset = obj_pos_world - body_pos[np.newaxis, :]
+        obj_slide_pos = R_body_pos.inv().apply(world_offset)
         # Read euler convention from scene_act_meta.json
         meta_path = _os.path.join(_os.path.dirname(config.model_path), "scene_act_meta.json")
         if _os.path.exists(meta_path):
@@ -393,6 +398,11 @@ def main(config: Config):
         qvel_ref_new[:, :min(qvel_ref.shape[1], nv_model)] = qvel_ref[:, :nv_model]
         ctrl_ref_new = torch.zeros((ctrl_ref.shape[0], config.nu), device=ctrl_ref.device, dtype=ctrl_ref.dtype)
         ctrl_ref_new[:, :min(ctrl_ref.shape[1], config.nu)] = ctrl_ref[:, :min(ctrl_ref.shape[1], config.nu)]
+        # Fix: set object actuator ctrl channels to converted slide_pos + euler (body-frame)
+        # Object actuators are the last 6 of nu (ids 29-34 for G1)
+        obj_act_start = config.nu - 6
+        ctrl_ref_new[:, obj_act_start:obj_act_start+3] = torch.from_numpy(obj_slide_pos.astype(np.float32)).to(ctrl_ref.device)
+        ctrl_ref_new[:, obj_act_start+3:obj_act_start+6] = torch.from_numpy(obj_euler.astype(np.float32)).to(ctrl_ref.device)
         loguru.logger.info("E027b: converted ref nq {} → {} (quat→{} euler, body_pos={})", qpos_ref.shape[1], nq_model, euler_conv, body_pos.tolist())
         qpos_ref = qpos_ref_new
         qvel_ref = qvel_ref_new
@@ -728,6 +738,37 @@ def main(config: Config):
                     # (H, K, 3) -> (1, 1, H, K, 3) to match trace_sample shape
                     trace_ref_np = np.stack(trace_ref, axis=0)[None, None, :, :, :]
                     infos["trace_ref"] = trace_ref_np
+
+                # E027d2: restore object actuator gains before commit step
+                # After optimize(), the last CEM iteration may have set gains to 0
+                # (residual_gain_ratio=0). Restore initial gains so PD actuator
+                # drives the object during the commit phase.
+                if contact_guidance_enabled and config.object_actuator_ids:
+                    _commit_params = {
+                        "kp": np.array(
+                            [
+                                (
+                                    config.init_rot_actuator_gain
+                                    if ("_rot_" in (n or ""))
+                                    else config.init_pos_actuator_gain
+                                )
+                                for n in (config.object_actuator_names or [])
+                            ],
+                            dtype=np.float32,
+                        ),
+                        "kd": np.array(
+                            [
+                                (
+                                    config.init_rot_actuator_bias
+                                    if ("_rot_" in (n or ""))
+                                    else config.init_pos_actuator_bias
+                                )
+                                for n in (config.object_actuator_names or [])
+                            ],
+                            dtype=np.float32,
+                        ),
+                    }
+                    load_env_params(config, env, _commit_params)
 
                 # step environment for ctrl_steps
                 step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}

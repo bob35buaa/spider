@@ -536,9 +536,8 @@ def process_config(config: Config):
     if not config.data_path:
         if config.embodiment_type == "dual_humanoid_object":
             config.data_path = f"{processed_dir_robot}/trajectory_kinematic_dual.npz"
-        elif config.contact_guidance:
-            config.data_path = f"{processed_dir_robot}/trajectory_kinematic_act.npz"
         else:
+            # Always load freejoint data; scene_act conversion happens in run_mjwp.py
             config.data_path = f"{processed_dir_robot}/trajectory_kinematic.npz"
 
     # get model data
