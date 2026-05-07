@@ -101,7 +101,7 @@ def generate_scene_act(task: str) -> tuple[str, str]:
             i,
             ET.Element("joint", {
                 "name": name, "type": jtype, "axis": axis,
-                "armature": "2.0", "damping": "100" if jtype == "slide" else "20",
+                "armature": "0.01", "damping": "100" if jtype == "slide" else "20",
             }),
         )
 

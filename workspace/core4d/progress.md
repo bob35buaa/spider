@@ -28,9 +28,10 @@
 - MuJoCo body_quat 非 identity 时, hinge 控制相对旋转
 
 **待优化**:
-1. 导出 desk005 hybrid 轨迹 → Holosoma RL
-2. 增加 kp 解决 bucket/chair (需更大 armature)
-3. 移除 hand_approach_rew (desk 不需要, box 有害)
+1. E027d contact_guidance 调试: rollout 内部 state reset 可能阻止物体移动
+2. 导出 desk005 hybrid 轨迹 → Holosoma RL
+3. 增加 kp 解决 bucket/chair (需更大 armature)
+4. 移除 hand_approach_rew (desk 不需要, box 有害)
 
 ---
 

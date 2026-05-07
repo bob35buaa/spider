@@ -1,0 +1,63 @@
+# @package _global_
+# E027d: Contact Guidance with HDMI-style physics for CORE4D
+dataset_name: core4d
+task: desk005_person2
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+scene_name: scene_act
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+
+# HDMI-style physics (key difference from E027c): decimation=8
+physics_dt: 0.0020833375
+sim_dt: 0.0166667
+
+# Contact guidance (OMOMO/HDMI paper approach)
+contact_guidance: true
+guidance_decay_ratio: 0.8
+init_pos_actuator_gain: 20.0
+init_pos_actuator_bias: 20.0
+init_rot_actuator_gain: 0.3
+init_rot_actuator_bias: 0.3
+object_pos_actuator_names:
+  - object_pos_x
+  - object_pos_y
+  - object_pos_z
+object_rot_actuator_names:
+  - object_rot_x
+  - object_rot_z
+  - object_rot_y
+improvement_threshold: 0.0
+
+# Timing
+horizon: 0.8
+ctrl_dt: 0.0333333
+knot_dt: 0.1
+
+# Annealing
+first_ctrl_noise_scale: 0.5
+last_ctrl_noise_scale: 1.0
+final_noise_scale: 0.1
+joint_noise_scale: 0.05
+
+# CEM
+max_num_iterations: 32
+num_samples: 1024
+temperature: 1.0
+
+# Rewards
+base_pos_rew_scale: 1.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 1.0
+pos_rew_scale: 1.0
+rot_rew_scale: 0.3
+vel_rew_scale: 0.0
+
+# No E027b override
+object_pd_override: false
+partner_force_scale: 0.0
+
+# Output
+viewer: none
+save_video: true

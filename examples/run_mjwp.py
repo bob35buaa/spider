@@ -653,6 +653,13 @@ def main(config: Config):
                     ref_data, sim_step + 1, sim_step + config.horizon_steps + 1
                 )
                 ctrls_for_opt = ctrls
+                # E027d: always reset object actuator ctrl to ref qpos for contact_guidance
+                if contact_guidance_enabled and config.object_actuator_ids:
+                    ref_ctrl_window = ctrl_ref[sim_step : sim_step + ctrls.shape[0]]
+                    if ref_ctrl_window.shape[0] == ctrls.shape[0]:
+                        ctrls_for_opt = ctrls_for_opt.clone()
+                        obj_ids = config.object_actuator_ids
+                        ctrls_for_opt[:, obj_ids] = ref_ctrl_window[:, obj_ids]
                 if contact_guidance_enabled and config.contact_len > 0:
                     contact_mask_step = contact[sim_step][
                         contact_offset : contact_offset + config.contact_len

@@ -40,6 +40,7 @@
 | E031 | 2026-05-07 | Phase 8 | **双机器人Connect泛化4case**: 全部失败——行走位移+connect拽倒机器人; Gibbs在connect下有害; 58维CEM采样不够; E018的box025成功不可泛化 | FAIL (结构性) |
 | E027b | 2026-05-07 | Phase 8 | **Object PD Override(scene_act+grav_comp+relative_euler)**: desk005 pos=0.10/rot=8.8°★★★, box025 rot=7.6°★★; 4/4 stable=100%; 修复3个bug(euler约定/slide偏移/body_quat相对旋转) | **desk005成功** |
 | E027c | 2026-05-07 | Phase 8 | **Contact Guidance(OMOMO方案)on CORE4D**: 机器人走路(pelvis=1.6m)但物体不跟随; **关键发现:论文loco-manipulation用HDMI simulator不是MJWP**; MJWP contact_guidance的gain更新可能不生效 | FAIL (simulator限制) |
+| E027d | 2026-05-08 | Phase 8 | **HDMI Physics+Debug**: 验证CUDA graph gains有效; 根因=object ctrl未重置为ref+noise_scale=0; 修复后仍需debug rollout内部state reset | 调试中 |
 
 ## 关键指标演进
 
