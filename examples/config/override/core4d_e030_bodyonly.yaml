@@ -1,0 +1,37 @@
+# @package _global_
+# E030-bodyonly: Body-only retargeting for hybrid export
+# Object left free (falls/tips); robot body tracks reference motion.
+# Exported trajectory will have object state replaced by ref in post-processing.
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_bodyonly
+
+# No partner force, no spring — pure body tracking
+partner_force_scale: 0.0
+partner_force_spring_kp: 0.0
+partner_force_spring_kp_rot: 0.0
+
+# Body tracking rewards only
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 3.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 4096
+improvement_threshold: 0.0
+max_num_iterations: 24
+terminate_resample: true
+base_pos_threshold: 0.5
+
+# Output
+viewer: none
+save_video: true

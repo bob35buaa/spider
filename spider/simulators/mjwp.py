@@ -817,6 +817,41 @@ def apply_perturbation(config: Config, env: MJWPEnv):
     return env
 
 
+def _apply_object_pd_override(config: Config, env: MJWPEnv):
+    """E027b: Override object actuator ctrl to PD-track ref trajectory.
+
+    For scene_act.xml with 6 object position actuators (3 slide + 3 hinge),
+    sets ctrl = ref_target so the actuator's built-in PD drives the object.
+    Called after CEM ctrl is written, effectively overriding CEM's object dims.
+    Adds gravity compensation offset to z-target (mg/kp) for zero steady-state error.
+    """
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = time_arr[0].item()
+    dt = 1.0 / 30.0
+    T = env.object_pd_ref_pos.shape[0]
+    idx = min(int(t / dt), T - 1)
+
+    # Get ref pos (3) and euler (3) directly
+    ref_pos = env.object_pd_ref_pos[idx]  # (3,)
+    ref_euler = env.object_pd_ref_euler[idx]  # (3,) xyz euler
+
+    # Gravity compensation offset for z: target += mg/kp
+    grav_comp = env.object_mass * 9.81 / config.object_pd_kp_pos
+
+    # Object actuator target = [pos_x, pos_y, pos_z + grav_comp, rot_x, rot_y, rot_z]
+    obj_target = torch.tensor(
+        [ref_pos[0].item(), ref_pos[1].item(), ref_pos[2].item() + grav_comp,
+         ref_euler[0].item(), ref_euler[1].item(), ref_euler[2].item()],
+        dtype=torch.float32, device=config.device,
+    )
+
+    # Write to ctrl for object actuator channels (last 6 of nu)
+    ctrl = wp.to_torch(env.data_wp.ctrl)
+    obj_act_start = ctrl.shape[1] - 6
+    ctrl[:, obj_act_start:] = obj_target.unsqueeze(0)
+    wp.copy(env.data_wp.ctrl, wp.from_torch(ctrl))
+
+
 def _apply_partner_force(config: Config, env: MJWPEnv):
     """Apply external force on the object body to simulate partner support.
 
@@ -872,11 +907,106 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
         spring_force = kp * (ref_pos.unsqueeze(0) - obj_pos_sim) - kd * obj_vel_sim
         xfrc_applied[:, obj_body_id, :3] += spring_force
 
-        # Note: orientation control (rotation spring/damping) disabled — causes instability.
-        # Object may tip over during spring-driven motion. This is a known limitation.
-        # Acceptable for generating training reference data (RL handles fine control).
+        # E030: Orientation control via xfrc_applied torque
+        if config.partner_force_spring_kp_rot > 0 and hasattr(env, "partner_force_ref_quat"):
+            from spider.math import quat_sub
+
+            # Object quaternion from qpos: freejoint stores (w,x,y,z)
+            obj_quat_sim = qpos[:, obj_qadr + 3:obj_qadr + 7]  # (N, 4) wxyz
+            obj_angvel_sim = qvel[:, obj_vadr + 3:obj_vadr + 6]  # (N, 3)
+
+            # Normalize quaternion (can become unnormalized in unstable rollouts)
+            quat_norm = obj_quat_sim.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+            obj_quat_sim = obj_quat_sim / quat_norm
+
+            # Reference quaternion for current time
+            ref_quat = env.partner_force_ref_quat[idx]  # (4,) wxyz on GPU
+
+            # axis-angle error in world frame: quat_sub(ref, cur)
+            aa_err = quat_sub(
+                ref_quat.unsqueeze(0).expand(obj_quat_sim.shape[0], -1),
+                obj_quat_sim,
+            )  # (N, 3)
+
+            # Replace NaN with zero (from degenerate quaternions)
+            aa_err = torch.nan_to_num(aa_err, nan=0.0)
+
+            # Clamp axis-angle magnitude
+            aa_mag = aa_err.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+            clamp_val = config.partner_force_rot_clamp
+            aa_err = torch.where(
+                aa_mag > clamp_val,
+                aa_err / aa_mag * clamp_val,
+                aa_err,
+            )
+
+            # Clamp angular velocity too
+            obj_angvel_sim = torch.nan_to_num(obj_angvel_sim, nan=0.0)
+            obj_angvel_sim = obj_angvel_sim.clamp(-10.0, 10.0)
+
+            # PD torque with ramp
+            kp_rot = config.partner_force_spring_kp_rot * ramp
+            if config.partner_force_spring_kd_rot < 0:
+                avg_inertia = float(np.mean(env.model_cpu.body_inertia[obj_body_id]))
+                kd_rot = 2.0 * (avg_inertia * config.partner_force_spring_kp_rot) ** 0.5
+            else:
+                kd_rot = config.partner_force_spring_kd_rot
+            torque = kp_rot * aa_err - kd_rot * obj_angvel_sim
+
+            # Clamp total torque magnitude to prevent instability
+            torque_mag = torque.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+            max_torque = 5.0  # Nm — conservative limit
+            torque = torch.where(
+                torque_mag > max_torque,
+                torque / torque_mag * max_torque,
+                torque,
+            )
+            xfrc_applied[:, obj_body_id, 3:6] += torque
 
     wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+
+
+def _update_object_weld_target(config: Config, env: MJWPEnv):
+    """Update the mocap 'object_target' body to track the reference trajectory.
+
+    Used with scene_weld.xml: a soft weld equality constraint pulls the freejoint
+    object toward this mocap body. MuJoCo's solver handles pos+orient coupling.
+    """
+    if not hasattr(env, "_weld_mocap_id"):
+        # Find the mocap body index for "object_target"
+        body_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object_target"
+        )
+        if body_id == -1:
+            env._weld_mocap_id = -1
+            return
+        # mocap body index (0-based among mocap bodies)
+        # In MuJoCo, body_mocapid maps body_id → mocap_id
+        env._weld_mocap_id = env.model_cpu.body_mocapid[body_id]
+
+    if env._weld_mocap_id < 0:
+        return
+
+    if not hasattr(env, "partner_force_ref_pos"):
+        return
+
+    # Get reference for current time
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = time_arr[0].item()
+    dt = 1.0 / 30.0
+    T = env.partner_force_ref_pos.shape[0]
+    idx = min(int(t / dt), T - 1)
+
+    ref_pos = env.partner_force_ref_pos[idx]  # (3,)
+    ref_quat = env.partner_force_ref_quat[idx]  # (4,) wxyz
+
+    # Write to mocap body (shared-memory in-place)
+    mocap_pos_all = wp.to_torch(env.data_wp.mocap_pos)  # (N, nmocap, 3)
+    mocap_quat_all = wp.to_torch(env.data_wp.mocap_quat)  # (N, nmocap, 4)
+    mid = env._weld_mocap_id
+    N = mocap_pos_all.shape[0]
+    mocap_pos_all[:, mid] = ref_pos.unsqueeze(0).expand(N, -1)
+    mocap_quat_all[:, mid] = ref_quat.unsqueeze(0).expand(N, -1)
 
 
 def _update_mocap_partner(env: MJWPEnv):
@@ -942,8 +1072,14 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         # E024: apply partner force on object (simulating human partner support)
         if config.partner_force_scale > 0:
             _apply_partner_force(config, env)
+        # E030: update weld target mocap body (for scene_weld.xml)
+        if config.scene_name == "scene_weld":
+            _update_object_weld_target(config, env)
         # step control
         wp.copy(env.data_wp.ctrl, wp.from_torch(ctrl_mujoco.to(torch.float32)))
+        # E027b: object PD override — set object actuator ctrl to track ref
+        if config.object_pd_override and hasattr(env, "object_pd_ref_pos"):
+            _apply_object_pd_override(config, env)
         # Update partner mocap positions within rollout (E013: intra-rollout update)
         if (
             config.mocap_partner_intra_step

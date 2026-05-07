@@ -77,6 +77,14 @@ class Config:
     partner_force_scale: float = 0.0  # fraction of object gravity to apply as upward force (0.5 = 50%)
     partner_force_spring_kp: float = 0.0  # spring stiffness pulling object toward ref pos (0 = pure gravity comp)
     partner_force_spring_kd: float = -1.0  # damping (-1 = auto critical damping = 2*sqrt(m*kp))
+    # E030: orientation spring for freejoint object
+    partner_force_spring_kp_rot: float = 0.0  # rotation spring stiffness (0 = disabled)
+    partner_force_spring_kd_rot: float = -1.0  # rotation damping (-1 = auto critical damping)
+    partner_force_rot_clamp: float = 0.5  # max axis-angle magnitude (rad) to prevent large torques
+    # E027b: object PD override — object actuators track ref directly, CEM only optimizes robot
+    object_pd_override: bool = False  # enable object actuator PD override in step_env
+    object_pd_kp_pos: float = 2000.0  # position actuator gain (strong tracking)
+    object_pd_kp_rot: float = 2000.0  # rotation actuator gain
     # E025: hand approach reward — guides hands toward object surface
     hand_approach_rew_scale: float = 0.0  # weight of hand-to-object-surface distance reward
     hand_approach_sigma: float = 5.0  # steepness of exponential decay
@@ -501,6 +509,10 @@ def process_config(config: Config):
             "humanoid_object": 7,
             "dual_humanoid_object": 7,
         }.get(config.embodiment_type, 0)
+
+    # E027b: object_pd_override uses scene_act (6DOF object) regardless of contact_guidance
+    if config.object_pd_override and config.embodiment_type == "humanoid_object":
+        config.nq_obj = 6
 
     # resolve processed directories for this trial
     dataset_dir_abs = os.path.abspath(config.dataset_dir)

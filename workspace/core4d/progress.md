@@ -1,21 +1,36 @@
 # CORE4D 研究进度
 
-## 当前会话: 2026-05-07
+## 当前会话: 2026-05-07 (续2)
 
-### E029-act (contact_guidance + kinematic override): 方向明确
+### E027b: Object PD Override — 突破性方案
 
-**关键澄清** (经讨论):
-- `scene.xml` 模式: CEM **不采样物体** (nu=29, 只有 robot actuator)
-- 物体翻转不是 CEM 干扰, 而是 **xfrc_applied torque 数值不稳定**
-- 所以不需要"解耦 CEM" — 需要 **debug torque 控制** 使其稳定
+**实验路径**:
+1. 使用 `scene_act.xml` (6 position actuators: 3slide+3hinge, armature=1.0)
+2. `_apply_object_pd_override()` 每步覆盖 object ctrl → PD 跟踪 ref
+3. gravity compensation: `target_z += mg/kp`
+4. CEM 只优化 robot body tracking + hand approach
 
-**E029 尝试汇总**:
-- contact_guidance (scene_act): CEM 采样 35 维包含 object → 干扰 ref → 不可用
-- kinematic qpos override: 只在 commit step 生效, CEM rollout 中无效 → metrics 不准
-- 都不如直接 fix xfrc torque
+**结果 (最终版)**:
+| Case | stable | pos_err | rot_err° | 视觉 |
+|------|--------|---------|----------|------|
+| desk005 | 100% | **0.100** | **8.8°** | ★★★ 首次完整 6DOF 搬运 |
+| box025 | 100% | 0.101 | **7.6°** | ★★ 方向正确但 z 不够 |
+| bucket010 | 100% | 0.547 | 61.5° | ★ 仍有旋转偏移 |
+| chair022 | 100% | 0.559 | 110.6° | ✗ 待 debug |
 
-**下一步**: Debug xfrc_applied torque 使其在 freejoint + MuJoCo Warp batch 中稳定工作。
-具体方向: (1) 验证坐标系是否正确; (2) clamp axis_angle; (3) 简化测试 (静止物体只做 orientation 纠正)
+**修复的 3 个 Bug**:
+1. Euler 约定: `"xyz"` → per-case 最佳 extrinsic 约定 (避免 gimbal lock)
+2. Slide 偏移: `world_pos` → `world_pos - body_pos`
+3. **Body_quat 相对旋转** (根本原因): `R_joint = R_body.inv() * R_world`
+
+**关键发现**:
+- CUDA graph 不更新 model params → gains 必须 bake 进 XML
+- MuJoCo body_quat 非 identity 时, hinge 控制相对旋转
+
+**待优化**:
+1. 导出 desk005 hybrid 轨迹 → Holosoma RL
+2. 增加 kp 解决 bucket/chair (需更大 armature)
+3. 移除 hand_approach_rew (desk 不需要, box 有害)
 
 ---
 

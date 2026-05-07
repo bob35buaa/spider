@@ -1,0 +1,43 @@
+# @package _global_
+# E030: Position + Orientation damped spring (xfrc_applied torque PD)
+# Verified on CPU: kp_rot=10 recovers 60° tilt. kp_rot=5-20 stable range.
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+
+# Partner force: gravity comp + position spring + orientation spring
+partner_force_scale: 1.0
+partner_force_spring_kp: 30.0
+partner_force_spring_kd: -1.0
+partner_force_spring_kp_rot: 2.0
+partner_force_spring_kd_rot: -1.0
+partner_force_rot_clamp: 0.3
+
+# Hand approach reward
+hand_approach_rew_scale: 5.0
+hand_approach_sigma: 5.0
+
+# Body tracking
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 3.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 4096
+improvement_threshold: 0.0
+max_num_iterations: 24
+terminate_resample: true
+base_pos_threshold: 0.5
+object_pos_threshold: 0.5
+
+# Output
+viewer: none
+save_video: true

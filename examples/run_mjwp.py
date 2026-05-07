@@ -348,6 +348,56 @@ def main(config: Config):
     # contact = contact[500:]
     # contact_pos = contact_pos[500:]
     ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos)
+    # E027b: convert freejoint ref (nq=43) to scene_act format (nq=42) by quat→euler
+    if config.object_pd_override and qpos_ref.shape[1] > config.nq:
+        from scipy.spatial.transform import Rotation as R
+        import mujoco as _mj
+        import json as _json
+        import os as _os
+        nq_model = config.nq  # 42 for scene_act
+        nq_robot = nq_model - 6  # 36
+        # Extract object pos(3) + quat(4) from end of freejoint ref
+        obj_pos_world = qpos_ref[:, nq_robot:nq_robot+3].detach().cpu().numpy()
+        obj_quat_wxyz = qpos_ref[:, nq_robot+3:nq_robot+7].detach().cpu().numpy()
+        # Get object body_pos from scene_act model (slide joints are relative to this)
+        _m_act = _mj.MjModel.from_xml_path(config.model_path)
+        _obj_body_id = _mj.mj_name2id(_m_act, _mj.mjtObj.mjOBJ_BODY, "object")
+        body_pos = _m_act.body_pos[_obj_body_id]
+        # Slide position = world_pos - body_pos
+        obj_slide_pos = obj_pos_world - body_pos[np.newaxis, :]
+        # Read euler convention from scene_act_meta.json
+        meta_path = _os.path.join(_os.path.dirname(config.model_path), "scene_act_meta.json")
+        if _os.path.exists(meta_path):
+            with open(meta_path) as f:
+                euler_conv = _json.load(f)["euler_convention"]
+        else:
+            euler_conv = "XYZ"
+        # Get body_quat for relative rotation: R_joint = R_body^-1 * R_world
+        body_quat_wxyz = _m_act.body_quat[_obj_body_id]
+        body_quat_xyzw = [body_quat_wxyz[1], body_quat_wxyz[2], body_quat_wxyz[3], body_quat_wxyz[0]]
+        R_body = R.from_quat(body_quat_xyzw)
+        # Convert world quat to relative euler
+        obj_quat_xyzw = np.column_stack([obj_quat_wxyz[:, 1], obj_quat_wxyz[:, 2],
+                                          obj_quat_wxyz[:, 3], obj_quat_wxyz[:, 0]])
+        R_world = R.from_quat(obj_quat_xyzw)
+        R_joint = R_body.inv() * R_world
+        obj_euler = R_joint.as_euler(euler_conv)
+        # Build new qpos: robot(36) + obj_slide(3) + obj_euler(3) = 42
+        qpos_ref_new = torch.zeros((qpos_ref.shape[0], nq_model), device=qpos_ref.device, dtype=qpos_ref.dtype)
+        qpos_ref_new[:, :nq_robot] = qpos_ref[:, :nq_robot]
+        qpos_ref_new[:, nq_robot:nq_robot+3] = torch.from_numpy(obj_slide_pos.astype(np.float32)).to(qpos_ref.device)
+        qpos_ref_new[:, nq_robot+3:nq_robot+6] = torch.from_numpy(obj_euler.astype(np.float32)).to(qpos_ref.device)
+        # Also adapt qvel and ctrl
+        nv_model = config.nv  # 41
+        qvel_ref_new = torch.zeros((qvel_ref.shape[0], nv_model), device=qvel_ref.device, dtype=qvel_ref.dtype)
+        qvel_ref_new[:, :min(qvel_ref.shape[1], nv_model)] = qvel_ref[:, :nv_model]
+        ctrl_ref_new = torch.zeros((ctrl_ref.shape[0], config.nu), device=ctrl_ref.device, dtype=ctrl_ref.dtype)
+        ctrl_ref_new[:, :min(ctrl_ref.shape[1], config.nu)] = ctrl_ref[:, :min(ctrl_ref.shape[1], config.nu)]
+        loguru.logger.info("E027b: converted ref nq {} → {} (quat→{} euler, body_pos={})", qpos_ref.shape[1], nq_model, euler_conv, body_pos.tolist())
+        qpos_ref = qpos_ref_new
+        qvel_ref = qvel_ref_new
+        ctrl_ref = ctrl_ref_new
+        ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos)
     config.max_sim_steps = (
         config.max_sim_steps
         if config.max_sim_steps > 0
@@ -357,8 +407,8 @@ def main(config: Config):
     # setup env with initial state from first sim qpos
     env = setup_env(config, ref_data)
 
-    # E025/E026/E028: precompute partner force reference object positions + quaternions for spring
-    if config.partner_force_spring_kp > 0 and config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
+    # E025/E026/E028/E030: precompute partner force reference object positions + quaternions
+    if (config.partner_force_spring_kp > 0 or config.scene_name == "scene_weld") and config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
         # Object freejoint: last 7 dof in qpos [nq-7:nq] = [pos(3), quat(4)]
         nq_obj = 7
         obj_pos_ref_np = qpos_ref[:, -nq_obj:-nq_obj+3].detach().cpu().numpy()  # (T, 3)
@@ -367,6 +417,34 @@ def main(config: Config):
         env.partner_force_ref_quat = torch.tensor(obj_quat_ref_np, device=config.device, dtype=torch.float32)
         loguru.logger.info("Partner force spring: ref_pos shape={}, ref_quat shape={}",
                           tuple(env.partner_force_ref_pos.shape), tuple(env.partner_force_ref_quat.shape))
+
+    # E027b: object PD override — precompute ref pos/euler for scene_act object actuators
+    if config.object_pd_override and config.embodiment_type in ["humanoid_object"]:
+        # After E027b conversion, qpos_ref is 42-dim: robot(36) + obj(6: px,py,pz,rx,ry,rz)
+        nq_robot = config.nq - 6
+        obj_pos_ref_np = qpos_ref[:, nq_robot:nq_robot+3].detach().cpu().numpy()
+        obj_euler_ref_np = qpos_ref[:, nq_robot+3:nq_robot+6].detach().cpu().numpy()
+        env.object_pd_ref_pos = torch.tensor(obj_pos_ref_np, device=config.device, dtype=torch.float32)
+        env.object_pd_ref_euler = torch.tensor(obj_euler_ref_np, device=config.device, dtype=torch.float32)
+        # Set actuator gains on model (last 6 actuators = object)
+        obj_act_ids = list(range(env.model_cpu.nu - 6, env.model_cpu.nu))
+        kp_pos = config.object_pd_kp_pos
+        kp_rot = config.object_pd_kp_rot
+        for i, aid in enumerate(obj_act_ids):
+            kp = kp_pos if i < 3 else kp_rot
+            env.model_cpu.actuator_gainprm[aid, 0] = kp
+            env.model_cpu.actuator_biasprm[aid, 1] = -kp  # position actuator bias
+            env.model_cpu.actuator_biasprm[aid, 2] = 0  # no velocity bias
+        # Store object mass for gravity compensation in _apply_object_pd_override
+        obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
+        env.object_mass = env.model_cpu.body_mass[obj_body_id]
+        # Propagate to Warp model
+        gain_full = np.array(env.model_cpu.actuator_gainprm, dtype=np.float32)
+        bias_full = np.array(env.model_cpu.actuator_biasprm, dtype=np.float32)
+        wp.copy(env.model_wp.actuator_gainprm, wp.from_numpy(gain_full, dtype=wp.float32, device=config.device))
+        wp.copy(env.model_wp.actuator_biasprm, wp.from_numpy(bias_full, dtype=wp.float32, device=config.device))
+        loguru.logger.info("Object PD override: kp_pos={}, kp_rot={}, ref shape={}",
+                          kp_pos, kp_rot, tuple(env.object_pd_ref_pos.shape))
 
     # setup mujoco (for viewer only)
     mj_model = setup_mj_model(config)
@@ -537,16 +615,26 @@ def main(config: Config):
         optimize_once = make_optimize_once_fn(rollout)
         optimize = make_optimize_fn(optimize_once)
         base_noise_scale = config.noise_scale.clone()
-        gibbs_enabled = config.gibbs_sampling and config.embodiment_type == "bimanual"
+        gibbs_enabled = config.gibbs_sampling and config.embodiment_type in [
+            "bimanual", "dual_humanoid_object",
+        ]
         if config.gibbs_sampling and not gibbs_enabled:
             loguru.logger.warning(
                 "gibbs_sampling is enabled but embodiment_type is {}, disabling.",
                 config.embodiment_type,
             )
         if gibbs_enabled:
-            right_ids, left_ids = _get_bimanual_hand_indices(config)
-            right_only_zero = left_ids
-            left_only_zero = right_ids
+            if config.embodiment_type == "bimanual":
+                right_ids, left_ids = _get_bimanual_hand_indices(config)
+                right_only_zero = left_ids
+                left_only_zero = right_ids
+            elif config.embodiment_type == "dual_humanoid_object":
+                # Split by robot: R1 = first half of nu, R2 = second half
+                half_nu = config.nu // 2
+                robot1_ids = list(range(0, half_nu))
+                robot2_ids = list(range(half_nu, config.nu))
+                right_only_zero = robot2_ids  # Zero R2 noise → optimize R1
+                left_only_zero = robot1_ids   # Zero R1 noise → optimize R2
 
         # initial controls
         ctrls = ctrl_ref[: config.horizon_steps]

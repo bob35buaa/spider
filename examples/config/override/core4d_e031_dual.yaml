@@ -1,0 +1,73 @@
+# @package _global_
+# E031: Dual-robot + soft 2-connect + task-space rewards (generalized from E018-d2)
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: dual_humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_dual_robot_connect2
+
+# Joint-space rewards
+base_pos_rew_scale: 15.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 1.0
+pos_rew_scale: 1.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# Task-space rewards (DynaRetarget inspired)
+task_obj_pos_rew_scale: 40.0
+task_obj_rot_rew_scale: 4.0
+task_body_rew_scale: 1.0
+task_body_names:
+  - pelvis
+  - torso_link
+  - left_wrist_yaw_link
+  - right_wrist_yaw_link
+  - left_ankle_roll_link
+  - right_ankle_roll_link
+  - r2_pelvis
+  - r2_torso_link
+  - r2_left_wrist_yaw_link
+  - r2_right_wrist_yaw_link
+  - r2_left_ankle_roll_link
+  - r2_right_ankle_roll_link
+task_body_weights:
+  - 5.0   # pelvis R1
+  - 30.0  # torso R1
+  - 5.0   # left_wrist R1
+  - 5.0   # right_wrist R1
+  - 10.0  # left_ankle R1
+  - 10.0  # right_ankle R1
+  - 5.0   # pelvis R2
+  - 30.0  # torso R2
+  - 5.0   # left_wrist R2
+  - 5.0   # right_wrist R2
+  - 10.0  # left_ankle R2
+  - 10.0  # right_ankle R2
+
+# Interaction reward (Harmanoid)
+interact_rew_scale: 2.0
+interact_sigma: 5.0
+interact_pairs:
+  - [0, 6]   # pelvis pair
+  - [1, 7]   # torso pair
+  - [3, 9]   # right_wrist pair
+
+# CEM
+num_samples: 2048
+temperature: 0.15
+max_num_iterations: 24
+terminate_resample: true
+base_pos_threshold: 0.5
+object_pos_threshold: 0.5
+
+# Gibbs sampling (now works for dual_humanoid_object)
+gibbs_sampling: true
+
+# Output
+viewer: none
+save_video: true

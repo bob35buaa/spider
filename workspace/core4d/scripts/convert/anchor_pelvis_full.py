@@ -16,6 +16,7 @@ from scipy.spatial.transform import Rotation
 PROCESSED = "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object"
 
 CASES = {
+    "box025": "box025_person1",
     "bucket010": "bucket010_person1",
     "chair022": "chair022_person1",
     "desk005": "desk005_person2",

@@ -1,0 +1,45 @@
+# @package _global_
+# E030-kinobj: Kinematic object via very strong PD actuators (scene_act.xml)
+# Object follows reference perfectly, CEM optimizes robot body only
+# Based on E010 (validated for box025), generalized to all cases
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_act
+
+# Contact guidance: high-gain PD keeps object on trajectory
+contact_guidance: true
+guidance_decay_ratio: 1.0    # No decay — gains constant
+residual_gain_ratio: 1.0     # Keep full gains through all CEM iterations
+init_pos_actuator_gain: 1000.0
+init_pos_actuator_bias: 200.0
+init_rot_actuator_gain: 100.0
+init_rot_actuator_bias: 20.0
+
+# Hand approach (helps CEM bring hands toward object)
+hand_approach_rew_scale: 5.0
+hand_approach_sigma: 5.0
+
+# Body tracking (strong body focus since object is kinematic)
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 3.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 4096
+improvement_threshold: 0.0
+max_num_iterations: 24
+terminate_resample: true
+base_pos_threshold: 0.5
+
+# Output
+viewer: none
+save_video: true

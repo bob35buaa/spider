@@ -1,0 +1,43 @@
+# @package _global_
+# E027b: Object PD Override — object actuators track ref, robot CEM + hand approach
+dataset_name: core4d
+task: box025_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_act
+
+# E027b: object PD override (object follows ref via actuator PD)
+object_pd_override: true
+object_pd_kp_pos: 2000.0
+object_pd_kp_rot: 2000.0
+
+# Use anchored trajectory (removes walking)
+data_path: ""  # will be overridden per-case via CLI
+
+# No partner force needed (object driven by actuators)
+partner_force_scale: 0.0
+partner_force_spring_kp: 0.0
+
+# Hand approach reward (guide hands toward moving object)
+hand_approach_rew_scale: 5.0
+hand_approach_sigma: 5.0
+
+# Body tracking (anchored)
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 1.0
+pos_rew_scale: 1.0
+rot_rew_scale: 0.3
+
+# CEM
+num_samples: 2048
+temperature: 0.15
+max_num_iterations: 16
+
+# Output
+viewer: none
+save_video: true
