@@ -33,7 +33,7 @@
 | E025 | 2026-05-07 | Phase 6 | **Hand Approach Reward**: 手确实接近物体(dist 0.34→0.00), 但本质是推/碰静止物体, 非沿ref搬运; partner横向动态缺失 | 部分成功(技术有效, 目标未达) |
 | E026 | 2026-05-07 | Phase 6 | **Sustained Contact (4096samp/24iter)**: bucket直立+持续接触, 但仍是推静止物体; 长horizon(2.4s)反而保守 | 同上 |
 | E027 | 2026-05-07 | Phase 6 | **Partner Force Sweep + desk005**: 接触率不依赖pf强度(均64%); desk005也产生碰触但非搬运 | 同上 |
-| E028 | 2026-05-07 | Phase 7 | **阻尼弹簧**: 物体沿ref移动(xy54%,z86%跟踪)+手接触82%; bucket010/chair022验证; orientation spring待修 | 进展中 |
+| E028 | 2026-05-07 | Phase 7 | **阻尼弹簧 4Case全覆盖**: desk005 z=84%/hand=90%/stable=100% 最佳指标; 但**所有case物体翻转**(orientation不受控); orientation spring/damping均不稳定 | C6 FAIL (视频不像搬运) |
 
 ## 关键指标演进
 

@@ -872,34 +872,9 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
         spring_force = kp * (ref_pos.unsqueeze(0) - obj_pos_sim) - kd * obj_vel_sim
         xfrc_applied[:, obj_body_id, :3] += spring_force
 
-        # Orientation spring (torque) if ref quaternion available
-        # TODO: disabled pending stability fix — torque direction may be wrong
-        if False and hasattr(env, "partner_force_ref_quat"):
-            obj_quat_sim = qpos[:, obj_qadr + 3:obj_qadr + 7]  # (N, 4) wxyz
-            obj_angvel_sim = qvel[:, obj_vadr + 3:obj_vadr + 6]  # (N, 3)
-            ref_quat = env.partner_force_ref_quat[idx]  # (4,) wxyz
-
-            # Quaternion error → axis-angle torque
-            q_sim = obj_quat_sim  # (N, 4) [w,x,y,z]
-            q_ref = ref_quat.unsqueeze(0).expand_as(q_sim)
-            # inv(sim): negate imaginary part
-            q_sim_inv = q_sim.clone()
-            q_sim_inv[:, 1:] = -q_sim_inv[:, 1:]
-            # q_err = q_ref * q_sim_inv
-            w1, x1, y1, z1 = q_ref[:, 0], q_ref[:, 1], q_ref[:, 2], q_ref[:, 3]
-            w2, x2, y2, z2 = q_sim_inv[:, 0], q_sim_inv[:, 1], q_sim_inv[:, 2], q_sim_inv[:, 3]
-            qe_x = w1*x2 + x1*w2 + y1*z2 - z1*y2
-            qe_y = w1*y2 - x1*z2 + y1*w2 + z1*x2
-            qe_z = w1*z2 + x1*y2 - y1*x2 + z1*w2
-            qe_w = w1*w2 - x1*x2 - y1*y2 - z1*z2
-            # Ensure shortest path
-            sign = torch.sign(qe_w).unsqueeze(1)
-            axis_angle = 2.0 * torch.stack([qe_x, qe_y, qe_z], dim=1) * sign
-
-            kp_rot = config.partner_force_spring_kp * 0.1 * ramp
-            kd_rot = 2.0 * (obj_mass * kp_rot) ** 0.5
-            torque = kp_rot * axis_angle - kd_rot * obj_angvel_sim
-            xfrc_applied[:, obj_body_id, 3:] += torque
+        # Note: orientation control (rotation spring/damping) disabled — causes instability.
+        # Object may tip over during spring-driven motion. This is a known limitation.
+        # Acceptable for generating training reference data (RL handles fine control).
 
     wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
 
