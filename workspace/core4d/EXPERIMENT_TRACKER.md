@@ -35,6 +35,7 @@
 | E027 | 2026-05-07 | Phase 6 | **Partner Force Sweep + desk005**: 接触率不依赖pf强度(均64%); desk005也产生碰触但非搬运 | 同上 |
 | E028 | 2026-05-07 | Phase 7 | **阻尼弹簧 4Case全覆盖**: desk005 z=84%/hand=90%/stable=100% 最佳指标; 但**所有case物体翻转**(orientation不受控); orientation spring/damping均不稳定 | C6 FAIL (视频不像搬运) |
 | E029 | 2026-05-07 | Phase 7 | **Quasi-Kinematic(kp=100)**: pos跟踪改善(box025=0.07m), 但**仍翻转**; chair022 pelvis崩溃(27%); 结论:xfrc_applied无法控制freejoint orientation | FAIL (根本性限制) |
+| E029-act | 2026-05-07 | Phase 7 | **PD Actuator+Kin Override**: contact_guidance CEM干扰obj ctrl; kin override不在rollout生效; **核心发现:scene.xml模式CEM不采样物体,问题是xfrc torque不稳定** | 方向明确(待debug torque) |
 
 ## 关键指标演进
 

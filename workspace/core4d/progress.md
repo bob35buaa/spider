@@ -2,21 +2,20 @@
 
 ## 当前会话: 2026-05-07
 
-### E029-act (contact_guidance + position actuator): 调参中
+### E029-act (contact_guidance + kinematic override): 方向明确
 
-**尝试**:
-1. `guidance_decay_ratio=0.0`: gains 第 2 步就归零 → 物体自由 → 翻倒
-2. `decay=1.0 + residual=1.0 + kp=200`: NaN (增益过高)
-3. `decay=1.0 + residual=1.0 + kp=30/rot=5`: 稳定但 pos_err=1.32 (跟踪差)
+**关键澄清** (经讨论):
+- `scene.xml` 模式: CEM **不采样物体** (nu=29, 只有 robot actuator)
+- 物体翻转不是 CEM 干扰, 而是 **xfrc_applied torque 数值不稳定**
+- 所以不需要"解耦 CEM" — 需要 **debug torque 控制** 使其稳定
 
-**根因**: contact_guidance 机制设计用于手部精细接触 (bimanual), 在 CEM 迭代内给 object actuator 发 ctrl。但对 "整个物体被强 PD 驱动" 的场景, 需要更高 gains — 而高 gains + sim_dt=0.017 导致不稳定。
+**E029 尝试汇总**:
+- contact_guidance (scene_act): CEM 采样 35 维包含 object → 干扰 ref → 不可用
+- kinematic qpos override: 只在 commit step 生效, CEM rollout 中无效 → metrics 不准
+- 都不如直接 fix xfrc torque
 
-**可能的解决方案**:
-- 降低 sim_dt (如 0.005) 允许更高 gains
-- 使用物体 qpos override (运动学驱动, 但保留碰撞 — 物体不受 robot 力影响)
-- 继续调参寻找 gains 甜点
-
-**状态**: 进行中, 等待决策
+**下一步**: Debug xfrc_applied torque 使其在 freejoint + MuJoCo Warp batch 中稳定工作。
+具体方向: (1) 验证坐标系是否正确; (2) clamp axis_angle; (3) 简化测试 (静止物体只做 orientation 纠正)
 
 ---
 
