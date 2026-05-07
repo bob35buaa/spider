@@ -24,6 +24,32 @@
 
 **配置**: `guidance_decay_ratio=1.0`, `residual_gain_ratio=1.0`, `base_pos_rew_scale=5.0`
 
+---
+
+### E032a: Hand Approach Reward + Weight Sweep — 接触大幅改善
+
+**实验**: 在 E027d2 基础上增加 `hand_approach_rew_scale=3.0` 引导手靠近物体
+
+**结果对比 (Full: 32iter/1024samp)**:
+| Case | E027d2 contact<10cm | E032a(base=5) | E032a(base=10) | 稳定性变化 |
+|------|--------------------|--------------:|---------------:|-----------|
+| box025 | 65% | **81%** | 57% | 100%→71%→**100%** |
+| desk005 | 9% | **83%** | **82%** | 87%→79%→75% |
+| bucket010 | 36% | **63%** | - | 100%→100% |
+
+**关键发现**:
+1. `hand_approach_rew=3.0` 对 desk005 是变革性改善 (9%→83%)
+2. 但与 stability 有 tradeoff (box025: base=5 时 71% stable)
+3. `base_pos=10` 恢复 box025 stability 但降低接触
+4. `task_body_rew` 有害 — 强制手跟踪 ref 与平衡冲突
+5. 降低 PD gains 无益 — 物体跟踪直接变差
+6. HDMI physics_dt=0.002: 接触 OK 但 CEM budget 不足以稳定行走
+
+**最佳 per-case 配置**:
+- box025: `base_pos=10, HA=3` → 100% stable, 57% contact
+- desk005: `base_pos=5, HA=3` → 79% stable, 83% contact  
+- bucket010: `base_pos=5, HA=3` → 100% stable, 63% contact
+
 **实验路径**:
 1. 使用 `scene_act.xml` (6 position actuators: 3slide+3hinge, armature=1.0)
 2. `_apply_object_pd_override()` 每步覆盖 object ctrl → PD 跟踪 ref
