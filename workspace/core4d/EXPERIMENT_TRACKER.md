@@ -34,6 +34,7 @@
 | E026 | 2026-05-07 | Phase 6 | **Sustained Contact (4096samp/24iter)**: bucket直立+持续接触, 但仍是推静止物体; 长horizon(2.4s)反而保守 | 同上 |
 | E027 | 2026-05-07 | Phase 6 | **Partner Force Sweep + desk005**: 接触率不依赖pf强度(均64%); desk005也产生碰触但非搬运 | 同上 |
 | E028 | 2026-05-07 | Phase 7 | **阻尼弹簧 4Case全覆盖**: desk005 z=84%/hand=90%/stable=100% 最佳指标; 但**所有case物体翻转**(orientation不受控); orientation spring/damping均不稳定 | C6 FAIL (视频不像搬运) |
+| E029 | 2026-05-07 | Phase 7 | **Quasi-Kinematic(kp=100)**: pos跟踪改善(box025=0.07m), 但**仍翻转**; chair022 pelvis崩溃(27%); 结论:xfrc_applied无法控制freejoint orientation | FAIL (根本性限制) |
 
 ## 关键指标演进
 

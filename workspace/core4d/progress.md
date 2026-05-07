@@ -2,9 +2,25 @@
 
 ## 当前会话: 2026-05-07
 
-### E028 初步结果: 阻尼弹簧 — 物体开始沿 ref 移动
+### E029 Quasi-Kinematic (kp=100): 仍然翻转
 
-**4 Case 全覆盖结果 (position-only spring, kp=15-30)**:
+- kp=100 + pf=1.0: box025 pos_err=0.07(优秀), desk005=0.13(好), 但**视频仍翻倒**
+- chair022: pelvis 仅 27% stable (物体强拉导致 robot 失稳)
+- **根本结论**: xfrc_applied 位置弹簧无法控制 freejoint 物体 orientation
+
+**Phase 7 最终结论**:
+> 位置弹簧 (E028/E029) 能驱动物体中心沿 ref 移动, 但无法阻止翻转。
+> 这是 xfrc_applied + freejoint 的根本限制, 不是参数问题。
+> 需要使用 MuJoCo joint-level 机制 (actuator 或 equality constraint) 来完整控制 6DOF。
+
+**可行出路**:
+1. 接受 kinematic object (E010 方案): robot body motion 正确, 物体用 ref → 导出 hybrid 轨迹
+2. 用 scene_act.xml 的 position actuator 驱动物体 (需要生成新 scene XML)
+3. 用 weld equality constraint + soft solref 让物体跟踪 mocap body
+
+---
+
+### E028 4Case 全覆盖 (position-only spring)
 
 | Case | kp | stable | z_track | hand<10cm | 视频 |
 |------|-----|--------|---------|-----------|------|
