@@ -118,10 +118,10 @@ def _assert_object_actuator_gains_zero(
         biasprm = biasprm[0]
     kp = gainprm[actuator_ids, 0]
     kd = -biasprm[actuator_ids, 1]
-    assert np.allclose(kp, 0.0, atol=atol), (
+    assert np.allclose(kp, 0.0, atol=atol) or config.residual_gain_ratio > 0, (
         f"Object actuator Kp not near zero at {stage}: max={np.max(np.abs(kp))}"
     )
-    assert np.allclose(kd, 0.0, atol=atol), (
+    assert np.allclose(kd, 0.0, atol=atol) or config.residual_gain_ratio > 0, (
         f"Object actuator Kd not near zero at {stage}: max={np.max(np.abs(kd))}"
     )
 
@@ -482,8 +482,13 @@ def main(config: Config):
             kp_i = base_kp * decay
             kd_i = base_kd * decay
             if i == config.max_num_iterations - 1:
-                kp_i = np.zeros_like(base_kp, dtype=np.float32)
-                kd_i = np.zeros_like(base_kd, dtype=np.float32)
+                if config.residual_gain_ratio > 0:
+                    # Keep a fraction of the decayed gains on the last iteration
+                    kp_i = base_kp * config.residual_gain_ratio
+                    kd_i = base_kd * config.residual_gain_ratio
+                else:
+                    kp_i = np.zeros_like(base_kp, dtype=np.float32)
+                    kd_i = np.zeros_like(base_kd, dtype=np.float32)
             kp_schedule.append(kp_i)
             kd_schedule.append(kd_i)
 

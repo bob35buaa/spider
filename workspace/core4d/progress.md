@@ -2,6 +2,24 @@
 
 ## 当前会话: 2026-05-07
 
+### E029-act (contact_guidance + position actuator): 调参中
+
+**尝试**:
+1. `guidance_decay_ratio=0.0`: gains 第 2 步就归零 → 物体自由 → 翻倒
+2. `decay=1.0 + residual=1.0 + kp=200`: NaN (增益过高)
+3. `decay=1.0 + residual=1.0 + kp=30/rot=5`: 稳定但 pos_err=1.32 (跟踪差)
+
+**根因**: contact_guidance 机制设计用于手部精细接触 (bimanual), 在 CEM 迭代内给 object actuator 发 ctrl。但对 "整个物体被强 PD 驱动" 的场景, 需要更高 gains — 而高 gains + sim_dt=0.017 导致不稳定。
+
+**可能的解决方案**:
+- 降低 sim_dt (如 0.005) 允许更高 gains
+- 使用物体 qpos override (运动学驱动, 但保留碰撞 — 物体不受 robot 力影响)
+- 继续调参寻找 gains 甜点
+
+**状态**: 进行中, 等待决策
+
+---
+
 ### E029 Quasi-Kinematic (kp=100): 仍然翻转
 
 - kp=100 + pf=1.0: box025 pos_err=0.07(优秀), desk005=0.13(好), 但**视频仍翻倒**

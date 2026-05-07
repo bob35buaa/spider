@@ -1,0 +1,44 @@
+# @package _global_
+# E029-act: Contact guidance (object PD actuator) — object follows ref via joint-level PD
+dataset_name: core4d
+task: bucket010_person1
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+scene_name: scene_act
+
+# Contact guidance: use object actuators to drive object along reference
+contact_guidance: true
+guidance_decay_ratio: 1.0  # NO decay — gains stay constant
+residual_gain_ratio: 1.0   # Keep full gains on last CEM iteration
+init_pos_actuator_gain: 100.0
+init_pos_actuator_bias: 20.0
+init_rot_actuator_gain: 10.0
+init_rot_actuator_bias: 5.0
+
+# Hand approach reward (robot maintains contact with moving object)
+hand_approach_rew_scale: 5.0
+hand_approach_sigma: 5.0
+
+# Body tracking
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 1.0
+joint_rew_scale: 3.0
+pos_rew_scale: 3.0
+rot_rew_scale: 0.3
+contact_rew_scale: 0.0
+
+# CEM
+num_samples: 4096
+improvement_threshold: 0.0
+max_num_iterations: 24
+terminate_resample: true
+base_pos_threshold: 0.5
+object_pos_threshold: 0.5
+
+# Output
+viewer: none
+save_video: true
