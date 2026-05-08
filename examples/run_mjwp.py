@@ -474,7 +474,37 @@ def main(config: Config):
         loguru.logger.info("Precomputed body_xpos_ref: shape={}", tuple(body_xpos_ref.shape))
     else:
         body_xpos_ref = torch.zeros((qpos_ref.shape[0], 0, 3), device=config.device, dtype=torch.float32)
-    ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref)
+
+    # E034: precompute hand-object contact mask for hand_approach gating
+    approach_mask_t = None
+    if config.hand_approach_body_ids and config.hand_approach_contact_threshold < float("inf"):
+        obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
+        if obj_body_id != -1 and config.hand_approach_obj_half_extents:
+            half_ext = np.array(config.hand_approach_obj_half_extents)
+            T_mask = qpos_ref.shape[0]
+            approach_mask_np = np.zeros(T_mask, dtype=np.float32)
+            for t in range(T_mask):
+                mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
+                mujoco.mj_kinematics(mj_model, mj_data_ref)
+                obj_pos = mj_data_ref.xpos[obj_body_id]
+                for hid in config.hand_approach_body_ids:
+                    hand_pos = mj_data_ref.xpos[hid]
+                    delta = np.abs(hand_pos - obj_pos)
+                    surf_dist = np.linalg.norm(np.maximum(delta - half_ext, 0))
+                    if surf_dist < config.hand_approach_contact_threshold:
+                        approach_mask_np[t] = 1.0
+                        break
+            approach_mask_t = torch.tensor(approach_mask_np, device=config.device)
+            active_pct = approach_mask_np.mean() * 100
+            loguru.logger.info(
+                "E034 approach_mask: {:.1f}% frames active (threshold={:.2f}m)",
+                active_pct, config.hand_approach_contact_threshold,
+            )
+
+    if approach_mask_t is not None:
+        ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t)
+    else:
+        ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref)
     mj_data.qpos[:] = qpos_ref[0].detach().cpu().numpy()
     mj_data.qvel[:] = qvel_ref[0].detach().cpu().numpy()
     mj_data.ctrl[:] = ctrl_ref[0].detach().cpu().numpy()

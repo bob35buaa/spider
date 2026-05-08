@@ -344,12 +344,15 @@ def get_reward(
 
     TODO: move reward computation to task-specific module
     """
-    # Unpack with backward compatibility (5-tuple legacy or 6-tuple E018)
+    # Unpack with backward compatibility (5-tuple legacy, 6-tuple E018, 7-tuple E034)
+    approach_mask_val = 1.0
     if len(ref) == 5:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref = ref
         body_xpos_ref = None
-    else:
+    elif len(ref) == 6:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref = ref
+    else:
+        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val = ref
     qpos_sim = wp.to_torch(env.data_wp.qpos)
     qvel_sim = wp.to_torch(env.data_wp.qvel)
     N = qpos_sim.shape[0]
@@ -363,7 +366,11 @@ def get_reward(
     qpos_dist = torch.norm(delta_qpos, p=2, dim=1)
     qvel_dist = torch.norm(qvel_sim - qvel_ref, p=2, dim=1)
 
-    qpos_rew = -qpos_dist * 1.0
+    qpos_rew = (
+        config.qpos_reward_scale * torch.exp(-qpos_dist / config.qpos_reward_sigma)
+        if config.use_bounded_qpos_reward
+        else -qpos_dist * 1.0
+    )
     qvel_rew = -config.vel_rew_scale * qvel_dist * 1.0
 
     # contact reward
@@ -460,11 +467,20 @@ def get_reward(
             # Min distance over hands (reward best hand)
             dist_per_hand = surface_dist.norm(dim=-1)  # (N, K_hand)
             min_dist = dist_per_hand.min(dim=1).values  # (N,)
-            hand_approach_rew = config.hand_approach_rew_scale * torch.exp(
+            hand_approach_rew = approach_mask_val * config.hand_approach_rew_scale * torch.exp(
                 -config.hand_approach_sigma * min_dist
             )
 
     reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew
+
+    # E034: stability penalty — penalize when pelvis z drops below threshold
+    stability_penalty = torch.zeros(N, device=config.device)
+    if config.stability_penalty_scale > 0.0:
+        xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+        pelvis_z = xpos_sim[:, 1, 2]  # body 1 is typically pelvis/torso
+        below = torch.clamp(config.stability_penalty_threshold - pelvis_z, min=0.0)
+        stability_penalty = -config.stability_penalty_scale * below
+        reward = reward + stability_penalty
 
     info = {
         "qpos_dist": qpos_dist,

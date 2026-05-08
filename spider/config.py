@@ -93,6 +93,12 @@ class Config:
     )
     hand_approach_body_ids: list[int] = field(default_factory=list)  # resolved at runtime
     hand_approach_obj_half_extents: list[float] = field(default_factory=list)  # resolved at runtime from geom
+    hand_approach_contact_threshold: float = 0.3  # ref hand-obj dist below this activates hand_approach (m)
+    use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
+    qpos_reward_sigma: float = 2.0  # sigma for bounded qpos reward
+    qpos_reward_scale: float = 5.0  # scale for bounded qpos reward
+    stability_penalty_scale: float = 0.0  # penalty when pelvis z < threshold
+    stability_penalty_threshold: float = 0.55  # pelvis z threshold (m)
     contact_guidance: bool = False
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [

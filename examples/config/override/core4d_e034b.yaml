@@ -1,0 +1,80 @@
+# @package _global_
+# E034b: Bounded Qpos with tighter sigma + no contact mask (desk005 always in range)
+dataset_name: core4d
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+scene_name: scene_act
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+physics_dt: 0
+warmup_steps: 0
+
+# Contact guidance (from E027d2)
+contact_guidance: true
+guidance_decay_ratio: 1.0
+residual_gain_ratio: 1.0
+init_pos_actuator_gain: 500.0
+init_pos_actuator_bias: 500.0
+init_rot_actuator_gain: 50.0
+init_rot_actuator_bias: 50.0
+object_pos_actuator_names:
+  - object_pos_x
+  - object_pos_y
+  - object_pos_z
+object_rot_actuator_names:
+  - object_rot_x
+  - object_rot_z
+  - object_rot_y
+improvement_threshold: 0.0
+
+# Timing
+horizon: 0.8
+ctrl_dt: 0.0333333
+knot_dt: 0.1
+
+# Annealing
+first_ctrl_noise_scale: 0.5
+last_ctrl_noise_scale: 1.0
+final_noise_scale: 0.1
+joint_noise_scale: 0.05
+
+# CEM
+max_num_iterations: 32
+num_samples: 1024
+temperature: 1.0
+
+# Bounded qpos reward with TIGHT sigma (σ=0.5 — punish large deviations heavily)
+use_bounded_qpos_reward: true
+qpos_reward_sigma: 0.5
+qpos_reward_scale: 5.0
+
+# Body stability
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 5.0
+
+# Joint tracking
+joint_rew_scale: 1.0
+pos_rew_scale: 1.0
+rot_rew_scale: 0.3
+vel_rew_scale: 0.0
+
+# Hand approach (no mask — desk005 is always in range)
+hand_approach_rew_scale: 3.0
+hand_approach_sigma: 3.0
+hand_approach_contact_threshold: 100.0
+hand_approach_body_names:
+  - left_wrist_yaw_link
+  - right_wrist_yaw_link
+
+# Task-space body tracking
+task_body_rew_scale: 0.0
+
+# No overrides
+object_pd_override: false
+partner_force_scale: 0.0
+
+# Output
+viewer: none
+save_video: true
