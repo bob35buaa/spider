@@ -245,7 +245,7 @@ $$\text{JointAcc} = \frac{1}{T-2} \sum_{t=2}^{T} \frac{1}{J} \sum_{j=1}^{J} \lef
 | **Contact <10cm** | — | **94.8%** | 40.3% | 44.0% | — | — |
 | **Smoothness (rad/s²)** | — | 9.8 | 10.0 | 9.4 | — | — |
 
-**注**: SPIDER/DynaRetarget 论文数值极低因为他们评的是 short-horizon 精确操控 (手部dexterous)，非 full-body locomotion+manipulation。HDMI R013 是最相关的同任务基线。
+**注**: SPIDER (OMOMO, G1 suitcase) 和 DynaRetarget (G1 box kicking) 都是 humanoid loco-manipulation 任务，与我们的 CORE4D 任务直接可比。HDMI R013 (G1 suitcase) 是同管线(SPIDER MJWP)同任务类型的直接基线。MPKPE 差距 6-7x 说明我们的 reward/CEM 配置还有根本性问题待解决。
 
 ---
 
@@ -267,17 +267,19 @@ uv run workspace/core4d/scripts/eval/eval_e035_comprehensive.py <sim.npz> <ref.n
 
 ## 评测标准 (通过/不通过)
 
-基于 HDMI R013 baseline + OmniRetarget 标准:
+基于同类任务论文基线 (DynaRetarget G1 loco-manip, SPIDER G1 OMOMO, HDMI R013):
 
 | 指标 | 合格线 | 优秀线 | 依据 |
 |------|-------|-------|------|
-| MPKPE | < 15 cm | < 8 cm | HDMI baseline = 7.7cm |
-| Joint Err | < 8 deg | < 4 deg | HDMI baseline = 3.2deg |
-| Obj Pos | < 15 cm | < 6 cm | HDMI baseline = 5.4cm |
+| MPKPE | < 15 cm | < 5 cm | DynaRetarget=3.57cm, HDMI=7.72cm, SPIDER OMOMO=0.83cm(joints only) |
+| Joint Err | < 5 deg | < 3 deg | HDMI=3.22deg, SPIDER=0.83deg |
+| Root Pos | < 15 cm | < 8 cm | HDMI=7.17cm |
+| Obj Pos | < 12 cm | < 6 cm | HDMI=5.39cm, DynaRetarget=8.81cm |
+| Obj Ori | < 10 deg | < 5 deg | HDMI=4.28deg, DynaRetarget=6.3deg |
 | Stability >0.60m | > 90% | > 95% | 无摔倒 |
-| Contact Preservation | > 80% | > 95% | OmniRetarget = 96% |
-| Penetration Duration | < 5% | < 1% | OmniRetarget = 0% |
-| Foot Skating Duration | < 10% | < 2% | OmniRetarget = 0% |
+| Contact Preservation <10cm | > 80% | > 95% | OmniRetarget=96%(物理碰撞) |
+| Penetration Duration | < 5% | < 1% | OmniRetarget=0% |
+| Foot Skating Duration | < 10% | < 2% | OmniRetarget=0% |
 
 **当前 E035 desk005 状态**:
 - MPKPE: 47.9cm ❌ (合格线 15cm)
