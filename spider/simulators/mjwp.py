@@ -612,6 +612,16 @@ def get_reward(
                 obj_quat_ref = qpos_ref[-4:].unsqueeze(0).repeat(N, 1)
                 rot_err = (quat_sub(obj_quat_sim, obj_quat_ref) ** 2).sum(dim=-1)
                 task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+        elif nq_obj == 6:
+            obj_pos_sim = qpos_sim[:, -6:-3]
+            obj_pos_ref = qpos_ref[-6:-3].unsqueeze(0)
+            pos_err = ((obj_pos_sim - obj_pos_ref) ** 2).sum(dim=-1)
+            task_obj_rew = task_obj_rew - config.task_obj_pos_rew_scale * pos_err
+            if config.task_obj_rot_rew_scale > 0.0:
+                obj_euler_sim = qpos_sim[:, -3:]
+                obj_euler_ref = qpos_ref[-3:].unsqueeze(0)
+                rot_err = ((obj_euler_sim - obj_euler_ref) ** 2).sum(dim=-1)
+                task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
 
     # E018: interaction reward (Harmanoid Eq.15) — match relative offsets
     # between pairs of bodies in task_body_ids
