@@ -43,6 +43,7 @@
 | E027d | 2026-05-08 | Phase 8 | **HDMI Physics+Debug**: 验证CUDA graph gains有效; 根因=object ctrl未重置为ref+noise_scale=0; 修复后仍需debug rollout内部state reset | 调试中 |
 | E027d2 | 2026-05-08 | Phase 8 | **Body-Frame Fix+Commit Gain Restore**: 3个bug(slide坐标系/commit归零/预转换数据); box025=100%stable+1.46m; desk005=87%+1.54m; bucket010=100%+0.92m; chair022=81%+0.76m; **首次实现非anchored locomotion+manipulation** | **突破** |
 | E032a | 2026-05-08 | Phase 9 | **Hand Approach+Reward Sweep**: HA=3提升contact(desk 9→83%, bucket 36→63%); task_body有害; base=10平衡stability/contact; PD sweep: 降低无效 | 完成 |
+| E033 | 2026-05-08 | Phase 9 | **desk005 σ sweep+CEM budget**: σ=1.0达95%stable+91%<15cm(目标达成); 增加iter/horizon/samples反而恶化stability; tradeoff是根本性的 | **stable目标达成** |
 
 ## 关键指标演进
 
