@@ -1,6 +1,6 @@
 # E037: Contact Mask-Gated Reward — HDMI-Style Proximity
 
-## 状态: Contact 恢复失败 — mask-gated reward 信号太弱，Contact 基本无改善
+## 状态: Contact 恢复失败 — gain=2.0 信号相对 tracking(3.5) 太弱，即使修复 baseline 也无效
 
 ## 背景
 
@@ -112,6 +112,43 @@ gain=2.0 时 max reward 等于 baseline → 无效。如果 baseline 不改，�
 当前取 min_dist (best hand)。如果两只手都需要接近物体，应该用 mean_dist 或 per-hand reward。
 
 **推荐**: 方向 A — 最小改动，修正 reward 设计缺陷。
+
+## E037b: Baseline 修复结果 — 仍然无效
+
+修复 formula 为 `contact_mask_rew = mask * gain * exp(-dist/sigma)` (non-contact=0)。
+
+### E037b 结果
+
+| Case | MPKPE | Stability>0.6 | Contact<10cm | Contact<15cm |
+|------|-------|---------------|-------------|-------------|
+| desk005 | 1.3cm | 100% | **6.9%** | 16.4% |
+| box025 | 1.4cm | 100% | **49.2%** | 79.0% |
+| bucket010 | 1.3cm | 100% | **3.2%** | — |
+
+### 对比 E036→E037→E037b
+
+| Case/Metric | E036 | E037 | E037b |
+|-------------|------|------|-------|
+| desk005 <10cm | 6.9% | 10.3% | 6.9% |
+| box025 <10cm | 55.6% | 51.6% | 49.2% |
+| bucket010 <10cm | 2.4% | 4.8% | 3.2% |
+
+**结论**: baseline 修复无效。E037b 甚至略差于 E037 (constant baseline 版本在接触帧提供了一个"惩罚"让 CEM 至少不远离物体)。
+
+### 真正的根因
+
+**gain=2.0 在 sigma=0.3m 下信号太弱**：
+- 手距物体 surface 20cm 时: reward = 2.0 * exp(-0.2/0.3) = 2.0 * 0.51 = **1.03**
+- 手距物体 surface 30cm 时: reward = 2.0 * exp(-0.3/0.3) = 2.0 * 0.37 = **0.74**
+- Body tracking 每帧 max: **3.5**
+
+CEM 在 horizon (24 steps) 内累加 reward。contact mask 只在 ~20-40% 帧激活 → contact 对总 reward 的贡献 ≈ 0.7 * 0.3 * 24 = **5**。而 tracking 贡献 ≈ 3.5 * 24 = **84**。Contact 只占总 reward 的 ~6% → CEM 完全忽略。
+
+### 下一步方向 (E038)
+
+1. **大幅提高 gain 到 3.5** (与 tracking 平齐) + **降低 sigma 到 0.15m** (更陡峭)
+2. 或者: **换策略** — 不用 CEM reward 来驱动 contact，而是用 contact_guidance 的 PD 控制器直接驱动手到物体上。类似 object 的 PD override，对 hand 也做 PD tracking。
+3. 或者: **在 tracking reward 内部偏置** — 提高 hand/wrist 在 local_frame_rew 中的权重，利用 body tracking 本身把手送到 ref 位置（ref 中手在物体上 → tracking 好的话手自然在物体上）。
 
 ## 配置
 
