@@ -97,6 +97,7 @@ class Config:
     # E037: contact mask-gated reward (HDMI-style)
     contact_mask_rew_scale: float = 0.0  # gain; 0.0 = disabled
     contact_mask_rew_sigma: float = 0.3  # exp kernel bandwidth (meters), HDMI default
+    contact_mask_rew_baseline: float = 0.0  # reward on non-contact frames (HDMI uses 1.0)
     use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
     qpos_reward_sigma: float = 2.0  # sigma for bounded qpos reward
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward

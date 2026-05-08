@@ -85,6 +85,7 @@ task_obj_rot_rew_scale: 1.0
 # === E037: Contact mask-gated reward (NEW) ===
 contact_mask_rew_scale: 2.0
 contact_mask_rew_sigma: 0.3
+contact_mask_rew_baseline: 0.0
 
 task_body_rew_scale: 0.0
 object_pd_override: false

@@ -690,11 +690,12 @@ def get_reward(
             surface_dist = torch.clamp(delta - half_ext, min=0.0)
             dist_per_hand = surface_dist.norm(dim=-1)  # (N, K)
             min_dist = dist_per_hand.min(dim=1).values  # (N,)
-            # mask=1 → exp proximity reward; mask=0 → no reward (CEM ignores)
+            # mask=1 → exp proximity reward; mask=0 → baseline (CEM ignores)
             gain = config.contact_mask_rew_scale
             mask = approach_mask_val  # scalar or (N,) from ref[6], per-timestep
             proximity = gain * torch.exp(-min_dist / config.contact_mask_rew_sigma)
-            contact_mask_rew = mask * proximity
+            baseline = config.contact_mask_rew_baseline
+            contact_mask_rew = mask * proximity + (1.0 - mask) * baseline
 
     reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew + contact_mask_rew
 
