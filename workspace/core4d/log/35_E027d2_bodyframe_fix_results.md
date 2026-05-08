@@ -76,6 +76,6 @@ physics_dt: 0  # 使用默认
 ## 下一步
 
 1. 视频验证所有 4 case（特别是 chair022 的大旋转问题）
-2. 提高 chair022 的 rot gains 或使用 per-case euler convention 调优
-3. 导出 hybrid 轨迹到 Holosoma RL
+2. 提高 chair022 的 rot gains 或使用 per-case euler convention 调优（暂时不考虑死磕chair022，先把其他3个case做好）
+3. 导出 hybrid 轨迹到 Holosoma RL（暂时也不考虑）
 4. 尝试 HDMI physics_dt=0.002 看是否进一步改善
