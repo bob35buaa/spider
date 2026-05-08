@@ -223,6 +223,7 @@ class Config:
     wait_on_finish: bool = True  # block after optimization to keep viewer alive
     rerun_spawn: bool = False
     save_video: bool = True
+    video_output_path: str = ""  # custom video output path; empty = default (output_dir/visualization_mjwp_act.mp4)
     save_info: bool = True
     save_rerun: bool = False
     save_metrics: bool = True

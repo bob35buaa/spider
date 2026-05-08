@@ -35,6 +35,7 @@ run_experiment() {
         contact_mask_rew_scale=$gain \
         contact_mask_rew_sigma=$sigma \
         contact_mask_rew_baseline=$baseline \
+        video_output_path="$RESULTS_DIR/${name}_box025.mp4" \
         > "$LOGS_DIR/${name}_box025.log" 2>&1
     cp "$OUTPUT_DIR/trajectory_mjwp_act.npz" "$RESULTS_DIR/${name}_box025.npz"
     echo "[$(date '+%H:%M:%S')] Finished $name"

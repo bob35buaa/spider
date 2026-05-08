@@ -14,6 +14,7 @@ Date: 2025-08-11
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from dataclasses import fields
@@ -923,7 +924,11 @@ def main(config: Config):
 
     # save video
     if config.save_video and len(images) > 0:
-        video_path = f"{config.output_dir}/visualization_mjwp{'_act' if config.contact_guidance else ''}.mp4"
+        if config.video_output_path:
+            video_path = config.video_output_path
+        else:
+            video_path = f"{config.output_dir}/visualization_mjwp{'_act' if config.contact_guidance else ''}.mp4"
+        os.makedirs(os.path.dirname(video_path), exist_ok=True)
         imageio.mimsave(
             video_path,
             images,
