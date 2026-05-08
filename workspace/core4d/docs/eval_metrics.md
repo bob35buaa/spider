@@ -180,17 +180,19 @@ if foot_z < 0.05:  # on ground
 
 ### E1. Contact Preservation — 接触保持率
 
-**来源**: OmniRetarget Table II
+**来源**: OmniRetarget Table II (他们用 MuJoCo 物理碰撞检测，我们用表面距离近似)
 
 **定义**: 在 ref 标记为"应该接触"的帧中，sim 实际接触的比例
 
-$$\text{ContactPres} = \frac{|\{t : t \in T_{\text{desired}} \wedge d^{\text{surf}}_{t} < \delta \}|}{|T_{\text{desired}}|}$$
+$$\text{ContactPres}(\delta) = \frac{|\{t : t \in T_{\text{desired}} \wedge d^{\text{surf}}_{t} < \delta \}|}{|T_{\text{desired}}|}$$
 
-- $T_{\text{desired}}$: ref 中 hand-object 距离 < 0.15m 的帧集合 (标记为"应该接触")
+- $T_{\text{desired}}$: ref 中 hand-object surface 距离 < 0.15m 的帧集合
 - $d^{\text{surf}}_t$: sim 中 hand-to-object-surface 距离
-- $\delta$: 接触阈值 (我们使用 0.10m)
+- $\delta$: 接触判定阈值
 
-**与 OmniRetarget 的区别**: OmniRetarget 用预标注的 contact label; 我们从 ref FK 推断 desired contact 帧。
+**报告多阈值**: δ = 10cm, 5cm, 3cm, 1cm
+
+**注意**: OmniRetarget 使用 MuJoCo collision contact (物理接触)，我们用 surface distance 近似。严格来说我们的 <1cm 最接近物理接触。
 
 ### E2. Sustained Contact — 最长连续接触
 
@@ -227,18 +229,21 @@ $$\text{JointAcc} = \frac{1}{T-2} \sum_{t=2}^{T} \frac{1}{J} \sum_{j=1}^{J} \lef
 
 ## 基线对比表
 
-| 指标 | HDMI R013 (suitcase) | E032a (desk005) | E035 (desk005) | SPIDER论文(OMOMO) | DynaRetarget |
-|------|---------------------|-----------------|----------------|-----------------|-------------|
-| **MPKPE (cm)** | **7.72** | 31.35 | 47.92 | — | 3.57 |
-| **Joint Err (deg)** | **3.22** | 11.71 | 10.26 | 0.83 | — |
-| **EEF Pos (cm)** | **7.88** | 38.48 | 48.36 | 0.20 | — |
-| **EEF Ori (deg)** | **5.46** | — | 55.19 | 0.17 | — |
-| **Root Pos (cm)** | **7.17** | 26.49 | 47.43 | — | — |
-| **Root Ori (deg)** | **2.30** | — | 18.71 | — | — |
-| **Obj Pos (cm)** | **5.39** | 16.37 | 22.55 | 0.18 | 8.81 |
-| **Obj Ori (deg)** | **4.28** | 6.14 | 14.01 | 0.06 | 6.3 |
-| **Stability >0.60m** | 84.8% | 77.6% | **100%** | — | — |
-| **Pelvis z min** | 0.300m | 0.223m | **0.657m** | — | — |
+| 指标 | HDMI R013 (suitcase) | E035 desk005 | E035 box025 | E035 bucket010 | SPIDER论文 | DynaRetarget |
+|------|---------------------|-------------|-------------|---------------|-----------|-------------|
+| **MPKPE (cm)** | **7.72** | 47.92 | 26.17 | 36.67 | — | 3.57 |
+| **Joint Err (deg)** | **3.22** | 10.26 | 11.81 | 9.70 | 0.83 | — |
+| **EEF Pos (cm)** | **7.88** | 48.36 | 36.38 | — | 0.20 | — |
+| **EEF Ori (deg)** | **5.46** | 55.19 | 62.36 | — | 0.17 | — |
+| **Root Pos (cm)** | **7.17** | 47.43 | 21.93 | 34.54 | — | — |
+| **Root Ori (deg)** | **2.30** | 18.71 | 6.46 | — | — | — |
+| **Obj Pos (cm)** | **5.39** | 22.55 | 16.80 | 15.05 | 0.18 | 8.81 |
+| **Obj Ori (deg)** | **4.28** | 14.01 | 10.74 | — | 0.06 | 6.3 |
+| **Stability >0.60m** | 84.8% | **100%** | **100%** | **100%** | — | — |
+| **Penetration** | — | **0%** | **0%** | **0%** | — | 0% (OmniRet) |
+| **Foot Skating** | — | 10.9% | 27.2% | 15.7% | — | 0% (OmniRet) |
+| **Contact <10cm** | — | **94.8%** | 40.3% | 44.0% | — | — |
+| **Smoothness (rad/s²)** | — | 9.8 | 10.0 | 9.4 | — | — |
 
 **注**: SPIDER/DynaRetarget 论文数值极低因为他们评的是 short-horizon 精确操控 (手部dexterous)，非 full-body locomotion+manipulation。HDMI R013 是最相关的同任务基线。
 
