@@ -671,7 +671,32 @@ def get_reward(
                 -config.hand_approach_sigma * min_dist
             )
 
-    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew
+    # E037: contact mask-gated reward — HDMI-style proximity with mask gate
+    contact_mask_rew = torch.zeros(N, device=config.device)
+    if config.contact_mask_rew_scale > 0.0 and config.hand_approach_body_ids:
+        obj_body_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
+        if obj_body_id != -1 and config.hand_approach_obj_half_extents:
+            xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+            hand_pos = xpos_sim[:, config.hand_approach_body_ids]  # (N, K, 3)
+            obj_pos = xpos_sim[:, obj_body_id : obj_body_id + 1]  # (N, 1, 3)
+            half_ext = torch.tensor(
+                config.hand_approach_obj_half_extents,
+                device=config.device,
+                dtype=hand_pos.dtype,
+            )
+            delta = torch.abs(hand_pos - obj_pos)
+            surface_dist = torch.clamp(delta - half_ext, min=0.0)
+            dist_per_hand = surface_dist.norm(dim=-1)  # (N, K)
+            min_dist = dist_per_hand.min(dim=1).values  # (N,)
+            # mask=1 → exp proximity reward; mask=0 → constant (no gradient for CEM)
+            gain = config.contact_mask_rew_scale
+            mask = approach_mask_val  # scalar or (N,) from ref[6], per-timestep
+            proximity = gain * torch.exp(-min_dist / config.contact_mask_rew_sigma)
+            contact_mask_rew = mask * proximity + (1.0 - mask) * gain
+
+    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew + contact_mask_rew
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
     stability_penalty = torch.zeros(N, device=config.device)

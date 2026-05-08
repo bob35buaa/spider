@@ -94,6 +94,9 @@ class Config:
     hand_approach_body_ids: list[int] = field(default_factory=list)  # resolved at runtime
     hand_approach_obj_half_extents: list[float] = field(default_factory=list)  # resolved at runtime from geom
     hand_approach_contact_threshold: float = 0.3  # ref hand-obj dist below this activates hand_approach (m)
+    # E037: contact mask-gated reward (HDMI-style)
+    contact_mask_rew_scale: float = 0.0  # gain; 0.0 = disabled
+    contact_mask_rew_sigma: float = 0.3  # exp kernel bandwidth (meters), HDMI default
     use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
     qpos_reward_sigma: float = 2.0  # sigma for bounded qpos reward
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward
