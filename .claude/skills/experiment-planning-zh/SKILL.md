@@ -158,8 +158,27 @@ if 训练/实验失败:
 |---------|---------|------|
 | 训练脚本 | `workspace/{exp_name}/scripts/train/` | `train_{exp_name}_{version}.sh` |
 | 评估脚本 | `workspace/{exp_name}/scripts/eval/` | `eval_{exp_name}_{version}.sh` |
+| **远程并行脚本** | `workspace/{exp_name}/scripts/` | `run_{exp_id}_remote.sh` |
 
 在创建 log 文件时，若对应脚本不存在，**必须先创建脚本再记录命令**。脚本内容需包含：运行命令、关键参数注释、GPU 参数占位符。
+
+### 8b. 远程并行执行规则
+
+当需要并行跑多个实验时，使用远程 2-GPU 机器加速。详见 [remote-execution.md](remote-execution.md)。
+
+**触发条件**: 需要运行 ≥3 个独立实验 (不同 case / 不同参数)。
+
+**标准流程**:
+1. 编写 `run_{exp_id}_remote.sh` — GPU0/GPU1 分配，视频路径独立
+2. `git push` 同步代码到远程
+3. `ssh spider-remote` + tmux 启动
+4. 监控完成后 `scp` 结果回本地
+5. 本地评估 + 离线渲染可视化
+
+**并行分配策略**:
+- 本地跑 1 个最关键的实验 (需要快速迭代的)
+- 远程跑 N-1 个 (按 GPU 数均分，同 GPU 串行)
+- 运行日志保存到 `logs/{exp_id}/`，结果到 `workspace/{exp_name}/results/{exp_id}/`
 
 ### 9. 可视化强制规则
 
@@ -273,6 +292,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-experiment.sh v5.0 new_feature
 - [templates/experiment_plan.md](templates/experiment_plan.md) — 实验计划模板
 - [templates/experiment_log.md](templates/experiment_log.md) — 实验结果模板
 - [templates/progress.md](templates/progress.md) — 会话进度日志模板
+
+## 参考文档
+
+- [remote-execution.md](remote-execution.md) — 远程多卡并行执行指南
 
 ## 脚本
 
