@@ -1,6 +1,6 @@
 # E035: Local-Frame Body Tracking — HDMI 核心设计移植
 
-## 状态: desk005 稳定性+接触质量均为历史最佳 ★★★
+## 状态: 稳定性解决，但 body tracking 远未达标 (MPKPE=48cm, 目标<15cm)
 
 ## 背景
 
@@ -16,88 +16,173 @@ HDMI 不摔的核心是 **local-frame body tracking**：在 pelvis yaw-only 坐�
 | `examples/run_mjwp.py` | 预计算全 body xpos(T,nbody,3) + xquat(T,nbody,4), 8-tuple ref_data |
 | `examples/config/override/core4d_e035.yaml` | 新配置 |
 
-## 严格评估结果 (FK xpos + 多阈值)
+## 全面评估结果 (Paper-Standard Metrics)
 
-### E035 vs E034d vs E032a — desk005
+评估方法: `workspace/core4d/scripts/eval/eval_comprehensive.py`
+指标定义: `workspace/core4d/docs/eval_metrics.md`
 
-| 指标 | E032a | E034d | **E035** |
-|------|-------|-------|---------|
-| pelvis_z min | 0.223m (倒地) | 0.552m (严重前倾) | **0.657m** |
-| >0.70m | 69.0% | 86.2% | **90.9%** |
-| >0.60m | 77.6% | 96.6% | **100%** |
-| 最长不稳段(<0.60m) | 52帧/0.87s | 7帧/0.12s | **无** |
-| <10cm contact | 82.8% | 79.3% | **94.4%** |
-| <5cm contact | 57.8% | 37.9% | **40.1%** |
-| <1cm contact | 24.6% | 0% | **14.2%** |
+### E035 vs HDMI R013 基线 vs 论文
 
-### E035 3-case 完整结果
+| 指标 | HDMI R013 | E035 desk005 | E035 box025 | E035 bucket010 | DynaRetarget | 合格线 |
+|------|-----------|-------------|-------------|---------------|-------------|-------|
+| **MPKPE (cm)** | **7.72** | 47.92 | 26.17 | 36.67 | 3.57 | <15 |
+| **Joint Err (deg)** | **3.22** | 10.26 | 11.81 | 9.70 | — | <5 |
+| **EEF Pos (cm)** | **7.88** | 48.36 | 36.38 | — | — | — |
+| **EEF Ori (deg)** | **5.46** | 55.19 | 62.36 | — | — | — |
+| **Root Pos (cm)** | **7.17** | 47.43 | 21.93 | 34.54 | — | <15 |
+| **Root Ori (deg)** | **2.30** | 18.71 | 6.46 | — | — | — |
+| **Obj Pos (cm)** | **5.39** | 22.55 | 16.80 | 15.05 | 8.81 | <12 |
+| **Obj Ori (deg)** | **4.28** | 14.01 | 10.74 | — | 6.3 | <10 |
+| **Stability >0.60m** | 84.8% | **100%** | **100%** | **100%** | — | >90% |
+| **Penetration** | — | **0%** | **0%** | **0%** | — | <5% |
+| **Foot Skating** | — | 10.9% | 27.2% | 15.7% | — | <10% |
+| **Contact <10cm** | — | **94.8%** | 40.3% | 44.0% | — | >80% |
+| **Smoothness (rad/s²)** | — | 9.8 | 10.0 | 9.4 | — | — |
 
-| Case | pelvis_min | >0.70m | >0.60m | 不稳定段 | <10cm | <5cm | <1cm | obj_disp |
-|------|-----------|--------|--------|---------|-------|------|------|----------|
-| **desk005** | 0.657m | 90.9% | 100% | 无 | **94.4%** | 40.1% | 14.2% | 1.46m |
-| **box025** | 0.708m | 100% | 100% | 无 | 16.5% | 12.5% | 10.9% | 1.48m |
-| **bucket010** | 0.711m | 100% | 100% | 无 | 0% | 0% | 0% | 0.88m |
+**注**: DynaRetarget (G1 box kicking) 和 SPIDER OMOMO (G1 suitcase) 都是 humanoid loco-manipulation 任务，与我们直接可比。差距 6-13x 说明 reward/CEM 配置有根本性问题。
+
+### desk005 详细分解
+
+```
+  A. BODY TRACKING
+    MPKPE (all bodies):       47.92 ± 21.13 cm
+    Joint Angle Error:        10.26 ± 5.26 deg
+    EEF Position Error:       48.36 ± 15.20 cm
+    EEF Orientation Error:    55.19 ± 27.14 deg
+
+  B. ROOT TRACKING
+    Root Position Error:      47.43 ± 23.69 cm
+    Root Orientation Error:   18.71 ± 25.02 deg
+
+  C. OBJECT TRACKING
+    Obj Position Error:       22.55 ± 11.52 cm
+    Obj Orientation Error:    14.01 ± 7.50 deg
+
+  D. PHYSICAL PLAUSIBILITY
+    Pelvis z: min=0.660m, mean=0.775m
+    Stability >0.60m: 100%
+    Penetration: 0%
+    Foot Skating: 10.9%
+
+  E. INTERACTION QUALITY
+    Mean hand-obj surface dist: 5.32 cm
+    <10cm: 94.8% (sustained: 106 frames / 3.53s)
+    < 5cm: 39.7% (sustained: 39 frames / 1.30s)
+    < 3cm: 23.3% (sustained: 19 frames / 0.63s)
+    < 1cm: 14.7% (sustained: 17 frames / 0.57s)
+    Contact Preservation (ref desired → sim <10cm): 99.0%
+
+  F. SMOOTHNESS
+    Mean |joint acceleration|: 9.8 rad/s²
+```
 
 ## 可视化验证
 
-### desk005 ★★★ 历史最佳
+### desk005
 
 | 帧 | 时间 | 观察 |
 |------|------|------|
 | 0 (0s) | 起始 | ref/sim对齐良好，站立姿态正常 |
-| 46 (0.8s) | 行走 | sim跟着ref走路，**全程直立**，手自然下垂——与E034d的t=0.8s开始前倾形成鲜明对比 |
-| 92 (1.5s) | 中前段 | sim站在桌旁，**手搭在桌面上**——姿态自然，略微弯腰但稳定。这正是E034d摔倒的时刻，E035完全没问题 |
-| 139 (2.3s) | 中段 | sim走在桌旁，手触桌面——**行走+接触同时进行**，姿态合理 |
-| 185 (3.1s) | 后段 | sim弯腰趴在桌面上，手贴桌——前倾较大但pelvis仍>0.70m |
-| 231 (3.9s) | 结束 | sim站在桌旁，手搭桌面——稳定收尾 |
+| 46 (0.8s) | 行走 | sim跟着ref走路，全程直立——与E034d的t=0.8s开始前倾形成对比 |
+| 92 (1.5s) | 中前段 | sim站在桌旁，手搭在桌面上——姿态自然。这是E034d摔倒的时刻 |
+| 139 (2.3s) | 中段 | sim走在桌旁，手触桌面——行走+接触同时进行 |
+| 185 (3.1s) | 后段 | sim弯腰趴在桌面上，手贴桌——前倾较大但pelvis>0.70m |
+| 231 (3.9s) | 结束 | sim站在桌旁，手搭桌面——稳定 |
 
-**关键对比**: E034d 在 t=1.0s 机器人几乎水平摔倒(pelvis=0.55m)；E035 同一时刻机器人**稳定站立手搭桌面**(pelvis=0.68m)。这就是 local-frame tracking 的价值——CEM 不再被迫把 pelvis 拉回 ref 位置。
+**关键问题**: 视觉上机器人稳定且手在桌面，但**整体位移/朝向和ref差距极大** (Root Pos=47cm)。机器人在"做自己的事"而不是跟踪ref的locomotion轨迹。
 
 ### box025
 
 | 帧 | 时间 | 观察 |
 |------|------|------|
-| 0 (0s) | 起始 | ref/sim对齐，手举起 |
-| 50 (0.8s) | 弯腰 | ref/sim都弯腰趴在箱顶，sim手搭箱面——**姿态匹配良好** |
-| 99 (1.7s) | 中段 | ref站在箱侧；sim也站着，手伸向箱面——稳定 |
-| 149 (2.5s) | 后中段 | ref站在箱后推箱；sim站立手搭箱顶——**全程直立** |
-| 198 (3.3s) | 后段 | ref弯腰趴箱顶；sim也弯腰趴在箱顶——**姿态跟踪好** |
-| 247 (4.1s) | 结束 | ref手举起站立；sim站在箱旁手伸向箱面——姿态偏离但稳定 |
-
-**评价**: 全程100% >0.70m，无任何不稳定。前半段(0-1.6s)有63% <10cm contact。后半段物体移走导致contact下降——几何限制。比E034d的后段失协调好很多。
+| 0 (0s) | 起始 | ref/sim对齐 |
+| 50 (0.8s) | 弯腰 | ref/sim都弯腰趴箱顶，sim手搭箱面——姿态匹配 |
+| 99 (1.7s) | 中段 | ref站在箱侧；sim也站着手伸向箱面——稳定 |
+| 149 (2.5s) | 后中段 | ref推箱行走；sim站立手搭箱顶 |
+| 198 (3.3s) | 后段 | ref弯腰趴箱顶；sim也弯腰趴箱顶——姿态跟踪好 |
+| 247 (4.1s) | 结束 | ref手举起；sim站在箱旁——姿态偏离 |
 
 ### bucket010
 
 | 帧 | 时间 | 观察 |
 |------|------|------|
-| 0 (0s) | 起始 | ref/sim对齐，桶在左侧 |
-| 50 (0.8s) | 弯腰 | ref弯腰看桶；sim也弯腰——**姿态匹配** |
-| 100 (1.7s) | 中段 | ref站在桶旁；sim也站着——桶已被PD推走，手够不到 |
-| 150 (2.5s) | 搬运 | ref站在桶旁搂桶；sim也站着但桶已远 |
-| 200 (3.3s) | 后段 | ref弯腰搂桶；sim也弯腰——姿态跟踪好但桶太远 |
-| 249 (4.2s) | 结束 | ref站着转身；sim弯腰看桶——稳定 |
+| 0-50 | 0-0.8s | ref/sim对齐，弯腰匹配 |
+| 100-150 | 1.7-2.5s | sim站着，桶被PD推走距离太远 |
+| 200-249 | 3.3-4.2s | sim弯腰，姿态跟踪好但桶太远 |
 
-**评价**: 全程100% >0.70m，完美稳定。Contact 为0%——桶被PD actuator推走后距离太远(mean_surf=0.99m)，这是物体PD跟踪的问题不是reward的问题。
+## Claims 验证 (修正)
 
-## Claims 验证
+1. ✅ **C1**: desk005 pelvis_z > 0.657m, >0.70m = 90.9% ≥ 90% — 达成
+2. ✅ **C2**: 3/3 cases 无不稳定段 — 达成
+3. ✅ **C3**: desk005 contact<10cm = 94.4% ≥ 70% — 达成
+4. ❌ **隐含 C4**: body tracking 精度 — MPKPE=48cm，远超合格线(15cm)，**未达成**
 
-1. ✅ **C1**: desk005 全程 pelvis_z > 0.657m，>0.70m = 90.9% ≥ 90% — **达成**
-2. ✅ **C2**: 3/3 cases (chair未跑) 无任何不稳定段 (<0.60m = 0 帧) — **达成**
-3. ✅ **C3**: desk005 contact<10cm = 94.4% ≥ 70% — **大幅超过目标**
+## 根因分析: 为什么 HDMI MPKPE=7.7cm 而 E035=48cm?
 
-## 核心发现
+### 对比 HDMI vs E035 的 reward 结构
 
-### Local-frame tracking 同时提升稳定性和接触质量
+| 差异 | HDMI | E035 |
+|------|------|------|
+| W_TRACK | 0.5 | 0.5 (相同) |
+| hand_approach | **无** (用 contact mask 门控的 rew_contact) | **scale=5, σ=3, 全程激活** |
+| object tracking | rew_obj_pos + rew_obj_ori (直接跟踪物体全局位姿) | **关闭** (task_body_rew_scale=0) |
+| contact reward | **mask 门控** (只在 ref 标记接触帧激活, gain=5) | 全程激活 |
+| stability_penalty | **无** (不需要) | scale=30, threshold=0.55 |
 
-这是违反直觉的——之前E032a/E033/E034都显示stability和contact是tradeoff关系。Local-frame tracking打破了这个tradeoff：
+### 核心问题: hand_approach 全程激活 + 贡献过大
 
-- **为什么更稳定**: CEM不再被迫把pelvis拉回ref的全局位置（这个过程会导致失衡），而是在local frame中优化body姿态
-- **为什么contact更好**: CEM节省了"拉回pelvis"的effort，可以把更多control budget用在"手靠近物体"上
-- **HDMI分析(log/39)的假设完全验证**: local-frame是HDMI不摔的核心原因
+HDMI 的 `rew_contact` 有两个关键限制:
+1. **Contact mask 门控**: 只在 ref 标记为"接触"的帧激活
+2. **在 object_tracking 组内**: 与 rew_obj_pos + rew_obj_ori 并列，总贡献 max≈3.0
 
-### 性能代价
+E035 的 `hand_approach_rew`:
+1. **全程激活** (threshold=100m → 永远开启)
+2. **scale=5, σ=3**: 当手距物体 10cm 时 reward ≈ 5*exp(-0.3)=3.7
+3. **独立于 tracking 之外**: 直接加到 total reward
 
-E035 运行时间 ~735s vs E034d ~367s — **约2倍慢**。原因是每步需要从 GPU 读 xpos+xquat (N, nbody, 3/4) 做 local-frame 计算。可以通过将helper移到warp kernel优化。
+**计算**:
+- E035 tracking max = 0.5 * 7 = 3.5 (body tracking 7 terms)
+- E035 hand_approach max = 5.0 (当手贴物体时)
+- **hand_approach 贡献 > tracking 贡献** → CEM 主要优化 hand_approach!
+
+而 HDMI:
+- tracking max = 3.5
+- object_tracking max ≈ 3.0 (含 contact mask 门控)
+- **tracking 和 object 相当** → CEM 同时优化两者
+
+### 为什么 HDMI 不需要 stability_penalty
+
+因为 HDMI 的 contact 有 mask 门控，不会在不该接触的时候拉手 → 不会导致前倾 → 不需要 penalty 来补救。
+
+## 下一步计划 (E036)
+
+### 方向: 对齐 HDMI reward 结构
+
+1. **关闭/大幅降低 hand_approach_rew** — 它是造成 body tracking 退化的主因
+2. **用 HDMI 风格的 rew_contact 替代** — contact mask 门控 + 在 object_tracking 组内
+3. **开启 object global tracking** — rew_obj_pos + rew_obj_ori
+4. **去掉 stability_penalty** — 如果 contact 有 mask，不应该需要
+
+具体参数对齐:
+```yaml
+# E036 预期配置
+use_local_frame_reward: true
+local_frame_w_track: 0.5  # 保持
+hand_approach_rew_scale: 0.0  # 关闭！
+stability_penalty_scale: 0.0  # 关闭（不需要了）
+# 新增: object global tracking (HDMI 风格)
+task_obj_pos_rew_scale: 1.0  # rew_obj_pos
+task_obj_rot_rew_scale: 1.0  # rew_obj_ori
+# TODO: 添加 contact mask 门控的 rew_contact
+```
+
+**预期**: 去掉 hand_approach 后 CEM 会全力优化 body tracking → MPKPE 大幅下降。Contact 可能退化，但之后可以用 mask-gated contact 恢复。
+
+### 验证目标
+
+- MPKPE < 20cm (从48cm下降 >50%)
+- Joint Err < 8deg
+- Stability >0.60m 维持 >90%
 
 ## 结果路径
 
@@ -107,12 +192,5 @@ E035 运行时间 ~735s vs E034d ~367s — **约2倍慢**。原因是每步需�
 | box025 | `workspace/core4d/results/E035/E035_box025.{npz,mp4}` |
 | bucket010 | `workspace/core4d/results/E035/E035_bucket010.{npz,mp4}` |
 | 配置 | `examples/config/override/core4d_e035.yaml` |
-| 计划 | `workspace/core4d/plan/41_E035_local_frame_tracking_plan.md` |
-| 评估脚本 | `workspace/core4d/scripts/eval/eval_e034_rigorous.py` |
-
-## 下一步
-
-1. **desk005 质量已足够用于 RL 训练导出** — 可以开始 hybrid export
-2. **box025 contact 可优化** — 前半段63% <10cm，后半段物体移走是几何限制
-3. **bucket010/chair022 contact 为0%** — 物体PD推得太远，需要调整PD gain或物体跟踪策略
-4. **性能优化** — 将local-frame计算移到warp kernel可加速2倍
+| 全面评估脚本 | `workspace/core4d/scripts/eval/eval_comprehensive.py` |
+| 评估指标文档 | `workspace/core4d/docs/eval_metrics.md` |
