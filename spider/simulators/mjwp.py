@@ -332,6 +332,129 @@ def _diff_qpos(
     return qpos_diff
 
 
+# ---------------------------------------------------------------------------
+# E035: Local-frame tracking helpers (ported from HDMI)
+# ---------------------------------------------------------------------------
+
+def _lf_yaw_quat(q: torch.Tensor) -> torch.Tensor:
+    """Extract yaw-only rotation from quaternion. q: (..., 4) wxyz."""
+    w, x, y, z = q.unbind(-1)
+    yaw = torch.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+    return torch.stack(
+        [torch.cos(yaw / 2), torch.zeros_like(yaw), torch.zeros_like(yaw), torch.sin(yaw / 2)],
+        dim=-1,
+    )
+
+
+def _lf_quat_conjugate(q: torch.Tensor) -> torch.Tensor:
+    """Quaternion conjugate. q: (..., 4) wxyz."""
+    return torch.cat([q[..., :1], -q[..., 1:]], dim=-1)
+
+
+def _lf_quat_mul(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    """Hamilton product. q1, q2: (..., 4) wxyz."""
+    w1, x1, y1, z1 = q1.unbind(-1)
+    w2, x2, y2, z2 = q2.unbind(-1)
+    return torch.stack([
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+    ], dim=-1)
+
+
+def _lf_quat_apply(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """Rotate vector v by quaternion q. q: (..., 4) wxyz, v: (..., 3)."""
+    t = 2.0 * torch.cross(q[..., 1:], v, dim=-1)
+    return v + q[..., :1] * t + torch.cross(q[..., 1:], t, dim=-1)
+
+
+def _lf_quat_apply_inverse(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """Rotate vector v by inverse of quaternion q."""
+    return _lf_quat_apply(_lf_quat_conjugate(q), v)
+
+
+def _lf_axis_angle_from_quat(q: torch.Tensor) -> torch.Tensor:
+    """Convert quaternion to axis-angle. q: (..., 4) wxyz -> (..., 3)."""
+    sin_half = torch.norm(q[..., 1:], dim=-1, keepdim=True).clamp(min=1e-8)
+    cos_half = q[..., :1]
+    angle = 2.0 * torch.atan2(sin_half, cos_half)
+    axis = q[..., 1:] / sin_half
+    return axis * angle
+
+
+def _local_pos_tracking(
+    xpos_batch: torch.Tensor,
+    xquat_batch: torch.Tensor,
+    body_ids: list[int],
+    root_id: int,
+    ref_body_pos: torch.Tensor,
+    ref_root_pos: torch.Tensor,
+    ref_root_quat: torch.Tensor,
+    sigma: float,
+) -> torch.Tensor:
+    """Position tracking in root-yaw-relative frame. Returns (N,).
+    ref_body_pos: (B, 3), ref_root_pos: (3,), ref_root_quat: (4,)
+    """
+    N = xpos_batch.shape[0]
+    body_pos = xpos_batch[:, body_ids, :]  # (N, B, 3)
+    root_pos = xpos_batch[:, root_id, :]  # (N, 3)
+    root_quat = xquat_batch[:, root_id, :]  # (N, 4)
+    B = len(body_ids)
+
+    root_pos_xy = root_pos.clone()
+    root_pos_xy[..., 2] = 0.0
+    root_quat_yaw = _lf_yaw_quat(root_quat)  # (N, 4)
+
+    ref_root_xy = ref_root_pos.clone()
+    ref_root_xy[2] = 0.0
+    ref_root_quat_yaw = _lf_yaw_quat(ref_root_quat.unsqueeze(0)).squeeze(0)  # (4,)
+
+    # Expand for batch and body dims
+    rp = root_pos_xy.unsqueeze(1).expand(-1, B, -1)  # (N, B, 3)
+    rq = root_quat_yaw.unsqueeze(1).expand(-1, B, -1)  # (N, B, 4)
+    ref_rp = ref_root_xy.unsqueeze(0).unsqueeze(0).expand(N, B, -1)  # (N, B, 3)
+    ref_rq = ref_root_quat_yaw.unsqueeze(0).unsqueeze(0).expand(N, B, -1)  # (N, B, 4)
+
+    body_local = _lf_quat_apply_inverse(rq, body_pos - rp)  # (N, B, 3)
+    ref_body_pos_exp = ref_body_pos.unsqueeze(0).expand(N, -1, -1)  # (N, B, 3)
+    ref_local = _lf_quat_apply_inverse(ref_rq, ref_body_pos_exp - ref_rp)  # (N, B, 3)
+
+    error = (ref_local - body_local).norm(dim=-1).clamp_min(0.0)  # (N, B)
+    return torch.exp(-error.mean(dim=1) / sigma)
+
+
+def _local_ori_tracking(
+    xquat_batch: torch.Tensor,
+    body_ids: list[int],
+    root_id: int,
+    ref_body_quat: torch.Tensor,
+    ref_root_quat: torch.Tensor,
+    sigma: float,
+) -> torch.Tensor:
+    """Orientation tracking in root-yaw-relative frame. Returns (N,).
+    ref_body_quat: (B, 4), ref_root_quat: (4,)
+    """
+    N = xquat_batch.shape[0]
+    B = len(body_ids)
+    body_quat = xquat_batch[:, body_ids, :]  # (N, B, 4)
+    root_quat = xquat_batch[:, root_id, :]  # (N, 4)
+
+    root_yaw = _lf_yaw_quat(root_quat)  # (N, 4)
+    ref_root_yaw = _lf_yaw_quat(ref_root_quat.unsqueeze(0)).squeeze(0)  # (4,)
+
+    rq = root_yaw.unsqueeze(1).expand(-1, B, -1)  # (N, B, 4)
+    ref_rq = ref_root_yaw.unsqueeze(0).unsqueeze(0).expand(N, B, -1)  # (N, B, 4)
+
+    body_local = _lf_quat_mul(_lf_quat_conjugate(rq), body_quat)  # (N, B, 4)
+    ref_body_quat_exp = ref_body_quat.unsqueeze(0).expand(N, -1, -1)  # (N, B, 4)
+    ref_local = _lf_quat_mul(_lf_quat_conjugate(ref_rq), ref_body_quat_exp)  # (N, B, 4)
+
+    diff = _lf_quat_mul(_lf_quat_conjugate(ref_local), body_local)  # (N, B, 4)
+    error = _lf_axis_angle_from_quat(diff).norm(dim=-1).clamp_min(0.0)  # (N, B)
+    return torch.exp(-error.mean(dim=1) / sigma)
+
+
 def get_reward(
     config: Config,
     env: MJWPEnv,
@@ -344,15 +467,18 @@ def get_reward(
 
     TODO: move reward computation to task-specific module
     """
-    # Unpack with backward compatibility (5-tuple legacy, 6-tuple E018, 7-tuple E034)
+    # Unpack with backward compatibility (5-tuple legacy, 6-tuple E018, 7-tuple E034, 8-tuple E035)
     approach_mask_val = 1.0
+    body_xquat_ref = None
     if len(ref) == 5:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref = ref
         body_xpos_ref = None
     elif len(ref) == 6:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref = ref
-    else:
+    elif len(ref) == 7:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val = ref
+    else:
+        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val, body_xquat_ref = ref
     qpos_sim = wp.to_torch(env.data_wp.qpos)
     qvel_sim = wp.to_torch(env.data_wp.qvel)
     N = qpos_sim.shape[0]
@@ -372,6 +498,70 @@ def get_reward(
         else -qpos_dist * 1.0
     )
     qvel_rew = -config.vel_rew_scale * qvel_dist * 1.0
+
+    # E035: local-frame body tracking (replaces qpos_rew when enabled)
+    local_frame_rew = torch.zeros(N, device=config.device)
+    if config.use_local_frame_reward and body_xpos_ref is not None and body_xquat_ref is not None:
+        xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+        xquat_sim = wp.to_torch(env.data_wp.xquat)  # (N, nbody, 4) wxyz
+
+        root_id = 1  # pelvis
+        ref_root_pos = body_xpos_ref[root_id]  # (3,)
+        ref_root_quat = body_xquat_ref[root_id]  # (4,)
+
+        upper_ids = config.local_frame_upper_ids
+        lower_ids = config.local_frame_lower_ids
+
+        upper_pos_rew = _local_pos_tracking(
+            xpos_sim, xquat_sim, upper_ids, root_id,
+            body_xpos_ref[upper_ids], ref_root_pos, ref_root_quat,
+            config.local_frame_pos_sigma,
+        )
+        upper_ori_rew = _local_ori_tracking(
+            xquat_sim, upper_ids, root_id,
+            body_xquat_ref[upper_ids], ref_root_quat,
+            config.local_frame_ori_sigma,
+        )
+        lower_pos_rew = _local_pos_tracking(
+            xpos_sim, xquat_sim, lower_ids, root_id,
+            body_xpos_ref[lower_ids], ref_root_pos, ref_root_quat,
+            config.local_frame_pos_sigma,
+        )
+        lower_ori_rew = _local_ori_tracking(
+            xquat_sim, lower_ids, root_id,
+            body_xquat_ref[lower_ids], ref_root_quat,
+            config.local_frame_ori_sigma,
+        )
+
+        # Root global tracking
+        root_pos_err = (xpos_sim[:, root_id] - ref_root_pos.unsqueeze(0)).norm(dim=-1)
+        root_pos_rew = torch.exp(-root_pos_err / config.local_frame_root_sigma)
+
+        root_quat_sim = xquat_sim[:, root_id]  # (N, 4)
+        root_quat_ref = ref_root_quat.unsqueeze(0).expand(N, -1)
+        root_diff = _lf_quat_mul(_lf_quat_conjugate(root_quat_ref), root_quat_sim)
+        root_ori_err = _lf_axis_angle_from_quat(root_diff).norm(dim=-1)
+        root_ori_rew = torch.exp(-root_ori_err / config.local_frame_root_sigma)
+
+        # Joint tracking from qpos (joint angles only, not base)
+        if config.embodiment_type == "humanoid_object":
+            jt_sim = qpos_sim[:, 7:-7] if qpos_sim.shape[1] > 14 else qpos_sim[:, 7:]
+            jt_ref = qpos_ref[7:-7] if qpos_ref.shape[0] > 14 else qpos_ref[7:]
+            jt_err = (jt_sim - jt_ref.unsqueeze(0)).abs().mean(dim=1)
+        else:
+            jt_err = torch.zeros(N, device=config.device)
+        joint_rew = torch.exp(-jt_err / config.local_frame_joint_sigma)
+
+        W = config.local_frame_w_track
+        local_frame_rew = W * (
+            upper_pos_rew + upper_ori_rew
+            + lower_pos_rew + lower_ori_rew
+            + root_pos_rew + root_ori_rew
+            + joint_rew
+        )  # max = W * 7
+
+        # Replace qpos_rew with local_frame_rew
+        qpos_rew = local_frame_rew
 
     # contact reward
     if config.contact_rew_scale > 0.0 and len(config.contact_site_ids) > 0:

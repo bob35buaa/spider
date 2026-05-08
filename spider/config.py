@@ -99,6 +99,15 @@ class Config:
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward
     stability_penalty_scale: float = 0.0  # penalty when pelvis z < threshold
     stability_penalty_threshold: float = 0.55  # pelvis z threshold (m)
+    # E035: local-frame body tracking (HDMI-style)
+    use_local_frame_reward: bool = False
+    local_frame_upper_ids: list[int] = field(default_factory=lambda: list(range(14, 31)))  # waist→wrists
+    local_frame_lower_ids: list[int] = field(default_factory=lambda: list(range(2, 14)))  # hips→ankles
+    local_frame_pos_sigma: float = 0.5
+    local_frame_ori_sigma: float = 1.0
+    local_frame_root_sigma: float = 0.5
+    local_frame_joint_sigma: float = 0.25
+    local_frame_w_track: float = 0.5
     contact_guidance: bool = False
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [

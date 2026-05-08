@@ -501,8 +501,30 @@ def main(config: Config):
                 active_pct, config.hand_approach_contact_threshold,
             )
 
+    # E035: precompute full body xpos + xquat for local-frame tracking
+    body_xquat_ref_t = None
+    body_xpos_full_ref_t = None
+    if config.use_local_frame_reward:
+        T_full = qpos_ref.shape[0]
+        nbody = mj_model.nbody
+        body_xpos_full_np = np.zeros((T_full, nbody, 3), dtype=np.float32)
+        body_xquat_full_np = np.zeros((T_full, nbody, 4), dtype=np.float32)
+        for t in range(T_full):
+            mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
+            mujoco.mj_kinematics(mj_model, mj_data_ref)
+            body_xpos_full_np[t] = mj_data_ref.xpos[:nbody]
+            body_xquat_full_np[t] = mj_data_ref.xquat[:nbody]
+        body_xpos_full_ref_t = torch.tensor(body_xpos_full_np, device=config.device)
+        body_xquat_ref_t = torch.tensor(body_xquat_full_np, device=config.device)
+        loguru.logger.info("E035 precomputed body FK: xpos={}, xquat={}", tuple(body_xpos_full_ref_t.shape), tuple(body_xquat_ref_t.shape))
+        # Override body_xpos_ref with full version for local-frame
+        body_xpos_ref = body_xpos_full_ref_t
+
     if approach_mask_t is not None:
-        ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t)
+        if body_xquat_ref_t is not None:
+            ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t)
+        else:
+            ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t)
     else:
         ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref)
     mj_data.qpos[:] = qpos_ref[0].detach().cpu().numpy()
