@@ -1,116 +1,109 @@
-# E034: HDMI-Style Reward Migration — Stability Penalty 突破
+# E034: HDMI-Style Reward Migration — 修正评估
 
-## 状态: E034d (stability_penalty) 达成 **4/4 cases 100% stable** ★★★
+## 状态: E034d stability_penalty 改善了stability，但 **desk005仍有明显摔倒/不稳定**
 
-## 背景
+## 修正：之前的评估过于乐观
 
-E033 + HDMI 分析（log/39）发现 MJWP 机器人摔倒的3个根因：
-1. hand_approach 全程激活 → 不该前倾时前倾
-2. Global qpos L2 无下界 → 正HA覆盖负qpos → CEM选"姿态差但手近"
-3. HDMI 用 local-frame + bounded + contact mask 完全避免此问题
+之前报告"4/4 cases 100% stable"基于 pelvis_z > 0.55m 阈值。经视频验证和更严格的评估发现：
+- desk005 在 t=1.0s 机器人**几乎水平摔倒**（pelvis_z=0.552m 恰好过阈值）
+- "100% stable"指标具有误导性 — 视觉上明显不稳定
 
-## 实验矩阵
+## 严格评估结果 (使用 FK xpos + 多阈值)
 
-### E034a: Contact Mask + Bounded Qpos (σ=2.0)
-| Case | stable | <15cm | <10cm | <5cm | <3cm | <1cm | mean_surf |
-|------|--------|-------|-------|------|------|------|-----------|
-| desk005 | **18.1%** ❌ | 98.5% | 67.7% | 37.9% | 21.7% | 8.6% | 0.069m |
+### E034d desk005 vs E032a baseline
 
-**失败原因**: Contact mask无效（desk005手始终在物体30cm内→100%激活）。Bounded qpos σ=2.0太松——exp(-large/2)≈0，CEM无法区分"站着"和"倒了"，只看到HA差异。
+| 指标 | E032a | E034d | 变化 |
+|------|-------|-------|------|
+| pelvis_z min | 0.223m | 0.552m | +0.33m ★ |
+| >0.70m | 69.0% | 86.2% | +17pp |
+| >0.65m | 75.4% | 92.2% | +17pp |
+| >0.60m | 77.6% | 96.6% | +19pp |
+| >0.55m | 79.3% | 100.0% | +21pp |
+| 最长不稳定段(<0.60m) | **52帧 (0.87s)** | **7帧 (0.12s)** | ↓86% |
+| 最差时刻 | t=1.32s, z=0.223m (完全倒地) | t=1.04s, z=0.552m (严重前倾但未完全倒地) |
+| <10cm contact | **82.8%** | 79.3% | -3.5pp |
+| <5cm contact | **57.8%** | 37.9% | -20pp |
+| <1cm contact | **24.6%** | 0% | -25pp |
 
-### E034b: Bounded Qpos σ=0.5 (tight)
-| Case | stable | <15cm | <10cm | <5cm | <3cm | <1cm | mean_surf |
-|------|--------|-------|-------|------|------|------|-----------|
-| desk005 | **30.6%** ❌ | 100% | 100% | 98.5% | 93.9% | **71.2%** | **0.007m** |
+**结论**: E034d 比 E032a **稳定性确实改善**(最差点从0.22m→0.55m，不稳定时长从0.87s→0.12s)，但 **仍有一次明显的近乎摔倒事件**(t≈1s)。Contact 质量下降 — E032a 虽然摔得更厉害，但在稳定段 contact 更紧密。
 
-**惊人的contact（71% <1cm!）但terrible stability**。Tight σ让qpos_rew对大偏差不敏感（都≈0），CEM纯靠HA优化→手贴着但人倒了。
+### E034d 4-case 完整严格评估
 
-### E034c: Stability Penalty (scale=30, threshold=0.55m) + E032a base
-| Case | stable | <15cm | <10cm | <5cm | <3cm | <1cm | mean_surf |
-|------|--------|-------|-------|------|------|------|-----------|
-| desk005 | **100%** ★ | 87.9% | 69.2% | 9.6% | 0% | 0% | 0.097m |
+| Case | pelvis_min | >0.70m | >0.60m | 最长不稳段 | <10cm | <5cm |
+|------|-----------|--------|--------|-----------|-------|------|
+| desk005 | 0.552m | 86% | 97% | 7帧/0.12s | **79%** | 38% |
+| box025 | 0.697m | 99% | 100% | 无 | **67%** | 28% |
+| bucket010 | 0.711m | 100% | 100% | 无 | **63%** | 23% |
+| chair022 | 0.547m | 68% | 93% | 10帧/0.17s | **65%** | 38% |
 
-**首次 100% stable!** 但contact比E032a略差（HA scale=3, σ=5 太温和）。
+### 与 E032a baseline 对比 (稳定性)
 
-### E034d: Stability Penalty + 强 HA (scale=5, σ=3) ★★★ BEST
-| Case | stable | <15cm | <10cm | <5cm | <3cm | <1cm | mean_surf | obj_disp |
-|------|--------|-------|-------|------|------|------|-----------|----------|
-| desk005 | **100%** ★ | 85.9% | **77.3%** | **44.4%** | 18.7% | 0% | 0.082m | 1.56m |
-| box025 | **100%** ★ | 33.3% | 20.2% | 5.6% | 2.5% | 0% | 0.847m | 1.57m |
-| bucket010 | **100%** ★ | 0% | 0% | 0% | 0% | 0% | 0.953m | 0.88m |
-| chair022 | **99.6%** ★ | 0% | 0% | 0% | 0% | 0% | 0.616m | 0.77m |
+| Case | E032a pelvis_min | E034d pelvis_min | E032a 最长不稳段 | E034d 最长不稳段 |
+|------|-----------------|-----------------|----------------|----------------|
+| desk005 | 0.223m (倒地) | 0.552m (前倾) | 52帧/0.87s | 7帧/0.12s |
+| box025 | 0.336m (倒地) | 0.697m (稳定) | 77帧/1.29s | 无 |
+| bucket010 | 0.715m (稳定) | 0.711m (稳定) | 无 | 无 |
+| chair022 | N/A | 0.547m (前倾) | N/A | 10帧/0.17s |
 
-## 与 E032a (baseline, 无 stability penalty) 对比
+## 视频观察 (诚实版)
 
-| Case | E032a stable | E034d stable | E032a <10cm | E034d <10cm |
-|------|-------------|-------------|-------------|-------------|
-| desk005 | 79% | **100%** (+21pp) | 81.8% | **77.3%** (-4.5pp) |
-| box025 | 100% | **100%** (=) | 0% | 20.2% (+20pp) |
-| bucket010 | 100% | **100%** (=) | 36.4% | 0% (-36pp) |
-| chair022 | 81% | **99.6%** (+19pp) | 4.5% | 0% (-4.5pp) |
+### desk005
+- **Frame 0 (0s)**: ref/sim对齐良好
+- **Frame 48 (0.8s)**: sim明显前倾，膝弯曲，开始失稳 — 虽然手在桌面但重心偏移
+- **Frame 62 (1.04s)**: ★★★ **sim几乎水平** — 极度不稳定，近乎完全摔倒！pelvis_z=0.55m
+- **Frame 80 (1.34s)**: sim恢复到站立，但手臂张开失去协调
+- **Frame 92-231 (1.5-3.9s)**: 后半段稳定行走，手在桌面附近
 
-## Claims 验证
+**问题**: t=0.8-1.3s 有明显的单次失稳事件（几乎倒地），但恢复了。
 
-1. ✅ **C1**: desk005 stable 100% (vs E032a 79%, vs E034a 18%) — stability penalty 有效
-2. ❌ **C2**: Contact mask 无效（desk005始终在范围内） — 需要更聪明的mask设计（如基于搬运阶段）
-3. ✅ **C3**: desk005 contact<15cm 85.9% ≥ 80% — contact quality 维持
-4. ✅ **新发现**: Stability penalty 彻底解决了 stability-contact tradeoff — 可以安全地增大 HA
+### box025
+- **Frame 0**: ref/sim对齐，手举起
+- **Frame 99 (1.7s)**: sim站在箱子旁，手接触箱面 — 姿态合理
+- **Frame 198 (3.3s)**: sim弯腰，手搭在箱子上 — 稳定但弯曲较大
 
-## 核心发现
+**问题**: 箱子很大(0.6x0.6x0.9m)，手够到表面就很难保持直立姿态。
 
-### Bounded Reward 是错误方向
+### bucket010
+- **Frame 0**: sim/ref站立，桶在旁边
+- **Frame 150 (2.5s)**: sim弯腰，手伸向桶 — 有一定前倾
 
-Bounded exp reward (`exp(-dist/σ)`) 的根本问题：当偏差大时 exp→0，CEM无法区分"站着偏了一点"和"完全倒了"。两者qpos_rew都≈0，CEM只看到HA差异→选择"倒了但手近"。
+**相对较好**: pelvis全程>0.71m，无不稳定事件。
 
-**HDMI不摔不是因为bounded reward，而是因为local-frame tracking让body tracking在pelvis偏移时仍有梯度。**
+### chair022
+- **Frame 0**: sim/ref对齐，椅子翻倒在脚边
+- **Frame 152 (2.5s)**: sim前倾明显，椅子翻转 — 存在不稳定倾向
 
-### Stability Penalty 是正确方向
+**问题**: 椅子orientation跟踪完全失败(quat_err=1.63)，可能推倒机器人。
 
-直接在reward中添加"倒了就惩罚"的硬约束：`-scale * max(threshold - pelvis_z, 0)`
+## 核心问题分析
 
-- 当pelvis_z > 0.55m: penalty=0，不影响CEM优化
-- 当pelvis_z < 0.55m: penalty = -30*(0.55 - z)，极强惩罚
-- CEM **永远不会选择倒下的方案**，因为任何HA奖励都无法覆盖penalty
+### 为什么 stability_penalty 不能完全消除不稳定?
 
-### Contact 差距分析
+1. **Penalty 是 reactive, 不是 preventive**: penalty 只在 pelvis_z < 0.55m 时生效。机器人已经开始倒（z=0.6→0.55m 过程中）penalty=0，CEM 不知道即将摔倒
+2. **CEM horizon (0.8s) 有限**: 如果 CEM 规划的 0.8s 内 pelvis 不会跌破 0.55m，penalty 不会触发 — 但 0.8s 后可能倒
+3. **hand_approach 在近距离有强梯度**: 当手离桌 10cm 时，σ=3 的 exp 梯度很陡 → CEM 会选择"再靠近一点"即使略微倾斜
 
-desk005 contact好（77% <10cm）但 bucket010/chair022 为0%。原因：
-- desk005: 机器人走在桌旁，手自然在桌面附近
-- bucket010/chair022: 物体被PD驱动跟着ref走，但物体在另一侧 → 手够不到
-- 这不是reward问题，是**单人协作任务的几何限制**
+### E032a 为什么 contact 更好?
 
-## 可视化验证 — E034d desk005
+E032a 没有 stability_penalty → CEM 可以自由前倾 → 手更容易贴近物体表面。"摔倒段"其实手也在物体上（因为人倒向物体方向）。这不是我们想要的 contact。
 
-| 帧 | 时间 | 描述 |
-|------|------|------|
-| 0 (0s) | 起始 | ref/sim对齐，站立姿态正常 |
-| 46 (1.5s) | 行走中 | sim跟随ref走路，手伸向桌面，稳定 |
-| 92 (3.1s) | 中段 | sim稳定行走，手在桌面附近 |
-| 139 (4.6s) | 后段 | sim略微落后ref，但姿态稳定，手触桌面 |
-| 185 (6.2s) | 末段 | sim在桌旁走路，手接触桌面 |
-| 231 (7.7s) | 结束 | 两者都稳定站立在桌旁 |
+## 技术性结论
 
-**关键: 全程无摔倒，手大部分时间在桌面附近，行走姿态自然。**
+1. **Stability penalty 确实有效**: 最差点从 0.22m→0.55m，不稳定时长 ↓86%
+2. **但单靠 penalty 不够**: 仍有 t≈1s 的明显失稳事件
+3. **Bounded exp reward 无效**: 已证明CEM无法区分站/倒
+4. **Contact mask 无效(for desk005)**: 手始终在物体30cm内
+
+## 下一步方向
+
+1. **提高 penalty threshold** (0.55→0.65m) — 让 CEM 在更高处就开始"紧张"
+2. **Local-frame tracking (方案B)** — 这才是 HDMI 真正的核心优势，不只是 penalty
+3. **提高 penalty 的 scope** — 不只看 pelvis_z，还看倾斜角度 (pitch/roll)
 
 ## 结果路径
 
 | 产出 | 路径 |
 |------|------|
-| E034d desk005 (best) | `workspace/core4d/results/E034d_desk005.npz` |
-| E034d desk005 video | `workspace/core4d/results/E034d_desk005.mp4` |
+| 严格评估脚本 | `workspace/core4d/scripts/eval/eval_e034_rigorous.py` |
+| E034d desk005 | `workspace/core4d/results/E034d_desk005.npz` |
 | 配置 | `examples/config/override/core4d_e034d.yaml` |
-
-## 代码改动
-
-| 文件 | 改动 |
-|------|------|
-| `spider/config.py` | +6 fields (bounded_qpos, stability_penalty, contact_threshold) |
-| `spider/simulators/mjwp.py` | get_reward: bounded qpos (可选) + contact mask gate + stability penalty |
-| `examples/run_mjwp.py` | 预计算 approach_mask, 7-tuple ref_data |
-
-## 下一步
-
-1. **desk005 已解决**: 100% stable + 77% <10cm contact — 足以用于RL训练
-2. **box025 contact优化**: 33% <15cm 仍然偏低，需要 per-case 调参或更强 HA
-3. **bucket010/chair022**: 0% contact — 几何限制，单人无法解决，需要双机器人或connect约束
-4. **考虑对4个case使用统一配置**: E034d已经是4/4 stable的通用配置
