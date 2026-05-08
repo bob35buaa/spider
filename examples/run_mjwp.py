@@ -722,7 +722,17 @@ def main(config: Config):
                     config.noise_scale = base_noise_scale
                 else:
                     config.noise_scale = base_noise_scale
-                    ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
+                    # Warmup: skip CEM for first N ctrl steps, use ref ctrl directly
+                    warmup_ctrl_steps = int(config.warmup_steps / config.ctrl_dt) if config.warmup_steps > 0 else 0
+                    ctrl_step_idx = sim_step // config.ctrl_steps_int if hasattr(config, 'ctrl_steps_int') else sim_step // max(1, int(np.round(config.ctrl_dt / config.sim_dt)))
+                    if warmup_ctrl_steps > 0 and ctrl_step_idx < warmup_ctrl_steps:
+                        # During warmup: use ref ctrl, no CEM
+                        ctrls = ctrl_ref[sim_step : sim_step + config.horizon_steps]
+                        if ctrls.shape[0] < config.horizon_steps:
+                            ctrls = torch.cat([ctrls, ctrls[-1:].repeat(config.horizon_steps - ctrls.shape[0], 1)], dim=0)
+                        infos = {"opt_steps": np.array([0]), "improvement": 0.0}
+                    else:
+                        ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
 
                 # Compute trace_ref from reference qpos over the horizon
                 if len(config.trace_site_ids) > 0:

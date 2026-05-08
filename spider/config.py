@@ -147,6 +147,7 @@ class Config:
     max_num_iterations: int = 16
     improvement_threshold: float = 0.01
     improvement_check_steps: int = 1
+    warmup_steps: int = 0  # skip CEM optimization for first N ctrl steps (use ref ctrl directly)
     # Termination parameters
     terminate_resample: bool = False
     object_pos_threshold: float = 0.1

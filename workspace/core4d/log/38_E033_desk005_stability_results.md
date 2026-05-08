@@ -80,3 +80,41 @@ base_rot_rew_scale: 3.0
 1. 分析 t≈1.9s 时刻 ref 在做什么 → 是否有急转/加速导致 CEM 跟不上
 2. desk005 可能需要分段优化（跳过难点区间）或 connect 约束在难点区间稳定
 3. 转向 box025 — connect 约束方案可能同时解决两个 case 的问题
+
+## E033-warmup: 冷启动修复尝试 — 证伪了"起步不稳"假设
+
+### 动机
+HDMI simulator 不存在起步摔倒问题（physics_dt=0.002 + implicitfast integrator），猜测 MJWP 的问题是 CEM 冷启动——前几步没优化好导致摔倒。
+
+### 方案
+添加 `warmup_steps` 参数：前 N 秒跳过 CEM，直接 commit ref ctrl，之后切入 CEM 优化。
+
+### 代码改动
+| 文件 | 改动 |
+|------|------|
+| `spider/config.py` | +`warmup_steps: int = 0` |
+| `examples/run_mjwp.py` | warmup 期间跳过 optimize()，直接用 ctrl_ref |
+| `examples/config/override/core4d_e032a.yaml` | +`warmup_steps: 0` |
+
+### 结果 (warmup_steps=1.0, σ=1.0)
+- stable = **80.6%** (反而比无 warmup 的 95% 差！)
+- carrying phase stable = 77.3%
+- contact<15cm = 80.3%
+
+### 视频分析
+- 0% (0s): 正常站立 ✓
+- 15% (0.7s): warmup 期间正常走路 ✓ — ref ctrl 足以维持稳定行走
+- **30% (1.4s): CEM 接管后立即摔倒** — warmup→CEM 切换时失稳
+- 50% (2.3s): 半恢复，在地上挣扎+手碰桌
+- 80-100%: 恢复行走
+
+### 根因修正
+
+**不是冷启动问题，是 CEM + hand_approach 的结构性缺陷**：
+- ref ctrl 可以让机器人稳定走路（warmup 期间证实）
+- CEM 一旦介入就会在某个时刻导致失稳
+- 这是因为 CEM 同时优化多个 reward（body tracking + hand_approach + stability），在 reward 竞争中某些时刻会牺牲平衡
+- σ=1.0 without warmup 能达到 95% stable，是因为 CEM 从头开始全程优化，虽然开头倒了但后面积累了"经验"找到了稳定策略
+- warmup 方案让 CEM 在 1s 后突然接管，没有前期积累，反而更不稳定
+
+**HDMI 不摔的真正原因**：可能不只是 physics_dt 小，而是 HDMI 的 reward 结构（active_adaptation 框架）和 PD 调参更适合行走任务。

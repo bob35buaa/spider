@@ -9,6 +9,7 @@ ref_dt: 0.0333333
 trace_dt: 0.0333333
 sim_dt: 0.0166667
 physics_dt: 0
+warmup_steps: 0
 
 # Contact guidance (from E027d2 best config)
 contact_guidance: true
