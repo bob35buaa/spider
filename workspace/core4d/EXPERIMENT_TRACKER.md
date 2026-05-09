@@ -51,6 +51,8 @@
 | E039b | 2026-05-09 | Phase 11 | **Config Bug Fix+Rotated SDF**: 修复后contact首次生效; box025=85%/bucket010=76%/desk005=81%; **但发现"手粘连物体"问题(固定target)** | 突破+新问题 |
 | E040 | 2026-05-09 | Phase 11 | **Dynamic Per-Frame Target**: 动态target未解决手背接触问题; position-only reward根本缺陷=无方向约束; CEM用手背满足距离→不自然; Contact<10cm=64/66/4%; 需添加orientation reward | ❌ 不自然行为未消除 |
 | E041 | 2026-05-09 | Phase 11 | **Orientation Reward(乘法门控)**: palm normal方向约束; 手掌朝向有所改善; 但乘法gating过严导致Contact/Stability退化(62/56%); body前倾问题仍存在; CEM难同时优化position+orientation | ⚠️ 方向正确但约束过严 |
+| E041c | 2026-05-09 | Phase 11 | **Additive Ori(w=0.3)最佳变体**: Contact=66/57%+Stable=100%+MPKPE=1.4cm; 与E040持平; 远程2GPU sweep验证 | ★ sweep最佳 |
+| E042 | 2026-05-10 | Phase 11 | **Wrist Freeze(零化手腕噪声)**: 对齐HDMI做法; box025持平(64%), bucket010暴跌(48%); freeze阻止CEM补偿body tracking误差; HDMI成功因ref精确在把手; **确认contact上限≈64-66%(box025)** | ❌ 有害 |
 
 ## 关键指标演进
 
