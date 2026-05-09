@@ -755,8 +755,19 @@ def get_reward(
                     dir_to_target = dir_to_target / dir_norm  # (N, 3) normalized
                     dot = (palm_world * dir_to_target).sum(dim=-1)  # (N,) in [-1, 1]
                     ori_rew = torch.clamp(dot, min=0.0)  # (N,) in [0, 1]
-                    # Multiplicative gating: reward only when both close AND palm faces target
-                    pos_rew = pos_rew * ori_rew
+
+                    ori_mode = config.contact_hdmi_ori_mode
+                    if ori_mode == "multiply":
+                        # Strict: only reward when both close AND palm faces target
+                        pos_rew = pos_rew * ori_rew
+                    elif ori_mode == "additive":
+                        # Softer: weighted combination
+                        w = config.contact_hdmi_ori_weight
+                        pos_rew = (1.0 - w) * pos_rew + w * ori_rew
+                    elif ori_mode == "near_field":
+                        # Only enforce orientation when already close (dist < 0.15m)
+                        near_mask = (dist < 0.15).float()
+                        pos_rew = pos_rew * (1.0 - near_mask + near_mask * ori_rew)
 
                 per_eef_rew.append(pos_rew)
 

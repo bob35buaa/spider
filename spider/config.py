@@ -108,7 +108,8 @@ class Config:
     # E040: dynamic per-frame contact target (from ref FK)
     contact_hdmi_dynamic_target: bool = False  # True=use per-frame ref-derived target instead of fixed
     # E041: orientation reward — palm must face object surface
-    contact_hdmi_ori_weight: float = 0.0  # 0=disabled; >0 = multiply pos_rew by ori_rew
+    contact_hdmi_ori_weight: float = 0.0  # 0=disabled; >0 = enable orientation term
+    contact_hdmi_ori_mode: str = "multiply"  # "multiply" | "additive" | "near_field"
     contact_hdmi_palm_normal_left: list[float] = field(default_factory=lambda: [0.0, -1.0, 0.0])
     contact_hdmi_palm_normal_right: list[float] = field(default_factory=lambda: [0.0, 1.0, 0.0])
     use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
