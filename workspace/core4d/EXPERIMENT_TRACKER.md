@@ -49,7 +49,7 @@
 | E036 | 2026-05-08 | Phase 10 | **关闭hand_approach**: MPKPE 48cm→1.4cm; Contact<10cm暴跌(desk 94→7%); body tracking突破+contact tradeoff | **body tracking突破** |
 | E037-E039 | 2026-05-08~09 | Phase 11 | **Contact Reward系列**: box-SDF/HDMI-aligned设计; **发现config bug: contact reward从未执行** (E036关闭approach→body_ids=[]→reward条件false) | Bug发现 |
 | E039b | 2026-05-09 | Phase 11 | **Config Bug Fix+Rotated SDF**: 修复后contact首次生效; box025=85%/bucket010=76%/desk005=81%; **但发现"手粘连物体"问题(固定target)** | 突破+新问题 |
-| E040 | 2026-05-09 | Phase 11 | **Dynamic Per-Frame Target**: 消除手粘连; Contact Preservation 89-95%; box025=64%/bucket010=66%/desk005=4%; 姿态完全自然; Contact<10cm低于E039b但行为质量更高 | **姿态自然+高Preservation** |
+| E040 | 2026-05-09 | Phase 11 | **Dynamic Per-Frame Target**: 动态target未解决手背接触问题; position-only reward根本缺陷=无方向约束; CEM用手背满足距离→不自然; Contact<10cm=64/66/4%; 需添加orientation reward | ❌ 不自然行为未消除 |
 
 ## 关键指标演进
 
@@ -64,9 +64,10 @@ E021 Anchored pelvis_err: box025(0.186, ↓72%) < desk005(0.279, ↓58%) < bucke
 joint_err:  E002(0.073) → E003(0.064) → E012(0.108 rad) → E015-d(0.202 rad, bucket005)
 MPKPE (Phase 10+): E036=1.4cm → E039b=1.1-2.1cm → E040=1.2-1.9cm (全部<3cm, 优秀)
 Contact<10cm演进:
-  box025:  E036(56%) → E039b(85%,手粘连) → E040(64%,自然) | Preservation=89%
-  bucket010: E036(2%) → E039b(76%,手粘连) → E040(66%,自然) | Preservation=95%
+  box025:  E036(56%) → E039b(85%,手粘连) → E040(64%,手背接触) | 均有不自然行为
+  bucket010: E036(2%) → E039b(76%,手粘连) → E040(66%,手背接触) | 均有不自然行为
   desk005: E036(7%) → E039b(81%,stable=20%) → E040(4%,stable=81%)
+  根因: position-only reward无方向约束 → CEM用手背满足距离 → 需orientation reward
 obj z 实测 (npz qpos):
   Phase 1: 所有实验 sim max ≤ 0.460m (E011), 实际未持续离地
   Phase 2 (kinobj): obj follows ref (PD驱动), pelvis stable

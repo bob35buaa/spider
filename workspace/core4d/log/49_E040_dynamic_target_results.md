@@ -1,6 +1,6 @@
 # E040: Dynamic Per-Frame Contact Target — 解决 "手粘连物体" 问题
 
-## 状态: 部分成功 — 手粘连消除, Contact Preservation 优异, 但绝对 Contact<10cm 低于 E039b
+## 状态: 失败 — 手背接触物体问题未解决, 动态 target 无法修复 position-only reward 的方向缺陷
 
 ## 背景
 
@@ -50,23 +50,23 @@ target_world = obj_pos_sim + quat_apply(obj_quat_sim, target_offset_t)
 
 | 帧 | ref | sim | 观察 |
 |------|-----|-----|------|
-| t=0.8s | 弯腰手搭箱面 | 弯腰手在箱面附近 | 手在箱面附近, 身体姿态自然 |
-| t=1.7s | 站箱旁手扶箱面 | 站箱旁手在箱面附近 | **无反关节!** 手自然放在箱面附近 |
-| t=2.5s | 站着手在箱侧 | 弯腰手在箱顶 | 略有偏差但姿态自然 |
+| t=0.8s | 弯腰手搭箱面 | 弯腰手在箱面附近 | 手在箱面附近 |
+| t=1.7s | 站箱旁手扶箱面 | 站箱旁手在箱面附近 | 姿态有改善但仍有问题 |
+| t=2.0s | 站着手扶箱面 | **弯腰趴向箱顶, 手背朝向箱子** | ❌ **严重不自然: 手背接触** |
 | t=3.3s | 弯腰趴箱面 | 弯腰手在箱面 | 接近 ref |
 
-**关键对比 E039b**: E039b 手"粘"在固定点, 手腕反关节; E040 手位置随 ref 变化, **无反关节, 姿态完全自然**。代价是手-箱距离略大 (从 85%→64%)。
+**❌ 问题未解决**: 视频 t≈2s 处清晰可见 sim 机器人弯腰趴向箱顶, **手背朝向物体** (而非手掌)。这与 E039b 的 "手粘连" 是同一类问题 — position-only reward 导致 CEM 用不自然的手腕旋转来满足距离约束。动态 target 只改变了粘连的位置, 没有解决根本的方向问题。
 
 ### bucket010 — Contact 66%, Stability 100%, MPKPE 1.2cm
 
 | 帧 | ref | sim | 观察 |
 |------|-----|-----|------|
-| t=0.8s | 弯腰手搭桶顶 | 弯腰手伸向桶 | 手在桶附近, 姿态匹配 |
+| t=0.8s | 弯腰手搭桶顶 | 弯腰手伸向桶 | 手在桶附近 |
 | t=1.7s | 站着手扶桶面 | 站着手在桶面 | 手贴近桶面 |
 | t=2.5s | 站着手搭桶顶 | 站着手在桶旁 | 距离略大 |
-| t=3.3s | 站着手在桶侧 | 站着手在桶旁 | 姿态自然 |
+| t=3.3s | 站着手在桶侧 | 站着手在桶旁 | 可接受 |
 
-**对比 E039b (76%)**: E040 (66%) 接触率略低, 但姿态更自然, 无粘连。Contact Preservation 达 95.4% — 即 ref 中接触的帧, sim 中 95% 也在 10cm 内!
+bucket010 表现相对较好, 但也存在手背朝物体的帧。
 
 ### desk005 — Contact 4%, Stability 81%
 
@@ -76,82 +76,79 @@ target_world = obj_pos_sim + quat_apply(obj_quat_sim, target_offset_t)
 | t=1.7s | 走向桌边 | **摔倒!** 脚离地 | stability 问题 |
 | t=2.5s | 站桌旁推桌 | 恢复站立, 手在桌面附近 | 从摔倒中恢复 |
 
-**分析**: desk005 的问题不是 "手粘连" (E039b 的问题), 而是 ref 中手在桌子下方横梁位置, 动态 target 仍然指向那里。t≈1.7s 时动态 target 把手拉向桌下, 导致身体前倾摔倒。但 81% stability 比 E039b 的 20% 好很多 (动态 target 不会持续强拉)。
+desk005 stability 从 E039b 的 20% 提升到 81% (动态 target 不会持续强拉), 但仍有不稳定段。
 
 ## Claims 验证
 
 | Claim | 阈值 | 结果 | 状态 |
 |-------|------|------|------|
-| C1: Contact<10cm ≥70% (box025) | ≥70% | 64% | ❌ 未达 (差6%) |
-| C1: Contact<10cm ≥70% (bucket010) | ≥70% | 66% | ❌ 未达 (差4%) |
+| C1: Contact<10cm ≥70% (box025) | ≥70% | 64% | ❌ 未达 |
+| C1: Contact<10cm ≥70% (bucket010) | ≥70% | 66% | ❌ 未达 |
 | C2: MPKPE <3cm | <3cm | 1.2-1.9cm | ✅ 达成 |
 | C3: Stability >90% | >90% | 81-100% | ⚠️ desk005 未达 |
-| C4: 无手粘连/反关节 | 视频验证 | **✅ 完全消除** | ✅ 达成 |
+| C4: 无手粘连/反关节 | 视频验证 | **❌ 手背接触仍存在** | ❌ 未达 |
 
 ## 关键发现
 
-### 1. 动态 target 成功消除手粘连问题
+### 1. ❌ 动态 target 未解决手背接触问题
 
-E039b 的核心缺陷 — 手被拉向固定点导致反关节 — 在 E040 中**完全消除**。视频证实所有帧中手腕关节均自然, 无扭转。
+**根因**: position-only reward (仅约束点-到-点距离) **缺少方向约束**。
 
-### 2. Contact<10cm 退化的原因
+```
+reward 只关心: ‖contact_point - target‖₂ 小
+不关心: 手掌是否朝向物体表面
+```
 
-| 因素 | 说明 |
-|------|------|
-| **动态 target 本质是 hand tracking** | 当 body tracking 已经很好时 (MPKPE=1.3cm), 额外的 contact reward 贡献有限 |
-| **Non-contact 帧的 target 不合理** | 当 ref 中手远离物体时, target = ref 手在物体坐标系的投影 — 这个位置可能在物体内部或背面 |
-| **CEM 优化空间冲突** | body tracking (max=3.5) + contact (gain=5.0) 在非接触帧竞争; 动态 target 在非接触帧给出错误方向 |
+CEM 发现: 旋转手腕让 `wrist + [0.05, 0, 0]` 的点靠近 target, 而不管手掌朝向 → 手背接触。
 
-### 3. Contact Preservation 才是真正指标
+动态 target 只是让"粘"的位置随时间变化 (不再固定在一个点), 但 **手掌方向错误** 的根因没有触及。
 
-Contact<10cm 包含所有帧 (含非接触帧)。更有意义的指标是 **Contact Preservation**: "ref 中手应该接触时, sim 中是否也接触?"
+### 2. 与 HDMI 的根本差异
 
-| Case | Contact<10cm | Contact Preservation (sim<10cm \| desired) |
-|------|------------|------------------------------------------|
-| box025 | 64% | **88.8%** |
-| bucket010 | 66% | **95.4%** |
+| | HDMI | SPIDER CEM |
+|---|---|---|
+| 优化方法 | RL policy (学习自然行为) | CEM (只优化距离) |
+| 手部方向 | Policy 自然学会手掌朝向物体 | CEM 无方向 inductive bias |
+| 解空间 | Policy 约束为自然动作分布 | CEM 在关节空间自由搜索 |
 
-**这说明在 ref 期望接触的帧, E040 实际上做得非常好 (89-95%)!** 整体 Contact<10cm 偏低是因为非接触帧的统计稀释。
+**HDMI 不需要显式方向约束**, 因为 RL 训练中 policy 自然趋向合理行为。CEM 没有这种归纳偏置, 必须**显式添加 orientation reward**。
 
-### 4. E040 vs E039b 的本质 tradeoff
+### 3. Contact Preservation 指标高但不可信
+
+之前认为 Contact Preservation 89-95% 是好结果, 但实际上这些 "接触" 帧中很多是 **手背接触** — 指标数字好看, 行为不合理。纯距离指标无法反映接触质量。
+
+### 4. E040 vs E039b: 都有不自然问题, 只是表现形式不同
 
 | 维度 | E039b (固定target) | E040 (动态target) |
 |------|---|---|
 | Contact<10cm | **85%/76%** (高) | 64%/66% (中) |
-| 姿态自然度 | ❌ 手粘连+反关节 | ✅ 完全自然 |
-| Contact Preservation | 未测量 | **89-95%** |
+| 不自然行为 | 手粘连固定点 + 手腕反关节 | **手背接触物体** + 不自然弯腰 |
 | Stability | 100%/100%/20% | 100%/100%/81% |
 | MPKPE | 1.1-2.1cm | 1.2-1.9cm |
+| 结论 | ❌ 不可用 | ❌ 不可用 |
 
-**E039b 的 85% 是以姿态畸形为代价的**, 手被强行固定在箱面导致高 Contact<10cm, 但行为不自然。E040 行为自然, Contact Preservation 高, 但绝对 Contact<10cm 因非接触帧的合理"放松"而降低。
+**两者都不可用于论文**: E039b 手粘连, E040 手背接触。根本原因相同 — position-only reward 没有手掌方向约束。
 
-## 下一步方向
+## 下一步方向: E041 Hand Orientation Reward
 
-### 方案 A: 提高 gain (E040b)
+**核心思路**: 添加 orientation 约束, 要求手掌法向量朝向物体表面。
 
-当前 gain=5.0, 动态 target 更精确 → 可能用更高 gain (7-10) 在接触帧进一步缩小距离。风险: desk005 stability 进一步恶化。
+```python
+# 手掌法向 (wrist local frame 的某个轴, 如 +x 或 -z)
+palm_normal_world = quat_apply(eef_quat, palm_normal_local)
 
-### 方案 B: 优化 mask threshold (E040c)
+# 物体表面法向 (从 contact_point 指向 target 的方向)
+surface_normal = normalize(target_world - contact_point)
 
-当前 threshold=0.15m: box025 激活 64%, bucket010 激活 67%。可以尝试:
-- threshold=0.10m: 更严格, 只在真正接触帧激活 → 减少非接触帧的干扰
-- 这可以避免非接触帧 "错误方向" 的动态 target 干扰 body tracking
+# Orientation reward: dot product 越大越好 (手掌朝向物体)
+ori_rew = dot(palm_normal_world, surface_normal)
+# 或: ori_rew = exp(-(1 - dot) / sigma)
+```
 
-### 方案 C: 接受当前结果, 切换到论文评估
-
-E040 的结果已经是**论文可用级别**:
-- Body tracking: MPKPE 1.2-1.3cm (优秀)
-- Stability: 100% (box025, bucket010)
-- Contact Preservation: 89-95%
-- 姿态自然度: 无畸形 (✅ 视频通过)
-
-与 E036 (无 contact) 对比: Contact<10cm 从 56/2/7% → 64/66/4% — box025 +8%, bucket010 +64%(!), desk005 不变。
-
-### 方案 D: Per-case 最优配置
-
-- **box025**: E039b (固定 target) 已足够好 (如果允许轻微手粘连), 或 E040 (自然)
-- **bucket010**: E040 (66% contact + 100% stable + 自然) 是最佳平衡
-- **desk005**: E036 (无 contact, 7%=超越 ref 0%) + 100% stable 是最佳
+**需要确定**:
+1. G1 wrist frame 中哪个轴代表 "手掌朝向" (需要可视化确认)
+2. 用 dot product reward 还是 cos similarity
+3. orientation gain 相对 position gain 的权重
 
 ## 改动文件
 
