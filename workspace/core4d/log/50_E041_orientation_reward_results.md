@@ -1,104 +1,152 @@
-# E041: Hand Orientation Reward — 手掌方向约束
+# E041: Hand Orientation Reward — 手掌方向约束 + Sweep
 
-## 状态: 方向部分有效 — additive 模式(E041c)是最佳变体,但未根本解决不自然前倾
+## 状态: additive 模式(E041c)是最佳变体, 但未根本解决不自然姿态 (CEM 结构性限制)
 
 ## 背景
 
-E040 发现 position-only reward 导致 CEM 用手背接触物体 (满足距离约束但方向错误)。E041 添加 orientation 乘法门控: pos_rew × ori_rew, 要求手掌法向量朝向物体。
+E039b~E040 的 contact reward 存在 "手背接触物体" 的不自然行为。根因: position-only reward 没有方向约束, CEM 通过旋转手腕让 contact_point 靠近 target, 导致手背 (而非手掌) 朝向物体。
 
-## 核心改动
+E041 在 contact reward 中添加 orientation 约束: 要求手掌法向量朝向物体表面。
 
-```python
-# Palm normal in wrist local frame (从 ref FK 分析得出)
-palm_normal_left = [0, -1, 0]   # left wrist -y axis
-palm_normal_right = [0, +1, 0]  # right wrist +y axis
+## Palm Normal 分析
 
-# Transform to world, compute alignment with hand→target direction
-palm_world = quat_apply(eef_quat, palm_normal_local)
-dir_to_target = normalize(target_world - contact_point)
-dot = dot_product(palm_world, dir_to_target)
-ori_rew = clamp(dot, min=0)  # [0, 1]
+通过分析 box025 ref 中 G1 wrist 在多个接触帧 (t=30~90) 的旋转矩阵与 wrist→object 方向的点积:
 
-# Multiplicative gating
-pos_rew = pos_rew * ori_rew  # only reward when both close AND palm faces target
+```
+Left wrist:  -y 轴一致指向物体 (dot = -0.61 ~ -0.87)
+Right wrist: +y 轴一致指向物体 (dot = +0.67 ~ +0.96)
 ```
 
-## 结果
+结论: palm_normal_left = `[0, -1, 0]`, palm_normal_right = `[0, +1, 0]`
 
-| Case | E036 (baseline) | E040 (动态target) | **E041 (+ orientation)** | Ref |
-|------|------|------|------|------|
-| box025 contact<10cm | 56% | 64% | **62%** | 69% |
-| bucket010 contact<10cm | 2% | 66% | **56%** | 76% |
-| box025 stability | 100% | 100% | **100%** | - |
-| bucket010 stability | 100% | 100% | **90%** | - |
-| box025 MPKPE | 1.4cm | 1.3cm | **1.6cm** | - |
-| bucket010 MPKPE | 1.3cm | 1.2cm | **1.8cm** | - |
+## 三种 Orientation 模式
 
-## 可视化分析
+```python
+# Mode 1: multiply (E041, E041b) — 严格乘法门控
+pos_rew = pos_rew * clamp(dot(palm_world, dir_to_target), min=0)
+
+# Mode 2: additive (E041c) — 柔性加权
+pos_rew = (1 - w) * pos_rew + w * ori_rew   # w=0.3
+
+# Mode 3: near_field (E041d) — 仅近距离时约束方向
+near = (dist < 0.15).float()
+pos_rew = pos_rew * (1 - near + near * ori_rew)
+```
+
+## Sweep 完整结果 (本地 + 远程 2-GPU 并行)
 
 ### box025
 
-| 帧 | ref | sim | 对比 E040 |
-|------|-----|-----|----------|
-| t=0.8s | 弯腰手搭箱面 | 弯腰手伸向箱面 | 手掌朝向有所改善 |
-| t=1.5s | 站箱后手搭面 | 站箱侧弯腰手伸向箱 | 手位置偏但方向似乎更正确 |
-| t=2.0s | 站箱侧 | **过度前倾, 头趴箱顶** | ❌ 仍有不自然前倾 |
-| t=2.5s | 站箱侧手搭 | 弯腰前倾手在箱面 | 不自然弯腰 |
-| t=3.3s | 弯腰趴箱 | 弯腰手在箱面 | 接近 ref |
-
-**问题**: t=2.0-2.5s 仍有过度前倾。orientation reward 改善了手掌方向但没有解决 "身体过度弯曲" 问题 — 这可能是 body tracking 本身的 tradeoff (MPKPE 退化到 1.6cm)。
+| 变体 | Mode | Gain | Contact<10cm | Stability | MPKPE | Preservation | ObjPos |
+|------|------|------|------|------|------|------|------|
+| E036 (no contact) | - | - | 56% | 100% | 1.4cm | - | 0.9cm |
+| E040 (pos-only) | - | 5.0 | 64% | 100% | 1.3cm | 88.8% | 0.7cm |
+| E041 (multiply) | multiply | 5.0 | 62% | 100% | 1.6cm | 86.5% | 0.8cm |
+| E041b (multiply) | multiply | 3.0 | 52% | **85%** ❌ | 1.5cm | 74.4% | 0.7cm |
+| **E041c (additive)** | additive(0.3) | 5.0 | **66%** | **100%** | **1.4cm** | **88.2%** | 0.8cm |
+| E041d (near_field) | near_field | 5.0 | 58% | 98% | 1.5cm | 73.5% | 0.9cm |
 
 ### bucket010
 
-| 帧 | ref | sim | 对比 E040 |
-|------|-----|-----|----------|
-| t=0.8s | 弯腰手搭桶顶 | 弯腰手伸向桶顶 | 手掌朝向改善, 更自然地伸手 |
-| t=1.7s | 站着手扶桶面 | 站着手在桶面附近 | ✅ 手掌朝向桶面, 比 E040 更自然 |
-| t=2.5s | 站着手搭桶顶 | 站着手在桶旁 | 手位置可接受 |
+| 变体 | Mode | Gain | Contact<10cm | Stability | MPKPE | Preservation | ObjPos |
+|------|------|------|------|------|------|------|------|
+| E036 (no contact) | - | - | 2% | 100% | 1.3cm | - | 0.8cm |
+| E040 (pos-only) | - | 5.0 | **66%** | 100% | 1.2cm | 95.4% | 0.9cm |
+| E041 (multiply) | multiply | 5.0 | 56% | **90%** | 1.8cm | 80.5% | 1.0cm |
+| E041b (multiply) | multiply | 3.0 | 40% | **90%** | 1.7cm | 58.1% | 0.9cm |
+| **E041c (additive)** | additive(0.3) | 5.0 | 57% | **100%** | **1.4cm** | **81.6%** | 0.9cm |
 
-bucket010 的手掌方向比 E040 有明显改善 (t=1.7s 可见), 但 Contact 和 Stability 都退化了。
+## 可视化分析 (t=2.0s 关键帧对比, box025)
 
-## Claims 验证
+t=2.0s 是 E040 中手背接触最明显的帧 (用户指出), 以下逐变体对比:
 
-| Claim | 阈值 | 结果 | 状态 |
+**ref**: 站在箱侧, 手自然搭在箱面
+
+### E040 (position-only, 无 ori) — Contact 64%
+
+sim: 弯腰前倾, 手在箱顶, **手背朝向物体**。手腕反转, 不是搬运的姿态。
+
+### E041 (multiply, gain=5) — Contact 62%
+
+sim: 弯腰头趴箱顶, 手在箱面上。前倾程度与 E040 类似, 手掌方向不太明确 (视角不清晰)。乘法门控使 CEM 难以同时满足 position + orientation → MPKPE 退化到 1.6cm。
+
+### E041b (multiply, gain=3) — Contact 52%
+
+sim: 站姿相对直立, 手在箱面附近但距离较远。gain 太低, 接触激励弱 → Contact 大幅退化 (52%), Stability 也降到 85%。**最差变体**。
+
+### E041c (additive, w=0.3) — Contact 66% ★最佳
+
+sim: 弯腰但程度比 E040/E041 轻, 手在箱面附近。additive 模式不会完全 zero-out reward → CEM 保持接近行为, 同时 orientation 提供软性方向信号。MPKPE 恢复到 1.4cm (与 E036 baseline 一致)。**仍有前倾但程度减轻**。
+
+### E041d (near_field) — Contact 58%
+
+sim: 站姿较直, 手伸向箱面。只在 dist<0.15m 时才激活 ori 约束 → 远距离正常靠近, 近距离方向校正。但总 Contact 偏低 (58%), 可能是近距离校正使 CEM 在最后一步"犹豫"。
+
+### E041c bucket010 可视化
+
+| 帧 | ref | sim | 观察 |
+|------|-----|-----|------|
+| t=0.8s | 弯腰手搭桶顶 | 弯腰手伸向桶, 步幅较大 | 手伸向桶的方向大致正确 |
+| t=1.7s | 站着手扶桶壁 | 弯腰手在桶面, 手搭在桶壁上 | 手掌大致朝向桶面 |
+| t=2.5s | 站着手搭桶顶 | 站着手在桶旁 | 姿态大致匹配, 距离略远 |
+
+bucket010 的 E041c 姿态整体合理, 但 Contact 从 E040 的 66% 降到 57% — orientation 约束增加了 CEM 负担。
+
+## Claims 验证 (以 E041c 最佳变体为准)
+
+| Claim | 阈值 | E041c 结果 | 状态 |
 |-------|------|------|------|
-| C1: Contact<10cm ≥60% | ≥60% | 62%/56% | ⚠️ bucket010 未达 |
-| C2: MPKPE <3cm | <3cm | 1.6/1.8cm | ✅ 达成 |
-| C3: Stability >90% | >90% | 100%/90% | ⚠️ bucket010 边缘 |
-| C4: 手掌朝向改善 | 视频验证 | 部分改善, 仍有前倾 | ⚠️ 部分达成 |
+| C1: Contact<10cm ≥60% | ≥60% | 66%/57% | ⚠️ bucket010 未达 |
+| C2: MPKPE <3cm | <3cm | 1.4cm | ✅ 达成 |
+| C3: Stability >90% | >90% | 100%/100% | ✅ 达成 |
+| C4: 手掌朝向改善 | 视频验证 | 前倾减轻但仍有不自然帧 | ⚠️ 部分达成 |
 
-## 分析
+## 关键分析
 
-### 1. Orientation reward 方向正确但 multiplicative gating 过于严格
+### 1. 各模式的效果排序
 
-乘法门控 `pos_rew × ori_rew` 意味着:
-- 当 palm 方向错误 (dot ≈ 0): 无论距离多近, reward ≈ 0
-- CEM 在 1024 samples 中更难找到 "距离近 AND 方向对" 的解
-- 结果: CEM 有时直接放弃接触 (Contact 降低) 或为满足约束做出其他妥协 (Stability 降低)
+**additive > near_field > multiply > multiply+低gain**
 
-### 2. "过度前倾" 问题的根因
+| 模式 | 原理 | 对 CEM 的压力 | 效果 |
+|------|------|-------------|------|
+| additive(0.3) | `0.7*pos + 0.3*ori` | 低 (ori 只占 30%) | ★★★ 保持 Contact, 软性引导方向 |
+| near_field | dist<15cm 时 `pos*ori` | 中 (远距离无压力) | ★★ Stability 好, Contact 偏低 |
+| multiply | `pos * ori` | 高 (必须同时满足) | ★ Contact/Stability 退化 |
+| multiply + gain=3 | `pos * ori`, gain 减半 | 高 + 激励弱 | ✗ 全面退化 |
 
-box025 t=2.0s 的过度前倾不是 orientation reward 导致的 — E040 也有同样问题。这是因为:
-- 动态 target 在该帧指向箱顶
-- body tracking 要求身体在某个位置
-- CEM 的折中: 前倾+伸手 → 同时部分满足 body tracking 和 contact
-- 这与 orientation 无关, 是 position reward 引起的身体姿态问题
+### 2. CEM 优化预算分析
 
-### 3. 指标对比总结
+CEM 每步有 1024 samples × 32 iterations 的预算来优化 reward:
 
-| 指标 | E036→E040→E041 趋势 | 分析 |
-|------|---|---|
-| Contact<10cm | 56→64→62 / 2→66→56 | E041 退化, ori gating 太严 |
-| Stability | 100→100→100 / 100→100→90 | bucket010 略退化 |
-| MPKPE | 1.4→1.3→1.6 / 1.3→1.2→1.8 | E041 body tracking 退化 |
-| 手掌方向 | 无约束→无约束→有约束 | E041 有改善但不完全 |
+| Reward component | Max | 维度 |
+|------|------|------|
+| local_frame_rew (body tracking) | 3.5 | 7 terms (upper/lower/root × pos/ori + joint) |
+| task_obj_rew | penalty | 2 terms (pos + rot) |
+| contact_hdmi_rew (E041c) | 5.0 | **2 terms × (position + orientation)** = 4 维 |
 
-## 下一步方向
+总共 ~13 个约束维度。CEM 用 1024 个高斯采样来搜索 nu 维关节空间 (nu≈20+), 同时满足 13 个约束。**这超出了 CEM 的有效搜索能力**。
 
-1. **降低 ori_weight 或改为加权和**: `0.5 * pos_rew + 0.5 * ori_rew` 替代乘法门控, 更宽容
-2. **只在近距离时激活 ori**: 当 dist < 0.15m 时才检查方向, 远距离只看 position
-3. **降低 contact gain**: gain=5.0 → 3.0, 让 body tracking 主导, contact 只做轻微引导
-4. **根本性思考**: CEM 的 1024 samples × 32 iter 是否足以同时优化 position + orientation? 可能需要接受 CEM 的结构性限制
+### 3. 根本性结论
+
+**Orientation reward 是正确的思路但 CEM 无法充分利用**:
+- multiplicative: CEM 搜索空间指数级缩小 → 直接退化
+- additive(0.3): CEM 能部分利用 (30% 权重) → 最佳但改善有限
+- 手背接触问题的根因 = CEM 关节空间随机搜索的归纳偏置不足
+- HDMI 的 RL policy 经数百万步训练自然学会手掌朝向, CEM 没有这种学习能力
+- **这是优化器的结构性限制, 不是 reward 设计的问题**
+
+### 4. E041c vs E040 的实际改善
+
+| 维度 | E040 | E041c | 改善 |
+|------|------|-------|------|
+| box025 Contact<10cm | 64% | **66%** | +2% |
+| box025 MPKPE | 1.3cm | **1.4cm** | ≈ |
+| box025 Preservation | 88.8% | **88.2%** | ≈ |
+| bucket010 Contact<10cm | **66%** | 57% | -9% |
+| bucket010 MPKPE | 1.2cm | **1.4cm** | -0.2cm |
+| Stability | 100%/100% | 100%/100% | = |
+
+**结论**: E041c 对 box025 有微小改善 (+2%), 对 bucket010 有退化 (-9%)。orientation reward 的边际收益不显著。
 
 ## 改动文件
 
@@ -107,36 +155,7 @@ box025 t=2.0s 的过度前倾不是 orientation reward 导致的 — E040 也有
 | `spider/config.py` | +`contact_hdmi_ori_weight`, `ori_mode`, `palm_normal_left/right` |
 | `spider/simulators/mjwp.py` | contact_hdmi_rew 块 + 3 种 ori 模式 (multiply/additive/near_field) |
 | `examples/config/override/core4d_e041{,b,c,d}.yaml` | 4 种变体配置 |
-| `workspace/core4d/scripts/run_E041_sweep_remote.sh` | 远程并行执行脚本 |
-
-## E041 Sweep 完整结果 (远程 2-GPU 并行)
-
-| 变体 | Mode | Gain | box025 Contact | box025 Stable | box025 MPKPE | bucket010 Contact | bucket010 Stable | bucket010 MPKPE |
-|------|------|------|------|------|------|------|------|------|
-| E040 (baseline) | 无ori | 5.0 | 64% | 100% | 1.3cm | 66% | 100% | 1.2cm |
-| E041 (multiply) | multiply | 5.0 | 62% | 100% | 1.6cm | 56% | 90% | 1.8cm |
-| E041b (multiply) | multiply | 3.0 | 52% | 85% | 1.5cm | 40% | 90% | 1.7cm |
-| **E041c (additive)** | additive(0.3) | 5.0 | **66%** | **100%** | **1.4cm** | 57% | **100%** | 1.4cm |
-| E041d (near_field) | near_field | 5.0 | 58% | 98% | 1.5cm | - | - | - |
-
-### 结论
-
-1. **E041c (additive, w=0.3) 是最佳变体**: Contact=66%/57% + Stability=100%/100% + MPKPE=1.4cm
-2. **Multiplicative gating 过于严格** (E041/E041b): CEM 放弃部分接触帧
-3. **Near-field** (E041d) 效果中等: 只在近距离才激活 ori → stability 好但 contact 退化
-4. **降低 gain** (E041b) 有害: contact 大幅退化 (52%/40%)
-
-### 视觉评估 (E041c box025)
-
-t=0.8s: 手掌方向相比 E040 有所改善, 但 t=2.0s 仍有前倾趴箱的不自然行为。Orientation reward 提供了方向 signal 但不足以完全阻止 CEM 用不自然姿态满足距离约束。
-
-### 根本性结论
-
-**Orientation reward 是正确的方向但对 CEM 效果有限**:
-- CEM 的 1024 samples × 32 iterations 优化空间有限
-- 同时满足 body tracking (7 terms) + position contact + orientation contact 对 CEM 压力太大
-- HDMI 的 RL policy 经数百万步训练自然学会正确行为, CEM 没有这种学习能力
-- **这是 CEM 的结构性限制, 不是 reward 设计的问题**
+| `workspace/core4d/scripts/run_E041_sweep_remote.sh` | 远程 2-GPU 并行执行脚本 |
 
 ## 结果路径
 
