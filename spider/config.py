@@ -647,8 +647,8 @@ def process_config(config: Config):
             len(config.task_body_ids),
         )
 
-    # Resolve hand_approach_body_ids and object half-extents for E025
-    if config.hand_approach_rew_scale > 0.0 and config.simulator == "mjwp":
+    # Resolve hand_approach_body_ids and object half-extents for E025/E039
+    if (config.hand_approach_rew_scale > 0.0 or config.contact_mask_rew_scale > 0.0 or config.contact_hdmi_gain > 0.0) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
             bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)

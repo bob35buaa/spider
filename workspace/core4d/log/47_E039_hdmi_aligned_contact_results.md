@@ -139,11 +139,25 @@ EEF offset (G1 wrist → palm): `[0.05, 0.0, 0.0]` (与 HDMI `move_suitcase.yaml
 
 ## 根因分析: 为什么对齐 HDMI 后仍不行?
 
-### 1. Approach mask 的 threshold 问题
+### 1. Approach mask 的 threshold 问题 (严重!)
 
-E039 使用 `hand_approach_contact_threshold=0.3` 和旧的 axis-aligned SDF (run_mjwp.py:486-494) 来预计算 mask。但我们已经发现 axis-aligned SDF 严重高估距离 — 导致 mask 在很多本应激活的帧没有激活。
+E039 使用 `hand_approach_contact_threshold=0.3` 和旧的 **axis-aligned SDF** (run_mjwp.py:486-494) 来预计算 mask:
+```python
+# run_mjwp.py:492-494 — 错误的距离计算!
+delta = np.abs(hand_pos - obj_pos)           # 不旋转到物体坐标系!
+surf_dist = np.linalg.norm(np.maximum(delta - half_ext, 0))
+if surf_dist < threshold: mask[t] = 1.0
+```
 
-bucket010: ref 中 76% 帧 <10cm (rotated SDF), 但 approach_mask (axis-aligned, threshold=0.3m) 可能只在 ~20% 帧激活。**大部分接触帧 mask=0, contact reward 被关闭了!**
+这和 eval 中正确的 rotated SDF (`obj_mat.T @ (hand - obj)`) 严重不一致:
+- bucket010: 正确 rotated SDF 显示 76% 帧 <10cm, 但 axis-aligned 版本严重高估距离
+- 结果: approach_mask 可能只在 ~20% 帧激活, **大部分接触帧 mask=0, contact reward 被关闭了!**
+
+此外 mask 是**标量** (两手共享), 而 HDMI 是 **per-EEF** (左右手独立 mask)。
+
+**这是 E039 效果有限的关键原因之一 — 不完全是 CEM 的问题, 而是 contact reward 在大部分接触帧根本没被激活。**
+
+**修复方案 (E039b)**: 用正确的 rotated SDF 重新计算 per-EEF mask, 预期大幅改善 bucket010。
 
 ### 2. CEM 的 horizon 限制
 

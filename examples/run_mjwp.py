@@ -521,6 +521,36 @@ def main(config: Config):
         # Override body_xpos_ref with full version for local-frame
         body_xpos_ref = body_xpos_full_ref_t
 
+    # E039b: precompute per-EEF contact mask using correct ROTATED SDF
+    if config.contact_hdmi_gain > 0.0 and config.hand_approach_body_ids:
+        obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
+        if obj_body_id != -1 and config.hand_approach_obj_half_extents:
+            half_ext = np.array(config.hand_approach_obj_half_extents)
+            T_mask = qpos_ref.shape[0]
+            threshold = config.contact_hdmi_threshold
+            per_eef_mask_np = np.zeros(T_mask, dtype=np.float32)
+            for t in range(T_mask):
+                mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
+                mujoco.mj_forward(mj_model, mj_data_ref)
+                obj_pos = mj_data_ref.xpos[obj_body_id]
+                obj_mat = mj_data_ref.xmat[obj_body_id].reshape(3, 3)
+                for hid in config.hand_approach_body_ids:
+                    hand_pos = mj_data_ref.xpos[hid]
+                    # Correct rotated SDF: transform to object local frame
+                    local = obj_mat.T @ (hand_pos - obj_pos)
+                    clamped = np.clip(local, -half_ext, half_ext)
+                    surf_dist = np.linalg.norm(local - clamped)
+                    if surf_dist < threshold:
+                        per_eef_mask_np[t] = 1.0
+                        break
+            # Override approach_mask with corrected version
+            approach_mask_t = torch.tensor(per_eef_mask_np, device=config.device)
+            active_pct = per_eef_mask_np.mean() * 100
+            loguru.logger.info(
+                "E039b rotated-SDF mask: {:.1f}% frames active (threshold={:.2f}m)",
+                active_pct, threshold,
+            )
+
     if approach_mask_t is not None:
         if body_xquat_ref_t is not None:
             ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t)
