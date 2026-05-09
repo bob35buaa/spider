@@ -551,9 +551,32 @@ def main(config: Config):
                 active_pct, threshold,
             )
 
+    # E040: precompute per-frame contact target from ref FK (hand pos in object local frame)
+    contact_target_per_frame = None
+    if config.contact_hdmi_dynamic_target and config.hand_approach_body_ids:
+        obj_body_id_e040 = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
+        if obj_body_id_e040 != -1:
+            T = qpos_ref.shape[0]
+            n_eef = len(config.hand_approach_body_ids)
+            target_np = np.zeros((T, n_eef, 3), dtype=np.float32)
+            for t in range(T):
+                mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
+                mujoco.mj_forward(mj_model, mj_data_ref)
+                obj_pos = mj_data_ref.xpos[obj_body_id_e040]
+                obj_mat = mj_data_ref.xmat[obj_body_id_e040].reshape(3, 3)
+                for ei, hid in enumerate(config.hand_approach_body_ids):
+                    hand_pos = mj_data_ref.xpos[hid]
+                    # Hand position in object local frame
+                    target_np[t, ei] = obj_mat.T @ (hand_pos - obj_pos)
+            contact_target_per_frame = torch.tensor(target_np, device=config.device)
+            loguru.logger.info("E040 dynamic target: shape={}", tuple(contact_target_per_frame.shape))
+
     if approach_mask_t is not None:
         if body_xquat_ref_t is not None:
-            ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t)
+            if contact_target_per_frame is not None:
+                ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t, contact_target_per_frame)
+            else:
+                ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t)
         else:
             ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t)
     else:

@@ -105,6 +105,8 @@ class Config:
     contact_hdmi_target_right: list[float] = field(default_factory=list)  # [x,y,z] in obj local frame
     contact_hdmi_eef_offset: list[float] = field(default_factory=lambda: [0.05, 0.0, 0.0])  # wrist→palm
     contact_hdmi_threshold: float = 0.30  # mask threshold: activate when hand-target < this (m)
+    # E040: dynamic per-frame contact target (from ref FK)
+    contact_hdmi_dynamic_target: bool = False  # True=use per-frame ref-derived target instead of fixed
     use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
     qpos_reward_sigma: float = 2.0  # sigma for bounded qpos reward
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward

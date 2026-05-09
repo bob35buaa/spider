@@ -46,6 +46,10 @@
 | E033 | 2026-05-08 | Phase 9 | **desk005 σ sweep+CEM budget**: σ=1.0达95%stable+91%<15cm(目标达成); 增加iter/horizon/samples反而恶化stability; tradeoff是根本性的 | **stable目标达成** |
 | E034 | 2026-05-08 | Phase 10 | **HDMI-Style Reward: Stability Penalty**: bounded qpos失败(CEM无法区分站/倒); stability_penalty有效(不稳定时长↓86%, min_z 0.22→0.55m); **但desk005仍有t≈1s严重前倾(视频证实)**; contact mask对desk005无效(始终在范围内) | 改善但未解决 |
 | E035 | 2026-05-08 | Phase 10 | **Local-Frame Body Tracking**: 移植HDMI yaw-local reward; desk005: pelvis_min=0.657m(无不稳定段) + **<10cm=94.4%**(历史最佳); 同时提升稳定性+contact(打破tradeoff); 3/3 cases零摔倒; 运行2x慢(FK读取) | **突破** |
+| E036 | 2026-05-08 | Phase 10 | **关闭hand_approach**: MPKPE 48cm→1.4cm; Contact<10cm暴跌(desk 94→7%); body tracking突破+contact tradeoff | **body tracking突破** |
+| E037-E039 | 2026-05-08~09 | Phase 11 | **Contact Reward系列**: box-SDF/HDMI-aligned设计; **发现config bug: contact reward从未执行** (E036关闭approach→body_ids=[]→reward条件false) | Bug发现 |
+| E039b | 2026-05-09 | Phase 11 | **Config Bug Fix+Rotated SDF**: 修复后contact首次生效; box025=85%/bucket010=76%/desk005=81%; **但发现"手粘连物体"问题(固定target)** | 突破+新问题 |
+| E040 | 2026-05-09 | Phase 11 | **Dynamic Per-Frame Target**: 消除手粘连; Contact Preservation 89-95%; box025=64%/bucket010=66%/desk005=4%; 姿态完全自然; Contact<10cm低于E039b但行为质量更高 | **姿态自然+高Preservation** |
 
 ## 关键指标演进
 
@@ -58,6 +62,11 @@ E026 sustained: bucket010 contact=64%(7/11), lift_max=0.093m, 4 consecutive >5cm
 E027 generalization: bucket010 pf=50% still 64% contact; desk005 contact=80%, lift_max=0.117m (best overall)
 E021 Anchored pelvis_err: box025(0.186, ↓72%) < desk005(0.279, ↓58%) < bucket010(0.293, ↓58%) < chair022(0.417, ↓47%)
 joint_err:  E002(0.073) → E003(0.064) → E012(0.108 rad) → E015-d(0.202 rad, bucket005)
+MPKPE (Phase 10+): E036=1.4cm → E039b=1.1-2.1cm → E040=1.2-1.9cm (全部<3cm, 优秀)
+Contact<10cm演进:
+  box025:  E036(56%) → E039b(85%,手粘连) → E040(64%,自然) | Preservation=89%
+  bucket010: E036(2%) → E039b(76%,手粘连) → E040(66%,自然) | Preservation=95%
+  desk005: E036(7%) → E039b(81%,stable=20%) → E040(4%,stable=81%)
 obj z 实测 (npz qpos):
   Phase 1: 所有实验 sim max ≤ 0.460m (E011), 实际未持续离地
   Phase 2 (kinobj): obj follows ref (PD驱动), pelvis stable

@@ -467,9 +467,10 @@ def get_reward(
 
     TODO: move reward computation to task-specific module
     """
-    # Unpack with backward compatibility (5-tuple legacy, 6-tuple E018, 7-tuple E034, 8-tuple E035)
+    # Unpack with backward compatibility (5-tuple legacy, 6-tuple E018, 7-tuple E034, 8-tuple E035, 9-tuple E040)
     approach_mask_val = 1.0
     body_xquat_ref = None
+    contact_target_dynamic = None
     if len(ref) == 5:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref = ref
         body_xpos_ref = None
@@ -477,8 +478,10 @@ def get_reward(
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref = ref
     elif len(ref) == 7:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val = ref
-    else:
+    elif len(ref) == 8:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val, body_xquat_ref = ref
+    else:
+        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val, body_xquat_ref, contact_target_dynamic = ref
     qpos_sim = wp.to_torch(env.data_wp.qpos)
     qvel_sim = wp.to_torch(env.data_wp.qvel)
     N = qpos_sim.shape[0]
@@ -698,8 +701,9 @@ def get_reward(
             contact_mask_rew = mask * proximity + (1.0 - mask) * baseline
 
     # E039: HDMI-aligned contact — predefined target points + per-EEF + mask gate
+    # E040: dynamic per-frame target support
     contact_hdmi_rew = torch.zeros(N, device=config.device)
-    if config.contact_hdmi_gain > 0.0 and config.contact_hdmi_target_left:
+    if config.contact_hdmi_gain > 0.0 and (config.contact_hdmi_target_left or contact_target_dynamic is not None):
         obj_body_id = mujoco.mj_name2id(
             env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
         )
@@ -710,11 +714,17 @@ def get_reward(
             obj_quat = xquat_sim[:, obj_body_id]  # (N, 4) wxyz
 
             eef_bids = config.hand_approach_body_ids  # [left_wrist, right_wrist]
-            targets = [
-                torch.tensor(config.contact_hdmi_target_left, device=config.device, dtype=obj_pos.dtype),
-                torch.tensor(config.contact_hdmi_target_right, device=config.device, dtype=obj_pos.dtype),
-            ]
             eef_offset = torch.tensor(config.contact_hdmi_eef_offset, device=config.device, dtype=obj_pos.dtype)
+
+            # E040: choose between dynamic per-frame targets and fixed targets
+            if contact_target_dynamic is not None:
+                # contact_target_dynamic is (n_eef, 3) for this timestep (already indexed by t)
+                targets = [contact_target_dynamic[ei] for ei in range(len(eef_bids))]
+            else:
+                targets = [
+                    torch.tensor(config.contact_hdmi_target_left, device=config.device, dtype=obj_pos.dtype),
+                    torch.tensor(config.contact_hdmi_target_right, device=config.device, dtype=obj_pos.dtype),
+                ]
 
             per_eef_rew = []
             for ei, (bid, target_off) in enumerate(zip(eef_bids, targets)):
@@ -731,9 +741,7 @@ def get_reward(
 
             # Stack per-EEF rewards: (N, 2)
             rew_stack = torch.stack(per_eef_rew, dim=1)
-            # Per-EEF mask from ref (approach_mask_val is scalar per-timestep, shared)
-            # Use it as combined mask; both EEFs get same mask
-            mask = approach_mask_val  # scalar or (N,) from ref[6]
+            mask = approach_mask_val
             gain = config.contact_hdmi_gain
             # HDMI formula: mask=1 → gain*pos_rew, mask=0 → 1.0
             contact_hdmi_rew = (rew_stack * mask * gain + (1.0 - mask)).mean(dim=1)
