@@ -98,6 +98,13 @@ class Config:
     contact_mask_rew_scale: float = 0.0  # gain; 0.0 = disabled
     contact_mask_rew_sigma: float = 0.3  # exp kernel bandwidth (meters), HDMI default
     contact_mask_rew_baseline: float = 0.0  # reward on non-contact frames (HDMI uses 1.0)
+    # E039: HDMI-aligned contact with predefined target points
+    contact_hdmi_gain: float = 0.0  # 0=disabled; HDMI uses 5.0
+    contact_hdmi_sigma: float = 0.3  # exp kernel bandwidth (same as HDMI eef_pos_sigma)
+    contact_hdmi_target_left: list[float] = field(default_factory=list)  # [x,y,z] in obj local frame
+    contact_hdmi_target_right: list[float] = field(default_factory=list)  # [x,y,z] in obj local frame
+    contact_hdmi_eef_offset: list[float] = field(default_factory=lambda: [0.05, 0.0, 0.0])  # wrist→palm
+    contact_hdmi_threshold: float = 0.30  # mask threshold: activate when hand-target < this (m)
     use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
     qpos_reward_sigma: float = 2.0  # sigma for bounded qpos reward
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward

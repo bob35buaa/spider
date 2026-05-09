@@ -697,7 +697,48 @@ def get_reward(
             baseline = config.contact_mask_rew_baseline
             contact_mask_rew = mask * proximity + (1.0 - mask) * baseline
 
-    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew + contact_mask_rew
+    # E039: HDMI-aligned contact — predefined target points + per-EEF + mask gate
+    contact_hdmi_rew = torch.zeros(N, device=config.device)
+    if config.contact_hdmi_gain > 0.0 and config.contact_hdmi_target_left:
+        obj_body_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
+        if obj_body_id != -1 and config.hand_approach_body_ids:
+            xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
+            xquat_sim = wp.to_torch(env.data_wp.xquat)  # (N, nbody, 4) wxyz
+            obj_pos = xpos_sim[:, obj_body_id]  # (N, 3)
+            obj_quat = xquat_sim[:, obj_body_id]  # (N, 4) wxyz
+
+            eef_bids = config.hand_approach_body_ids  # [left_wrist, right_wrist]
+            targets = [
+                torch.tensor(config.contact_hdmi_target_left, device=config.device, dtype=obj_pos.dtype),
+                torch.tensor(config.contact_hdmi_target_right, device=config.device, dtype=obj_pos.dtype),
+            ]
+            eef_offset = torch.tensor(config.contact_hdmi_eef_offset, device=config.device, dtype=obj_pos.dtype)
+
+            per_eef_rew = []
+            for ei, (bid, target_off) in enumerate(zip(eef_bids, targets)):
+                # Target in world = obj_pos + quat_apply(obj_quat, target_offset)
+                target_world = obj_pos + _lf_quat_apply(obj_quat, target_off.unsqueeze(0).expand(N, -1))
+                # EEF contact point = eef_pos + quat_apply(eef_quat, eef_offset)
+                eef_pos = xpos_sim[:, bid]  # (N, 3)
+                eef_quat = xquat_sim[:, bid]  # (N, 4)
+                contact_point = eef_pos + _lf_quat_apply(eef_quat, eef_offset.unsqueeze(0).expand(N, -1))
+                # Distance and exp reward
+                dist = (target_world - contact_point).norm(dim=-1)  # (N,)
+                pos_rew = torch.exp(-dist / config.contact_hdmi_sigma)
+                per_eef_rew.append(pos_rew)
+
+            # Stack per-EEF rewards: (N, 2)
+            rew_stack = torch.stack(per_eef_rew, dim=1)
+            # Per-EEF mask from ref (approach_mask_val is scalar per-timestep, shared)
+            # Use it as combined mask; both EEFs get same mask
+            mask = approach_mask_val  # scalar or (N,) from ref[6]
+            gain = config.contact_hdmi_gain
+            # HDMI formula: mask=1 → gain*pos_rew, mask=0 → 1.0
+            contact_hdmi_rew = (rew_stack * mask * gain + (1.0 - mask)).mean(dim=1)
+
+    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew + contact_mask_rew + contact_hdmi_rew
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
     stability_penalty = torch.zeros(N, device=config.device)
