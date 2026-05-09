@@ -136,3 +136,76 @@ sim 手全程贴桶, **完美恢复到 ref 水平** (76% = 76%)。
 | desk005 | `workspace/core4d/results/E039b/E039b_desk005.{npz,mp4}` |
 | bucket010 | `workspace/core4d/results/E039b/E039b_bucket010.{npz,mp4}` |
 | 运行日志 | `logs/E039b/` |
+
+---
+
+## E039c: threshold=0.15m + 问题分析
+
+### 结果
+
+降低 mask threshold 从 0.30m 到 0.15m, 让非接触帧正确关闭:
+
+| Case | Mask active | MPKPE | Stability | Contact<10cm |
+|------|-----------|-------|-----------|-------------|
+| box025 | 64% | 1.4cm | 100% | **82%** |
+| bucket010 | 67% | 1.3cm | 100% | **68%** |
+| desk005 | 72% | 2.1cm | **17%** ❌ | 91% |
+
+### 新发现: Mask 激活率过高的原因
+
+threshold=0.30m 时 mask 接近 100% 激活, 因为这些 ref 序列中人始终站在物体旁边, 手到物体表面距离全程 <30cm (包括"非接触"段)。实际距离分布:
+- box025: max=18.9cm (全程 <30cm → 100% active)
+- desk005: max=20.8cm (全程 <30cm → 100% active)
+- bucket010: max=44.4cm (仅首帧 >30cm → 94-99% active)
+
+threshold=0.15m 合理过滤了 30-40% 的非接触帧。
+
+### 新问题: box025 "手粘连物体" 现象 (严重)
+
+视频分析 (t≈1.5-2.5s) 发现不自然行为:
+
+**表现**:
+1. **手腕反关节**: sim 手被 contact reward 强行拉向箱面固定 target, 手腕超过关节限位, 出现反关节扭曲
+2. **手粘连物体**: body tracking 要求身体移动 (从箱子一侧走到另一侧) 时, contact reward 仍拉手到固定 target → 手"粘"在箱面不松
+3. **身体后仰扭转**: 身体跟 ref 走, 但手被粘住 → 手臂过度伸展 → 身体被迫向后扭转
+
+对比 E036 (无 contact reward) 同时刻, E036 虽然手距物体远但姿态自然无扭曲。
+
+**根因: 固定 contact_target_offset 不适合 CORE4D 任务**
+
+| | HDMI (move_suitcase) | CORE4D (box025/bucket010) |
+|---|---|---|
+| 手在物体上的位置 | **固定** (把手位置不变) | **随时变化** (人围着物体活动) |
+| 固定 offset 合理性 | ✅ 把手是固定的 | ❌ 手在箱面滑动/切换位置 |
+| 人体运动模式 | 抓住把手行走 | 推/搬/抱, 手持续调整位置 |
+
+**HDMI 的 contact_target_offset 假设 "手始终在物体同一个点" — 对 suitcase 把手成立, 对 CORE4D 自由交互不成立。**
+
+当 ref 中机器人从箱子前方移动到侧方时, 手在箱面上的实际接触点从"前面中部"变到"侧面上方"。但固定 target 始终指向"前面中部" → contact reward 强行拉手回去 → 手腕反关节。
+
+### 下一步方向 (E040)
+
+**方案 1: 动态 per-frame target (推荐)**
+
+每帧从 ref FK 中提取手相对物体的实际位置 (in obj local frame) 作为当帧的 target:
+```python
+# 预计算: (T, 2, 3) — per-frame, per-EEF target offset
+for t in range(T):
+    target_offset[t, ei] = rot_inv(obj_quat[t]) @ (hand_pos_ref[t] - obj_pos[t])
+```
+这等价于 "ref 中手在物体上的位置" → sim 的 contact reward 引导手去 ref 手所在的物体表面位置。
+
+优点: 完全避免固定 offset 的粘连问题 (target 随 ref 动态变化)
+本质: 变成了 "在物体坐标系下的 EEF tracking"
+
+**方案 2: 降低 gain + 关节限位惩罚**
+
+- gain 从 5.0 降到 2.0-3.0 (与 tracking 竞争更弱)
+- 添加 joint limit penalty 防止反关节
+
+**方案 3: 重新定义 contact metric**
+
+当前 MPKPE=1.4cm 已很好, contact<10cm 的提升可能不需要额外 reward:
+- 如果用 <15cm 作为 contact 标准, E036 已有 80% → 足够
+- 如果用动态 target (方案 1), 本质上就是提高 hand tracking 精度
+
