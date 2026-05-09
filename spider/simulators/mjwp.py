@@ -716,6 +716,14 @@ def get_reward(
             eef_bids = config.hand_approach_body_ids  # [left_wrist, right_wrist]
             eef_offset = torch.tensor(config.contact_hdmi_eef_offset, device=config.device, dtype=obj_pos.dtype)
 
+            # E041: palm normal vectors for orientation reward
+            palm_normals = None
+            if config.contact_hdmi_ori_weight > 0.0:
+                palm_normals = [
+                    torch.tensor(config.contact_hdmi_palm_normal_left, device=config.device, dtype=obj_pos.dtype),
+                    torch.tensor(config.contact_hdmi_palm_normal_right, device=config.device, dtype=obj_pos.dtype),
+                ]
+
             # E040: choose between dynamic per-frame targets and fixed targets
             if contact_target_dynamic is not None:
                 # contact_target_dynamic is (n_eef, 3) for this timestep (already indexed by t)
@@ -737,6 +745,19 @@ def get_reward(
                 # Distance and exp reward
                 dist = (target_world - contact_point).norm(dim=-1)  # (N,)
                 pos_rew = torch.exp(-dist / config.contact_hdmi_sigma)
+
+                # E041: orientation gating — palm must face toward target
+                if palm_normals is not None:
+                    palm_local = palm_normals[ei]  # (3,)
+                    palm_world = _lf_quat_apply(eef_quat, palm_local.unsqueeze(0).expand(N, -1))  # (N, 3)
+                    dir_to_target = target_world - contact_point  # (N, 3)
+                    dir_norm = dir_to_target.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+                    dir_to_target = dir_to_target / dir_norm  # (N, 3) normalized
+                    dot = (palm_world * dir_to_target).sum(dim=-1)  # (N,) in [-1, 1]
+                    ori_rew = torch.clamp(dot, min=0.0)  # (N,) in [0, 1]
+                    # Multiplicative gating: reward only when both close AND palm faces target
+                    pos_rew = pos_rew * ori_rew
+
                 per_eef_rew.append(pos_rew)
 
             # Stack per-EEF rewards: (N, 2)

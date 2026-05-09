@@ -50,6 +50,7 @@
 | E037-E039 | 2026-05-08~09 | Phase 11 | **Contact Reward系列**: box-SDF/HDMI-aligned设计; **发现config bug: contact reward从未执行** (E036关闭approach→body_ids=[]→reward条件false) | Bug发现 |
 | E039b | 2026-05-09 | Phase 11 | **Config Bug Fix+Rotated SDF**: 修复后contact首次生效; box025=85%/bucket010=76%/desk005=81%; **但发现"手粘连物体"问题(固定target)** | 突破+新问题 |
 | E040 | 2026-05-09 | Phase 11 | **Dynamic Per-Frame Target**: 动态target未解决手背接触问题; position-only reward根本缺陷=无方向约束; CEM用手背满足距离→不自然; Contact<10cm=64/66/4%; 需添加orientation reward | ❌ 不自然行为未消除 |
+| E041 | 2026-05-09 | Phase 11 | **Orientation Reward(乘法门控)**: palm normal方向约束; 手掌朝向有所改善; 但乘法gating过严导致Contact/Stability退化(62/56%); body前倾问题仍存在; CEM难同时优化position+orientation | ⚠️ 方向正确但约束过严 |
 
 ## 关键指标演进
 
