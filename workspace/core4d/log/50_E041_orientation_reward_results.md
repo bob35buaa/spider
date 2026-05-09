@@ -126,14 +126,31 @@ CEM 每步有 1024 samples × 32 iterations 的预算来优化 reward:
 
 总共 ~13 个约束维度。CEM 用 1024 个高斯采样来搜索 nu 维关节空间 (nu≈20+), 同时满足 13 个约束。**这超出了 CEM 的有效搜索能力**。
 
-### 3. 根本性结论
+### 3. 根本性结论 (重要修正!)
 
-**Orientation reward 是正确的思路但 CEM 无法充分利用**:
-- multiplicative: CEM 搜索空间指数级缩小 → 直接退化
-- additive(0.3): CEM 能部分利用 (30% 权重) → 最佳但改善有限
-- 手背接触问题的根因 = CEM 关节空间随机搜索的归纳偏置不足
-- HDMI 的 RL policy 经数百万步训练自然学会手掌朝向, CEM 没有这种学习能力
-- **这是优化器的结构性限制, 不是 reward 设计的问题**
+**之前认为 "HDMI 用 RL, SPIDER 用 CEM → CEM 能力不足" — 这是错误的!**
+
+核实 `examples/run_hdmi.py` 发现: HDMI workflow 在 SPIDER 中**也是 CEM** (sampling-based MPC), 使用完全相同的 `make_optimize_fn`。且 HDMI 的 `rew_contact` (hdmi.py:1108) 也是 **position-only** (无 orientation 约束):
+
+```python
+# hdmi.py:1108-1114 — HDMI contact reward, 纯 position, 无 orientation!
+eef_dist = (target_pos - contact_eef).norm(dim=-1)
+pos_rew = torch.exp(-eef_dist / rc["eef_pos_sigma"])
+contact_rew = pos_rew * force_factor
+```
+
+但 HDMI 在 `move_suitcase` 任务上能实现自然手掌接触。**差异不在 CEM 能力, 而在任务特性**:
+
+| | HDMI move_suitcase | CORE4D box025 |
+|---|---|---|
+| 接触目标 | 固定把手位置 (手自然抓握) | 平坦表面 (手掌/手背都能贴) |
+| 手腕自由度 | **零噪声** (run_hdmi.py:112-118 wrist noise=0) | 正常 CEM 采样 |
+| 物体形状 | 箱子有凸出把手 → 几何引导手掌方向 | 平面 → 无几何引导 |
+| ref 动作 | 人抓把手行走 → 手腕姿态固定 | 人推/搬 → 手腕姿态自由变化 |
+
+**HDMI 的 "秘密" 不是 RL, 而是 (1) wrist 零噪声 + (2) 固定把手的几何引导**。
+
+→ **下一步 E042: 在 CORE4D 中冻结 wrist 关节噪声** (和 HDMI run_hdmi.py 一样), 让手腕保持 ref 姿态不被 CEM 随机扰动, 可能直接解决手背接触问题。
 
 ### 4. E041c vs E040 的实际改善
 
