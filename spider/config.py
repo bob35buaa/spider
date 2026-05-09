@@ -201,6 +201,8 @@ class Config:
     joint_noise_scale: float = 0.15
     pos_noise_scale: float = 0.03
     rot_noise_scale: float = 0.03
+    # E042: zero noise for specific joints (like HDMI wrist freeze)
+    zero_noise_joint_keywords: list[str] = field(default_factory=list)  # e.g. ["wrist_roll", "wrist_pitch", "wrist_yaw"]
     # Reward mode
     use_rl_reward: bool = False  # use dexmachina RL training reward formulation
     # Reward scaling
@@ -473,6 +475,14 @@ def get_noise_scale(config: Config) -> torch.Tensor:
             config.object_actuator_ids, device=config.device, dtype=torch.long
         )
         noise_scale[:, :, object_ids] *= 0.0
+    # E042: zero noise for keyword-matched joints (e.g. wrist freeze)
+    if config.zero_noise_joint_keywords and hasattr(config, "_model_cpu_for_noise"):
+        import mujoco as _mj
+        _model = config._model_cpu_for_noise
+        for ai in range(_model.nu):
+            aname = _mj.mj_id2name(_model, _mj.mjtObj.mjOBJ_ACTUATOR, ai)
+            if aname and any(kw in aname for kw in config.zero_noise_joint_keywords):
+                noise_scale[:, :, ai] *= 0.0
     # repeat to match num_samples; same samples used across DR groups
     noise_scale = noise_scale.repeat(config.num_samples, 1, 1)
     # set first sample to 0
@@ -628,6 +638,8 @@ def process_config(config: Config):
                 ]
 
     # get noise scale
+    if config.zero_noise_joint_keywords:
+        config._model_cpu_for_noise = model
     config = compute_noise_schedule(config)
 
     # Resolve task_body_names → task_body_ids from model
