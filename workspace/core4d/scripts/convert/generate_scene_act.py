@@ -17,10 +17,26 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 CASES = {
+    "box001_person1": "box001_person1",
+    "box023_person1": "box023_person1",
+    "box024_person1": "box024_person1",
     "box025_person1": "box025_person1",
+    "box025_person2": "box025_person2",
+    "box025_s2_person1": "box025_s2_person1",
+    "bucket001_person1": "bucket001_person1",
+    "bucket003_person1": "bucket003_person1",
+    "bucket005_person1": "bucket005_person1",
+    "bucket005_person2": "bucket005_person2",
+    "bucket005_s2_person1": "bucket005_s2_person1",
+    "bucket007_person1": "bucket007_person1",
     "bucket010_person1": "bucket010_person1",
-    "desk005_person2": "desk005_person2",
+    "bucket010_person2": "bucket010_person2",
+    "bucket010_s2_person1": "bucket010_s2_person1",
     "chair022_person1": "chair022_person1",
+    "desk001_person1": "desk001_person1",
+    "desk005_person2": "desk005_person2",
+    "desk007_person1": "desk007_person1",
+    "desk021_person1": "desk021_person1",
 }
 
 BASE = "example_datasets/processed/core4d/unitree_g1/humanoid_object"
