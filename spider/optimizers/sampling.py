@@ -202,7 +202,10 @@ def make_rollout_fn(
 
 
 def _compute_weights_impl(
-    rews: torch.Tensor, num_samples: int, temperature: float
+    rews: torch.Tensor,
+    num_samples: int,
+    temperature: float,
+    elite_fraction: float = 0.1,
 ) -> torch.Tensor:
     """Compute softmax weights from rewards (implementation).
 
@@ -210,6 +213,7 @@ def _compute_weights_impl(
         rews: Rewards, shape (num_samples,)
         num_samples: Number of samples
         temperature: Temperature for softmax
+        elite_fraction: Fraction of top samples to use (default 0.1 = 10%)
 
     Returns:
         Weights, shape (num_samples,)
@@ -223,8 +227,8 @@ def _compute_weights_impl(
     )
     rews = torch.where(nan_mask, rews_min, rews)
 
-    # Select top 10% samples for softmax weighting
-    top_k = max(1, int(0.1 * num_samples))
+    # Select top elite_fraction samples for softmax weighting
+    top_k = max(1, int(elite_fraction * num_samples))
     top_indices = torch.topk(rews, k=top_k, largest=True).indices
 
     # Initialize weights as zeros and compute softmax only for top samples
@@ -290,13 +294,16 @@ def make_optimize_once_fn(
         # resample based on terminate condition
 
         # Compute weights using compiled or non-compiled version
-        if config.use_torch_compile:
+        elite_fraction = (
+            sample_params.get("elite_fraction", 0.1) if sample_params else 0.1
+        )
+        if config.use_torch_compile and elite_fraction == 0.1:
             weights, nan_mask = _compute_weights_compiled(
                 rews, config.num_samples, config.temperature
             )
         else:
             weights, nan_mask = _compute_weights_impl(
-                rews, config.num_samples, config.temperature
+                rews, config.num_samples, config.temperature, elite_fraction
             )
 
         if nan_mask.any():
@@ -305,6 +312,21 @@ def make_optimize_once_fn(
             )
 
         ctrls_mean = (weights[:, None, None] * ctrls_samples).sum(dim=0)
+
+        # SBTO: apply mean EWMA (DynaRetarget α_μ)
+        mean_momentum = (
+            sample_params.get("mean_momentum", 0.0) if sample_params else 0.0
+        )
+        if mean_momentum > 0.0:
+            ctrls_mean = mean_momentum * ctrls + (1.0 - mean_momentum) * ctrls_mean
+
+        # SBTO: compute elite sample std for Sigma EWMA (returned via info)
+        elite_std = None
+        if sample_params and sample_params.get("return_elite_std", False):
+            top_k = max(1, int(elite_fraction * config.num_samples))
+            top_indices = torch.topk(rews, k=top_k, largest=True).indices
+            elite_ctrls = ctrls_samples[top_indices]  # (top_k, H, nu)
+            elite_std = elite_ctrls.std(dim=0)  # (H, nu)
 
         # down sample traces by selecting topk and uniform samples for visualization
         n_uni = max(0, min(config.num_trace_uniform_samples, config.num_samples))
@@ -357,6 +379,10 @@ def make_optimize_once_fn(
                 rollout_info["trace"][sel_idx].cpu().numpy()
             )  # (M, H, n_trace, 3)
             info["trace_cost"] = -rews[sel_idx].cpu().numpy()
+
+        # SBTO: attach elite_std to info for Sigma EWMA
+        if elite_std is not None:
+            info["elite_std"] = elite_std  # (H, nu) tensor, stays on GPU
 
         return ctrls_mean, terminate, info
 

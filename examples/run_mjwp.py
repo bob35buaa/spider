@@ -180,7 +180,19 @@ def _apply_noise_mask(
     return noise_scale
 
 
-def run_sbto(config, env, ref_data, mj_model, mj_data, mj_data_ref, qpos_ref, qvel_ref, ctrl_ref, renderer, images):
+def run_sbto(
+    config,
+    env,
+    ref_data,
+    mj_model,
+    mj_data,
+    mj_data_ref,
+    qpos_ref,
+    qvel_ref,
+    ctrl_ref,
+    renderer,
+    images,
+):
     """SBTO: Sampling-Based Trajectory Optimization (DynaRetarget Algorithm 2).
 
     Incrementally grows the optimization horizon from knot 0 to the full trajectory,
@@ -189,21 +201,50 @@ def run_sbto(config, env, ref_data, mj_model, mj_data, mj_data_ref, qpos_ref, qv
     from spider.config import compute_noise_schedule
     from spider.interp import get_slice
     from spider.simulators.mjwp import (
-        step_env, save_state, load_state, get_reward, get_terminal_reward,
-        get_terminate, get_trace, save_env_params, load_env_params,
-        copy_sample_state, sync_env, get_qpos, get_qvel,
+        step_env,
+        save_state,
+        load_state,
+        get_reward,
+        get_terminal_reward,
+        get_terminate,
+        get_trace,
+        save_env_params,
+        load_env_params,
+        copy_sample_state,
+        sync_env,
+        get_qpos,
+        get_qvel,
     )
-    from spider.optimizers.sampling import make_rollout_fn, make_optimize_once_fn, make_optimize_fn
+    from spider.optimizers.sampling import (
+        make_rollout_fn,
+        make_optimize_once_fn,
+        make_optimize_fn,
+    )
     from spider.viewers import render_image
 
     total_steps = config.max_sim_steps
     sbto_knot_steps = int(np.round(config.sbto_knot_dt / config.sim_dt))
     total_knots = total_steps // sbto_knot_steps
-    loguru.logger.info("SBTO: total_steps={}, knot_dt={}, total_knots={}", total_steps, config.sbto_knot_dt, total_knots)
+    loguru.logger.info(
+        "SBTO: total_steps={}, knot_dt={}, total_knots={}",
+        total_steps,
+        config.sbto_knot_dt,
+        total_knots,
+    )
 
     # Build optimizer
-    rollout = make_rollout_fn(step_env, save_state, load_state, get_reward, get_terminal_reward,
-                              get_terminate, get_trace, save_env_params, load_env_params, copy_sample_state)
+    rollout = make_rollout_fn(
+        step_env,
+        save_state,
+        load_state,
+        get_reward,
+        get_terminal_reward,
+        get_terminate,
+        get_trace,
+        save_env_params,
+        load_env_params,
+        copy_sample_state,
+    )
     optimize_once = make_optimize_once_fn(rollout)
     optimize = make_optimize_fn(optimize_once)
 
@@ -220,7 +261,9 @@ def run_sbto(config, env, ref_data, mj_model, mj_data, mj_data_ref, qpos_ref, qv
     config.knot_steps = sbto_knot_steps
 
     # Gibbs for dual humanoid
-    gibbs_enabled = config.gibbs_sampling and config.embodiment_type == "dual_humanoid_object"
+    gibbs_enabled = (
+        config.gibbs_sampling and config.embodiment_type == "dual_humanoid_object"
+    )
     if gibbs_enabled:
         half_nu = config.nu // 2
         robot1_ids = list(range(0, half_nu))
@@ -248,33 +291,91 @@ def run_sbto(config, env, ref_data, mj_model, mj_data, mj_data_ref, qpos_ref, qv
             )
 
         # Optimize this horizon increment using optimize_once (single CEM iterations)
-        # SBTO algorithm: the outer loop IS the iteration control, not optimize()
-        # NOTE: Do NOT anneal noise in SBTO — DynaRetarget uses constant σ₀.
-        # Convergence comes from elite narrowing, not noise decay.
+        # DynaRetarget Algorithm 2: inner loop converges when max(diag(Σ)) < σ_min
+        # Σ is updated via EWMA from elite sample statistics each iteration
+        current_noise = config.noise_scale.clone()  # (N, knot_steps, nu)
+        alpha_cov = config.sbto_cov_momentum  # α_Σ = 0.2 (paper)
+
         for iteration in range(config.sbto_max_iter_per_knot):
-            sample_params = {"global_noise_scale": 1.0}  # constant noise (no annealing)
+            # SBTO sample_params: pass elite_fraction, mean_momentum, request elite_std
+            sample_params = {
+                "global_noise_scale": 1.0,
+                "elite_fraction": config.sbto_elite_fraction,
+                "mean_momentum": config.sbto_mean_momentum,
+                "return_elite_std": True,
+            }
 
             if gibbs_enabled:
-                base_ns = config.noise_scale.clone()
+                base_ns = current_noise.clone()
                 config.noise_scale = _apply_noise_mask(base_ns, robot2_ids)
                 active_ctrls, terminate, info = optimize_once(
-                    config, env, active_ctrls, ref_slice, config.env_params_list[min(iteration, len(config.env_params_list)-1)], sample_params)
+                    config,
+                    env,
+                    active_ctrls,
+                    ref_slice,
+                    config.env_params_list[
+                        min(iteration, len(config.env_params_list) - 1)
+                    ],
+                    sample_params,
+                )
                 config.noise_scale = _apply_noise_mask(base_ns, robot1_ids)
                 active_ctrls, terminate, info = optimize_once(
-                    config, env, active_ctrls, ref_slice, config.env_params_list[min(iteration, len(config.env_params_list)-1)], sample_params)
+                    config,
+                    env,
+                    active_ctrls,
+                    ref_slice,
+                    config.env_params_list[
+                        min(iteration, len(config.env_params_list) - 1)
+                    ],
+                    sample_params,
+                )
                 config.noise_scale = base_ns
             else:
                 active_ctrls, terminate, info = optimize_once(
-                    config, env, active_ctrls, ref_slice, config.env_params_list[min(iteration, len(config.env_params_list)-1)], sample_params)
+                    config,
+                    env,
+                    active_ctrls,
+                    ref_slice,
+                    config.env_params_list[
+                        min(iteration, len(config.env_params_list) - 1)
+                    ],
+                    sample_params,
+                )
 
-            imp = info.get("improvement", 0.0)
-            if imp < config.sbto_sigma_min:
+            # Sigma EWMA: Σ_new = α_Σ · Σ_old + (1-α_Σ) · Σ_elite
+            elite_std = info.get("elite_std", None)
+            if elite_std is not None:
+                # elite_std shape: (H, nu) — expand to match noise_scale (N, knot_steps, nu)
+                # Map horizon steps back to knot steps by subsampling
+                knot_step_size = max(1, elite_std.shape[0] // current_noise.shape[1])
+                elite_knot_std = elite_std[::knot_step_size][: current_noise.shape[1]]
+                if elite_knot_std.shape[0] < current_noise.shape[1]:
+                    # Pad with last value
+                    pad = elite_knot_std[-1:].expand(
+                        current_noise.shape[1] - elite_knot_std.shape[0], -1
+                    )
+                    elite_knot_std = torch.cat([elite_knot_std, pad], dim=0)
+                # EWMA update (broadcast across samples dimension)
+                current_noise_mean = current_noise.mean(dim=0)  # (knot_steps, nu)
+                new_noise_mean = (
+                    alpha_cov * current_noise_mean + (1.0 - alpha_cov) * elite_knot_std
+                )
+                # Scale all samples proportionally
+                scale = new_noise_mean / (current_noise_mean + 1e-8)
+                current_noise = current_noise * scale.unsqueeze(0)
+                config.noise_scale = current_noise
+
+            # Convergence criterion: max(noise_scale) < σ_min (DynaRetarget paper)
+            max_sigma = current_noise.abs().max().item()
+            if max_sigma < config.sbto_sigma_min:
                 break
 
         full_ctrls[:active_steps] = active_ctrls
         elapsed = time.perf_counter() - t_start
         rew_val = info.get("rew_max", 0.0)
-        print(f"SBTO: knot {k}/{total_knots}, h={active_steps*config.sim_dt:.2f}s, iter={iteration+1}, rew={rew_val:.3f}, imp={imp:.4f}, t={elapsed:.0f}s")
+        print(
+            f"SBTO: knot {k}/{total_knots}, h={active_steps * config.sim_dt:.2f}s, iter={iteration + 1}, max_σ={max_sigma:.4f}, rew={rew_val:.3f}, t={elapsed:.0f}s"
+        )
 
     # Restore config
     config.horizon = orig_horizon
@@ -350,16 +451,19 @@ def main(config: Config):
     # contact_pos = contact_pos[500:]
     ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos)
     # E027b: convert freejoint ref (nq=43) to scene_act format (nq=42) by quat→euler
-    if (config.object_pd_override or config.contact_guidance) and qpos_ref.shape[1] > config.nq:
+    if (config.object_pd_override or config.contact_guidance) and qpos_ref.shape[
+        1
+    ] > config.nq:
         from scipy.spatial.transform import Rotation as R
         import mujoco as _mj
         import json as _json
         import os as _os
+
         nq_model = config.nq  # 42 for scene_act
         nq_robot = nq_model - 6  # 36
         # Extract object pos(3) + quat(4) from end of freejoint ref
-        obj_pos_world = qpos_ref[:, nq_robot:nq_robot+3].detach().cpu().numpy()
-        obj_quat_wxyz = qpos_ref[:, nq_robot+3:nq_robot+7].detach().cpu().numpy()
+        obj_pos_world = qpos_ref[:, nq_robot : nq_robot + 3].detach().cpu().numpy()
+        obj_quat_wxyz = qpos_ref[:, nq_robot + 3 : nq_robot + 7].detach().cpu().numpy()
         # Get object body_pos from scene_act model (slide joints are relative to this)
         _m_act = _mj.MjModel.from_xml_path(config.model_path)
         _obj_body_id = _mj.mj_name2id(_m_act, _mj.mjtObj.mjOBJ_BODY, "object")
@@ -367,12 +471,19 @@ def main(config: Config):
         # Slide position = R_body^-1 * (world_pos - body_pos)
         # Slide joints operate in the body frame, not world frame
         body_quat_wxyz_pos = _m_act.body_quat[_obj_body_id]
-        body_quat_xyzw_pos = [body_quat_wxyz_pos[1], body_quat_wxyz_pos[2], body_quat_wxyz_pos[3], body_quat_wxyz_pos[0]]
+        body_quat_xyzw_pos = [
+            body_quat_wxyz_pos[1],
+            body_quat_wxyz_pos[2],
+            body_quat_wxyz_pos[3],
+            body_quat_wxyz_pos[0],
+        ]
         R_body_pos = R.from_quat(body_quat_xyzw_pos)
         world_offset = obj_pos_world - body_pos[np.newaxis, :]
         obj_slide_pos = R_body_pos.inv().apply(world_offset)
         # Read euler convention from scene_act_meta.json
-        meta_path = _os.path.join(_os.path.dirname(config.model_path), "scene_act_meta.json")
+        meta_path = _os.path.join(
+            _os.path.dirname(config.model_path), "scene_act_meta.json"
+        )
         if _os.path.exists(meta_path):
             with open(meta_path) as f:
                 euler_conv = _json.load(f)["euler_convention"]
@@ -380,31 +491,64 @@ def main(config: Config):
             euler_conv = "XYZ"
         # Get body_quat for relative rotation: R_joint = R_body^-1 * R_world
         body_quat_wxyz = _m_act.body_quat[_obj_body_id]
-        body_quat_xyzw = [body_quat_wxyz[1], body_quat_wxyz[2], body_quat_wxyz[3], body_quat_wxyz[0]]
+        body_quat_xyzw = [
+            body_quat_wxyz[1],
+            body_quat_wxyz[2],
+            body_quat_wxyz[3],
+            body_quat_wxyz[0],
+        ]
         R_body = R.from_quat(body_quat_xyzw)
         # Convert world quat to relative euler
-        obj_quat_xyzw = np.column_stack([obj_quat_wxyz[:, 1], obj_quat_wxyz[:, 2],
-                                          obj_quat_wxyz[:, 3], obj_quat_wxyz[:, 0]])
+        obj_quat_xyzw = np.column_stack(
+            [
+                obj_quat_wxyz[:, 1],
+                obj_quat_wxyz[:, 2],
+                obj_quat_wxyz[:, 3],
+                obj_quat_wxyz[:, 0],
+            ]
+        )
         R_world = R.from_quat(obj_quat_xyzw)
         R_joint = R_body.inv() * R_world
         obj_euler = R_joint.as_euler(euler_conv)
         # Build new qpos: robot(36) + obj_slide(3) + obj_euler(3) = 42
-        qpos_ref_new = torch.zeros((qpos_ref.shape[0], nq_model), device=qpos_ref.device, dtype=qpos_ref.dtype)
+        qpos_ref_new = torch.zeros(
+            (qpos_ref.shape[0], nq_model), device=qpos_ref.device, dtype=qpos_ref.dtype
+        )
         qpos_ref_new[:, :nq_robot] = qpos_ref[:, :nq_robot]
-        qpos_ref_new[:, nq_robot:nq_robot+3] = torch.from_numpy(obj_slide_pos.astype(np.float32)).to(qpos_ref.device)
-        qpos_ref_new[:, nq_robot+3:nq_robot+6] = torch.from_numpy(obj_euler.astype(np.float32)).to(qpos_ref.device)
+        qpos_ref_new[:, nq_robot : nq_robot + 3] = torch.from_numpy(
+            obj_slide_pos.astype(np.float32)
+        ).to(qpos_ref.device)
+        qpos_ref_new[:, nq_robot + 3 : nq_robot + 6] = torch.from_numpy(
+            obj_euler.astype(np.float32)
+        ).to(qpos_ref.device)
         # Also adapt qvel and ctrl
         nv_model = config.nv  # 41
-        qvel_ref_new = torch.zeros((qvel_ref.shape[0], nv_model), device=qvel_ref.device, dtype=qvel_ref.dtype)
-        qvel_ref_new[:, :min(qvel_ref.shape[1], nv_model)] = qvel_ref[:, :nv_model]
-        ctrl_ref_new = torch.zeros((ctrl_ref.shape[0], config.nu), device=ctrl_ref.device, dtype=ctrl_ref.dtype)
-        ctrl_ref_new[:, :min(ctrl_ref.shape[1], config.nu)] = ctrl_ref[:, :min(ctrl_ref.shape[1], config.nu)]
+        qvel_ref_new = torch.zeros(
+            (qvel_ref.shape[0], nv_model), device=qvel_ref.device, dtype=qvel_ref.dtype
+        )
+        qvel_ref_new[:, : min(qvel_ref.shape[1], nv_model)] = qvel_ref[:, :nv_model]
+        ctrl_ref_new = torch.zeros(
+            (ctrl_ref.shape[0], config.nu), device=ctrl_ref.device, dtype=ctrl_ref.dtype
+        )
+        ctrl_ref_new[:, : min(ctrl_ref.shape[1], config.nu)] = ctrl_ref[
+            :, : min(ctrl_ref.shape[1], config.nu)
+        ]
         # Fix: set object actuator ctrl channels to converted slide_pos + euler (body-frame)
         # Object actuators are the last 6 of nu (ids 29-34 for G1)
         obj_act_start = config.nu - 6
-        ctrl_ref_new[:, obj_act_start:obj_act_start+3] = torch.from_numpy(obj_slide_pos.astype(np.float32)).to(ctrl_ref.device)
-        ctrl_ref_new[:, obj_act_start+3:obj_act_start+6] = torch.from_numpy(obj_euler.astype(np.float32)).to(ctrl_ref.device)
-        loguru.logger.info("E027b: converted ref nq {} → {} (quat→{} euler, body_pos={})", qpos_ref.shape[1], nq_model, euler_conv, body_pos.tolist())
+        ctrl_ref_new[:, obj_act_start : obj_act_start + 3] = torch.from_numpy(
+            obj_slide_pos.astype(np.float32)
+        ).to(ctrl_ref.device)
+        ctrl_ref_new[:, obj_act_start + 3 : obj_act_start + 6] = torch.from_numpy(
+            obj_euler.astype(np.float32)
+        ).to(ctrl_ref.device)
+        loguru.logger.info(
+            "E027b: converted ref nq {} → {} (quat→{} euler, body_pos={})",
+            qpos_ref.shape[1],
+            nq_model,
+            euler_conv,
+            body_pos.tolist(),
+        )
         qpos_ref = qpos_ref_new
         qvel_ref = qvel_ref_new
         ctrl_ref = ctrl_ref_new
@@ -419,24 +563,43 @@ def main(config: Config):
     env = setup_env(config, ref_data)
 
     # E025/E026/E028/E030: precompute partner force reference object positions + quaternions
-    if (config.partner_force_spring_kp > 0 or config.scene_name == "scene_weld") and config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
+    if (
+        config.partner_force_spring_kp > 0 or config.scene_name == "scene_weld"
+    ) and config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
         # Object freejoint: last 7 dof in qpos [nq-7:nq] = [pos(3), quat(4)]
         nq_obj = 7
-        obj_pos_ref_np = qpos_ref[:, -nq_obj:-nq_obj+3].detach().cpu().numpy()  # (T, 3)
-        obj_quat_ref_np = qpos_ref[:, -nq_obj+3:].detach().cpu().numpy()  # (T, 4) wxyz
-        env.partner_force_ref_pos = torch.tensor(obj_pos_ref_np, device=config.device, dtype=torch.float32)
-        env.partner_force_ref_quat = torch.tensor(obj_quat_ref_np, device=config.device, dtype=torch.float32)
-        loguru.logger.info("Partner force spring: ref_pos shape={}, ref_quat shape={}",
-                          tuple(env.partner_force_ref_pos.shape), tuple(env.partner_force_ref_quat.shape))
+        obj_pos_ref_np = (
+            qpos_ref[:, -nq_obj : -nq_obj + 3].detach().cpu().numpy()
+        )  # (T, 3)
+        obj_quat_ref_np = (
+            qpos_ref[:, -nq_obj + 3 :].detach().cpu().numpy()
+        )  # (T, 4) wxyz
+        env.partner_force_ref_pos = torch.tensor(
+            obj_pos_ref_np, device=config.device, dtype=torch.float32
+        )
+        env.partner_force_ref_quat = torch.tensor(
+            obj_quat_ref_np, device=config.device, dtype=torch.float32
+        )
+        loguru.logger.info(
+            "Partner force spring: ref_pos shape={}, ref_quat shape={}",
+            tuple(env.partner_force_ref_pos.shape),
+            tuple(env.partner_force_ref_quat.shape),
+        )
 
     # E027b: object PD override — precompute ref pos/euler for scene_act object actuators
     if config.object_pd_override and config.embodiment_type in ["humanoid_object"]:
         # After E027b conversion, qpos_ref is 42-dim: robot(36) + obj(6: px,py,pz,rx,ry,rz)
         nq_robot = config.nq - 6
-        obj_pos_ref_np = qpos_ref[:, nq_robot:nq_robot+3].detach().cpu().numpy()
-        obj_euler_ref_np = qpos_ref[:, nq_robot+3:nq_robot+6].detach().cpu().numpy()
-        env.object_pd_ref_pos = torch.tensor(obj_pos_ref_np, device=config.device, dtype=torch.float32)
-        env.object_pd_ref_euler = torch.tensor(obj_euler_ref_np, device=config.device, dtype=torch.float32)
+        obj_pos_ref_np = qpos_ref[:, nq_robot : nq_robot + 3].detach().cpu().numpy()
+        obj_euler_ref_np = (
+            qpos_ref[:, nq_robot + 3 : nq_robot + 6].detach().cpu().numpy()
+        )
+        env.object_pd_ref_pos = torch.tensor(
+            obj_pos_ref_np, device=config.device, dtype=torch.float32
+        )
+        env.object_pd_ref_euler = torch.tensor(
+            obj_euler_ref_np, device=config.device, dtype=torch.float32
+        )
         # Set actuator gains on model (last 6 actuators = object)
         obj_act_ids = list(range(env.model_cpu.nu - 6, env.model_cpu.nu))
         kp_pos = config.object_pd_kp_pos
@@ -447,15 +610,27 @@ def main(config: Config):
             env.model_cpu.actuator_biasprm[aid, 1] = -kp  # position actuator bias
             env.model_cpu.actuator_biasprm[aid, 2] = 0  # no velocity bias
         # Store object mass for gravity compensation in _apply_object_pd_override
-        obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
+        obj_body_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
         env.object_mass = env.model_cpu.body_mass[obj_body_id]
         # Propagate to Warp model
         gain_full = np.array(env.model_cpu.actuator_gainprm, dtype=np.float32)
         bias_full = np.array(env.model_cpu.actuator_biasprm, dtype=np.float32)
-        wp.copy(env.model_wp.actuator_gainprm, wp.from_numpy(gain_full, dtype=wp.float32, device=config.device))
-        wp.copy(env.model_wp.actuator_biasprm, wp.from_numpy(bias_full, dtype=wp.float32, device=config.device))
-        loguru.logger.info("Object PD override: kp_pos={}, kp_rot={}, ref shape={}",
-                          kp_pos, kp_rot, tuple(env.object_pd_ref_pos.shape))
+        wp.copy(
+            env.model_wp.actuator_gainprm,
+            wp.from_numpy(gain_full, dtype=wp.float32, device=config.device),
+        )
+        wp.copy(
+            env.model_wp.actuator_biasprm,
+            wp.from_numpy(bias_full, dtype=wp.float32, device=config.device),
+        )
+        loguru.logger.info(
+            "Object PD override: kp_pos={}, kp_rot={}, ref shape={}",
+            kp_pos,
+            kp_rot,
+            tuple(env.object_pd_ref_pos.shape),
+        )
 
     # setup mujoco (for viewer only)
     mj_model = setup_mj_model(config)
@@ -465,20 +640,28 @@ def main(config: Config):
     # E018: precompute reference body world positions for task-space tracking
     if config.task_body_ids:
         T_body = qpos_ref.shape[0]
-        body_xpos_ref_np = np.zeros((T_body, len(config.task_body_ids), 3), dtype=np.float32)
+        body_xpos_ref_np = np.zeros(
+            (T_body, len(config.task_body_ids), 3), dtype=np.float32
+        )
         for t in range(T_body):
             mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
             mujoco.mj_kinematics(mj_model, mj_data_ref)
             for k, bid in enumerate(config.task_body_ids):
                 body_xpos_ref_np[t, k] = mj_data_ref.xpos[bid]
         body_xpos_ref = torch.tensor(body_xpos_ref_np, device=config.device)
-        loguru.logger.info("Precomputed body_xpos_ref: shape={}", tuple(body_xpos_ref.shape))
+        loguru.logger.info(
+            "Precomputed body_xpos_ref: shape={}", tuple(body_xpos_ref.shape)
+        )
     else:
-        body_xpos_ref = torch.zeros((qpos_ref.shape[0], 0, 3), device=config.device, dtype=torch.float32)
+        body_xpos_ref = torch.zeros(
+            (qpos_ref.shape[0], 0, 3), device=config.device, dtype=torch.float32
+        )
 
     # E034: precompute hand-object contact mask for hand_approach gating
     approach_mask_t = None
-    if config.hand_approach_body_ids and config.hand_approach_contact_threshold < float("inf"):
+    if config.hand_approach_body_ids and config.hand_approach_contact_threshold < float(
+        "inf"
+    ):
         obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
         if obj_body_id != -1 and config.hand_approach_obj_half_extents:
             half_ext = np.array(config.hand_approach_obj_half_extents)
@@ -499,7 +682,8 @@ def main(config: Config):
             active_pct = approach_mask_np.mean() * 100
             loguru.logger.info(
                 "E034 approach_mask: {:.1f}% frames active (threshold={:.2f}m)",
-                active_pct, config.hand_approach_contact_threshold,
+                active_pct,
+                config.hand_approach_contact_threshold,
             )
 
     # E035: precompute full body xpos + xquat for local-frame tracking
@@ -517,7 +701,11 @@ def main(config: Config):
             body_xquat_full_np[t] = mj_data_ref.xquat[:nbody]
         body_xpos_full_ref_t = torch.tensor(body_xpos_full_np, device=config.device)
         body_xquat_ref_t = torch.tensor(body_xquat_full_np, device=config.device)
-        loguru.logger.info("E035 precomputed body FK: xpos={}, xquat={}", tuple(body_xpos_full_ref_t.shape), tuple(body_xquat_ref_t.shape))
+        loguru.logger.info(
+            "E035 precomputed body FK: xpos={}, xquat={}",
+            tuple(body_xpos_full_ref_t.shape),
+            tuple(body_xquat_ref_t.shape),
+        )
         # Override body_xpos_ref with full version for local-frame
         body_xpos_ref = body_xpos_full_ref_t
 
@@ -548,13 +736,16 @@ def main(config: Config):
             active_pct = per_eef_mask_np.mean() * 100
             loguru.logger.info(
                 "E039b rotated-SDF mask: {:.1f}% frames active (threshold={:.2f}m)",
-                active_pct, threshold,
+                active_pct,
+                threshold,
             )
 
     # E040: precompute per-frame contact target from ref FK (hand pos in object local frame)
     contact_target_per_frame = None
     if config.contact_hdmi_dynamic_target and config.hand_approach_body_ids:
-        obj_body_id_e040 = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
+        obj_body_id_e040 = mujoco.mj_name2id(
+            mj_model, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
         if obj_body_id_e040 != -1:
             T = qpos_ref.shape[0]
             n_eef = len(config.hand_approach_body_ids)
@@ -569,16 +760,45 @@ def main(config: Config):
                     # Hand position in object local frame
                     target_np[t, ei] = obj_mat.T @ (hand_pos - obj_pos)
             contact_target_per_frame = torch.tensor(target_np, device=config.device)
-            loguru.logger.info("E040 dynamic target: shape={}", tuple(contact_target_per_frame.shape))
+            loguru.logger.info(
+                "E040 dynamic target: shape={}", tuple(contact_target_per_frame.shape)
+            )
 
     if approach_mask_t is not None:
         if body_xquat_ref_t is not None:
             if contact_target_per_frame is not None:
-                ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t, contact_target_per_frame)
+                ref_data = (
+                    qpos_ref,
+                    qvel_ref,
+                    ctrl_ref,
+                    contact,
+                    contact_pos,
+                    body_xpos_ref,
+                    approach_mask_t,
+                    body_xquat_ref_t,
+                    contact_target_per_frame,
+                )
             else:
-                ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t, body_xquat_ref_t)
+                ref_data = (
+                    qpos_ref,
+                    qvel_ref,
+                    ctrl_ref,
+                    contact,
+                    contact_pos,
+                    body_xpos_ref,
+                    approach_mask_t,
+                    body_xquat_ref_t,
+                )
         else:
-            ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref, approach_mask_t)
+            ref_data = (
+                qpos_ref,
+                qvel_ref,
+                ctrl_ref,
+                contact,
+                contact_pos,
+                body_xpos_ref,
+                approach_mask_t,
+            )
     else:
         ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos, body_xpos_ref)
     mj_data.qpos[:] = qpos_ref[0].detach().cpu().numpy()
@@ -708,8 +928,17 @@ def main(config: Config):
     # ─── SBTO mode ──────────────────────────────────────────────────────────
     if config.use_sbto:
         info_list = run_sbto(
-            config, env, ref_data, mj_model, mj_data, mj_data_ref,
-            qpos_ref, qvel_ref, ctrl_ref, renderer, images,
+            config,
+            env,
+            ref_data,
+            mj_model,
+            mj_data,
+            mj_data_ref,
+            qpos_ref,
+            qvel_ref,
+            ctrl_ref,
+            renderer,
+            images,
         )
         # Jump directly to save section (shared with MPC)
     else:
@@ -732,7 +961,8 @@ def main(config: Config):
         optimize = make_optimize_fn(optimize_once)
         base_noise_scale = config.noise_scale.clone()
         gibbs_enabled = config.gibbs_sampling and config.embodiment_type in [
-            "bimanual", "dual_humanoid_object",
+            "bimanual",
+            "dual_humanoid_object",
         ]
         if config.gibbs_sampling and not gibbs_enabled:
             loguru.logger.warning(
@@ -750,7 +980,7 @@ def main(config: Config):
                 robot1_ids = list(range(0, half_nu))
                 robot2_ids = list(range(half_nu, config.nu))
                 right_only_zero = robot2_ids  # Zero R2 noise → optimize R1
-                left_only_zero = robot1_ids   # Zero R1 noise → optimize R2
+                left_only_zero = robot1_ids  # Zero R1 noise → optimize R2
 
         # initial controls
         ctrls = ctrl_ref[: config.horizon_steps]
@@ -814,7 +1044,9 @@ def main(config: Config):
                     ):
                         if ctrls_for_opt is ctrls:
                             ctrls_for_opt = ctrls_for_opt.clone()
-                            ref_ctrl_slice = ctrl_ref[sim_step : sim_step + ctrls.shape[0]]
+                            ref_ctrl_slice = ctrl_ref[
+                                sim_step : sim_step + ctrls.shape[0]
+                            ]
                         ctrls_for_opt[:, config.left_pos_ctrl_ids] = ref_ctrl_slice[
                             :, config.left_pos_ctrl_ids
                         ] + torch.clip(left_delta, -0.01, 0.01)
@@ -823,19 +1055,38 @@ def main(config: Config):
                         base_noise_scale, right_only_zero
                     )
                     ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
-                    config.noise_scale = _apply_noise_mask(base_noise_scale, left_only_zero)
+                    config.noise_scale = _apply_noise_mask(
+                        base_noise_scale, left_only_zero
+                    )
                     ctrls, infos = optimize(config, env, ctrls, ref_slice)
                     config.noise_scale = base_noise_scale
                 else:
                     config.noise_scale = base_noise_scale
                     # Warmup: skip CEM for first N ctrl steps, use ref ctrl directly
-                    warmup_ctrl_steps = int(config.warmup_steps / config.ctrl_dt) if config.warmup_steps > 0 else 0
-                    ctrl_step_idx = sim_step // config.ctrl_steps_int if hasattr(config, 'ctrl_steps_int') else sim_step // max(1, int(np.round(config.ctrl_dt / config.sim_dt)))
+                    warmup_ctrl_steps = (
+                        int(config.warmup_steps / config.ctrl_dt)
+                        if config.warmup_steps > 0
+                        else 0
+                    )
+                    ctrl_step_idx = (
+                        sim_step // config.ctrl_steps_int
+                        if hasattr(config, "ctrl_steps_int")
+                        else sim_step
+                        // max(1, int(np.round(config.ctrl_dt / config.sim_dt)))
+                    )
                     if warmup_ctrl_steps > 0 and ctrl_step_idx < warmup_ctrl_steps:
                         # During warmup: use ref ctrl, no CEM
                         ctrls = ctrl_ref[sim_step : sim_step + config.horizon_steps]
                         if ctrls.shape[0] < config.horizon_steps:
-                            ctrls = torch.cat([ctrls, ctrls[-1:].repeat(config.horizon_steps - ctrls.shape[0], 1)], dim=0)
+                            ctrls = torch.cat(
+                                [
+                                    ctrls,
+                                    ctrls[-1:].repeat(
+                                        config.horizon_steps - ctrls.shape[0], 1
+                                    ),
+                                ],
+                                dim=0,
+                            )
                         infos = {"opt_steps": np.array([0]), "improvement": 0.0}
                     else:
                         ctrls, infos = optimize(config, env, ctrls_for_opt, ref_slice)
@@ -848,7 +1099,10 @@ def main(config: Config):
                         mj_data_ref.qpos[:] = qpos_ref_horizon[h].detach().cpu().numpy()
                         mujoco.mj_kinematics(mj_model, mj_data_ref)
                         site_xpos = np.array(
-                            [mj_data_ref.site_xpos[sid] for sid in config.trace_site_ids]
+                            [
+                                mj_data_ref.site_xpos[sid]
+                                for sid in config.trace_site_ids
+                            ]
                         )
                         trace_ref.append(site_xpos)
                     # (H, K, 3) -> (1, 1, H, K, 3) to match trace_sample shape
@@ -910,7 +1164,9 @@ def main(config: Config):
                             )
                             images.append(image)
                     if "rerun" in config.viewer or "viser" in config.viewer:
-                        mj_data_ref.qpos[:] = qpos_ref[sim_step + i].detach().cpu().numpy()
+                        mj_data_ref.qpos[:] = (
+                            qpos_ref[sim_step + i].detach().cpu().numpy()
+                        )
                         mujoco.mj_kinematics(mj_model, mj_data_ref)
                         log_frame(
                             mj_data,
@@ -954,7 +1210,9 @@ def main(config: Config):
 
                 # record info/trajectory at control tick
                 # rule out "trace"
-                info_list.append({k: v for k, v in infos.items() if k != "trace_sample"})
+                info_list.append(
+                    {k: v for k, v in infos.items() if k != "trace_sample"}
+                )
 
                 if sim_step >= config.max_sim_steps:
                     break

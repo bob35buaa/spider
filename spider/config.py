@@ -216,9 +216,13 @@ class Config:
     use_sbto: bool = (
         False  # if True, use incremental full-horizon optimization instead of MPC
     )
-    sbto_sigma_min: float = 0.05  # convergence threshold per knot increment
+    sbto_sigma_min: float = 0.05  # convergence threshold: max(noise_scale) < this
     sbto_max_iter_per_knot: int = 50  # max optimization iterations per knot increment
     sbto_knot_dt: float = 0.25  # knot spacing for SBTO (independent of MPC knot_dt)
+    # DynaRetarget paper alignment (Table I)
+    sbto_elite_fraction: float = 0.03  # ρ_e: fraction of samples used for update
+    sbto_mean_momentum: float = 0.95  # α_μ: EWMA momentum on mean (0=no momentum)
+    sbto_cov_momentum: float = 0.2  # α_Σ: EWMA momentum on covariance
 
     # === Path Y: Holosoma physics alignment ===
     apply_holosoma_pd: bool = (
