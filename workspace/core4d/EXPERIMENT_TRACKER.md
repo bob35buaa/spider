@@ -61,6 +61,7 @@
 | E047b | 2026-05-10 | Phase 12 | **SBTO放松参数(α_μ=0.5,σ_min=0.03)**: stability恢复98-100%(E047a=31%), 但MPKPE=69-87cm仍极差; **SBTO开环优化无法替代MPC闭环反馈** | ❌ tracking差 |
 | — | 2026-05-11 | Bug Fix | **碰撞盒模板Bug修复**: 21/21 case碰撞盒全部修正为mesh AABB×1.05; box023从1.8x过大修正; bucket010 Y/Z互换修正; box025增大24% | 修复完成 |
 | E048 | 2026-05-11 | Phase 13 | **碰撞盒修复后Baseline+HDMI对比**: box025 Contact 66→54%; bucket010 57→7%(碰撞盒形状修正); desk005偏移156cm; **box023 HDMI=93%Contact/100%Stable vs E041c=38%Stable(摔倒)** | **★ 算法是瓶颈** |
+| E049 | 2026-05-11 | Phase 14 | **HDMI优化移植+泛化验证**: 三优化(PD+damping+noise)直接移植使Stability崩溃(box025 98→57%); **HDMI box025=99%Contact/100%Stable**(碾压); 简单移植PD gains不可行, HDMI成功靠完整系统设计 | ★ HDMI碾压 / 移植❌ |
 
 ## 关键指标演进
 
