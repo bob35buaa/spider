@@ -1,0 +1,107 @@
+# @package _global_
+# E045b: Much tighter local-frame sigma (0.5 → 0.15)
+# Hypothesis: Very tight sigma strongly penalizes hand position error → aggressive tracking
+# Risk: May cause CEM to get stuck in local optima or destabilize
+# Base: E041c (additive ori w=0.3, dynamic target, local-frame tracking)
+dataset_name: core4d
+data_id: 0
+robot_type: unitree_g1
+embodiment_type: humanoid_object
+scene_name: scene_act
+ref_dt: 0.0333333
+trace_dt: 0.0333333
+sim_dt: 0.0166667
+physics_dt: 0
+warmup_steps: 0
+
+# Contact guidance
+contact_guidance: true
+guidance_decay_ratio: 1.0
+residual_gain_ratio: 1.0
+init_pos_actuator_gain: 500.0
+init_pos_actuator_bias: 500.0
+init_rot_actuator_gain: 50.0
+init_rot_actuator_bias: 50.0
+object_pos_actuator_names:
+  - object_pos_x
+  - object_pos_y
+  - object_pos_z
+object_rot_actuator_names:
+  - object_rot_x
+  - object_rot_z
+  - object_rot_y
+improvement_threshold: 0.0
+
+# Timing
+horizon: 0.8
+ctrl_dt: 0.0333333
+knot_dt: 0.1
+
+# Annealing
+first_ctrl_noise_scale: 0.5
+last_ctrl_noise_scale: 1.0
+final_noise_scale: 0.1
+joint_noise_scale: 0.05
+
+# CEM
+max_num_iterations: 32
+num_samples: 1024
+temperature: 1.0
+
+# === E035: Local-frame reward (HDMI-style) ===
+use_local_frame_reward: true
+local_frame_pos_sigma: 0.15   # ← CHANGED from 0.5 (E045b key change — very tight)
+local_frame_ori_sigma: 1.0
+local_frame_root_sigma: 0.5
+local_frame_joint_sigma: 0.25
+local_frame_w_track: 0.5
+
+# Disable old qpos-level weights
+use_bounded_qpos_reward: false
+base_pos_rew_scale: 10.0
+base_rot_rew_scale: 5.0
+joint_rew_scale: 1.0
+pos_rew_scale: 1.0
+rot_rew_scale: 0.3
+vel_rew_scale: 0.0
+
+# === E036: DISABLE hand_approach ===
+hand_approach_rew_scale: 0.0
+hand_approach_sigma: 3.0
+hand_approach_body_names:
+  - left_wrist_yaw_link
+  - right_wrist_yaw_link
+hand_approach_contact_threshold: 0.3
+
+# === E036: DISABLE stability_penalty ===
+stability_penalty_scale: 0.0
+stability_penalty_threshold: 0.55
+
+# === E036: ENABLE object tracking ===
+task_obj_pos_rew_scale: 1.0
+task_obj_rot_rew_scale: 1.0
+
+# === E037: DISABLE old contact_mask_rew ===
+contact_mask_rew_scale: 0.0
+contact_mask_rew_sigma: 0.3
+contact_mask_rew_baseline: 0.0
+
+# === E041c: Dynamic target + Orientation reward ===
+contact_hdmi_gain: 5.0
+contact_hdmi_sigma: 0.3
+contact_hdmi_eef_offset: [0.05, 0.0, 0.0]
+contact_hdmi_threshold: 0.15
+contact_hdmi_dynamic_target: true
+contact_hdmi_target_left: []
+contact_hdmi_target_right: []
+contact_hdmi_ori_weight: 0.3
+contact_hdmi_ori_mode: additive
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [0.0, 1.0, 0.0]
+
+task_body_rew_scale: 0.0
+object_pd_override: false
+partner_force_scale: 0.0
+viewer: none
+save_video: true
+video_output_path: ""
