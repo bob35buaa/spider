@@ -74,58 +74,103 @@ class Config:
     perturb_force: float = 0.0
     perturb_torque: float = 0.0
     # E024: partner force — external upward force on object simulating human partner support
-    partner_force_scale: float = 0.0  # fraction of object gravity to apply as upward force (0.5 = 50%)
-    partner_force_spring_kp: float = 0.0  # spring stiffness pulling object toward ref pos (0 = pure gravity comp)
-    partner_force_spring_kd: float = -1.0  # damping (-1 = auto critical damping = 2*sqrt(m*kp))
+    partner_force_scale: float = (
+        0.0  # fraction of object gravity to apply as upward force (0.5 = 50%)
+    )
+    partner_force_spring_kp: float = (
+        0.0  # spring stiffness pulling object toward ref pos (0 = pure gravity comp)
+    )
+    partner_force_spring_kd: float = (
+        -1.0
+    )  # damping (-1 = auto critical damping = 2*sqrt(m*kp))
     # E030: orientation spring for freejoint object
     partner_force_spring_kp_rot: float = 0.0  # rotation spring stiffness (0 = disabled)
-    partner_force_spring_kd_rot: float = -1.0  # rotation damping (-1 = auto critical damping)
-    partner_force_rot_clamp: float = 0.5  # max axis-angle magnitude (rad) to prevent large torques
+    partner_force_spring_kd_rot: float = (
+        -1.0
+    )  # rotation damping (-1 = auto critical damping)
+    partner_force_rot_clamp: float = (
+        0.5  # max axis-angle magnitude (rad) to prevent large torques
+    )
     # E027b: object PD override — object actuators track ref directly, CEM only optimizes robot
     object_pd_override: bool = False  # enable object actuator PD override in step_env
     object_pd_kp_pos: float = 2000.0  # position actuator gain (strong tracking)
     object_pd_kp_rot: float = 2000.0  # rotation actuator gain
     # E025: hand approach reward — guides hands toward object surface
-    hand_approach_rew_scale: float = 0.0  # weight of hand-to-object-surface distance reward
+    hand_approach_rew_scale: float = (
+        0.0  # weight of hand-to-object-surface distance reward
+    )
     hand_approach_sigma: float = 5.0  # steepness of exponential decay
     hand_approach_body_names: list[str] = field(
         default_factory=lambda: ["left_wrist_yaw_link", "right_wrist_yaw_link"]
     )
-    hand_approach_body_ids: list[int] = field(default_factory=list)  # resolved at runtime
-    hand_approach_obj_half_extents: list[float] = field(default_factory=list)  # resolved at runtime from geom
-    hand_approach_contact_threshold: float = 0.3  # ref hand-obj dist below this activates hand_approach (m)
+    hand_approach_body_ids: list[int] = field(
+        default_factory=list
+    )  # resolved at runtime
+    hand_approach_obj_half_extents: list[float] = field(
+        default_factory=list
+    )  # resolved at runtime from geom
+    hand_approach_contact_threshold: float = (
+        0.3  # ref hand-obj dist below this activates hand_approach (m)
+    )
     # E037: contact mask-gated reward (HDMI-style)
     contact_mask_rew_scale: float = 0.0  # gain; 0.0 = disabled
     contact_mask_rew_sigma: float = 0.3  # exp kernel bandwidth (meters), HDMI default
-    contact_mask_rew_baseline: float = 0.0  # reward on non-contact frames (HDMI uses 1.0)
+    contact_mask_rew_baseline: float = (
+        0.0  # reward on non-contact frames (HDMI uses 1.0)
+    )
     # E039: HDMI-aligned contact with predefined target points
     contact_hdmi_gain: float = 0.0  # 0=disabled; HDMI uses 5.0
     contact_hdmi_sigma: float = 0.3  # exp kernel bandwidth (same as HDMI eef_pos_sigma)
-    contact_hdmi_target_left: list[float] = field(default_factory=list)  # [x,y,z] in obj local frame
-    contact_hdmi_target_right: list[float] = field(default_factory=list)  # [x,y,z] in obj local frame
-    contact_hdmi_eef_offset: list[float] = field(default_factory=lambda: [0.05, 0.0, 0.0])  # wrist→palm
-    contact_hdmi_threshold: float = 0.30  # mask threshold: activate when hand-target < this (m)
+    contact_hdmi_target_left: list[float] = field(
+        default_factory=list
+    )  # [x,y,z] in obj local frame
+    contact_hdmi_target_right: list[float] = field(
+        default_factory=list
+    )  # [x,y,z] in obj local frame
+    contact_hdmi_eef_offset: list[float] = field(
+        default_factory=lambda: [0.05, 0.0, 0.0]
+    )  # wrist→palm
+    contact_hdmi_threshold: float = (
+        0.30  # mask threshold: activate when hand-target < this (m)
+    )
     # E040: dynamic per-frame contact target (from ref FK)
-    contact_hdmi_dynamic_target: bool = False  # True=use per-frame ref-derived target instead of fixed
+    contact_hdmi_dynamic_target: bool = (
+        False  # True=use per-frame ref-derived target instead of fixed
+    )
     # E041: orientation reward — palm must face object surface
     contact_hdmi_ori_weight: float = 0.0  # 0=disabled; >0 = enable orientation term
     contact_hdmi_ori_mode: str = "multiply"  # "multiply" | "additive" | "near_field"
-    contact_hdmi_palm_normal_left: list[float] = field(default_factory=lambda: [0.0, -1.0, 0.0])
-    contact_hdmi_palm_normal_right: list[float] = field(default_factory=lambda: [0.0, 1.0, 0.0])
-    use_bounded_qpos_reward: bool = False  # use exp(-dist/σ) instead of -dist for qpos reward
+    contact_hdmi_palm_normal_left: list[float] = field(
+        default_factory=lambda: [0.0, -1.0, 0.0]
+    )
+    contact_hdmi_palm_normal_right: list[float] = field(
+        default_factory=lambda: [0.0, 1.0, 0.0]
+    )
+    use_bounded_qpos_reward: bool = (
+        False  # use exp(-dist/σ) instead of -dist for qpos reward
+    )
     qpos_reward_sigma: float = 2.0  # sigma for bounded qpos reward
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward
     stability_penalty_scale: float = 0.0  # penalty when pelvis z < threshold
     stability_penalty_threshold: float = 0.55  # pelvis z threshold (m)
     # E035: local-frame body tracking (HDMI-style)
     use_local_frame_reward: bool = False
-    local_frame_upper_ids: list[int] = field(default_factory=lambda: list(range(14, 31)))  # waist→wrists
-    local_frame_lower_ids: list[int] = field(default_factory=lambda: list(range(2, 14)))  # hips→ankles
+    local_frame_upper_ids: list[int] = field(
+        default_factory=lambda: list(range(14, 31))
+    )  # waist→wrists
+    local_frame_lower_ids: list[int] = field(
+        default_factory=lambda: list(range(2, 14))
+    )  # hips→ankles
     local_frame_pos_sigma: float = 0.5
     local_frame_ori_sigma: float = 1.0
     local_frame_root_sigma: float = 0.5
     local_frame_joint_sigma: float = 0.25
     local_frame_w_track: float = 0.5
+    # E044: extra weight for wrist bodies in local-frame tracking
+    local_frame_wrist_ids: list[int] = field(
+        default_factory=lambda: [23, 30]
+    )  # left/right wrist_yaw_link
+    local_frame_wrist_weight: float = 1.0  # 1.0 = no extra weight
     contact_guidance: bool = False
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [
@@ -155,21 +200,33 @@ class Config:
     init_rot_actuator_gain: float = 0.1
     init_rot_actuator_bias: float = 0.1
     guidance_decay_ratio: float = 0.5
-    residual_gain_ratio: float = 0.0  # if > 0, last CEM iteration keeps this fraction of decayed gains
+    residual_gain_ratio: float = (
+        0.0  # if > 0, last CEM iteration keeps this fraction of decayed gains
+    )
     # Mocap partner trajectory (E011)
-    mocap_partner_trajectory: str = ""  # path to NPZ with partner_pos (T,2,3) and partner_quat (T,2,4)
-    mocap_partner_intra_step: bool = True  # update partner mocap within rollout steps (not just MPC steps)
+    mocap_partner_trajectory: str = (
+        ""  # path to NPZ with partner_pos (T,2,3) and partner_quat (T,2,4)
+    )
+    mocap_partner_intra_step: bool = (
+        True  # update partner mocap within rollout steps (not just MPC steps)
+    )
     gibbs_sampling: bool = False
 
     # === SBTO (Sampling-Based Trajectory Optimization, DynaRetarget) ===
-    use_sbto: bool = False  # if True, use incremental full-horizon optimization instead of MPC
+    use_sbto: bool = (
+        False  # if True, use incremental full-horizon optimization instead of MPC
+    )
     sbto_sigma_min: float = 0.05  # convergence threshold per knot increment
     sbto_max_iter_per_knot: int = 50  # max optimization iterations per knot increment
     sbto_knot_dt: float = 0.25  # knot spacing for SBTO (independent of MPC knot_dt)
 
     # === Path Y: Holosoma physics alignment ===
-    apply_holosoma_pd: bool = False  # override actuator gains using Holosoma G1 PD config (Isaac order)
-    use_local_contact_reward: bool = False  # add HDMI-style local-frame contact offset reward
+    apply_holosoma_pd: bool = (
+        False  # override actuator gains using Holosoma G1 PD config (Isaac order)
+    )
+    use_local_contact_reward: bool = (
+        False  # add HDMI-style local-frame contact offset reward
+    )
     local_contact_sigma: float = 0.3
     local_contact_rew_scale: float = 5.0
 
@@ -180,7 +237,9 @@ class Config:
     max_num_iterations: int = 16
     improvement_threshold: float = 0.01
     improvement_check_steps: int = 1
-    warmup_steps: int = 0  # skip CEM optimization for first N ctrl steps (use ref ctrl directly)
+    warmup_steps: int = (
+        0  # skip CEM optimization for first N ctrl steps (use ref ctrl directly)
+    )
     # Termination parameters
     terminate_resample: bool = False
     object_pos_threshold: float = 0.1
@@ -202,7 +261,9 @@ class Config:
     pos_noise_scale: float = 0.03
     rot_noise_scale: float = 0.03
     # E042: zero noise for specific joints (like HDMI wrist freeze)
-    zero_noise_joint_keywords: list[str] = field(default_factory=list)  # e.g. ["wrist_roll", "wrist_pitch", "wrist_yaw"]
+    zero_noise_joint_keywords: list[str] = field(
+        default_factory=list
+    )  # e.g. ["wrist_roll", "wrist_pitch", "wrist_yaw"]
     # Reward mode
     use_rl_reward: bool = False  # use dexmachina RL training reward formulation
     # Reward scaling
@@ -478,6 +539,7 @@ def get_noise_scale(config: Config) -> torch.Tensor:
     # E042: zero noise for keyword-matched joints (e.g. wrist freeze)
     if config.zero_noise_joint_keywords and hasattr(config, "_model_cpu_for_noise"):
         import mujoco as _mj
+
         _model = config._model_cpu_for_noise
         for ai in range(_model.nu):
             aname = _mj.mj_id2name(_model, _mj.mjtObj.mjOBJ_ACTUATOR, ai)
@@ -667,7 +729,11 @@ def process_config(config: Config):
         )
 
     # Resolve hand_approach_body_ids and object half-extents for E025/E039
-    if (config.hand_approach_rew_scale > 0.0 or config.contact_mask_rew_scale > 0.0 or config.contact_hdmi_gain > 0.0) and config.simulator == "mjwp":
+    if (
+        config.hand_approach_rew_scale > 0.0
+        or config.contact_mask_rew_scale > 0.0
+        or config.contact_hdmi_gain > 0.0
+    ) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
             bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
@@ -685,13 +751,17 @@ def process_config(config: Config):
                 if model.geom_bodyid[g] == obj_body_id:
                     gname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g)
                     if gname and "collision" in gname:
-                        config.hand_approach_obj_half_extents = [float(x) for x in model.geom_size[g]]
+                        config.hand_approach_obj_half_extents = [
+                            float(x) for x in model.geom_size[g]
+                        ]
                         break
             if not config.hand_approach_obj_half_extents:
                 # Fallback: use first object geom size
                 for g in range(model.ngeom):
                     if model.geom_bodyid[g] == obj_body_id:
-                        config.hand_approach_obj_half_extents = [float(x) for x in model.geom_size[g]]
+                        config.hand_approach_obj_half_extents = [
+                            float(x) for x in model.geom_size[g]
+                        ]
                         break
         loguru.logger.info(
             "Hand approach: {} bodies, obj half_ext={}",

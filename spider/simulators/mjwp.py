@@ -92,7 +92,11 @@ def setup_mj_model(config: Config) -> mujoco.MjModel:
             2,
         ]  # softer contact for sim2real
         model_cpu.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
-    elif config.embodiment_type in ["humanoid", "humanoid_object", "dual_humanoid_object"]:
+    elif config.embodiment_type in [
+        "humanoid",
+        "humanoid_object",
+        "dual_humanoid_object",
+    ]:
         # setup for humanoid
         model_cpu.opt.iterations = 5
         model_cpu.opt.ls_iterations = 10
@@ -108,6 +112,7 @@ def setup_mj_model(config: Config) -> mujoco.MjModel:
     # Path Y: override PD gains with Holosoma values
     if getattr(config, "apply_holosoma_pd", False):
         from spider.mujoco_utils import apply_holosoma_g1_pd
+
         n = apply_holosoma_g1_pd(model_cpu, verbose=False)
         loguru.logger.info(f"Applied Holosoma G1 PD to {n} actuators")
     return model_cpu
@@ -160,7 +165,9 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> MJWPEnv:
             nconmax=int(config.nconmax_per_env),
             njmax=int(config.njmax_per_env),
         )
-        default_graph = _compile_step(default_model_wp, default_data_wp, decimation=config.sim_decimation)
+        default_graph = _compile_step(
+            default_model_wp, default_data_wp, decimation=config.sim_decimation
+        )
 
     # Initialize env; default active is main
     env = MJWPEnv(
@@ -226,9 +233,9 @@ def _weight_diff_qpos(config: Config) -> torch.Tensor:
         w[3:6] = config.base_rot_rew_scale
         w[6:nv_robot] = config.joint_rew_scale
         # robot2
-        w[nv_robot:nv_robot + 3] = config.base_pos_rew_scale
-        w[nv_robot + 3:nv_robot + 6] = config.base_rot_rew_scale
-        w[nv_robot + 6:2 * nv_robot] = config.joint_rew_scale
+        w[nv_robot : nv_robot + 3] = config.base_pos_rew_scale
+        w[nv_robot + 3 : nv_robot + 6] = config.base_rot_rew_scale
+        w[nv_robot + 6 : 2 * nv_robot] = config.joint_rew_scale
         # object
         w[-6:-3] = config.pos_rew_scale
         w[-3:] = config.rot_rew_scale
@@ -307,19 +314,19 @@ def _diff_qpos(
         nv_robot = (config.nv - 6) // 2  # 35 per robot
         # robot1: nq[0:nq_robot], robot2: nq[nq_robot:2*nq_robot], obj: nq[-nq_obj:]
         r1 = qpos_sim[:, :nq_robot]
-        r2 = qpos_sim[:, nq_robot:2 * nq_robot]
+        r2 = qpos_sim[:, nq_robot : 2 * nq_robot]
         obj = qpos_sim[:, -nq_obj:]
         r1_ref = qpos_ref[:, :nq_robot]
-        r2_ref = qpos_ref[:, nq_robot:2 * nq_robot]
+        r2_ref = qpos_ref[:, nq_robot : 2 * nq_robot]
         obj_ref = qpos_ref[:, -nq_obj:]
         # robot1: base pos/rot/joints
         qpos_diff[:, :3] = r1[:, :3] - r1_ref[:, :3]
         qpos_diff[:, 3:6] = quat_sub(r1[:, 3:7], r1_ref[:, 3:7])
         qpos_diff[:, 6:nv_robot] = r1[:, 7:] - r1_ref[:, 7:]
         # robot2: base pos/rot/joints
-        qpos_diff[:, nv_robot:nv_robot + 3] = r2[:, :3] - r2_ref[:, :3]
-        qpos_diff[:, nv_robot + 3:nv_robot + 6] = quat_sub(r2[:, 3:7], r2_ref[:, 3:7])
-        qpos_diff[:, nv_robot + 6:2 * nv_robot] = r2[:, 7:] - r2_ref[:, 7:]
+        qpos_diff[:, nv_robot : nv_robot + 3] = r2[:, :3] - r2_ref[:, :3]
+        qpos_diff[:, nv_robot + 3 : nv_robot + 6] = quat_sub(r2[:, 3:7], r2_ref[:, 3:7])
+        qpos_diff[:, nv_robot + 6 : 2 * nv_robot] = r2[:, 7:] - r2_ref[:, 7:]
         # object
         if nq_obj == 7:
             qpos_diff[:, -6:-3] = obj[:, :3] - obj_ref[:, :3]
@@ -336,12 +343,18 @@ def _diff_qpos(
 # E035: Local-frame tracking helpers (ported from HDMI)
 # ---------------------------------------------------------------------------
 
+
 def _lf_yaw_quat(q: torch.Tensor) -> torch.Tensor:
     """Extract yaw-only rotation from quaternion. q: (..., 4) wxyz."""
     w, x, y, z = q.unbind(-1)
     yaw = torch.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
     return torch.stack(
-        [torch.cos(yaw / 2), torch.zeros_like(yaw), torch.zeros_like(yaw), torch.sin(yaw / 2)],
+        [
+            torch.cos(yaw / 2),
+            torch.zeros_like(yaw),
+            torch.zeros_like(yaw),
+            torch.sin(yaw / 2),
+        ],
         dim=-1,
     )
 
@@ -355,12 +368,15 @@ def _lf_quat_mul(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
     """Hamilton product. q1, q2: (..., 4) wxyz."""
     w1, x1, y1, z1 = q1.unbind(-1)
     w2, x2, y2, z2 = q2.unbind(-1)
-    return torch.stack([
-        w1*w2 - x1*x2 - y1*y2 - z1*z2,
-        w1*x2 + x1*w2 + y1*z2 - z1*y2,
-        w1*y2 - x1*z2 + y1*w2 + z1*x2,
-        w1*z2 + x1*y2 - y1*x2 + z1*w2,
-    ], dim=-1)
+    return torch.stack(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ],
+        dim=-1,
+    )
 
 
 def _lf_quat_apply(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -477,19 +493,44 @@ def get_reward(
     elif len(ref) == 6:
         qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref = ref
     elif len(ref) == 7:
-        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val = ref
+        (
+            qpos_ref,
+            qvel_ref,
+            ctrl_ref,
+            contact_ref,
+            contact_pos_ref,
+            body_xpos_ref,
+            approach_mask_val,
+        ) = ref
     elif len(ref) == 8:
-        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val, body_xquat_ref = ref
+        (
+            qpos_ref,
+            qvel_ref,
+            ctrl_ref,
+            contact_ref,
+            contact_pos_ref,
+            body_xpos_ref,
+            approach_mask_val,
+            body_xquat_ref,
+        ) = ref
     else:
-        qpos_ref, qvel_ref, ctrl_ref, contact_ref, contact_pos_ref, body_xpos_ref, approach_mask_val, body_xquat_ref, contact_target_dynamic = ref
+        (
+            qpos_ref,
+            qvel_ref,
+            ctrl_ref,
+            contact_ref,
+            contact_pos_ref,
+            body_xpos_ref,
+            approach_mask_val,
+            body_xquat_ref,
+            contact_target_dynamic,
+        ) = ref
     qpos_sim = wp.to_torch(env.data_wp.qpos)
     qvel_sim = wp.to_torch(env.data_wp.qvel)
     N = qpos_sim.shape[0]
 
     # weighted qpos tracking
-    qpos_diff = _diff_qpos(
-        config, qpos_sim, qpos_ref.unsqueeze(0).repeat(N, 1)
-    )
+    qpos_diff = _diff_qpos(config, qpos_sim, qpos_ref.unsqueeze(0).repeat(N, 1))
     qpos_weight = _weight_diff_qpos(config)
     delta_qpos = qpos_diff * qpos_weight
     qpos_dist = torch.norm(delta_qpos, p=2, dim=1)
@@ -504,7 +545,11 @@ def get_reward(
 
     # E035: local-frame body tracking (replaces qpos_rew when enabled)
     local_frame_rew = torch.zeros(N, device=config.device)
-    if config.use_local_frame_reward and body_xpos_ref is not None and body_xquat_ref is not None:
+    if (
+        config.use_local_frame_reward
+        and body_xpos_ref is not None
+        and body_xquat_ref is not None
+    ):
         xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
         xquat_sim = wp.to_torch(env.data_wp.xquat)  # (N, nbody, 4) wxyz
 
@@ -516,23 +561,60 @@ def get_reward(
         lower_ids = config.local_frame_lower_ids
 
         upper_pos_rew = _local_pos_tracking(
-            xpos_sim, xquat_sim, upper_ids, root_id,
-            body_xpos_ref[upper_ids], ref_root_pos, ref_root_quat,
+            xpos_sim,
+            xquat_sim,
+            upper_ids,
+            root_id,
+            body_xpos_ref[upper_ids],
+            ref_root_pos,
+            ref_root_quat,
             config.local_frame_pos_sigma,
         )
         upper_ori_rew = _local_ori_tracking(
-            xquat_sim, upper_ids, root_id,
-            body_xquat_ref[upper_ids], ref_root_quat,
+            xquat_sim,
+            upper_ids,
+            root_id,
+            body_xquat_ref[upper_ids],
+            ref_root_quat,
             config.local_frame_ori_sigma,
         )
+
+        # E044: extra weight for wrist bodies
+        if config.local_frame_wrist_weight != 1.0 and config.local_frame_wrist_ids:
+            wrist_ids = [
+                wid for wid in config.local_frame_wrist_ids if wid in upper_ids
+            ]
+            if wrist_ids:
+                wrist_pos_extra = _local_pos_tracking(
+                    xpos_sim,
+                    xquat_sim,
+                    wrist_ids,
+                    root_id,
+                    body_xpos_ref[wrist_ids],
+                    ref_root_pos,
+                    ref_root_quat,
+                    config.local_frame_pos_sigma,
+                )
+                upper_pos_rew = (
+                    upper_pos_rew
+                    + (config.local_frame_wrist_weight - 1.0) * wrist_pos_extra
+                )
         lower_pos_rew = _local_pos_tracking(
-            xpos_sim, xquat_sim, lower_ids, root_id,
-            body_xpos_ref[lower_ids], ref_root_pos, ref_root_quat,
+            xpos_sim,
+            xquat_sim,
+            lower_ids,
+            root_id,
+            body_xpos_ref[lower_ids],
+            ref_root_pos,
+            ref_root_quat,
             config.local_frame_pos_sigma,
         )
         lower_ori_rew = _local_ori_tracking(
-            xquat_sim, lower_ids, root_id,
-            body_xquat_ref[lower_ids], ref_root_quat,
+            xquat_sim,
+            lower_ids,
+            root_id,
+            body_xquat_ref[lower_ids],
+            ref_root_quat,
             config.local_frame_ori_sigma,
         )
 
@@ -557,9 +639,12 @@ def get_reward(
 
         W = config.local_frame_w_track
         local_frame_rew = W * (
-            upper_pos_rew + upper_ori_rew
-            + lower_pos_rew + lower_ori_rew
-            + root_pos_rew + root_ori_rew
+            upper_pos_rew
+            + upper_ori_rew
+            + lower_pos_rew
+            + lower_ori_rew
+            + root_pos_rew
+            + root_ori_rew
             + joint_rew
         )  # max = W * 7
 
@@ -642,9 +727,9 @@ def get_reward(
         for ia, ib in config.interact_pairs:
             delta_sim = body_pos_sim[:, ia] - body_pos_sim[:, ib]  # (N, 3)
             delta_ref = body_xpos_ref[ia] - body_xpos_ref[ib]  # (3,)
-            pair_err_total = (
-                pair_err_total + ((delta_sim - delta_ref.unsqueeze(0)) ** 2).sum(dim=-1)
-            )
+            pair_err_total = pair_err_total + (
+                (delta_sim - delta_ref.unsqueeze(0)) ** 2
+            ).sum(dim=-1)
         interact_rew = config.interact_rew_scale * torch.exp(
             -config.interact_sigma * pair_err_total
         )
@@ -658,7 +743,7 @@ def get_reward(
         if obj_body_id != -1 and config.hand_approach_obj_half_extents:
             xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
             hand_pos = xpos_sim[:, config.hand_approach_body_ids]  # (N, K_hand, 3)
-            obj_pos = xpos_sim[:, obj_body_id:obj_body_id + 1]  # (N, 1, 3)
+            obj_pos = xpos_sim[:, obj_body_id : obj_body_id + 1]  # (N, 1, 3)
             # Surface distance: clamp(|delta| - half_ext, min=0) then norm
             half_ext = torch.tensor(
                 config.hand_approach_obj_half_extents,
@@ -670,8 +755,10 @@ def get_reward(
             # Min distance over hands (reward best hand)
             dist_per_hand = surface_dist.norm(dim=-1)  # (N, K_hand)
             min_dist = dist_per_hand.min(dim=1).values  # (N,)
-            hand_approach_rew = approach_mask_val * config.hand_approach_rew_scale * torch.exp(
-                -config.hand_approach_sigma * min_dist
+            hand_approach_rew = (
+                approach_mask_val
+                * config.hand_approach_rew_scale
+                * torch.exp(-config.hand_approach_sigma * min_dist)
             )
 
     # E037: contact mask-gated reward — HDMI-style proximity with mask gate
@@ -703,7 +790,9 @@ def get_reward(
     # E039: HDMI-aligned contact — predefined target points + per-EEF + mask gate
     # E040: dynamic per-frame target support
     contact_hdmi_rew = torch.zeros(N, device=config.device)
-    if config.contact_hdmi_gain > 0.0 and (config.contact_hdmi_target_left or contact_target_dynamic is not None):
+    if config.contact_hdmi_gain > 0.0 and (
+        config.contact_hdmi_target_left or contact_target_dynamic is not None
+    ):
         obj_body_id = mujoco.mj_name2id(
             env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
         )
@@ -714,14 +803,26 @@ def get_reward(
             obj_quat = xquat_sim[:, obj_body_id]  # (N, 4) wxyz
 
             eef_bids = config.hand_approach_body_ids  # [left_wrist, right_wrist]
-            eef_offset = torch.tensor(config.contact_hdmi_eef_offset, device=config.device, dtype=obj_pos.dtype)
+            eef_offset = torch.tensor(
+                config.contact_hdmi_eef_offset,
+                device=config.device,
+                dtype=obj_pos.dtype,
+            )
 
             # E041: palm normal vectors for orientation reward
             palm_normals = None
             if config.contact_hdmi_ori_weight > 0.0:
                 palm_normals = [
-                    torch.tensor(config.contact_hdmi_palm_normal_left, device=config.device, dtype=obj_pos.dtype),
-                    torch.tensor(config.contact_hdmi_palm_normal_right, device=config.device, dtype=obj_pos.dtype),
+                    torch.tensor(
+                        config.contact_hdmi_palm_normal_left,
+                        device=config.device,
+                        dtype=obj_pos.dtype,
+                    ),
+                    torch.tensor(
+                        config.contact_hdmi_palm_normal_right,
+                        device=config.device,
+                        dtype=obj_pos.dtype,
+                    ),
                 ]
 
             # E040: choose between dynamic per-frame targets and fixed targets
@@ -730,18 +831,30 @@ def get_reward(
                 targets = [contact_target_dynamic[ei] for ei in range(len(eef_bids))]
             else:
                 targets = [
-                    torch.tensor(config.contact_hdmi_target_left, device=config.device, dtype=obj_pos.dtype),
-                    torch.tensor(config.contact_hdmi_target_right, device=config.device, dtype=obj_pos.dtype),
+                    torch.tensor(
+                        config.contact_hdmi_target_left,
+                        device=config.device,
+                        dtype=obj_pos.dtype,
+                    ),
+                    torch.tensor(
+                        config.contact_hdmi_target_right,
+                        device=config.device,
+                        dtype=obj_pos.dtype,
+                    ),
                 ]
 
             per_eef_rew = []
             for ei, (bid, target_off) in enumerate(zip(eef_bids, targets)):
                 # Target in world = obj_pos + quat_apply(obj_quat, target_offset)
-                target_world = obj_pos + _lf_quat_apply(obj_quat, target_off.unsqueeze(0).expand(N, -1))
+                target_world = obj_pos + _lf_quat_apply(
+                    obj_quat, target_off.unsqueeze(0).expand(N, -1)
+                )
                 # EEF contact point = eef_pos + quat_apply(eef_quat, eef_offset)
                 eef_pos = xpos_sim[:, bid]  # (N, 3)
                 eef_quat = xquat_sim[:, bid]  # (N, 4)
-                contact_point = eef_pos + _lf_quat_apply(eef_quat, eef_offset.unsqueeze(0).expand(N, -1))
+                contact_point = eef_pos + _lf_quat_apply(
+                    eef_quat, eef_offset.unsqueeze(0).expand(N, -1)
+                )
                 # Distance and exp reward
                 dist = (target_world - contact_point).norm(dim=-1)  # (N,)
                 pos_rew = torch.exp(-dist / config.contact_hdmi_sigma)
@@ -749,7 +862,9 @@ def get_reward(
                 # E041: orientation gating — palm must face toward target
                 if palm_normals is not None:
                     palm_local = palm_normals[ei]  # (3,)
-                    palm_world = _lf_quat_apply(eef_quat, palm_local.unsqueeze(0).expand(N, -1))  # (N, 3)
+                    palm_world = _lf_quat_apply(
+                        eef_quat, palm_local.unsqueeze(0).expand(N, -1)
+                    )  # (N, 3)
                     dir_to_target = target_world - contact_point  # (N, 3)
                     dir_norm = dir_to_target.norm(dim=-1, keepdim=True).clamp(min=1e-6)
                     dir_to_target = dir_to_target / dir_norm  # (N, 3) normalized
@@ -778,7 +893,17 @@ def get_reward(
             # HDMI formula: mask=1 → gain*pos_rew, mask=0 → 1.0
             contact_hdmi_rew = (rew_stack * mask * gain + (1.0 - mask)).mean(dim=1)
 
-    reward = qpos_rew + qvel_rew + contact_rew + task_body_rew + task_obj_rew + interact_rew + hand_approach_rew + contact_mask_rew + contact_hdmi_rew
+    reward = (
+        qpos_rew
+        + qvel_rew
+        + contact_rew
+        + task_body_rew
+        + task_obj_rew
+        + interact_rew
+        + hand_approach_rew
+        + contact_mask_rew
+        + contact_hdmi_rew
+    )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
     stability_penalty = torch.zeros(N, device=config.device)
@@ -951,19 +1076,23 @@ def get_terminate(
         r1_pos_err = torch.norm(qpos_sim[:, :3] - qpos_ref[:3].unsqueeze(0), p=2, dim=1)
         r1_rot_err = torch.norm(
             quat_sub(qpos_sim[:, 3:7], qpos_ref[3:7].unsqueeze(0).expand(N, -1)),
-            p=2, dim=1,
+            p=2,
+            dim=1,
         )
         # robot2 base
         r2_pos_err = torch.norm(
-            qpos_sim[:, nq_robot:nq_robot + 3] - qpos_ref[nq_robot:nq_robot + 3].unsqueeze(0),
-            p=2, dim=1,
+            qpos_sim[:, nq_robot : nq_robot + 3]
+            - qpos_ref[nq_robot : nq_robot + 3].unsqueeze(0),
+            p=2,
+            dim=1,
         )
         r2_rot_err = torch.norm(
             quat_sub(
-                qpos_sim[:, nq_robot + 3:nq_robot + 7],
-                qpos_ref[nq_robot + 3:nq_robot + 7].unsqueeze(0).expand(N, -1),
+                qpos_sim[:, nq_robot + 3 : nq_robot + 7],
+                qpos_ref[nq_robot + 3 : nq_robot + 7].unsqueeze(0).expand(N, -1),
             ),
-            p=2, dim=1,
+            p=2,
+            dim=1,
         )
         terminate = (
             (r1_pos_err > config.base_pos_threshold)
@@ -1163,9 +1292,16 @@ def _apply_object_pd_override(config: Config, env: MJWPEnv):
 
     # Object actuator target = [pos_x, pos_y, pos_z + grav_comp, rot_x, rot_y, rot_z]
     obj_target = torch.tensor(
-        [ref_pos[0].item(), ref_pos[1].item(), ref_pos[2].item() + grav_comp,
-         ref_euler[0].item(), ref_euler[1].item(), ref_euler[2].item()],
-        dtype=torch.float32, device=config.device,
+        [
+            ref_pos[0].item(),
+            ref_pos[1].item(),
+            ref_pos[2].item() + grav_comp,
+            ref_euler[0].item(),
+            ref_euler[1].item(),
+            ref_euler[2].item(),
+        ],
+        dtype=torch.float32,
+        device=config.device,
     )
 
     # Write to ctrl for object actuator channels (last 6 of nu)
@@ -1184,9 +1320,7 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
 
     This enables single-robot retargeting of cooperative carrying tasks.
     """
-    obj_body_id = mujoco.mj_name2id(
-        env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
-    )
+    obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
     if obj_body_id == -1:
         return
 
@@ -1207,8 +1341,8 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
         obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
         obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
         obj_vadr = env.model_cpu.jnt_dofadr[obj_jnt_id]
-        obj_pos_sim = qpos[:, obj_qadr:obj_qadr + 3]  # (N, 3)
-        obj_vel_sim = qvel[:, obj_vadr:obj_vadr + 3]  # (N, 3)
+        obj_pos_sim = qpos[:, obj_qadr : obj_qadr + 3]  # (N, 3)
+        obj_vel_sim = qvel[:, obj_vadr : obj_vadr + 3]  # (N, 3)
 
         # Get reference pos for current time
         time_arr = wp.to_torch(env.data_wp.time)
@@ -1231,12 +1365,14 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
         xfrc_applied[:, obj_body_id, :3] += spring_force
 
         # E030: Orientation control via xfrc_applied torque
-        if config.partner_force_spring_kp_rot > 0 and hasattr(env, "partner_force_ref_quat"):
+        if config.partner_force_spring_kp_rot > 0 and hasattr(
+            env, "partner_force_ref_quat"
+        ):
             from spider.math import quat_sub
 
             # Object quaternion from qpos: freejoint stores (w,x,y,z)
-            obj_quat_sim = qpos[:, obj_qadr + 3:obj_qadr + 7]  # (N, 4) wxyz
-            obj_angvel_sim = qvel[:, obj_vadr + 3:obj_vadr + 6]  # (N, 3)
+            obj_quat_sim = qpos[:, obj_qadr + 3 : obj_qadr + 7]  # (N, 4) wxyz
+            obj_angvel_sim = qvel[:, obj_vadr + 3 : obj_vadr + 6]  # (N, 3)
 
             # Normalize quaternion (can become unnormalized in unstable rollouts)
             quat_norm = obj_quat_sim.norm(dim=-1, keepdim=True).clamp(min=1e-8)
@@ -1380,7 +1516,7 @@ def _load_mocap_partner(config: Config, env: MJWPEnv):
     env.mocap_partner_dt = config.ref_dt  # partner trajectory is at ref framerate
 
     loguru.logger.info(
-        f"Loaded mocap partner trajectory: {partner_pos.shape[0]} frames @ {1/config.ref_dt:.0f}fps"
+        f"Loaded mocap partner trajectory: {partner_pos.shape[0]} frames @ {1 / config.ref_dt:.0f}fps"
     )
 
 
@@ -1483,8 +1619,8 @@ def load_env_params(config: Config, env: MJWPEnv, env_param: dict):
             )
         elif config.embodiment_type in ["humanoid_object", "dual_humanoid_object"]:
             nq_obj = config.nq_obj  # 7 (freejoint) or 6 (contact_guidance)
-            qpos_override_th[:, -nq_obj:-nq_obj + 2] = (
-                qpos_override_th[:, -nq_obj:-nq_obj + 2] + env_param["xy_offset"]
+            qpos_override_th[:, -nq_obj : -nq_obj + 2] = (
+                qpos_override_th[:, -nq_obj : -nq_obj + 2] + env_param["xy_offset"]
             )
 
         wp.copy(env.data_wp.qpos, wp.from_torch(qpos_override_th))
