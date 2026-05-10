@@ -57,6 +57,8 @@
 | E044a | 2026-05-10 | Phase 12 | **Wrist Weight=2.0**: box025 contact持平(67%)但stability崩溃(73%); pelvis_min=0.113m; 增强上半身权重→下半身stability退化 | ❌ stability退化 |
 | E045 | 2026-05-10 | Phase 12 | **Sigma Sweep(0.3/0.15)**: 收紧sigma→contact全面下降(box025 66→38/46%, bucket010 57→20/23%); desk005局部改善(4→22%); **证实contact瓶颈不在tracking精度** | ❌ 无效 |
 | E047a | 2026-05-10 | Phase 12 | **SBTO对齐DynaRetarget**: 修复5个偏差(Sigma EWMA/收敛准则/mean EWMA/elite fraction); 机器人摔倒(MPKPE=155cm); α_μ=0.95太保守+σ_min=0.01太紧; **SBTO+exp-kernel reward不兼容** | ❌❌ 失败 |
+| E044b | 2026-05-10 | Phase 12 | **Wrist Weight=3.0**: box025 contact 59%+stable 100%(比w=2.0更稳但contact↓); bucket010 22%/92%; desk005 MPKPE=1.1cm最佳; **weight越大CEM越保守** | ❌ contact退化 |
+| E047b | 2026-05-10 | Phase 12 | **SBTO放松参数(α_μ=0.5,σ_min=0.03)**: stability恢复98-100%(E047a=31%), 但MPKPE=69-87cm仍极差; **SBTO开环优化无法替代MPC闭环反馈** | ❌ tracking差 |
 
 ## 关键指标演进
 

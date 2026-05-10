@@ -1,6 +1,6 @@
 # E044-E047: Phase 12 三方向广泛探索
 
-## 状态: E045 全部完成 + E044a/E047a 完成 — E044b/E047b 远程运行中
+## 状态: 全部完成 — 三方向均未超越 E041c baseline
 
 ## 背景
 
@@ -93,6 +93,41 @@ desk005 的改善例外是因为：desk005 的 ref 中手-物体距离本来就�
 
 ---
 
+### E044b: 手腕权重增强 (wrist_weight=3.0)
+
+**配置差异**: `local_frame_wrist_weight: 3.0`
+
+#### 结果 (全 3 case)
+
+| 实验 | Case | MPKPE | Contact<10cm | Stability>0.6 | 对比 E041c |
+|------|------|-------|-------------|--------------|-----------|
+| E041c | box025 | 1.4cm | **66%** | **100%** | — |
+| E044b (w=3.0) | box025 | 1.6cm | 59% | **100%** | ❌ contact↓ |
+| E041c | bucket010 | 1.4cm | **57%** | **100%** | — |
+| E044b (w=3.0) | bucket010 | 1.8cm | 22% | 92% | ❌ 全面退化 |
+| E041c | desk005 | 1.9cm | 4% | 81% | — |
+| E044b (w=3.0) | desk005 | **1.1cm** | **13%** | **100%** | ⚠️ desk 改善 |
+
+#### E044a vs E044b 对比 (box025)
+
+| 指标 | E044a (w=2.0) | E044b (w=3.0) |
+|------|-------------|-------------|
+| Contact<10cm | **67%** | 59% |
+| Stability>0.6 | 73% ❌ | **100%** |
+| Pelvis min | 0.113m | — |
+
+**有趣现象**: weight=3.0 反而比 weight=2.0 更稳定 (100% vs 73%)。原因推测:
+- weight=2.0 时 CEM 找到了"翻转右肩"的捷径（reward 收益刚好足够），导致摔倒
+- weight=3.0 时手腕权重过大，CEM 被迫选择更保守的全身姿态来满足约束，反而避免了极端动作
+- 但 contact 从 67%→59% 说明过高权重使 CEM 优先"锁定手腕"而非"手靠近物体"
+
+**E044 系列结论**: ❌ wrist weight 增强整体无效:
+- box025: contact 最高 67% (w=2.0)，但 stability 崩溃; w=3.0 稳定但 contact↓
+- bucket010: 严重退化 (57→22%, stability 92%)
+- desk005: 局部改善 (MPKPE 1.9→1.1cm, stability 81→100%), 但 contact 仅 4→13%
+
+---
+
 ## Direction 3: CEM/SBTO 算法优化
 
 ### E047a: SBTO 对齐 DynaRetarget (论文参数)
@@ -140,6 +175,41 @@ Total: 481.8s
 4. **DynaRetarget 用 CPU MuJoCo rollout，SPIDER 用 GPU Warp**: 论文的 MuJoCo `rollout` 函数是前向模拟，不需要 CUDA graph → 内存和计算约束不同。
 
 **下一步**: E047b 正在远程运行 (momentum=0.5, σ_min=0.03)。
+
+---
+
+### E047b: SBTO 放松参数 (momentum=0.5, σ_min=0.03)
+
+**修改**: `sbto_mean_momentum=0.5` (从 0.95), `sbto_sigma_min=0.03` (从 0.01)
+
+#### 结果
+
+| 实验 | Case | MPKPE | Contact<10cm | Stability>0.6 | 运行时间 | 对比 E041c |
+|------|------|-------|-------------|--------------|---------|-----------|
+| E041c (MPC) | box025 | 1.4cm | 66% | 100% | 14min | — |
+| E047a (α_μ=0.95) | box025 | 155cm | 0% | 31% | 8min | ❌❌ 摔倒 |
+| **E047b (α_μ=0.5)** | box025 | 87cm | 28% | **98%** | ~4min | ❌ tracking差 |
+| **E047b (α_μ=0.5)** | bucket010 | 69cm | 0% | **100%** | ~4min | ❌ tracking差 |
+| E047b (α_μ=0.5) | desk005 | — | — | — | killed | CPU-only 运行 |
+
+#### 分析
+
+E047b 比 E047a 有显著改善:
+- **Stability 恢复**: 98-100% (E047a 仅 31%) — 降低 momentum 让 CEM 有效收敛
+- 但 **MPKPE 仍然很大** (69-87cm vs MPC 的 1.4cm) — SBTO 的 body tracking 质量远不如 MPC
+
+**SBTO vs MPC 的根本差异**:
+1. MPC 每步从当前真实状态规划 → 闭环反馈纠正偏差
+2. SBTO 一次性优化全程开环轨迹 → 累积误差无法纠正
+3. DynaRetarget 论文中成功因为用 **MuJoCo CPU rollout** (精确模拟)，SPIDER 用 **Warp GPU** (可能有精度差异)
+4. DynaRetarget 的代价函数是 **平方误差** (无界负)，SPIDER 的 reward 是 **exp-kernel** (有界 [0, 3.5]) → 长 horizon 的 mean reward 差异缩小，CEM 难区分
+
+**E047b desk005 CPU-only 问题**: desk005 的 SBTO 在 GPU1 上运行但 GPU 利用率 0%，纯 CPU 跑了 54 分钟未完成 → 可能是 Warp kernel cache 问题或 scene 特定的 CUDA graph 失败。已 kill。
+
+**E047 系列结论**: ❌ SBTO 在 SPIDER 的 reward 架构下不可用:
+- 即使放松参数，body tracking 仍比 MPC 差 50-60 倍
+- SBTO 的优势（长 horizon 全局优化）无法弥补闭环反馈的缺失
+- DynaRetarget 的成功可能依赖于其特定的代价函数设计 + CPU 模拟精度
 
 ---
 
@@ -192,9 +262,25 @@ Total: 481.8s
 
 ### 进行中
 
-- **E044b** (wrist_weight=3.0) — 远程 GPU0 运行中
-- **E047b** (SBTO: momentum=0.5, σ_min=0.03) — 远程 GPU1 运行中
-- 预计 ~18:10 完成
+- **E046 数据扩展**: 3 个 person2 case 已转换，5 个新物体候选已确定（待 OmniRetarget 处理）
+
+---
+
+## 最终结论
+
+**E041c 仍然是 CORE4D 上的最佳配置**。Phase 12 的三方向探索全部未能超越：
+
+| 方向 | 实验 | 最佳结果 vs E041c | 判定 |
+|------|------|-------------------|------|
+| Body tracking sigma | E045a/b | contact ↓20-37%, stability ≈ | ❌ 放弃 |
+| Wrist weight | E044a/b | contact ≈/↓, stability ↓ 或 tradeoff | ❌ 放弃 |
+| SBTO 算法 | E047a/b | MPKPE 69-155cm (MPC 1.4cm) | ❌ 放弃 |
+
+**核心发现**:
+1. contact 瓶颈不在 tracking 精度 — 降 MPKPE 从 1.4→1.2cm 不改善 contact
+2. 任何增强上半身权重的方法都有 stability tradeoff
+3. SBTO 开环优化与 SPIDER 的 exp-kernel reward 不兼容
+4. E041c 的 σ=0.5 / uniform weight / MPC 配置是 tracking/stability/contact 的帕累托最优
 
 ---
 
@@ -213,6 +299,7 @@ Total: 481.8s
 | 产出 | 路径 |
 |------|------|
 | E044a box025 | `workspace/core4d/results/E044/E044a_box025.{npz,mp4}` |
+| E044b box025/bucket010/desk005 | `workspace/core4d/results/E044/E044b_*.{npz,mp4}` |
 | E045a/b × 3 case | `workspace/core4d/results/E045/E045{a,b}_{box025,bucket010,desk005}.{npz,mp4}` |
 | E047a box025 | `workspace/core4d/results/E047/E047a_box025.{npz,mp4}` |
-| E044b/E047b (运行中) | `workspace/core4d/results/E044/`, `workspace/core4d/results/E047/` |
+| E047b box025/bucket010 | `workspace/core4d/results/E047/E047b_{box025,bucket010}.{npz,mp4}` |
