@@ -53,6 +53,10 @@
 | E041 | 2026-05-09 | Phase 11 | **Orientation Reward(乘法门控)**: palm normal方向约束; 手掌朝向有所改善; 但乘法gating过严导致Contact/Stability退化(62/56%); body前倾问题仍存在; CEM难同时优化position+orientation | ⚠️ 方向正确但约束过严 |
 | E041c | 2026-05-09 | Phase 11 | **Additive Ori(w=0.3)最佳变体**: Contact=66/57%+Stable=100%+MPKPE=1.4cm; 与E040持平; 远程2GPU sweep验证 | ★ sweep最佳 |
 | E042 | 2026-05-10 | Phase 11 | **Wrist Freeze(零化手腕噪声)**: 对齐HDMI做法; box025持平(64%), bucket010暴跌(48%); freeze阻止CEM补偿body tracking误差; HDMI成功因ref精确在把手; **确认contact上限≈64-66%(box025)** | ❌ 有害 |
+| E043 | 2026-05-10 | Phase 11 | **原始OmniRetarget Ref对比**: Phase3(无松弛)反而更差; box025 64→52%, bucket010 66→57%; Phase4松弛版contact更优; desk005例外(stability改善) | Phase4更优 |
+| E044a | 2026-05-10 | Phase 12 | **Wrist Weight=2.0**: box025 contact持平(67%)但stability崩溃(73%); pelvis_min=0.113m; 增强上半身权重→下半身stability退化 | ❌ stability退化 |
+| E045 | 2026-05-10 | Phase 12 | **Sigma Sweep(0.3/0.15)**: 收紧sigma→contact全面下降(box025 66→38/46%, bucket010 57→20/23%); desk005局部改善(4→22%); **证实contact瓶颈不在tracking精度** | ❌ 无效 |
+| E047a | 2026-05-10 | Phase 12 | **SBTO对齐DynaRetarget**: 修复5个偏差(Sigma EWMA/收敛准则/mean EWMA/elite fraction); 机器人摔倒(MPKPE=155cm); α_μ=0.95太保守+σ_min=0.01太紧; **SBTO+exp-kernel reward不兼容** | ❌❌ 失败 |
 
 ## 关键指标演进
 
@@ -71,6 +75,11 @@ Contact<10cm演进:
   bucket010: E036(2%) → E039b(76%,手粘连) → E040(66%,手背接触) | 均有不自然行为
   desk005: E036(7%) → E039b(81%,stable=20%) → E040(4%,stable=81%)
   根因: position-only reward无方向约束 → CEM用手背满足距离 → 需orientation reward
+Phase 12 探索(均未超越E041c baseline):
+  E045a(σ=0.3): box025 38%↓ / bucket010 20%↓ / desk005 6%≈  ← sigma收紧有害
+  E045b(σ=.15): box025 46%↓ / bucket010 23%↓ / desk005 22%↑  ← desk005局部改善
+  E044a(w=2.0): box025 67%≈ / stability 73%↓ ← 上半身权重与stability tradeoff
+  E047a(SBTO):  box025 0% / stability 31% ← SBTO+exp-reward不兼容,需调参
 obj z 实测 (npz qpos):
   Phase 1: 所有实验 sim max ≤ 0.460m (E011), 实际未持续离地
   Phase 2 (kinobj): obj follows ref (PD驱动), pelvis stable
