@@ -59,6 +59,8 @@
 | E047a | 2026-05-10 | Phase 12 | **SBTO对齐DynaRetarget**: 修复5个偏差(Sigma EWMA/收敛准则/mean EWMA/elite fraction); 机器人摔倒(MPKPE=155cm); α_μ=0.95太保守+σ_min=0.01太紧; **SBTO+exp-kernel reward不兼容** | ❌❌ 失败 |
 | E044b | 2026-05-10 | Phase 12 | **Wrist Weight=3.0**: box025 contact 59%+stable 100%(比w=2.0更稳但contact↓); bucket010 22%/92%; desk005 MPKPE=1.1cm最佳; **weight越大CEM越保守** | ❌ contact退化 |
 | E047b | 2026-05-10 | Phase 12 | **SBTO放松参数(α_μ=0.5,σ_min=0.03)**: stability恢复98-100%(E047a=31%), 但MPKPE=69-87cm仍极差; **SBTO开环优化无法替代MPC闭环反馈** | ❌ tracking差 |
+| — | 2026-05-11 | Bug Fix | **碰撞盒模板Bug修复**: 21/21 case碰撞盒全部修正为mesh AABB×1.05; box023从1.8x过大修正; bucket010 Y/Z互换修正; box025增大24% | 修复完成 |
+| E048 | 2026-05-11 | Phase 13 | **碰撞盒修复后Baseline+HDMI对比**: box025 Contact 66→54%; bucket010 57→7%(碰撞盒形状修正); desk005偏移156cm; **box023 HDMI=93%Contact/100%Stable vs E041c=38%Stable(摔倒)** | **★ 算法是瓶颈** |
 
 ## 关键指标演进
 
