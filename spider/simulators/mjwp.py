@@ -115,6 +115,13 @@ def setup_mj_model(config: Config) -> mujoco.MjModel:
 
         n = apply_holosoma_g1_pd(model_cpu, verbose=False)
         loguru.logger.info(f"Applied Holosoma G1 PD to {n} actuators")
+    # HDMI R013: add dof_damping to wrist joints (critically damped)
+    if getattr(config, "apply_wrist_dof_damping", False):
+        for ji in range(model_cpu.njnt):
+            jname = mujoco.mj_id2name(model_cpu, mujoco.mjtObj.mjOBJ_JOINT, ji)
+            if jname and "wrist" in jname:
+                model_cpu.dof_damping[model_cpu.jnt_dofadr[ji]] = config.wrist_dof_damping
+        loguru.logger.info(f"Applied wrist dof_damping={config.wrist_dof_damping}")
     return model_cpu
 
 

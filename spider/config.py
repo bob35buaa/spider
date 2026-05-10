@@ -228,6 +228,10 @@ class Config:
     apply_holosoma_pd: bool = (
         False  # override actuator gains using Holosoma G1 PD config (Isaac order)
     )
+    apply_wrist_dof_damping: bool = (
+        False  # add dof_damping to wrist joints (HDMI R013 fix for underdamped wrists)
+    )
+    wrist_dof_damping: float = 5.0  # critically damped for Kp≈15, inertia≈0.43
     use_local_contact_reward: bool = (
         False  # add HDMI-style local-frame contact offset reward
     )

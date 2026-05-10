@@ -41,13 +41,18 @@ def main():
     task = args.task
     base_dir = f"example_datasets/processed/core4d/unitree_g1/humanoid_object/{task}"
 
-    half_ext_map = {
-        "desk005_person2": np.array([0.20, 0.37, 0.40]),
-        "box025_person1": np.array([0.305, 0.305, 0.446]),
-        "bucket010_person1": np.array([0.20, 0.20, 0.20]),
-        "chair022_person1": np.array([0.25, 0.25, 0.40]),
-    }
-    obj_half = half_ext_map.get(task, np.array([0.20, 0.20, 0.20]))
+    # Dynamically read object collision half-extents from scene XML
+    obj_half = np.array([0.20, 0.20, 0.20])  # fallback
+    try:
+        _m_scene = mujoco.MjModel.from_xml_path(f"{base_dir}/scene.xml")
+        for gi in range(_m_scene.ngeom):
+            gname = mujoco.mj_id2name(_m_scene, mujoco.mjtObj.mjOBJ_GEOM, gi)
+            if gname and "object_collision" in gname:
+                obj_half = _m_scene.geom_size[gi].copy()
+                break
+        del _m_scene
+    except Exception:
+        pass  # use fallback
 
     # Load sim
     d_sim = np.load(args.sim_npz)
