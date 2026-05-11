@@ -31,16 +31,21 @@ def flatten_mjwp(phys_data: dict) -> np.ndarray:
     return qpos
 
 
-def _euler_xyz_to_quat_wxyz(euler: np.ndarray) -> np.ndarray:
-    """Convert intrinsic XYZ euler angles to wxyz quaternion."""
+def _euler_to_quat_wxyz(euler: np.ndarray, convention: str = "xyz") -> np.ndarray:
+    """Convert euler angles to wxyz quaternion with specified convention."""
     from scipy.spatial.transform import Rotation
-    r = Rotation.from_euler("xyz", euler)
+    r = Rotation.from_euler(convention.upper(), euler)
     q_xyzw = r.as_quat()  # scipy returns (x,y,z,w)
     return np.array([q_xyzw[3], q_xyzw[0], q_xyzw[1], q_xyzw[2]])
 
 
+# Keep old name for backwards compat
+def _euler_xyz_to_quat_wxyz(euler: np.ndarray) -> np.ndarray:
+    return _euler_to_quat_wxyz(euler, "xyz")
+
+
 def adapt_qpos_to_model(
-    model: mujoco.MjModel, qpos_seq: np.ndarray
+    model: mujoco.MjModel, qpos_seq: np.ndarray, euler_convention: str = "xyz"
 ) -> np.ndarray:
     """Convert trajectory qpos to match model nq if needed.
 
@@ -78,7 +83,7 @@ def adapt_qpos_to_model(
             out[t, robot_nq:robot_nq + 3] = slide_offset + body_default_pos
             # Euler xyz → quaternion wxyz
             euler = qpos_seq[t, robot_nq + 3:robot_nq + 6]
-            out[t, robot_nq + 3:robot_nq + 7] = _euler_xyz_to_quat_wxyz(euler)
+            out[t, robot_nq + 3:robot_nq + 7] = _euler_to_quat_wxyz(euler, euler_convention)
 
         print(f"Converted qpos: {traj_nq} → {model.nq} (contact guidance → freejoint)")
         return out
@@ -97,9 +102,10 @@ def render_frames(
     width: int = 640,
     height: int = 480,
     camera_name: str | None = None,
+    euler_convention: str = "xyz",
 ) -> list[np.ndarray]:
     """Render trajectory frames using offscreen renderer."""
-    qpos_seq = adapt_qpos_to_model(model, qpos_seq)
+    qpos_seq = adapt_qpos_to_model(model, qpos_seq, euler_convention)
     renderer = mujoco.Renderer(model, height=height, width=width)
     data = mujoco.MjData(model)
     frames = []
@@ -170,10 +176,26 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fps", type=int, default=10)
     parser.add_argument("--camera", type=str, default=None)
+    parser.add_argument("--euler", type=str, default=None,
+                        help="Euler convention (e.g. YXZ). Auto-detected from scene_act_meta.json if not given.")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(args.scene)
     print(f"Scene: nq={model.nq}")
+
+    # Auto-detect euler convention from scene_act_meta.json near the scene file
+    euler_conv = args.euler or "xyz"
+    if not args.euler:
+        import json
+        scene_dir = str(Path(args.scene).parent)
+        # Try common locations for scene_act_meta.json
+        for candidate in [Path(scene_dir) / "scene_act_meta.json",
+                          Path(scene_dir).parent / "scene_act_meta.json"]:
+            if candidate.exists():
+                with open(candidate) as f:
+                    euler_conv = json.load(f).get("euler_convention", "xyz")
+                print(f"Auto-detected euler convention: {euler_conv}")
+                break
 
     # Load data
     kin_qpos = np.load(args.kin)["qpos"]
@@ -182,9 +204,9 @@ def main() -> None:
 
     # Render both
     print("Rendering kinematic frames...")
-    kin_frames = render_frames(model, kin_qpos, args.width, args.height, args.camera)
+    kin_frames = render_frames(model, kin_qpos, args.width, args.height, args.camera, euler_conv)
     print("Rendering physics frames...")
-    phys_frames = render_frames(model, phys_qpos, args.width, args.height, args.camera)
+    phys_frames = render_frames(model, phys_qpos, args.width, args.height, args.camera, euler_conv)
 
     # Combine side-by-side (resample to same length)
     T = min(len(kin_frames), len(phys_frames))
