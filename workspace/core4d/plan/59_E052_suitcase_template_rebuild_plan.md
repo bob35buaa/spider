@@ -66,9 +66,12 @@ suitcase scene.xml
 
 **关键设计决策**:
 
-1. **body_pos 不改**: 保持 suitcase 原始的 `pos="0.4 0.05 0"`. 
-   虽然这与 CORE4D 物体实际位置不匹配 (产生大 slide offset),
-   但 E051a 证明这个 offset 是 HDMI PD 追踪机制所需要的.
+1. **body_pos 不改**: 保持 suitcase 原始的 `pos="0.4 0.05 0"`.
+   - body_pos 决定 slide joints 的 offset: `slide = 物体实际位置 - body_pos`
+   - PD force = kp × slide_offset. 当 offset 大 (1-2m) 时, 持续拉力 20-40N
+   - E051a 实验证明: 将 body_pos 修正为 frame-0 精确位置 (offset≈0) → PD 无恢复力 → ObjPos 从 24cm 恶化到 132cm
+   - 原始 suitcase 也用 [0.4, 0.05, 0] (不是精确位置), 这个 offset 提供的拉力是 contact guidance 的隐式设计
+   - 对所有 CORE4D cases 统一用同一个 body_pos, 无需 per-case 调整
 
 2. **Euler convention 不改**: 使用默认 XYZ joints + extrinsic "xyz" euler.
    对 box023 (178° mismatch) 虽然 FK 错, 但系统内部自洽.

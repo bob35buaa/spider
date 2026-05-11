@@ -173,6 +173,7 @@ class Config:
     local_frame_wrist_weight: float = 1.0  # 1.0 = no extra weight
     contact_guidance: bool = False
     euler_convention: str = "XYZ"  # Intrinsic euler convention for object hinge joints
+    use_scene_act: str = ""  # Path to scene_act.xml (bypass _make_contact_guidance_model)
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [
             "right_object_pos_x",

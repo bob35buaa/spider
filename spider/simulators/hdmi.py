@@ -516,6 +516,80 @@ def _make_contact_guidance_model(
     return model
 
 
+def _load_scene_act_for_hdmi(scene_act_path: str) -> tuple[mujoco.MjModel, str]:
+    """Load a pre-built scene_act.xml and adapt it for HDMI contact guidance.
+
+    scene_act.xml already has correct euler convention and 6-DOF object joints.
+    We rename "object" → "suitcase" and ensure object actuator gains are zero
+    (set at runtime via load_env_params).
+
+    Returns:
+        (model, euler_convention) tuple.
+    """
+    import json
+
+    scene_dir = os.path.dirname(os.path.abspath(scene_act_path))
+    tree = ET.parse(scene_act_path)
+    root = tree.getroot()
+
+    # Read euler convention from meta
+    meta_path = os.path.join(scene_dir, "scene_act_meta.json")
+    euler_convention = "XYZ"
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            euler_convention = json.load(f).get("euler_convention", "XYZ")
+
+    # Remove keyframe if present
+    kf = root.find("keyframe")
+    if kf is not None:
+        root.remove(kf)
+
+    # Rename "object" body to "suitcase" (HDMI expects this name)
+    for body in root.find("worldbody").iter("body"):
+        bname = body.get("name", "")
+        if bname == "object":
+            body.set("name", "suitcase")
+    # Rename object geoms and update all references
+    for geom in root.iter("geom"):
+        gname = geom.get("name", "")
+        if gname and "object" in gname:
+            geom.set("name", gname.replace("object", "suitcase"))
+    # Rename object sites
+    for site in root.iter("site"):
+        sname = site.get("name", "")
+        if sname and "object" in sname:
+            site.set("name", sname.replace("object", "suitcase"))
+    # Update contact pair geom references
+    contact_elem = root.find("contact")
+    if contact_elem is not None:
+        for pair in contact_elem.findall("pair"):
+            for attr in ["geom1", "geom2"]:
+                val = pair.get(attr, "")
+                if "object" in val:
+                    pair.set(attr, val.replace("object", "suitcase"))
+
+    # Ensure object actuators have kp=0 kv=0 (gains set at runtime)
+    actuator_elem = root.find("actuator")
+    if actuator_elem is not None:
+        for act in actuator_elem:
+            aname = act.get("name", "")
+            if aname.startswith("object_"):
+                act.set("kp", "0")
+                act.set("kv", "0")
+
+    # Write temp file in scene dir (for mesh path resolution)
+    tmp_path = os.path.join(scene_dir, "_scene_act_hdmi_tmp.xml")
+    tree.write(tmp_path, encoding="unicode")
+    model = mujoco.MjModel.from_xml_path(tmp_path)
+    os.remove(tmp_path)
+
+    loguru.logger.info(
+        f"Loaded scene_act for HDMI: nq={model.nq}, nv={model.nv}, nu={model.nu}, "
+        f"euler={euler_convention}"
+    )
+    return model, euler_convention
+
+
 def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
     """Setup HDMI env + MuJoCo Warp GPU environment.
 
@@ -543,11 +617,18 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         raise FileNotFoundError(f"Scene XML not found: {scene_xml_path}")
 
     if getattr(config, "contact_guidance", False):
-        euler_conv = getattr(config, "euler_convention", "XYZ")
-        model_cpu = _make_contact_guidance_model(scene_xml_path, euler_conv)
+        scene_act_path = getattr(config, "use_scene_act", "")
+        if scene_act_path and Path(scene_act_path).exists():
+            # 方案B: Use pre-built scene_act.xml with correct euler convention
+            model_cpu, euler_conv = _load_scene_act_for_hdmi(str(scene_act_path))
+            config.euler_convention = euler_conv
+        else:
+            # 方案A: Dynamically replace freejoint with slide/hinge joints
+            euler_conv = getattr(config, "euler_convention", "XYZ")
+            model_cpu = _make_contact_guidance_model(scene_xml_path, euler_conv)
         loguru.logger.info(
-            f"Contact guidance enabled: suitcase freejoint → 6 actuated joints "
-            f"(euler={euler_conv})"
+            f"Contact guidance enabled: 6 actuated joints "
+            f"(euler={config.euler_convention})"
         )
     else:
         model_cpu = mujoco.MjModel.from_xml_path(scene_xml_path)
