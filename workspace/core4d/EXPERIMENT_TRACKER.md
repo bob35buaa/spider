@@ -66,6 +66,7 @@
 | E051 | 2026-05-11 | Phase 15 | **HDMI Scene物理配置全面诊断**: (1)Euler mismatch影响所有case(box023=178°,box025=140°); (2)修复euler反而恶化5×(内部自洽被打破); (3)**根因=scene物理配置:hand=1sphere(应3boxes),armature=1.0(应0.01),foot=4spheres(应7capsules)**; 需从suitcase模板重建scene | 方向明确 |
 | E052a | 2026-05-11 | Phase 15 | **Suitcase模板+旧euler**: 3-box hand+低armature(0.01)+euler=xyz; ObjPos 37cm(比baseline 24cm更差); Joint 13.9°(比7.3°退化); **低armature损害body tracking, 错euler使好hand无效** | ❌ 单修scene不够 |
 | E052c | 2026-05-12 | Phase 15 | **Suitcase模板+正确euler(XZY)**: ObjPos=98cm, Stab=32%(摔倒!); **2×2矩阵最差组合**; 结论: E048a baseline(24cm/7.3°/100%)是HDMI在CORE4D上的极限, euler/"错误"config实为CEM已适应的状态, 修正只会破坏 | ❌❌ 全矩阵失败 |
+| E053 | 2026-05-12 | Phase 16 | **碰撞盒Margin Sweep(0.90/0.95/1.00×3case)**: box025上0.90最佳(pelvis_min 0.660 vs 1.05x的0.575); bucket010上1.05x反而最好(0.90/1.00 stability降至88-90%); desk005中间值(0.95-1.00)最差(Stab 66-78%); **不同物体形状需要不同margin, 无全局最优; 碰撞盒不是搬运失败的根因** | ⚠️ per-case策略 |
 
 ## 关键指标演进
 
