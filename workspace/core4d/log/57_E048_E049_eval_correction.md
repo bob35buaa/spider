@@ -93,3 +93,88 @@ render_trajectory_video.py 存在多个 bug:
 ## 结果路径 (不变)
 
 视频 v5 (正确渲染): `workspace/core4d/results/E049/E049e_hdmi_box025_comparison_v5.mp4`
+
+---
+
+## 运行命令记录
+
+### E048 碰撞盒修复
+```bash
+# 本地修复碰撞盒
+uv run workspace/core4d/scripts/convert/fix_collision_boxes.py
+# 本地重新生成 scene_act.xml (21 case)
+uv run workspace/core4d/scripts/convert/generate_scene_act.py
+```
+
+### E048 E041c Baseline 重跑 (远程 2-GPU 并行)
+```bash
+# 远程: spider-remote (10.100.71.70:58122, user xiayb)
+# 脚本: workspace/core4d/scripts/run_E048_remote.sh
+# GPU0: box025_person1, bucket010_person1, box001_person1
+# GPU1: desk005_person2, box023_person1, box024_person1
+ssh spider-remote 'cd /home/xiayb/pHRI_workspace/spider && \
+    tmux new-session -d -s e048 "bash /tmp/run_E048.sh"'
+# 结果回收:
+scp spider-remote:/home/xiayb/pHRI_workspace/spider/workspace/core4d/results/E048/E048_*.{npz,mp4} \
+    workspace/core4d/results/E048/
+```
+
+### E048a HDMI box023
+```bash
+# 1. 数据转换
+uv run workspace/core4d/scripts/convert/convert_core4d_to_hdmi.py --case box023_person1
+# 输出: /home/ubuntu/Workspace/HDMI/data/motion/g1/core4d/box023_person1/
+
+# 2. 运行 HDMI
+CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl uv run examples/run_hdmi.py \
+    task=move_box023 +data_id=0 viewer=none save_video=false save_info=true \
+    output_dir=workspace/core4d/results/E048/E048a_hdmi use_torch_compile=false
+```
+
+### E049 HDMI 优化移植 (远程)
+```bash
+# 脚本: workspace/core4d/scripts/run_E049_remote.sh
+# Config: examples/config/override/core4d_e049.yaml
+# GPU0: box023_person1, box025_person1
+# GPU1: bucket010_person1, desk005_person2
+ssh spider-remote 'cd /home/xiayb/pHRI_workspace/spider && \
+    tmux new-session -d -s e049 "bash workspace/core4d/scripts/run_E049_remote.sh"'
+scp spider-remote:/home/xiayb/pHRI_workspace/spider/workspace/core4d/results/E049/E049_*.{npz,mp4} \
+    workspace/core4d/results/E049/
+```
+
+### E049e HDMI box025
+```bash
+# 1. 数据转换
+uv run workspace/core4d/scripts/convert/convert_core4d_to_hdmi.py --case box025_person1
+# 2. 运行 HDMI
+CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl uv run examples/run_hdmi.py \
+    task=move_box025 +data_id=0 viewer=none save_video=false save_info=true \
+    output_dir=workspace/core4d/results/E049/E049e_hdmi_box025 use_torch_compile=false
+```
+
+### 评估命令
+```bash
+# E041c (外部 ref):
+uv run workspace/core4d/scripts/eval/eval_comprehensive.py <task> <sim.npz> --ref <ref.npz>
+# HDMI (双通道, 注意: channel 1 是漂移的内部 ref, 不可信!):
+# 正确方法: 手动比较 sim (channel 0) vs trajectory_kinematic.npz
+```
+
+### 渲染命令
+```bash
+# 正确渲染 (使用 CORE4D freejoint scene, 避免 euler 转换问题):
+MUJOCO_GL=egl python3 render_v5.py  # 见 v5 内联脚本
+# 或修复后的脚本:
+MUJOCO_GL=egl uv run workspace/hdmi_reproduce/scripts/render_trajectory_video.py \
+    --scene <scene.xml> --kin <kin.npz> --phys <phys.npz> --output <out.mp4> --euler XYZ
+```
+
+---
+
+## Root Cause: HDMI euler convention bug
+
+**文件**: `spider/simulators/hdmi.py` 第 659 行和第 1303 行
+**Bug**: `as_euler("xyz")` (extrinsic) 应为 `as_euler("XYZ")` (intrinsic)
+**影响**: 物体方向大旋转时 (CORE4D boxes 有 90° X+Z), 参考方向错误达 119-278°
+**为何未暴露**: HDMI 原始 suitcase 方向接近 identity (仅 -88° 绕 Z), extrinsic/intrinsic 差异仅 2-6°

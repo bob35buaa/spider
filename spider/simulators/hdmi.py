@@ -656,7 +656,7 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         # Convert quat (wxyz) to euler (rpy) for the 3 hinge joints
         q_wxyz = init["quat"]
         q_xyzw = [q_wxyz[1], q_wxyz[2], q_wxyz[3], q_wxyz[0]]
-        rpy = spt.Rotation.from_quat(q_xyzw).as_euler("xyz")
+        rpy = spt.Rotation.from_quat(q_xyzw).as_euler("XYZ")  # intrinsic XYZ matches MuJoCo hinge joints
         data_cpu.qpos[pos_qadr + 3:pos_qadr + 6] = rpy
         loguru.logger.info(
             f"Contact guidance suitcase init: global_pos={init['pos'].tolist()} "
@@ -1300,7 +1300,7 @@ def get_reference(
             from scipy.spatial.transform import Rotation as R
             q_np = obj_quat.numpy()
             q_xyzw = np.stack([q_np[:, 1], q_np[:, 2], q_np[:, 3], q_np[:, 0]], axis=-1)
-            rpy = R.from_quat(q_xyzw).as_euler("xyz")
+            rpy = R.from_quat(q_xyzw).as_euler("XYZ")  # intrinsic XYZ matches MuJoCo hinge joints
             obj_rpy = torch.from_numpy(rpy).float()
             qpos_ref[:, pos_qadr + 3:pos_qadr + 6] = obj_rpy
             # Velocity: direct mapping (6 DOF)
