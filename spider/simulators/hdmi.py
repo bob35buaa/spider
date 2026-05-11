@@ -442,11 +442,18 @@ def _create_hdmi_env(config: Config):
     return env
 
 
-def _make_contact_guidance_model(scene_xml_path: str) -> mujoco.MjModel:
+def _make_contact_guidance_model(
+    scene_xml_path: str, euler_convention: str = "XYZ"
+) -> mujoco.MjModel:
     """Replace suitcase freejoint with 6 slide/hinge joints + PD actuators.
 
     Returns a model with nq=42 (was 43), nu=35 (was 29).
     Object actuator gains are initialized to 0 — set at runtime.
+
+    Args:
+        scene_xml_path: Path to scene XML with suitcase freejoint.
+        euler_convention: Intrinsic euler convention for hinge joints (e.g. "XYZ", "YXZ").
+            Determines the order of hinge joints to avoid gimbal lock.
     """
     scene_dir = os.path.dirname(os.path.abspath(scene_xml_path))
     tree = ET.parse(scene_xml_path)
@@ -470,15 +477,19 @@ def _make_contact_guidance_model(scene_xml_path: str) -> mujoco.MjModel:
     for fj in list(suitcase_body.findall("freejoint")):
         suitcase_body.remove(fj)
 
-    # Add 6 slide/hinge joints
+    # Add 6 slide/hinge joints — slides always XYZ, hinges per euler_convention
+    axis_map = {"X": "1 0 0", "Y": "0 1 0", "Z": "0 0 1"}
     joint_defs = [
         ("object_pos_x", "slide", "1 0 0"),
         ("object_pos_y", "slide", "0 1 0"),
         ("object_pos_z", "slide", "0 0 1"),
-        ("object_rot_x", "hinge", "1 0 0"),
-        ("object_rot_y", "hinge", "0 1 0"),
-        ("object_rot_z", "hinge", "0 0 1"),
     ]
+    # Hinge joints in euler_convention order (e.g. "YXZ" → rot_y, rot_x, rot_z)
+    for axis_letter in euler_convention.upper():
+        joint_defs.append((
+            f"object_rot_{axis_letter.lower()}", "hinge", axis_map[axis_letter]
+        ))
+
     for i, (name, jtype, axis) in enumerate(joint_defs):
         suitcase_body.insert(
             i,
@@ -532,8 +543,12 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         raise FileNotFoundError(f"Scene XML not found: {scene_xml_path}")
 
     if getattr(config, "contact_guidance", False):
-        model_cpu = _make_contact_guidance_model(scene_xml_path)
-        loguru.logger.info("Contact guidance enabled: suitcase freejoint → 6 actuated joints")
+        euler_conv = getattr(config, "euler_convention", "XYZ")
+        model_cpu = _make_contact_guidance_model(scene_xml_path, euler_conv)
+        loguru.logger.info(
+            f"Contact guidance enabled: suitcase freejoint → 6 actuated joints "
+            f"(euler={euler_conv})"
+        )
     else:
         model_cpu = mujoco.MjModel.from_xml_path(scene_xml_path)
     # Use small physics timestep with decimation for stability (matches HDMI)
@@ -653,14 +668,17 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> HDMIEnv:
         obj_body_id = model_cpu.jnt_bodyid[obj_pos_x_jid]
         body_default_pos = model_cpu.body_pos[obj_body_id].copy()
         data_cpu.qpos[pos_qadr:pos_qadr + 3] = init["pos"] - body_default_pos
-        # Convert quat (wxyz) to euler (rpy) for the 3 hinge joints
+        # Convert quat (wxyz) to euler for the 3 hinge joints
+        # Use the euler convention that matches the hinge joint order
+        euler_conv = getattr(config, "euler_convention", "XYZ")
         q_wxyz = init["quat"]
         q_xyzw = [q_wxyz[1], q_wxyz[2], q_wxyz[3], q_wxyz[0]]
-        rpy = spt.Rotation.from_quat(q_xyzw).as_euler("xyz")  # extrinsic xyz (see E050 analysis)
+        rpy = spt.Rotation.from_quat(q_xyzw).as_euler(euler_conv)  # intrinsic
         data_cpu.qpos[pos_qadr + 3:pos_qadr + 6] = rpy
         loguru.logger.info(
             f"Contact guidance suitcase init: global_pos={init['pos'].tolist()} "
-            f"slide_offset={body_default_pos.tolist()} rpy={rpy.tolist()}"
+            f"slide_offset={(init['pos'] - body_default_pos).tolist()} "
+            f"euler({euler_conv})={rpy.tolist()}"
         )
 
     # Also set hinge joints from motion data initial frame
@@ -1288,7 +1306,7 @@ def get_reference(
             mj_model, mujoco.mjtObj.mjOBJ_JOINT, "object_pos_x"
         )
         if obj_pos_x_jid >= 0:
-            # Contact guidance mode: 6 joints (pos_x/y/z + rot_x/y/z)
+            # Contact guidance mode: 6 joints (pos_x/y/z + rot per convention)
             pos_qadr = mj_model.jnt_qposadr[obj_pos_x_jid]
             # Slide joints are relative to body default pos
             obj_body_id = mj_model.jnt_bodyid[obj_pos_x_jid]
@@ -1296,11 +1314,12 @@ def get_reference(
                 mj_model.body_pos[obj_body_id].copy()
             ).float()
             qpos_ref[:, pos_qadr:pos_qadr + 3] = obj_pos - body_default_pos
-            # Convert quat (wxyz) to euler rpy for rot joints (use scipy)
+            # Convert quat (wxyz) to euler for rot joints using matching convention
+            euler_conv = getattr(config, "euler_convention", "XYZ")
             from scipy.spatial.transform import Rotation as R
             q_np = obj_quat.numpy()
             q_xyzw = np.stack([q_np[:, 1], q_np[:, 2], q_np[:, 3], q_np[:, 0]], axis=-1)
-            rpy = R.from_quat(q_xyzw).as_euler("xyz")  # extrinsic xyz (see E050 analysis)
+            rpy = R.from_quat(q_xyzw).as_euler(euler_conv)  # intrinsic convention
             obj_rpy = torch.from_numpy(rpy).float()
             qpos_ref[:, pos_qadr + 3:pos_qadr + 6] = obj_rpy
             # Velocity: direct mapping (6 DOF)
