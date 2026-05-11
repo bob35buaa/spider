@@ -62,6 +62,8 @@
 | — | 2026-05-11 | Bug Fix | **碰撞盒模板Bug修复**: 21/21 case碰撞盒全部修正为mesh AABB×1.05; box023从1.8x过大修正; bucket010 Y/Z互换修正; box025增大24% | 修复完成 |
 | E048 | 2026-05-11 | Phase 13 | **碰撞盒修复后Baseline+HDMI对比**: 碰撞盒修复21 case; HDMI评估发现严重bug(内部ref漂移); **真实对比: HDMI body tracking好(joint err 5-7°), E041c object tracking好(obj pos 14-16cm vs HDMI 24-91cm)**; 各有所长非碾压 | ⚠️ 评估修正 |
 | E049 | 2026-05-11 | Phase 14 | **HDMI优化移植失败+eval修正**: 三优化(PD+damping+noise)直接移植使Stability崩(box025 98→57%); HDMI eval指标全部虚假(内部ref漂移); E041c object tracking优于HDMI 2-8x | ❌移植 / ⚠️修正 |
+| E050 | 2026-05-11 | Phase 14 | **Euler Convention Fix尝试**: "xyz"→"XYZ"引发gimbal lock(box025 Y=89.4°); ObjPos 24→108cm; 已回退 | ❌ gimbal lock |
+| E051 | 2026-05-11 | Phase 15 | **HDMI Scene物理配置全面诊断**: (1)Euler mismatch影响所有case(box023=178°,box025=140°); (2)修复euler反而恶化5×(内部自洽被打破); (3)**根因=scene物理配置:hand=1sphere(应3boxes),armature=1.0(应0.01),foot=4spheres(应7capsules)**; 需从suitcase模板重建scene | 方向明确 |
 
 ## 关键指标演进
 
