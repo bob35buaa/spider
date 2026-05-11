@@ -64,6 +64,8 @@
 | E049 | 2026-05-11 | Phase 14 | **HDMI优化移植失败+eval修正**: 三优化(PD+damping+noise)直接移植使Stability崩(box025 98→57%); HDMI eval指标全部虚假(内部ref漂移); E041c object tracking优于HDMI 2-8x | ❌移植 / ⚠️修正 |
 | E050 | 2026-05-11 | Phase 14 | **Euler Convention Fix尝试**: "xyz"→"XYZ"引发gimbal lock(box025 Y=89.4°); ObjPos 24→108cm; 已回退 | ❌ gimbal lock |
 | E051 | 2026-05-11 | Phase 15 | **HDMI Scene物理配置全面诊断**: (1)Euler mismatch影响所有case(box023=178°,box025=140°); (2)修复euler反而恶化5×(内部自洽被打破); (3)**根因=scene物理配置:hand=1sphere(应3boxes),armature=1.0(应0.01),foot=4spheres(应7capsules)**; 需从suitcase模板重建scene | 方向明确 |
+| E052a | 2026-05-11 | Phase 15 | **Suitcase模板+旧euler**: 3-box hand+低armature(0.01)+euler=xyz; ObjPos 37cm(比baseline 24cm更差); Joint 13.9°(比7.3°退化); **低armature损害body tracking, 错euler使好hand无效** | ❌ 单修scene不够 |
+| E052c | 2026-05-12 | Phase 15 | **Suitcase模板+正确euler(XZY)**: ObjPos=98cm, Stab=32%(摔倒!); **2×2矩阵最差组合**; 结论: E048a baseline(24cm/7.3°/100%)是HDMI在CORE4D上的极限, euler/"错误"config实为CEM已适应的状态, 修正只会破坏 | ❌❌ 全矩阵失败 |
 
 ## 关键指标演进
 
