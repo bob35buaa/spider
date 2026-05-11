@@ -10,6 +10,9 @@
 # ~30min per experiment, ~2h total with 2 GPUs
 set -e
 
+# Ensure uv is in PATH (tmux may not inherit user's shell PATH)
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 RESULTS=workspace/core4d/results/E053
 LOGS_DIR=logs/E053
 MARGIN_TOOL=workspace/core4d/scripts/convert/set_collision_margin.py
