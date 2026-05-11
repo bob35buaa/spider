@@ -7,9 +7,21 @@
 E048-E052 系列实验跨越 HDMI workflow 对齐、euler convention 修复、scene 物理配置重建.
 在所有数值指标分析后, 对关键实验进行可视化复查, 发现**多个数值指标具有误导性**.
 
----
+## E048 与 E041c 的关系
 
-## 逐 case 可视化分析
+E048 的所有 baseline 实验使用 `+override=core4d_e041c` — **与 E041c 完全相同配置**,
+唯一区别是碰撞盒通过 `fix_collision_boxes.py` 修复后重跑.
+
+| E048 实验 | = E041c + | 碰撞盒变化 |
+|-----------|-----------|-----------|
+| E048_box025_baseline | E041c box025 重跑 | 碰撞盒增大 24% |
+| E048_bucket010_baseline | E041c bucket010 重跑 | Y/Z 互换修正 |
+| E048_desk005_baseline | E041c desk005 (新case) | — |
+| E048_box023 | E041c box023 (新case) | — |
+
+E041 目录下已创建 `E041c_*_collision_fixed` symlinks 指向 E048 对应文件.
+
+---
 
 ### box023 (小箱子 35×37×41cm)
 
@@ -53,21 +65,43 @@ E048-E052 系列实验跨越 HDMI workflow 对齐、euler convention 修复、sc
 
 ### desk005 (小桌)
 
-**E041c (E048_desk005_baseline.mp4)**:
-- t=0s: 机器人站在桌旁, 手在桌面附近, ref/sim 非常接近
-- t=3s: sim 机器人**站立行走**, 桌子在侧后方有位移但跟随
-- **视觉效果最好**: 站立行走 + 物体有跟随
+**E041c (E048_desk005_baseline.mp4)** — 详细逐帧:
+- t=0s: 机器人站在桌旁, 手在桌面附近, ref/sim 接近
+- t=2s: ref 站在桌旁. **sim 机器人已走远** — 桌子被甩在身后, 人桌分离
+- t=4s: **sim 机器人完全离开桌子**, 独自站着走, 桌子出了画面
+- t=6s: 同上, 机器人自顾自走路
+- **Stability=100% 真实 (站着走), 但机器人与桌子完全分离 — 不是搬运, 是丢下桌子走了**
+- ObjPos 数字只反映前几帧短暂跟随
 
 **E035 (E035_desk005.mp4, local-frame body tracking)**:
 - t=0s: ref/sim 非常接近
-- t=2s: 机器人站立行走, 手伸向桌子
-- **同样很好**, body tracking 更精细
+- t=2s: 机器人站立行走, 姿态跟随好
+- **body tracking 更好, 但同样没有真正搬运桌子**
 
 ---
 
-## 修正后的真实排名
+## 二次修正后的真实排名
 
 ### 按实际行为质量 (结合可视化)
+
+所有 case 的**真实行为**:
+
+| Case | E041c 实际行为 | HDMI 实际行为 |
+|------|---------------|---------------|
+| box023 | **摔倒** (Stab=38%) | 站立弯腰+物体被推歪 (Stab=100%) |
+| box025 | 趴在箱子上 | 趴在箱子上 |
+| bucket010 | 站立+手碰桶侧 (相对最好) | 未测试 |
+| desk005 | **站着但丢下桌子走了** | 未测试 |
+
+### 诚实评估: 没有任何 case 真正实现了 "搬运"
+
+| Case × Method | 机器人站立? | 手触碰物体? | 物体跟随? | 真正搬运? |
+|---------------|-----------|-----------|---------|---------|
+| desk005 × E041c | ✅ | ❌ (只有前几帧) | ❌ | ❌ |
+| bucket010 × E041c | ✅ | ✅ (手在桶侧) | 部分 | ❌ (推而非搬) |
+| box023 × HDMI | ✅ | ✅ (弯腰触碰) | ❌ (euler错) | ❌ |
+| box023 × E041c | ❌ (摔倒) | — | — | ❌ |
+| box025 × 任一 | ❌ (趴着) | — | — | ❌ |
 
 | Rank | Case × Method | 实际行为 | Stab | Body | ObjPos | 评价 |
 |------|---------------|---------|------|------|--------|------|
@@ -82,38 +116,24 @@ E048-E052 系列实验跨越 HDMI workflow 对齐、euler convention 修复、sc
 | 之前的结论 | 修正为 |
 |-----------|--------|
 | "E041c box023 ObjPos=14cm, 优于 HDMI 24cm" | ❌ 14cm 是假象 (机器人摔倒, 物体没被搬) |
-| "HDMI body tracking 好但 object tracking 差" | ⚠️ 部分正确: HDMI body tracking 确实好, 且**是 box023 唯一可用的方法** |
-| "E041c object tracking 优于 HDMI 2-8×" | ❌ 仅在物体不动/机器人摔倒时成立 |
-| "两种方法互补, 可取各自优势" | ⚠️ 需按 case 区分: desk005/bucket010 上 E041c 可用, box023 上只有 HDMI 可用 |
-
----
-
-## 各方法真实能力总结
-
-### HDMI Workflow
-- **核心优势**: body tracking (7.3°) + stability (100%) — 机器人始终站立行走
-- **核心缺陷**: object tracking (24-91cm) — euler 错配 + contact guidance decay 导致物体漂移
-- **适用场景**: 需要机器人站立 + body motion 高精度的场景
-
-### E041c (MJWP)
-- **核心优势**: object PD override 使物体追踪精确 (当机器人不摔倒时)
-- **核心缺陷**: stability 不稳定 (box023 38%, desk005 100% — case dependent)
-- **适用场景**: desk005/bucket010 等机器人能站稳的 case
-
-### 按 case 的最佳方法
-
-| Case | 最佳方法 | 理由 |
-|------|---------|------|
-| desk005 | E041c/E035 | 站立+物体跟随, 视觉效果最好 |
-| bucket010 | E041c | 站立+手接触 |
-| box023 | HDMI | E041c 摔倒, 只有 HDMI 能站着 |
-| box025 | 无 | 单人不可解 |
+| "desk005 是最好的 showcase" | ❌ 机器人丢下桌子自己走了, 不是搬运 |
+| "HDMI body tracking 好但 object tracking 差" | ⚠️ 部分正确: HDMI 是 box023 唯一可用方法, 但没有任何方法真正实现搬运 |
+| "E041c object tracking 优于 HDMI 2-8×" | ❌ 数字在所有 case 上都有误导性 |
+| "两种方法互补, 可取各自优势" | ❌ 两种方法在所有 case 上都没有实现真正的搬运行为 |
 
 ---
 
 ## 对后续方向的影响
 
-1. **不再追求 "统一方法"** — 不同 case 适合不同方法
-2. **desk005 应作为主要 showcase** — 两种方法都能产生可用结果
-3. **box023 只有 HDMI 可用, 但 object tracking 需改善** — 最有价值的改进方向
-4. **box025 放弃单人方案** — 已在 E016-E018 验证双机器人可行
+### 核心现实: 当前方法无法解决 loco-manipulation
+
+无论 HDMI 还是 E041c (MJWP), **没有任何 case 实现了真正的搬运**:
+- 机器人要么摔倒, 要么趴在物体上, 要么丢下物体走了
+- 数值指标 (ObjPos, Contact) 存在系统性误导
+- body tracking (关节角度追踪) 是唯一真正有效的能力
+
+### 根本瓶颈
+
+1. **CEM sampling-based MPC 无法产生 sustained contact**: 1024 samples × 32 iterations 的搜索空间对 loco-manipulation 不够
+2. **Contact guidance decay (PD→0)**: 在最后 iteration 释放物体后, CEM 没有找到维持接触的策略
+3. **CORE4D 数据是双人协作**: 单机器人物理上无法完成原始任务的搬运部分
