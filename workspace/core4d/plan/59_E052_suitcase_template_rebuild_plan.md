@@ -144,20 +144,33 @@ suitcase scene 的 actuator 命名为 `robot/{joint_name}`, 代码 L566 做 `spl
 
 ---
 
-## 执行顺序
+## 执行顺序 (更新)
 
 ```
-1. 回退 euler convention 到旧行为 (config默认值改为 "xyz")     [5min]
-2. 创建 generate_hdmi_scene.py                                [30min]
-3. 生成 box023 / box025 的新 scene                            [1min]  
-4. 验证 MuJoCo 加载成功 + body 匹配                           [2min]
-5. 本地运行 E052a box023                                      [55min]
-6. 远程运行 E052b box025 (并行)                               [55min]
-7. 评估 + 视频分析                                            [10min]
-8. 记录实验日志                                               [10min]
+✅ 1. 回退 euler convention 到旧行为 (config默认值改为 "xyz")
+✅ 2. 创建 generate_hdmi_scene.py
+✅ 3. 生成 box023 / box025 的新 scene
+✅ 4. 验证 MuJoCo 加载成功
+✅ 5. E052a box023 (suitcase + xyz) → ObjPos=36.9cm, Joint=13.9° ❌
+🔄 6. E052b box025 (suitcase + xyz) → 远程运行中
+→→ 7. E052c box023 (suitcase + XZY 正确euler) → 关键联合实验!    [55min]
+   8. 评估 + 视频分析
+   9. 记录实验日志
 ```
 
-总预计: ~2h (含 1h 等待 GPU)
+### E052a 结果分析 → 新发现
+
+E052a (suitcase模板 + 旧euler) 比 E048a baseline 更差 (ObjPos 24→37cm).
+说明: suitcase 模板的低 armature (0.01) 损害了 body tracking, 且错误 euler 下 3-box hand 也无法有效抓握.
+
+**关键实验矩阵**:
+| | 旧 euler (xyz) | 正确 euler (XZY) |
+|---|---|---|
+| 旧 scene (1sphere, arm=1.0) | E048a: 24cm ✓ | E051b: 143cm ❌ |
+| suitcase (3box, arm=0.01) | E052a: 37cm ❌ | **E052c: ???** |
+
+E052c 是唯一未试过的组合. 假设: **两个修复必须同时应用**.
+如果 E052c 也失败 → HDMI contact guidance 在 CORE4D 上有根本限制.
 
 ---
 
