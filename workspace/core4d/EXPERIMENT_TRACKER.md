@@ -22,9 +22,9 @@
 | E014 | 2026-05-03 | Phase 3 | 增大Partner碰撞体: 原始capsule从未碰到箱子(gap=0.175m), 增大后力太混乱 | 失败 |
 | — | 2026-05-03 | Phase 4 | **规划**: Phase 4 路线图 (E015-E016), 小物体验证+双机器人 | 规划完成 |
 | E015 | 2026-05-03 | Phase 4 | Bucket005小物体: body-only pelvis_err=0.129m, 物体未搬起; **修复scene_name bug** | 完成 |
-| E016 | 2026-05-04 | Phase 4 | **双机器人Gibbs CEM**: nq=79 nu=58, 两G1均稳定(≥0.70), obj_z=0.488(92%ref) | **通过** |
-| E017 | 2026-05-05 | Phase 4 | **双机器人 Soft 2-Connect**: obj_z>0.40持续98%帧, obj_z_max=0.597(112%ref) | **突破** |
-| E018 | 2026-05-06 | Phase 4 | **Task-Space奖励(DynaRetarget)+Interaction(Harmanoid)**: obj_err↓49%, R1=95%/R2=100%stable | **最佳** |
+| E016 | 2026-05-04 | Phase 4 | **双机器人Gibbs CEM**: nq=79 nu=58, obj_z=0.488(92%ref); **视频复查: connect约束强行拉物体, 机器人头歪/手穿模, 非真实搬运** | ❌ connect假象 |
+| E017 | 2026-05-05 | Phase 4 | **双机器人 Soft 2-Connect**: obj_z_max=0.597(112%ref); **视频复查: 脚悬空+手张开, connect约束悬浮物体, 视觉不可用** | ❌ connect假象 |
+| E018 | 2026-05-06 | Phase 4 | **Task-Space奖励(DynaRetarget)+Interaction(Harmanoid)**: obj_err↓49%; **视频复查: 头穿进箱子+身体扭曲, connect假指标; E031泛化4case全失败** | ❌ connect假象 |
 | E020 | 2026-05-06 | Phase 5 | **多Case诊断(5物体×2模式)**: 全部stable=100%, 仅bucket005 pelvis_err<0.20m; chair022碰撞推飞 | 诊断完成 |
 | E021 | 2026-05-06 | Phase 5 | **IK可达性+Anchor**: 行走是主因(87-96%), Pelvis XY Anchor使err↓47-72%, box025降至0.186m | **突破** |
 | E022 | 2026-05-06 | Phase 5 | **Anchored+ObjRew**: desk005 lift=37%+视频确认手接触; box025臂展限制不变; bucket010 strong崩溃 | 部分成功 |
@@ -41,17 +41,17 @@
 | E027b | 2026-05-07 | Phase 8 | **Object PD Override(scene_act+grav_comp+relative_euler)**: desk005 pos=0.10/rot=8.8°★★★, box025 rot=7.6°★★; 4/4 stable=100%; 修复3个bug(euler约定/slide偏移/body_quat相对旋转) | **desk005成功** |
 | E027c | 2026-05-07 | Phase 8 | **Contact Guidance(OMOMO方案)on CORE4D**: 机器人走路(pelvis=1.6m)但物体不跟随; **关键发现:论文loco-manipulation用HDMI simulator不是MJWP**; MJWP contact_guidance的gain更新可能不生效 | FAIL (simulator限制) |
 | E027d | 2026-05-08 | Phase 8 | **HDMI Physics+Debug**: 验证CUDA graph gains有效; 根因=object ctrl未重置为ref+noise_scale=0; 修复后仍需debug rollout内部state reset | 调试中 |
-| E027d2 | 2026-05-08 | Phase 8 | **Body-Frame Fix+Commit Gain Restore**: 3个bug(slide坐标系/commit归零/预转换数据); box025=100%stable+1.46m; desk005=87%+1.54m; bucket010=100%+0.92m; chair022=81%+0.76m; **首次实现非anchored locomotion+manipulation** | **突破** |
+| E027d2 | 2026-05-08 | Phase 8 | **Body-Frame Fix+Commit Gain Restore**: 3个bug修复; box025=100%stable+1.46m; desk005=87%+1.54m; **body tracking有效(机器人站着走), 但物体通过PD actuator驱动而非真实接触搬运** | body tracking有效 |
 | E032a | 2026-05-08 | Phase 9 | **Hand Approach+Reward Sweep**: HA=3提升contact(desk 9→83%, bucket 36→63%); task_body有害; base=10平衡stability/contact; PD sweep: 降低无效 | 完成 |
 | E033 | 2026-05-08 | Phase 9 | **desk005 σ sweep+CEM budget**: σ=1.0达95%stable+91%<15cm(目标达成); 增加iter/horizon/samples反而恶化stability; tradeoff是根本性的 | **stable目标达成** |
 | E034 | 2026-05-08 | Phase 10 | **HDMI-Style Reward: Stability Penalty**: bounded qpos失败(CEM无法区分站/倒); stability_penalty有效(不稳定时长↓86%, min_z 0.22→0.55m); **但desk005仍有t≈1s严重前倾(视频证实)**; contact mask对desk005无效(始终在范围内) | 改善但未解决 |
-| E035 | 2026-05-08 | Phase 10 | **Local-Frame Body Tracking**: 移植HDMI yaw-local reward; desk005: pelvis_min=0.657m(无不稳定段) + **<10cm=94.4%**(历史最佳); 同时提升稳定性+contact(打破tradeoff); 3/3 cases零摔倒; 运行2x慢(FK读取) | **突破** |
-| E036 | 2026-05-08 | Phase 10 | **关闭hand_approach**: MPKPE 48cm→1.4cm; Contact<10cm暴跌(desk 94→7%); body tracking突破+contact tradeoff | **body tracking突破** |
+| E035 | 2026-05-08 | Phase 10 | **Local-Frame Body Tracking**: 移植HDMI yaw-local reward; desk005: pelvis_min=0.657m+Contact<10cm=94.4%(历史最佳); 3/3 cases零摔倒; **body tracking突破, 但视频显示机器人丢下桌子自己走了, 不是搬运** | body tracking突破 |
+| E036 | 2026-05-08 | Phase 10 | **关闭hand_approach**: MPKPE 48cm→1.4cm; Contact<10cm暴跌(desk 94→7%); **确认: body tracking和contact是tradeoff, CEM无法同时优化** | body tracking突破 |
 | E037-E039 | 2026-05-08~09 | Phase 11 | **Contact Reward系列**: box-SDF/HDMI-aligned设计; **发现config bug: contact reward从未执行** (E036关闭approach→body_ids=[]→reward条件false) | Bug发现 |
 | E039b | 2026-05-09 | Phase 11 | **Config Bug Fix+Rotated SDF**: 修复后contact首次生效; box025=85%/bucket010=76%/desk005=81%; **但发现"手粘连物体"问题(固定target)** | 突破+新问题 |
 | E040 | 2026-05-09 | Phase 11 | **Dynamic Per-Frame Target**: 动态target未解决手背接触问题; position-only reward根本缺陷=无方向约束; CEM用手背满足距离→不自然; Contact<10cm=64/66/4%; 需添加orientation reward | ❌ 不自然行为未消除 |
 | E041 | 2026-05-09 | Phase 11 | **Orientation Reward(乘法门控)**: palm normal方向约束; 手掌朝向有所改善; 但乘法gating过严导致Contact/Stability退化(62/56%); body前倾问题仍存在; CEM难同时优化position+orientation | ⚠️ 方向正确但约束过严 |
-| E041c | 2026-05-09 | Phase 11 | **Additive Ori(w=0.3)最佳变体**: Contact=66/57%+Stable=100%+MPKPE=1.4cm; 与E040持平; 远程2GPU sweep验证 | ★ sweep最佳 |
+| E041c | 2026-05-09 | Phase 11 | **Additive Ori(w=0.3)最佳变体**: Contact=66/57%+Stable=100%+MPKPE=1.4cm; **CEM reward sweep最佳, 但视频显示: box025趴在箱上, desk005丢下桌子走, bucket010手碰桶侧(推非搬)** | ★ CEM最佳(非搬运) |
 | E042 | 2026-05-10 | Phase 11 | **Wrist Freeze(零化手腕噪声)**: 对齐HDMI做法; box025持平(64%), bucket010暴跌(48%); freeze阻止CEM补偿body tracking误差; HDMI成功因ref精确在把手; **确认contact上限≈64-66%(box025)** | ❌ 有害 |
 | E043 | 2026-05-10 | Phase 11 | **原始OmniRetarget Ref对比**: Phase3(无松弛)反而更差; box025 64→52%, bucket010 66→57%; Phase4松弛版contact更优; desk005例外(stability改善) | Phase4更优 |
 | E044a | 2026-05-10 | Phase 12 | **Wrist Weight=2.0**: box025 contact持平(67%)但stability崩溃(73%); pelvis_min=0.113m; 增强上半身权重→下半身stability退化 | ❌ stability退化 |
@@ -60,13 +60,49 @@
 | E044b | 2026-05-10 | Phase 12 | **Wrist Weight=3.0**: box025 contact 59%+stable 100%(比w=2.0更稳但contact↓); bucket010 22%/92%; desk005 MPKPE=1.1cm最佳; **weight越大CEM越保守** | ❌ contact退化 |
 | E047b | 2026-05-10 | Phase 12 | **SBTO放松参数(α_μ=0.5,σ_min=0.03)**: stability恢复98-100%(E047a=31%), 但MPKPE=69-87cm仍极差; **SBTO开环优化无法替代MPC闭环反馈** | ❌ tracking差 |
 | — | 2026-05-11 | Bug Fix | **碰撞盒模板Bug修复**: 21/21 case碰撞盒全部修正为mesh AABB×1.05; box023从1.8x过大修正; bucket010 Y/Z互换修正; box025增大24% | 修复完成 |
-| E048 | 2026-05-11 | Phase 13 | **碰撞盒修复后Baseline+HDMI对比**: 碰撞盒修复21 case; HDMI评估发现严重bug(内部ref漂移); **真实对比: HDMI body tracking好(joint err 5-7°), E041c object tracking好(obj pos 14-16cm vs HDMI 24-91cm)**; 各有所长非碾压 | ⚠️ 评估修正 |
-| E049 | 2026-05-11 | Phase 14 | **HDMI优化移植失败+eval修正**: 三优化(PD+damping+noise)直接移植使Stability崩(box025 98→57%); HDMI eval指标全部虚假(内部ref漂移); E041c object tracking优于HDMI 2-8x | ❌移植 / ⚠️修正 |
+| E048 | 2026-05-11 | Phase 13 | **碰撞盒修复后Baseline+HDMI对比**: 碰撞盒修复21 case; HDMI评估发现严重bug(内部ref漂移); **视频复查: 所有case均无搬运 — box023摔倒(ObjPos=14cm是假象), desk005丢下桌子走, box025趴着; 数值指标系统性误导** | ⚠️ 指标不可信 |
+| E049 | 2026-05-11 | Phase 14 | **HDMI优化移植失败+eval修正**: 三优化(PD+damping+noise)直接移植使Stability崩(box025 98→57%); HDMI eval指标全部虚假(内部ref漂移); **之前"E041c object tracking优于HDMI 2-8x"结论不成立 — 都是假指标** | ❌ 移植失败 |
 | E050 | 2026-05-11 | Phase 14 | **Euler Convention Fix尝试**: "xyz"→"XYZ"引发gimbal lock(box025 Y=89.4°); ObjPos 24→108cm; 已回退 | ❌ gimbal lock |
 | E051 | 2026-05-11 | Phase 15 | **HDMI Scene物理配置全面诊断**: (1)Euler mismatch影响所有case(box023=178°,box025=140°); (2)修复euler反而恶化5×(内部自洽被打破); (3)**根因=scene物理配置:hand=1sphere(应3boxes),armature=1.0(应0.01),foot=4spheres(应7capsules)**; 需从suitcase模板重建scene | 方向明确 |
 | E052a | 2026-05-11 | Phase 15 | **Suitcase模板+旧euler**: 3-box hand+低armature(0.01)+euler=xyz; ObjPos 37cm(比baseline 24cm更差); Joint 13.9°(比7.3°退化); **低armature损害body tracking, 错euler使好hand无效** | ❌ 单修scene不够 |
 | E052c | 2026-05-12 | Phase 15 | **Suitcase模板+正确euler(XZY)**: ObjPos=98cm, Stab=32%(摔倒!); **2×2矩阵最差组合**; 结论: E048a baseline(24cm/7.3°/100%)是HDMI在CORE4D上的极限, euler/"错误"config实为CEM已适应的状态, 修正只会破坏 | ❌❌ 全矩阵失败 |
 | E053 | 2026-05-12 | Phase 16 | **碰撞盒Margin Sweep(0.90/0.95/1.00×3case)**: box025上0.90最佳(pelvis_min 0.660 vs 1.05x的0.575); bucket010上1.05x反而最好(0.90/1.00 stability降至88-90%); desk005中间值(0.95-1.00)最差(Stab 66-78%); **不同物体形状需要不同margin, 无全局最优; 碰撞盒不是搬运失败的根因** | ⚠️ per-case策略 |
+
+## 全局结论 (E001-E053, 50+ 实验)
+
+### 视觉复查后的诚实评估
+
+**50+ 实验, 跨 5 种方法, 没有任何实验产生视觉可接受的 loco-manipulation 结果:**
+
+| 方法 | Body Tracking | 物体搬运 | 视觉质量 | 代表实验 |
+|------|-------------|---------|---------|---------|
+| E041c 单机器人 MJWP | 站着(desk)或摔倒(box) | ❌ 没搬 | ❌ | E048 |
+| HDMI 单机器人 | ✅ 站着走 | ❌ 物体推歪 | 勉强(body OK) | E048a |
+| 双机器人 CEM | ❌ 穿模变形 | ❌ connect假搬运 | ❌ | E016-E018 |
+| 双机器人泛化 | ❌ 全部崩溃 | ❌ | ❌ | E031 |
+| 阻尼弹簧/xfrc | — | ❌ 物体翻转 | ❌ | E028-E029 |
+
+### 数值指标 vs 视觉真实的系统性偏差
+
+| 指标 | 数值看起来 | 视觉实际 | 原因 |
+|------|----------|---------|------|
+| ObjPos=14cm (E041c box023) | "物体追踪好" | 机器人摔倒, 物体没动 | 物体静止=低误差 |
+| Contact=93% (HDMI box023) | "手触碰物体" | 物体方向错 178° | euler 错配下的假接触 |
+| obj_z=0.597m (E017d dual) | "箱子被抬起 112%" | connect 约束悬浮 | 非物理接触力 |
+| Stability=100% (E041c desk) | "机器人稳定搬运" | 丢下桌子自己走了 | 只看 pelvis_z |
+
+### 唯一有效的能力
+
+**Body tracking (关节角度追踪)**: HDMI 7.3°, E035/E041c 15-20°
+- 机器人能复现人体的站立、弯腰、行走等全身动作
+- 但无法通过物理接触搬运物体
+
+### 根本瓶颈
+
+1. **CEM sampling-based MPC 无法产生 sustained contact**: 1024 samples × 32 iterations 的搜索空间不够
+2. **Contact guidance decay**: 最后 iteration PD→0 后, CEM 没有维持接触的策略
+3. **Connect 约束是 hack**: 绕过接触发现问题但引入穿模/变形
+4. **CORE4D 数据是双人协作**: 单机器人物理上无法完成原始任务的搬运部分
 
 ## 关键指标演进
 
@@ -140,10 +176,13 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 ```
 
 ## 关键教训
-- **必须用 qpos 实测 + 视频验证** — reward 字段不可信 (E006/E008)
+- **必须用 qpos 实测 + 视频验证** — reward 字段不可信 (E006/E008), 数值指标系统性误导 (E048-E052 全面复查)
 - **几何分析先于参数调优** — 接触方向比力大小重要 (E009)
 - **理解数据集语义** — 协作数据需要协作建模 (E009)
 - **重定向 ≠ RL, PD 不需对齐** — 两阶段天然分离 (E007)
+- **"修复" 可能破坏已适应的系统** — euler convention 修复使结果 5× 恶化 (E051b), CEM 已适应 "错误" 配置 (E052c)
+- **碰撞盒大小无全局最优** — 不同物体形状需不同 margin, box025 需小(0.90), bucket010 需大(1.05) (E053)
+- **connect 约束制造假指标** — 所有双机器人 "成功" 均为穿模变形 (E016-E018 视频复查)
 
 ## Logs
 
@@ -164,6 +203,13 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - Phase 4 计划: `workspace/core4d/plan/14_phase4_small_object_dual_robot_plan.md`
 - E015: `workspace/core4d/log/14_E015_bucket005_results.md`
 - E016: `workspace/core4d/log/15_E016_dual_robot_results.md`
+- 碰撞盒修复: `workspace/core4d/log/54_collision_box_bug_fix.md`
+- E048-E049 评估修正: `workspace/core4d/log/57_E048_E049_eval_correction.md`
+- E050 euler分析: `workspace/core4d/log/58_E050_hdmi_euler_analysis.md`
+- E051 HDMI scene诊断: `workspace/core4d/log/59_E051_hdmi_scene_diagnosis.md`
+- E052 suitcase模板: `workspace/core4d/log/60_E052_suitcase_template_results.md`
+- E048-E052 视觉复查: `workspace/core4d/log/61_E048_E052_visual_reevaluation.md`
+- E053 碰撞盒margin: `workspace/core4d/log/62_E053_collision_margin_sweep.md`
 
 ## 脚本
 
