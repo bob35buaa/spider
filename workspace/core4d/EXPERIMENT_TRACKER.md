@@ -67,8 +67,10 @@
 | E052a | 2026-05-11 | Phase 15 | **Suitcase模板+旧euler**: 3-box hand+低armature(0.01)+euler=xyz; ObjPos 37cm(比baseline 24cm更差); Joint 13.9°(比7.3°退化); **低armature损害body tracking, 错euler使好hand无效** | ❌ 单修scene不够 |
 | E052c | 2026-05-12 | Phase 15 | **Suitcase模板+正确euler(XZY)**: ObjPos=98cm, Stab=32%(摔倒!); **2×2矩阵最差组合**; 结论: E048a baseline(24cm/7.3°/100%)是HDMI在CORE4D上的极限, euler/"错误"config实为CEM已适应的状态, 修正只会破坏 | ❌❌ 全矩阵失败 |
 | E053 | 2026-05-12 | Phase 16 | **碰撞盒Margin Sweep(0.90/0.95/1.00×3case)**: box025上0.90最佳(pelvis_min 0.660 vs 1.05x的0.575); bucket010上1.05x反而最好(0.90/1.00 stability降至88-90%); desk005中间值(0.95-1.00)最差(Stab 66-78%); **不同物体形状需要不同margin, 无全局最优; 碰撞盒不是搬运失败的根因** | ⚠️ per-case策略 |
+| — | 2026-05-12 | Phase 17 | **路线图**: E001-E053总结+下一步规划; 4路径(A收口/B warmstart/C force-closure/D差分物理); 暂不进RL | 规划完成 |
+| E054 | 2026-05-12 | Phase 17 | **Case Tier + Mocap质量分析(21 case, v3 detector + 视频核实主导手)**: B+C=6(box021/023, bucket001/005_s2/007, desk021), C-only=0(数据天然空), dual-robot=2, drop=13; **重要修正:box023是Tier1非Tier3, 之前与box025同处理浪费5+实验**; **6个B+C case的hand-obj距离19-37cm验证mocap retarget后从未真接触**; **v3 detector关键: band ∩ (slow_rel OR lifted_amp_scaled), 物理必要性>运动学统计**; **dom_hand 视频核实: 仅bucket001是single-hand(L_mean=23cm vs R_mean=62cm, sym=0.37), 其他5个全是both-hand(sym≥0.94); 之前用"L最近帧占比"判错3/6, 改用"两手平均距离比"后6/6匹配视频** — 4/5 Claims通过(C4数据集原因) | **✅ 收口完成** |
 
-## 全局结论 (E001-E053, 50+ 实验)
+## 全局结论 (E001-E054, 51+ 实验)
 
 ### 视觉复查后的诚实评估
 
@@ -210,6 +212,10 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E052 suitcase模板: `workspace/core4d/log/60_E052_suitcase_template_results.md`
 - E048-E052 视觉复查: `workspace/core4d/log/61_E048_E052_visual_reevaluation.md`
 - E053 碰撞盒margin: `workspace/core4d/log/62_E053_collision_margin_sweep.md`
+- E001-E053 阶段总结: `workspace/core4d/log/63_E001_E053_stage_summary.md`
+- Phase 17 路线图: `workspace/core4d/plan/63_phase17_post_E053_roadmap_plan.md`
+- E054 case分级 计划: `workspace/core4d/plan/64_E054_case_tier_analysis_plan.md`
+- E054 case分级 结果: `workspace/core4d/log/64_E054_case_tier_analysis_results.md`
 
 ## 脚本
 
@@ -221,3 +227,5 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - 重定向(E009): `workspace/core4d/scripts/retarget/retarget_core4d_e009a.sh`
 - 导出: `workspace/core4d/scripts/export/export_to_holosoma.sh`
 - 评估(E009): `workspace/core4d/scripts/eval/eval_e009_lift.py`
+- E054 case分析: `workspace/core4d/scripts/analyze/case_tier_analysis.py`
+- E054 视频关键帧提取: `workspace/core4d/scripts/analyze/extract_case_keyframes.sh`
