@@ -69,6 +69,8 @@
 | E053 | 2026-05-12 | Phase 16 | **碰撞盒Margin Sweep(0.90/0.95/1.00×3case)**: box025上0.90最佳(pelvis_min 0.660 vs 1.05x的0.575); bucket010上1.05x反而最好(0.90/1.00 stability降至88-90%); desk005中间值(0.95-1.00)最差(Stab 66-78%); **不同物体形状需要不同margin, 无全局最优; 碰撞盒不是搬运失败的根因** | ⚠️ per-case策略 |
 | — | 2026-05-12 | Phase 17 | **路线图**: E001-E053总结+下一步规划; 4路径(A收口/B warmstart/C force-closure/D差分物理); 暂不进RL | 规划完成 |
 | E054 | 2026-05-12 | Phase 17 | **Case Tier + Mocap质量分析(21 case, v3 detector + 视频核实主导手)**: B+C=6(box021/023, bucket001/005_s2/007, desk021), C-only=0(数据天然空), dual-robot=2, drop=13; **重要修正:box023是Tier1非Tier3, 之前与box025同处理浪费5+实验**; **6个B+C case的hand-obj距离19-37cm验证mocap retarget后从未真接触**; **v3 detector关键: band ∩ (slow_rel OR lifted_amp_scaled), 物理必要性>运动学统计**; **dom_hand 视频核实: 仅bucket001是single-hand(L_mean=23cm vs R_mean=62cm, sym=0.37), 其他5个全是both-hand(sym≥0.94); 之前用"L最近帧占比"判错3/6, 改用"两手平均距离比"后6/6匹配视频** — 4/5 Claims通过(C4数据集原因) | **✅ 收口完成** |
+| E055 | 2026-05-12 | Phase 17 | **box023 Hand-Snap Warmstart (Path B 首验证, 无CEM)**: DLS单臂IK + frame-warm-start + 5cm offset 把双手投影到box表面; intent窗口58帧×2手=116次snap, 全部关节限位满足, IK final到target≤1cm 100%; 视觉对比5帧目检 — snap中段双手对称握box, ref中仅单手贴边 ✅; **重要发现 1**: G1 palm site在wrist+8cm是手中部不是接触面, hand_collision是5cm半径球, 5mm offset会10cm穿模; 改用5cm offset后palm距box表面5cm, hand球穿模降至8cm; **诊断工具产出**: 6面命名约定 (+yz/-yz/+xz/-xz/+xy/-xy) + face_distance_timeseries.py + visualize_frames.py + ref_diagnosis 抽帧; **box023 ref 状态 (E056 视频核实后修正)**: L 在 -xy 底面(托底), R 在 -yz 远侧(扣远) — **垂直握, valid**, 之前错误地同意用户"L 在 +xz" 是 sign 漂移误判 — 3/5✅ + 2/5⚠️ | **✅ Path B 几何验证 + 诊断工具** |
+| E056 | 2026-05-12 | Phase 17 | **多 case Hand-Face 诊断 (6 B+C case)**: 复用 E055 6面命名 + signed_dist 时序 + main_face 判定 (中位数<7cm + 60%帧贴近); 5类 grasp 分类 (对侧/垂直/错位/同面/单手); **关键结果**: 5/6 case valid — **bucket005_s2 是唯一真正"对侧"握 (-yz/+yz, 88帧最长 ⭐ E057首选)**; box023/bucket007/desk021 = 垂直 valid; bucket001 = 单手 valid; **box021 = 同面异常** (双手都在 +xy 顶面, 视频核实是"按压"非"搬运", 应从 Path B 移出); 视频核实 3 case × 3 帧, 算法分类 3/3 一致; **教训**: 接触面必须 signed_dist≥0(palm 在外侧), 多 case 比单 case 调参高效, half-sizes 必须从 model 读不能 hardcode | **✅ E057 决策完成 (路线 A: bucket005_s2)** |
 
 ## 全局结论 (E001-E054, 51+ 实验)
 
@@ -216,6 +218,10 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - Phase 17 路线图: `workspace/core4d/plan/63_phase17_post_E053_roadmap_plan.md`
 - E054 case分级 计划: `workspace/core4d/plan/64_E054_case_tier_analysis_plan.md`
 - E054 case分级 结果: `workspace/core4d/log/64_E054_case_tier_analysis_results.md`
+- E055 hand-snap 计划: `workspace/core4d/plan/65_E055_box023_hand_snap_warmstart_plan.md`
+- E055 hand-snap 结果: `workspace/core4d/log/65_E055_box023_hand_snap_results.md`
+- E056 多 case 诊断 计划: `workspace/core4d/plan/66_E056_multi_case_hand_face_diagnosis_plan.md`
+- E056 多 case 诊断 结果: `workspace/core4d/log/66_E056_multi_case_diagnosis_results.md`
 
 ## 脚本
 
@@ -229,3 +235,11 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - 评估(E009): `workspace/core4d/scripts/eval/eval_e009_lift.py`
 - E054 case分析: `workspace/core4d/scripts/analyze/case_tier_analysis.py`
 - E054 视频关键帧提取: `workspace/core4d/scripts/analyze/extract_case_keyframes.sh`
+- E055 hand-snap 一键脚本: `workspace/core4d/scripts/run_E055_snap.sh`
+- E055 snap 主体: `workspace/core4d/scripts/E055/snap_box023.py` (调用 `spider/preprocess/hand_snap_ik.py`)
+- E055 snap 可视化: `workspace/core4d/scripts/E055/visualize_snap.py`
+- E055 snap 关键帧: `workspace/core4d/scripts/E055/extract_snap_keyframes.sh`
+- E055 单帧坐标系图: `workspace/core4d/scripts/E055/visualize_frames.py` (world / object / pelvis + 6 面命名)
+- E055 face dist 时间序列: `workspace/core4d/scripts/E055/face_distance_timeseries.py` (诊断 ref 握姿是否合理)
+- E056 多 case 诊断: `workspace/core4d/scripts/E056/multi_case_face_diagnosis.py` (6 case face dist + 5 类 grasp 分类)
+- E056 一键脚本: `workspace/core4d/scripts/run_E056_diagnosis.sh` (诊断 + 抽帧验证)
