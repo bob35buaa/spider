@@ -1,6 +1,6 @@
 # Scene snapshot for E060
-# Captured: 2026-05-13T18:17:29+08:00
-# Git HEAD: 784e792 (feat/dual-robot-retarget)
+# Captured: 2026-05-13T19:11:46+08:00
+# Git HEAD: 165ba42 (feat/dual-robot-retarget)
 
 case                             file                       size  sha256
 box023_person1                   scene.xml                 31488  541745862d1d793ea2700a75f583d2b5db4343e4a0c486702149b080c1b0ff8d

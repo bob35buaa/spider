@@ -1,0 +1,7 @@
+# Scene snapshot for E060_box025_regression
+# Captured: 2026-05-13T18:40:19+08:00
+# Git HEAD: f951772 (feat/dual-robot-retarget)
+# Hand collision: 3-box per side (verify in scene.xml geom names lh/lh2/lh3)
+
+box025_person1/scene.xml  sha256=b685d92cbafa43e6f77c39cba664ab6be47a053f0c7416bf6dd016acc7709015
+box025_person1/scene_act.xml  sha256=7d901973da0613ee6246233dbf1d7368dc8e4dbf7b9386c7b5a134b1841b7bbb
