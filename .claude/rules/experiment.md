@@ -77,3 +77,21 @@ Numeric metrics alone cannot fully capture physics simulation quality. **Visual 
 - Temporary outputs (checkpoints, debug dumps) belong in gitignored paths.
 - No scattered artifacts in the repo root.
 
+## 7. Scene/Data XML Reproducibility (Dual Safeguards)
+
+`example_datasets/` is in `.gitignore`, but scene XMLs (collision boxes, object poses, euler conventions) get edited as experiments progress. mtime alone is not reproducible. **Two safeguards are required**:
+
+**Safeguard 1 — Active cases tracked in main git**: scene XML for any case under active experimentation MUST be force-added to git (`git add -f`). When activating a new case, force-add its `scene.xml`, `scene_act.xml`, and adjacent JSON metadata (`scene_act_meta.json`, `task_info.json`) BEFORE running the first experiment on it.
+
+**Safeguard 2 — Per-experiment snapshot**: every experiment that runs physics simulation MUST snapshot the exact XML files used into `workspace/{exp_name}/results/E0NN/scene_snapshot/` BEFORE training starts. Snapshot must include:
+- All scene XML files for every case the experiment touches
+- A `manifest.txt` recording git HEAD + sha256 of each file
+
+The snapshot is committed alongside the experiment log. Even if main-git XMLs are later overwritten, E0NN's exact training state remains recoverable.
+
+**Helper**: `workspace/{exp_name}/scripts/convert/snapshot_scenes.sh <EXP_ID> <case1> [case2 ...]`
+
+**Train script integration**: training scripts (`scripts/train/train_E0NN.sh`) MUST call snapshot_scenes.sh as the first step. The experiment log's "改动文件" / "Files changed" table MUST list the `scene_snapshot/` path.
+
+**Multi-stage experiments**: if an experiment modifies XMLs between stages (e.g., snap → CEM, or margin sweep), each stage that re-uses the modified XML must re-snapshot.
+

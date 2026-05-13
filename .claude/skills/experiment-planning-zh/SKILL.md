@@ -212,6 +212,27 @@ if 环境具备 viewer 条件 (rerun / mujoco / viser 任一可用):
 1. **验证结果归属训练目录**：所有评估、指标 JSON、可视化截图，都写入对应的 `logs/.../eval/`，不另起目录
 2. **重定向走 workspace**：SPIDER 输出的 npz、pkl 等中间数据写入 `workspace/{exp_name}/results/`，保持与训练日志分离
 
+### 10b. Scene/数据 XML 快照规则（双重保障复现性）
+
+`example_datasets/` 整个目录在 `.gitignore` 里，但 scene XML（碰撞盒、物体姿态、euler convention 等）会随实验调整。**单靠 mtime 不可复现，必须双重保障**：
+
+**保障 1（活跃 case 入主 git）**：项目在用的 case 的 scene XML 用 `git add -f` 强制纳入版本管理。当前活跃 case 见 `example_datasets/processed/{dataset}/` 已 tracked 的文件列表。新激活的 case 必须先 `git add -f` 再开始实验。
+
+**保障 2（实验快照）**：每个实验启动训练前，**必须**调用快照脚本，把当时使用的 scene XML 复制到 `workspace/{exp_name}/results/E0NN/scene_snapshot/`，此快照随实验日志一起 commit：
+
+```bash
+bash workspace/{exp_name}/scripts/convert/snapshot_scenes.sh E0NN <case1> [case2 ...]
+```
+
+snapshot 脚本会生成 `manifest.txt` 记录 git HEAD + 每个文件的 sha256，确保即使主 git 中的 XML 被后续实验覆盖，E0NN 的训练状态仍可精确恢复。
+
+**触发时机**：
+- 训练脚本（`scripts/train/train_E0NN.sh`）的第一步必须调 snapshot
+- 如果实验是 multi-stage（snap → CEM 等），每个 stage 改动 XML 后都要重 snapshot
+- log 的「改动文件」表必须列出 `scene_snapshot/` 路径
+
+**例外**：纯分析/可视化脚本（不跑物理仿真）可以跳过快照。
+
 ### 11. Git 管理规则
 
 #### 提交时机
