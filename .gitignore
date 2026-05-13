@@ -260,8 +260,11 @@ logs/
 *.gz
 *.tar
 **.tar
-uv.lock
-pyproject.toml
+
+# NOTE: uv.lock + pyproject.toml MUST be tracked — the project needs them
+# to install. Do NOT add them to .gitignore. If you have local-only edits
+# (e.g. commenting out the nvidia uv.index for offline machines), use
+# `git update-index --skip-worktree pyproject.toml uv.lock` per-clone instead.
 
 MUJOCO_LOG.TXT
 nohup.out

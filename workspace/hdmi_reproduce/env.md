@@ -213,3 +213,46 @@ user.name: bob35buaa
 user.email: 643692325@qq.com
 remote: https://github.com/bob35buaa/holosoma.git
 ```
+
+### 3. 保护本地修改不被误 commit (skip-worktree)
+
+`pyproject.toml` 的 nvidia 注释（见本文 §1）和 `uv sync` 后的 `uv.lock` 都是**本机专用**修改，**不能** 推到 git（其他机器需要 canonical 的 nvidia 启用版才能 install）。
+
+`.gitignore` 对**已 tracked 的文件无效**，所以靠 .gitignore 是挡不住的。正确做法是 `git update-index --skip-worktree`：
+
+```bash
+# 一次性设置（每次新 clone 都要重新跑）
+git update-index --skip-worktree pyproject.toml uv.lock
+
+# 验证（应看到两个文件前面有 S 标记）
+git ls-files -v | grep -E "^S (pyproject\.toml|uv\.lock)"
+```
+
+设置后：
+- 本地 `pyproject.toml` 可以随便 nvidia 注释、`uv sync` 改 `uv.lock`，**`git status` 都不会显示**
+- `git add` / `git add -A` / `git commit -a` 都不会捎带这两个文件
+- git 推过来的 canonical 版本也不会覆盖本地（pull 时 git 会跳过它们）
+
+**注意点 1 — skip-worktree 是 per-clone 设置**（保存在 `.git/index`，不进 git 历史）。换机器或重新 clone 后必须重新跑一遍：
+
+```bash
+git clone <repo>
+cd <repo>
+# 本地需要的修改 (例如注释 nvidia 索引)
+sed -i 's/^\[\[tool\.uv\.index\]\]/# [[tool.uv.index]]/' pyproject.toml  # 等
+# 然后立刻保护
+git update-index --skip-worktree pyproject.toml uv.lock
+```
+
+**注意点 2 — 真要修改 canonical 内容时（加新依赖等），必须先临时关掉 skip-worktree**：
+
+```bash
+git update-index --no-skip-worktree pyproject.toml
+# 改 pyproject.toml: 比如 uv add new-dep ...
+git add pyproject.toml uv.lock
+git commit -m "deps: add new-dep"
+git push
+git update-index --skip-worktree pyproject.toml uv.lock  # 重新保护
+```
+
+如果忘了关 skip-worktree 就改 + commit，git 会**静默跳过**你的修改，commit 里只有 message 没有内容（容易让人误以为推上去了实际没有）。
