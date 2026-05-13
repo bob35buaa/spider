@@ -1,0 +1,11 @@
+# @package _global_
+# E063 Tier 1 regression guard: same 3 reward overrides as core4d_e063_box023,
+# but on box025_person1 (E062 baseline pelvis_min=0.688m, stable=100%, final 9.8cm).
+# Goal: confirm reward changes do NOT break box025 X1 self-consistency.
+defaults:
+  - core4d_e062_box025
+  - _self_
+
+stability_penalty_scale: 1.0    # was 0.0
+task_obj_pos_rew_scale: 0.5     # was 1.0
+task_obj_rot_rew_scale: 0.5     # was 1.0
