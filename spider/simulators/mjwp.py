@@ -697,26 +697,53 @@ def get_reward(
         "left",
     ]:
         nq_obj = config.nq_obj
+        # E065: switch between unbounded -L2 (default) and saturating exp form.
+        # exp form: scale * exp(-||err||/sigma) ∈ [0, scale], aligned with HDMI.
+        use_exp = config.task_obj_use_exp
         if nq_obj == 7:
             obj_pos_sim = qpos_sim[:, -7:-4]
             obj_pos_ref = qpos_ref[-7:-4].unsqueeze(0)
-            pos_err = ((obj_pos_sim - obj_pos_ref) ** 2).sum(dim=-1)
-            task_obj_rew = task_obj_rew - config.task_obj_pos_rew_scale * pos_err
+            if use_exp:
+                pos_err_norm = (obj_pos_sim - obj_pos_ref).norm(dim=-1)
+                task_obj_rew = task_obj_rew + config.task_obj_pos_rew_scale * torch.exp(
+                    -pos_err_norm / config.task_obj_pos_sigma
+                )
+            else:
+                pos_err = ((obj_pos_sim - obj_pos_ref) ** 2).sum(dim=-1)
+                task_obj_rew = task_obj_rew - config.task_obj_pos_rew_scale * pos_err
             if config.task_obj_rot_rew_scale > 0.0:
                 obj_quat_sim = qpos_sim[:, -4:]
                 obj_quat_ref = qpos_ref[-4:].unsqueeze(0).repeat(N, 1)
-                rot_err = (quat_sub(obj_quat_sim, obj_quat_ref) ** 2).sum(dim=-1)
-                task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+                if use_exp:
+                    rot_err_norm = quat_sub(obj_quat_sim, obj_quat_ref).norm(dim=-1)
+                    task_obj_rew = task_obj_rew + config.task_obj_rot_rew_scale * torch.exp(
+                        -rot_err_norm / config.task_obj_rot_sigma
+                    )
+                else:
+                    rot_err = (quat_sub(obj_quat_sim, obj_quat_ref) ** 2).sum(dim=-1)
+                    task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
         elif nq_obj == 6:
             obj_pos_sim = qpos_sim[:, -6:-3]
             obj_pos_ref = qpos_ref[-6:-3].unsqueeze(0)
-            pos_err = ((obj_pos_sim - obj_pos_ref) ** 2).sum(dim=-1)
-            task_obj_rew = task_obj_rew - config.task_obj_pos_rew_scale * pos_err
+            if use_exp:
+                pos_err_norm = (obj_pos_sim - obj_pos_ref).norm(dim=-1)
+                task_obj_rew = task_obj_rew + config.task_obj_pos_rew_scale * torch.exp(
+                    -pos_err_norm / config.task_obj_pos_sigma
+                )
+            else:
+                pos_err = ((obj_pos_sim - obj_pos_ref) ** 2).sum(dim=-1)
+                task_obj_rew = task_obj_rew - config.task_obj_pos_rew_scale * pos_err
             if config.task_obj_rot_rew_scale > 0.0:
                 obj_euler_sim = qpos_sim[:, -3:]
                 obj_euler_ref = qpos_ref[-3:].unsqueeze(0)
-                rot_err = ((obj_euler_sim - obj_euler_ref) ** 2).sum(dim=-1)
-                task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+                if use_exp:
+                    rot_err_norm = (obj_euler_sim - obj_euler_ref).norm(dim=-1)
+                    task_obj_rew = task_obj_rew + config.task_obj_rot_rew_scale * torch.exp(
+                        -rot_err_norm / config.task_obj_rot_sigma
+                    )
+                else:
+                    rot_err = ((obj_euler_sim - obj_euler_ref) ** 2).sum(dim=-1)
+                    task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
 
     # E018: interaction reward (Harmanoid Eq.15) — match relative offsets
     # between pairs of bodies in task_body_ids

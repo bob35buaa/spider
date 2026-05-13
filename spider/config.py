@@ -298,6 +298,13 @@ class Config:
     # Separate object pos/rot tracking weights (DynaRetarget uses obj_pos=40)
     task_obj_pos_rew_scale: float = 0.0
     task_obj_rot_rew_scale: float = 0.0
+    # E065: switch task_obj_rew form from unbounded L2 (default, original) to
+    # HDMI-style saturating exp(-err/sigma). When True, reward becomes
+    #   scale * exp(-||obj_err||/pos_sigma)  ∈ [0, scale]
+    # instead of  -scale * sum(err²)  (unbounded). Diagnosis log 82 §10.2.
+    task_obj_use_exp: bool = False
+    task_obj_pos_sigma: float = 0.5  # HDMI default
+    task_obj_rot_sigma: float = 0.5
     # Interaction reward (Harmanoid Eq.15): match relative offsets between two robots' bodies
     interact_rew_scale: float = 0.0
     interact_sigma: float = 1.0

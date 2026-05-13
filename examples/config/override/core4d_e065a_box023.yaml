@@ -1,0 +1,11 @@
+# @package _global_
+# E065-A: drop unbounded task_obj L2 penalty entirely (HDMI doesn't have it).
+# Base: E062 (X1 only, no E063/E064 stab/threshold tweaks).
+# Hypothesis: task_obj_rew = -1.0*err² is the always-on unbounded term that
+# pushes CEM toward "急追物体 → 抬腿" failure mode (log 82 §10.2).
+defaults:
+  - core4d_e062_box023
+  - _self_
+
+task_obj_pos_rew_scale: 0.0   # was 1.0 (HDMI doesn't have this)
+task_obj_rot_rew_scale: 0.0   # was 1.0
