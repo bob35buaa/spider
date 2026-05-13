@@ -212,6 +212,16 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 # docs/package-lock.json  # Uncomment to ignore lock file
 
+# other
+*.egg-info
+*.egg-info/
+*.egg
+__pycache__
+__pycache__/
+eggs/
+.eggs/
+build/
+
 # private-robots
 spider/assets/robots/xhand_pro/
 spider/assets/robots/sharpa/
@@ -227,3 +237,31 @@ example_video_data
 tmp_datasets/
 paper/
 logs/
+
+*.npz
+*.xlsx
+*.xls
+*.parquet
+!*.lfs.parquet
+*.csv
+*.jsonl
+*.jsonl.backup
+*.jpg
+*.jpeg
+*.mp4
+*.pkl
+!*.lfs.pkl
+*.html
+*.json
+!*.lfs.json
+*.txt
+**.mmd
+**.gz
+*.gz
+*.tar
+**.tar
+uv.lock
+pyproject.toml
+
+MUJOCO_LOG.TXT
+nohup.out
