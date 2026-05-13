@@ -1,0 +1,3 @@
+name,T,intent_start,intent_end,L_contact_pct,R_contact_pct,both_contact_pct,stable_pct,stable_intent_pct,pelvis_min,pelvis_min_intent,L_main_face,L_med_cm,L_close_pct,R_main_face,R_med_cm,R_close_pct,expected_L,expected_R,L_match,R_match,pelvis_min_intent_pass
+E060_0_box023,136,21,78,0.172,0.241,0.121,0.471,0.741,0.176,0.176,,+11.47,0.19,,+15.82,0.16,-xy,-yz,False,False,False
+E060_0_bucket005_s2,148,19,107,0.202,0.247,0.090,0.426,0.146,0.114,0.117,,+28.17,0.16,,+28.44,0.02,-yz,+yz,False,False,False
