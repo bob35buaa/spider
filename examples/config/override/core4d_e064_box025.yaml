@@ -1,0 +1,11 @@
+# @package _global_
+# E064 Tier 2 regression guard on box025 — same 3 overrides as box023 yaml.
+# Baseline: E063_box025 (R1/R2/R3 all PASS, pelvis 0.685m, stable 100%, obj 10.7cm).
+# Goal: confirm Tier 2 + threshold raise does not break box025 self-consistency.
+defaults:
+  - core4d_e063_box025
+  - _self_
+
+local_frame_root_sigma: 0.3        # was 0.5
+contact_hdmi_gain: 3.0             # was 5.0
+stability_penalty_threshold: 0.65  # was 0.55

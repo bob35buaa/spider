@@ -1,0 +1,18 @@
+# @package _global_
+# E064 Tier 2 + threshold raise — extends E063 (T1-A + T1-B) with three overrides
+# motivated by E063 box023 superman-lunge failure mode (log 80 §5).
+#
+# E063 result: pelvis_min 0.058→0.192m (+13cm), but sim found horizontal
+# superman lunge to satisfy stability_penalty_scale=1.0 with threshold=0.55m.
+#
+# E064 changes:
+#   T2-A: tighten root tracking sigma → penalize pelvis far from ref
+#   T2-B: weaker contact pull → less aggressive forward reach
+#   T2-C: raise stability threshold → catch superman frames (pz 0.30-0.55m)
+defaults:
+  - core4d_e063_box023
+  - _self_
+
+local_frame_root_sigma: 0.3        # was 0.5 (T2-A)
+contact_hdmi_gain: 3.0             # was 5.0 (T2-B)
+stability_penalty_threshold: 0.65  # was 0.55 (T2-C, NEW vs log 79 §4)
