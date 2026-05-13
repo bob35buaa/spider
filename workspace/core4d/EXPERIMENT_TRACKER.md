@@ -71,6 +71,9 @@
 | E054 | 2026-05-12 | Phase 17 | **Case Tier + Mocap质量分析(21 case, v3 detector + 视频核实主导手)**: B+C=6(box021/023, bucket001/005_s2/007, desk021), C-only=0(数据天然空), dual-robot=2, drop=13; **重要修正:box023是Tier1非Tier3, 之前与box025同处理浪费5+实验**; **6个B+C case的hand-obj距离19-37cm验证mocap retarget后从未真接触**; **v3 detector关键: band ∩ (slow_rel OR lifted_amp_scaled), 物理必要性>运动学统计**; **dom_hand 视频核实: 仅bucket001是single-hand(L_mean=23cm vs R_mean=62cm, sym=0.37), 其他5个全是both-hand(sym≥0.94); 之前用"L最近帧占比"判错3/6, 改用"两手平均距离比"后6/6匹配视频** — 4/5 Claims通过(C4数据集原因) | **✅ 收口完成** |
 | E055 | 2026-05-12 | Phase 17 | **box023 Hand-Snap Warmstart (Path B 首验证, 无CEM)**: DLS单臂IK + frame-warm-start + 5cm offset 把双手投影到box表面; intent窗口58帧×2手=116次snap, 全部关节限位满足, IK final到target≤1cm 100%; 视觉对比5帧目检 — snap中段双手对称握box, ref中仅单手贴边 ✅; **重要发现 1**: G1 palm site在wrist+8cm是手中部不是接触面, hand_collision是5cm半径球, 5mm offset会10cm穿模; 改用5cm offset后palm距box表面5cm, hand球穿模降至8cm; **诊断工具产出**: 6面命名约定 (+yz/-yz/+xz/-xz/+xy/-xy) + face_distance_timeseries.py + visualize_frames.py + ref_diagnosis 抽帧; **box023 ref 状态 (E056 视频核实后修正)**: L 在 -xy 底面(托底), R 在 -yz 远侧(扣远) — **垂直握, valid**, 之前错误地同意用户"L 在 +xz" 是 sign 漂移误判 — 3/5✅ + 2/5⚠️ | **✅ Path B 几何验证 + 诊断工具** |
 | E056 | 2026-05-12 | Phase 17 | **多 case Hand-Face 诊断 (6 B+C case)**: 复用 E055 6面命名 + signed_dist 时序 + main_face 判定 (中位数<7cm + 60%帧贴近); 5类 grasp 分类 (对侧/垂直/错位/同面/单手); **关键结果**: 5/6 case valid — **bucket005_s2 是唯一真正"对侧"握 (-yz/+yz, 88帧最长 ⭐ E057首选)**; box023/bucket007/desk021 = 垂直 valid; bucket001 = 单手 valid; **box021 = 同面异常** (双手都在 +xy 顶面, 视频核实是"按压"非"搬运", 应从 Path B 移出); 视频核实 3 case × 3 帧, 算法分类 3/3 一致; **教训**: 接触面必须 signed_dist≥0(palm 在外侧), 多 case 比单 case 调参高效, half-sizes 必须从 model 读不能 hardcode | **✅ E057 决策完成 (路线 A: bucket005_s2)** |
+| E057 | 2026-05-13 | Phase 17 | **bucket005_s2 Hand-Snap (Path B 第 2 case, 对侧握姿)**: 复用 E055 hand_snap_ik (无改动) + 新增 verify_snap_face.py (C6 face 验证); intent 88f×2 hands=176 snap, palm-to-surface init mean=5.04cm → final mean=4.93cm (target=表面外 5cm), IK residual mean=0.11cm/max=1.12cm, **关节限位 100% (176/176)**; **C6 PASS**: snap 后 L=-yz (med 2.90cm, 77% close)、R=+yz (med 1.87cm, 100% close), 与 E056 诊断完全一致; **5/5 keyframe 视觉合格**: intent mid (t=2.10s) 双手对称在 bucket ±yz 两侧, 教科书搬运姿势 ⭐, pre/post blend 平滑; vs E055 box023: intent +52% (88 vs 58f), grasp_type 升级 (垂直 → 对侧), snap 流水线 case-agnostic 验证 | **✅ 6/6 通过 (Path B 几何验证 + face guard)** |
+| E058 | 2026-05-13 | Phase 17 | **Path B-CEM 首跑 (bucket005_s2 baseline vs warm)**: spider/config.py +warmstart_qpos_path, run_mjwp.py +30行 hook (intent 内 ref+ctrl 替换); 并行 GPU0/1 train, baseline 36min, **warm 3h54min** (intent 内 plan 14s→99s, contact 约束爆炸); **结果: 双方都摔 (pelvis_min=0.11m)**, contact% baseline 36/37/12 vs warm 35/20/9 (-3pp/-17pp R 暴跌), main_face 都 None; **唯一正信号: stable_intent 12.5%→33% (+20pp)**, 视频 t=2.10s warm 单手仍按桶 (baseline 完全脱手); **教训: warmstart 修几何不修物理稳定性, E041c reward 在 bucket005_s2 上 baseline 就站不住 → 应先验稳定 baseline 再加 warmstart**; **环境副产品**: uv re-resolve 升 torch 2.11/坏 nccl 已回滚 2.8.0; spider/interp nearest+align_corners bug 已绕过; 缺 python3.12-dev 用 use_torch_compile=false 代偿 | ❌ 2/6 (流水线 OK 内容失败) |
+| E059 | 2026-05-13 | Phase 17 | **Path B-CEM 第 2 case (box023, 区分 E058 失败原因)**: 复用 spider 改动, 加 PYTHONUNBUFFERED 实时进度; 并行 32min/33min (warm 没爆炸); **真正发现: 与 E058 同一情景 = baseline 摔 + warm 摔** (baseline pelvis_min=0.14m, warm 0.08m, 都 < 0.20m 摔倒), 与 E048 视频复查 "box023摔倒" 一致; warm L contact 9%→44% 是因 warmstart 把 L 锁在 box 底面 (机器人摔倒中手仍贴), 不是搬运成功; both contact < 6% 全程, 视频 5/5 keyframe 都摔 (warm 摔得更彻底); **L main face = -xy 命中 expected 是边际信号** (warmstart hook 设计正确, 没 bug), 不构成搬运突破; **真正结论: E041c reward stack 在 box023 + bucket005_s2 都缺 stability 约束 (`stability_penalty_scale: 0.0`), warmstart 不能修 reward 缺陷**; **下一步 E060: 必须先在 baseline 上加回 stability_penalty (E034 引入 E041 关掉), 验证 baseline 能否站住, 再谈 warmstart 价值** | ❌ 1.5/6 (与 E058 同情景, baseline 是真正 bug) |
 
 ## 全局结论 (E001-E054, 51+ 实验)
 
@@ -222,6 +225,12 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E055 hand-snap 结果: `workspace/core4d/log/65_E055_box023_hand_snap_results.md`
 - E056 多 case 诊断 计划: `workspace/core4d/plan/66_E056_multi_case_hand_face_diagnosis_plan.md`
 - E056 多 case 诊断 结果: `workspace/core4d/log/66_E056_multi_case_diagnosis_results.md`
+- E057 bucket005_s2 snap 计划: `workspace/core4d/plan/67_E057_bucket005_s2_hand_snap_plan.md`
+- E057 bucket005_s2 snap 结果: `workspace/core4d/log/67_E057_bucket005_s2_hand_snap_results.md`
+- E058 Path B-CEM 计划: `workspace/core4d/plan/68_E058_bucket005_s2_warmstart_cem_plan.md`
+- E058 Path B-CEM 结果: `workspace/core4d/log/68_E058_bucket005_s2_warmstart_cem_results.md`
+- E059 Path B-CEM box023 计划: `workspace/core4d/plan/69_E059_box023_warmstart_cem_plan.md`
+- E059 Path B-CEM box023 结果: `workspace/core4d/log/69_E059_box023_warmstart_cem_results.md`
 
 ## 脚本
 
@@ -243,3 +252,16 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E055 face dist 时间序列: `workspace/core4d/scripts/E055/face_distance_timeseries.py` (诊断 ref 握姿是否合理)
 - E056 多 case 诊断: `workspace/core4d/scripts/E056/multi_case_face_diagnosis.py` (6 case face dist + 5 类 grasp 分类)
 - E056 一键脚本: `workspace/core4d/scripts/run_E056_diagnosis.sh` (诊断 + 抽帧验证)
+- E057 snap 主体: `workspace/core4d/scripts/E057/snap_bucket005_s2.py` (复用 hand_snap_ik, 改 case 路径)
+- E057 snap 可视化: `workspace/core4d/scripts/E057/visualize_snap.py` (ref vs snap 2×2 渲染)
+- E057 snap 关键帧: `workspace/core4d/scripts/E057/extract_snap_keyframes.sh`
+- E057 face 验证 (C6): `workspace/core4d/scripts/E057/verify_snap_face.py` (snap 后 main face 与 E056 一致性)
+- E057 一键脚本: `workspace/core4d/scripts/run_E057_snap.sh` (snap → viz → keyframes → face 验证)
+- E058 train (并行/串行): `workspace/core4d/scripts/train/train_E058.sh`
+- E058 eval (contact/face/stability): `workspace/core4d/scripts/eval/eval_E058.py`
+- E058 关键帧: `workspace/core4d/scripts/eval/extract_E058_keyframes.sh`
+- E058 一键脚本: `workspace/core4d/scripts/run_E058.sh` (train → eval → keyframes)
+- E059 train (box023, +PYTHONUNBUFFERED 实时进度): `workspace/core4d/scripts/train/train_E059.sh`
+- E059 eval: `workspace/core4d/scripts/eval/eval_E059.py`
+- E059 关键帧: `workspace/core4d/scripts/eval/extract_E059_keyframes.sh`
+- E059 一键脚本: `workspace/core4d/scripts/run_E059.sh`

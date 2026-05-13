@@ -430,6 +430,40 @@ def main(config: Config):
     qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos = load_data(
         config, config.data_path
     )
+
+    # E058: optional warmstart — replace qpos_ref slices in intent window with
+    # snap-projected qpos (e.g. from spider/preprocess/hand_snap_ik.py). The
+    # snap file is at source ref_dt; we re-interpolate to match qpos_ref length.
+    if config.warmstart_qpos_path:
+        from spider.interp import interp as _interp
+        ws = np.load(config.warmstart_qpos_path)
+        qpos_snap_src = torch.from_numpy(ws["qpos_snap"]).to(qpos_ref.device).to(qpos_ref.dtype)
+        snap_mask_src = torch.from_numpy(ws["snap_mask"].astype(np.float32)).to(qpos_ref.device)
+        if config.ref_dt > config.sim_dt:
+            qpos_snap_i = _interp(qpos_snap_src.unsqueeze(0), config.ref_steps).squeeze(0)
+            # nearest-neighbor mask upsample by repeat (avoid spider.interp align_corners bug)
+            snap_mask_i = snap_mask_src.repeat_interleave(config.ref_steps)
+        else:
+            ds = int(config.sim_dt / config.ref_dt)
+            qpos_snap_i = qpos_snap_src[::ds]
+            snap_mask_i = snap_mask_src[::ds]
+        # pad with last frame to match qpos_ref length (matches load_data trailing repeat)
+        n_pad = qpos_ref.shape[0] - qpos_snap_i.shape[0]
+        if n_pad > 0:
+            qpos_snap_i = torch.cat([qpos_snap_i, qpos_snap_i[-1:].repeat(n_pad, 1)], dim=0)
+            snap_mask_i = torch.cat([snap_mask_i, torch.zeros(n_pad, device=snap_mask_i.device)], dim=0)
+        elif n_pad < 0:
+            qpos_snap_i = qpos_snap_i[: qpos_ref.shape[0]]
+            snap_mask_i = snap_mask_i[: qpos_ref.shape[0]]
+        assert qpos_snap_i.shape == qpos_ref.shape, \
+            f"warmstart shape mismatch after interp: {qpos_snap_i.shape} vs {qpos_ref.shape}"
+        snap_mask_b = snap_mask_i > 0.5
+        qpos_ref = torch.where(snap_mask_b.unsqueeze(-1), qpos_snap_i, qpos_ref)
+        n_replaced = int(snap_mask_b.sum().item())
+        loguru.logger.info(
+            f"[E058 warmstart] {config.warmstart_qpos_path}: replaced {n_replaced}/{qpos_ref.shape[0]} frames of qpos_ref"
+        )
+
     if (
         config.contact_guidance
         and ctrl_ref.shape[1] != config.nu
