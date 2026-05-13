@@ -18,9 +18,6 @@
       </default>
       <default class="collision">
         <geom group="3" rgba="0 1 0 1" type="sphere" />
-        <default class="hand_collision">
-          <geom type="sphere" pos="0.1 0.0 0.0" size="0.05" />
-        </default>
         <default class="foot_collision">
           <geom type="sphere" size="0.005" priority="1" friction="2.0" condim="3" />
         </default>
@@ -349,7 +346,9 @@
                           <!-- <geom name="left_hand_collision" class="collision" size="0.035"
                             rgba=".2 .6 .2 .2"
                             fromto="0.07 0 0 0.15 -0.02 0" /> -->
-                          <geom name="lh" class="hand_collision" />
+                          <geom name="lh" type="box" size="0.05 0.025 0.025" pos="0.02 0 0" condim="1" />
+                          <geom name="lh2" type="box" size="0.05 0.01 0.05" pos="0.09 0 0" condim="1" />
+                          <geom name="lh3" type="box" size="0.025 0.01 0.05" pos="0.15 -0.01 0" quat="0.980067 0 0 -0.198669" condim="1" />
                         </body>
                       </body>
                     </body>
@@ -413,7 +412,9 @@
                           <!-- <geom name="right_hand_collision" class="collision" size="0.035"
                             rgba=".2 .6 .2 .2"
                             fromto="0.07 0 0 0.15 0.02 0" /> -->
-                          <geom name="rh" class="hand_collision" />
+                          <geom name="rh" type="box" size="0.05 0.025 0.025" pos="0.02 0 0" condim="1" />
+                          <geom name="rh2" type="box" size="0.05 0.01 0.05" pos="0.09 0 0" condim="1" />
+                          <geom name="rh3" type="box" size="0.025 0.01 0.05" pos="0.15 0.01 0" quat="0.980067 0 0 0.198669" condim="1" />
                         </body>
                       </body>
                     </body>
@@ -500,9 +501,11 @@
       friction="1 1" condim="3" />
     <pair name="right_foot_floor3" geom1="rf3" geom2="floor" solref="0.008 1"
       friction="1 1" condim="3" />
-    <pair name="left_hand_floor" geom1="lh" geom2="floor" solref="0.008 1"
-      friction="1 1" condim="3" />
-    <pair name="right_hand_floor" geom1="rh" geom2="floor" solref="0.008 1"
-      friction="1 1" condim="3" />
+    <pair name="lh_floor" geom1="lh" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
+    <pair name="lh2_floor" geom1="lh2" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
+    <pair name="lh3_floor" geom1="lh3" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
+    <pair name="rh_floor" geom1="rh" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
+    <pair name="rh2_floor" geom1="rh2" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
+    <pair name="rh3_floor" geom1="rh3" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
   </contact>
 </mujoco>

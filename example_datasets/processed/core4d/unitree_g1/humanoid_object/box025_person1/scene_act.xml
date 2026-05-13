@@ -21,10 +21,7 @@
       </default>
       <default class="collision">
         <geom group="3" rgba="0 1 0 1" type="capsule" />
-        <default class="hand_collision">
-          <geom type="sphere" pos="0.1 0.0 0.0" size="0.05" />
-        </default>
-        <default class="foot_collision">
+<default class="foot_collision">
           <geom type="sphere" size="0.005" priority="1" friction="2.0" condim="3" />
         </default>
       </default>
@@ -280,7 +277,9 @@
                           <geom class="visual" mesh="left_wrist_yaw_link" />
                           <geom pos="0.0415 0.003 0" quat="1 0 0 0" class="visual" mesh="left_rubber_hand" />
                           <site name="left_palm" pos="0.08 0 0" size="0.01" />
-                          <geom name="lh" class="hand_collision" />
+                          <geom name="lh" type="box" size="0.05 0.025 0.025" pos="0.02 0 0" condim="1" />
+                          <geom name="lh2" type="box" size="0.05 0.01 0.05" pos="0.09 0 0" condim="1" />
+                          <geom name="lh3" type="box" size="0.025 0.01 0.05" pos="0.15 -0.01 0" quat="0.980067 0 0 -0.198669" condim="1" />
                           <site name="trace_left_hand" size="0.01" pos="0.08 0 0" />
                           <site name="contact_left_hand" size="0.01" pos="0.08 0 0" />
                         <site name="track_hand_left" pos="0.08 0 0" size="0.01" /></body>
@@ -322,7 +321,9 @@
                           <geom class="visual" mesh="right_wrist_yaw_link" />
                           <geom pos="0.0415 -0.003 0" quat="1 0 0 0" class="visual" mesh="right_rubber_hand" />
                           <site name="right_palm" pos="0.08 0 0" size="0.01" />
-                          <geom name="rh" class="hand_collision" />
+                          <geom name="rh" type="box" size="0.05 0.025 0.025" pos="0.02 0 0" condim="1" />
+                          <geom name="rh2" type="box" size="0.05 0.01 0.05" pos="0.09 0 0" condim="1" />
+                          <geom name="rh3" type="box" size="0.025 0.01 0.05" pos="0.15 0.01 0" quat="0.980067 0 0 0.198669" condim="1" />
                           <site name="trace_right_hand" size="0.01" pos="0.08 0 0" />
                           <site name="contact_right_hand" size="0.01" pos="0.08 0 0" />
                         <site name="track_hand_right" pos="0.08 0 0" size="0.01" /></body>
@@ -383,8 +384,6 @@
     <pair name="right_foot_floor1" geom1="rf1" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="right_foot_floor2" geom1="rf2" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="right_foot_floor3" geom1="rf3" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
-    <pair name="left_hand_floor" geom1="lh" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
-    <pair name="right_hand_floor" geom1="rh" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="pelvis_floor" geom1="pelvis_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="left_hip_collision_floor" geom1="left_hip_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="right_hip_collision_floor" geom1="right_hip_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
@@ -398,8 +397,6 @@
     <pair name="right_shoulder_yaw_collision_floor" geom1="right_shoulder_yaw_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="left_elbow_yaw_collision_floor" geom1="left_elbow_yaw_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="right_elbow_yaw_collision_floor" geom1="right_elbow_yaw_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
-    <pair name="left_hand_object" geom1="lh" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" />
-    <pair name="right_hand_object" geom1="rh" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" />
     <pair name="object_floor" geom1="object_collision" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
-  </contact>
+  <pair name="lh_floor" geom1="lh" geom2="floor" solref="0.008 1" friction="1 1" condim="3" /><pair name="lh_object" geom1="lh" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" /><pair name="lh2_floor" geom1="lh2" geom2="floor" solref="0.008 1" friction="1 1" condim="3" /><pair name="lh2_object" geom1="lh2" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" /><pair name="lh3_floor" geom1="lh3" geom2="floor" solref="0.008 1" friction="1 1" condim="3" /><pair name="lh3_object" geom1="lh3" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" /><pair name="rh_floor" geom1="rh" geom2="floor" solref="0.008 1" friction="1 1" condim="3" /><pair name="rh_object" geom1="rh" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" /><pair name="rh2_floor" geom1="rh2" geom2="floor" solref="0.008 1" friction="1 1" condim="3" /><pair name="rh2_object" geom1="rh2" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" /><pair name="rh3_floor" geom1="rh3" geom2="floor" solref="0.008 1" friction="1 1" condim="3" /><pair name="rh3_object" geom1="rh3" geom2="object_collision" solref="0.008 1" friction="2 1" condim="4" /></contact>
 </mujoco>
