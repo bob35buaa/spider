@@ -17,6 +17,14 @@
 - [x] 新增 E074A/E074C override、训练脚本、评估脚本、远程启动与结果回收脚本。
 - [x] 验证: `py_compile` 通过；`bash -n` 通过；Hydra compose 确认 E074A/E074C override 生效；`git diff --check` 通过。
 - [x] 按 `experiment-planning-zh/remote-execution.md` 修正远程默认配置: `REMOTE_HOST=spider-remote`, `REMOTE_REPO=/home/xiayb/pHRI_workspace/spider`，并补充 tmux capture-pane/结果计数提示。
+- [x] 首次远程启动时 SSH 网络超时且旧脚本无 timeout，已终止挂起进程，并给远程启动/回收脚本加入 BatchMode、ConnectTimeout 和 ServerAlive 参数。
+
+## 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|------|---------|----------|
+| 本地沙箱内 `git push` 触发 DNS 失败 | 1 | 用已批准的 escalated `run_E074_remote.sh` 重试，push 显示 up-to-date |
+| 远程 SSH 间歇超时，旧启动脚本无 `ConnectTimeout` 导致挂起 | 1 | 终止挂起进程；脚本增加 `BatchMode=yes`、`ConnectTimeout=20`、`ServerAlive*` |
 
 ## 核心结论
 

@@ -8,6 +8,12 @@ REMOTE_REPO="${REMOTE_REPO:-/home/xiayb/pHRI_workspace/spider}"
 REMOTE_SESSION="${REMOTE_SESSION:-E074}"
 GPU_A="${GPU_A:-0}"
 GPU_C="${GPU_C:-1}"
+SSH_OPTS=(
+  -o BatchMode=yes
+  -o ConnectTimeout=20
+  -o ServerAliveInterval=10
+  -o ServerAliveCountMax=3
+)
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "Working tree has uncommitted changes. Commit them before remote launch so git sync is exact." >&2
@@ -19,8 +25,8 @@ echo "[$(date '+%H:%M:%S')] pushing local branch to origin"
 git push
 
 echo "[$(date '+%H:%M:%S')] launching remote session ${REMOTE_SESSION} on ${REMOTE_HOST}:${REMOTE_REPO}"
-ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && git pull --ff-only && mkdir -p logs/E074 workspace/core4d/results/E074 && (tmux kill-session -t '$REMOTE_SESSION' 2>/dev/null || true)"
-ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && tmux new-session -d -s '$REMOTE_SESSION' \"bash workspace/core4d/scripts/train/train_E074.sh parallel '$GPU_A' '$GPU_C' 2>&1 | tee logs/E074/remote_parallel.log\""
+ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "cd '$REMOTE_REPO' && git pull --ff-only && mkdir -p logs/E074 workspace/core4d/results/E074 && (tmux kill-session -t '$REMOTE_SESSION' 2>/dev/null || true)"
+ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "cd '$REMOTE_REPO' && tmux new-session -d -s '$REMOTE_SESSION' \"bash workspace/core4d/scripts/train/train_E074.sh parallel '$GPU_A' '$GPU_C' 2>&1 | tee logs/E074/remote_parallel.log\""
 
 echo "Remote launched."
 echo "Monitor:"
