@@ -1,0 +1,47 @@
+# ~/.codex/config.toml
+
+# 默认模型
+model = "gpt-5.5"
+
+# Web 搜索
+web_search = "live"    # "cached" | "live" | "disabled"
+
+# 推理强度
+model_reasoning_effort = "high"
+
+# 代码审查 Profile
+[profiles.review]
+sandbox_mode = "read-only"
+approval_policy = "never"
+
+# 快速问答 Profile
+[profiles.quick]
+model = "o4-mini"
+model_reasoning_effort = "medium"
+web_search = "disabled"
+
+# 全自动 Profile（谨慎使用）
+[profiles.auto]
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# 交互风格
+personality = "pragmatic"    # "friendly" | "pragmatic" | "none"
+
+# 功能开关
+[features]
+shell_snapshot = true
+undo = true
+web_search = true
+
+# 信任的项目（跳过信任确认）
+[projects."/home/ubuntu/Workspace/spider"]
+trust_level = "trusted"
+
+[projects."/home/ubuntu/Workspace/holosoma"]
+trust_level = "trusted"
+
+
+[[skills.config]]
+path = ".codex/skills/experiment-planning-zh/SKILL.md"
+enabled = true
