@@ -180,4 +180,57 @@ C6 face verification (intent 内):
 ## E070 计划
 
 - [x] 写 plan → `workspace/core4d/plan/75_E070_mjwarp_ref_control_parity_plan.md`
-- [ ] 等用户确认后实现 parity 诊断脚本与入口脚本。
+- [x] 用户确认继续后，实现 parity 诊断脚本 → `workspace/core4d/scripts/debug/diagnose_E070_ref_control_parity.py`
+- [x] 实现入口脚本 → `workspace/core4d/scripts/train/train_E070.sh`
+- [x] `py_compile` 通过。
+- [x] 首轮 E070 GPU parity 诊断完成。
+- [x] 根据首轮结果扩展脚本: 增加 `qpos_ctrl` vs `orig_ctrl` 对照，区分 run_mjwp 当前 qpos-as-ctrl 映射与原始 29-dim robot ctrl 映射。
+- [x] 重跑 E070 GPU parity 诊断。
+
+### E070 实现补充
+
+计划原本只比较 CPU vs MJWarp；实际脚本增加了两条控制变量：
+
+- `zero_gains`: 保持 object actuator gains 为 0，对应 setup/start 状态。
+- `restored_gains`: 按 `run_mjwp.py` commit 阶段恢复 object actuator gains，再提交 `ctrl_ref`。
+
+这样能区分 drift 来自 MJWarp step 本身，还是来自 commit 阶段 object actuator gain 恢复后的物体反作用。
+
+### E070 首轮发现
+
+- `qpos_ctrl` 口径下，CPU MuJoCo 和 MJWarp 完全一致，并且都精确复现 E069: t=0.017/0.033 yaw err = 12.403/22.156 deg，`qpos_max_abs_diff_vs_e069 ≈ 0`。
+- `zero_gains` 与 `restored_gains` 几乎一致，object actuator gain 恢复不是主因。
+- 新疑点: `run_mjwp.py` 的 `ctrl_ref = qpos_ref[:, :config.nu]` 可能把 floating base pos/quat 当成 robot actuator ctrl；E068 的小漂移使用的是原始 29-dim robot ctrl + scene_act object ctrl。需要 `orig_ctrl` 对照验证。
+
+### E070 最终发现
+
+| ctrl 口径 | CPU yaw err t=0.017/0.033 | MJWarp yaw err t=0.017/0.033 | vs E069 | 结论 |
+|-----------|----------------------------|-------------------------------|---------|------|
+| `qpos_ctrl` (`qpos_ref[:, :nu]`) | 12.403 / 22.156 deg | 12.403 / 22.156 deg | `qpos_max_abs_diff≈0` | 精确复现 E069 错误 |
+| `orig_ctrl` (原始 29-dim robot ctrl + scene_act object ctrl) | 0.574 / 1.075 deg | 0.574 / 1.075 deg | 明显不同 | early drift 基本消失 |
+
+**根因修正**: 不是 MJWarp physics mismatch，也不是 object actuator gain 恢复。`examples/run_mjwp.py` 在 contact guidance 下的 `ctrl_ref = qpos_ref[:, :config.nu]` 把 floating-base qpos 前 7 维混入 robot actuator ctrl，导致 ref-control 本身就是错的。E071 应修 scene_act ctrl 映射: 保留原始 29-dim robot ctrl，只把 object 6DOF ctrl 从转换后的 qpos 填入末 6 维。
+
+## E071 结果摘要
+
+- [x] 已写 plan: `workspace/core4d/plan/76_E071_scene_act_ctrl_mapping_fix_plan.md`
+- [x] 已修 `examples/run_mjwp.py`: 删除 qpos-as-ctrl fallback，保留原始 29-dim robot ctrl。
+- [x] 已新增配置: `examples/config/override/core4d_e071w02_box023.yaml`
+- [x] 已新增训练脚本: `workspace/core4d/scripts/train/train_E071.sh`
+- [x] 已新增评估脚本: `workspace/core4d/scripts/eval/eval_E071.py`
+- [x] 已运行 `bash workspace/core4d/scripts/train/train_E071.sh 0`。
+- [x] 已生成 `.npz`、`.mp4`、`eval_summary.csv` 和关键帧。
+
+| 指标 | E069-W02 | E071-W02 | 结论 |
+|------|----------|----------|------|
+| yaw err t=0.017/0.033s | 12.40 / 22.16 deg | 0.574 / 1.075 deg | early drift 消失 |
+| vs E070 orig parity | N/A | -0.0004 / +0.0005 deg | 与正确 ctrl 口径一致 |
+| warmup ctrl diff | 0.00 / 0.00 | 0.00 / 0.00 | ref ctrl 提交正确 |
+| B1 max foot z [0,2s] | 0.222m | 0.069m | pre-contact lunge 消失 |
+| pelvis_min_intent | 0.578m | 0.674m | 更稳定 |
+| post-2s obj_err max/mean | 未统计 | 0.308 / 0.133m | post-contact FAIL |
+| first post-2s obj_err > 25cm | 未统计 | 2.00s | 没有稳定拿住箱子 |
+| post-2s pelvis body z min | 未统计 | 0.200m | 摔倒 |
+| first post-2s pelvis z < 45cm | 未统计 | 3.32s | 摔倒开始 |
+
+**修正结论**: E070 根因只对 early yaw/lunge 完全确认。scene_act 下 `qpos_ref[:, :nu]` fallback 是 box023 0-2s 初始漂移的主因；保留 raw robot ctrl 并由 scene_act conversion 补 object ctrl 后，初始漂移消失。但 E071 不是整体成功：2s 后 robot 没有稳定拿住箱子，约 3.3s 开始摔倒。下一步 E072 应聚焦 post-2s hold/place failure 诊断，而不是先做泛化 regression。

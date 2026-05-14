@@ -488,14 +488,13 @@ def main(config: Config):
     if (
         config.contact_guidance
         and ctrl_ref.shape[1] != config.nu
-        and qpos_ref.shape[1] >= config.nu
     ):
         loguru.logger.info(
-            "Using qpos as ctrl reference for contact guidance (ctrl dims: {} -> {}).",
+            "Preserving raw ctrl reference for contact guidance (ctrl dims: {} -> {}); "
+            "scene_act conversion will pad object controls when applicable.",
             ctrl_ref.shape[1],
             config.nu,
         )
-        ctrl_ref = qpos_ref[:, : config.nu]
     if config.contact_guidance and torch.all(contact <= 0):
         raise ValueError("contact_guidance is enabled, but contact mask is all zeros.")
     # hack: start from step 500

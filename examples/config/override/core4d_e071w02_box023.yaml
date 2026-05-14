@@ -1,0 +1,9 @@
+# @package _global_
+# E071-W02: scene_act ctrl mapping fix validation for box023.
+# Keeps E069 warmup horizon after preserving raw robot ctrl and filling object ctrl
+# through the scene_act conversion path.
+defaults:
+  - core4d_e062_box023
+  - _self_
+
+warmup_steps: 0.20

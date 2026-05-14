@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E070 | 2026-05-14 | Phase 18 | **MJWarp ref-control parity 诊断定位根因**: CPU MuJoCo 与 MJWarp 完全一致; `qpos_ctrl` 口径精确复现 E069 yaw 12.403/22.156° 且 vs E069 qpos≈0; `orig_ctrl` 口径降到 0.574/1.075°. 根因不是 physics/gains/CEM, 而是 `run_mjwp.py` 用 `qpos_ref[:, :nu]` 把 floating base 混入 robot ctrl | ✅ 详见 log 90 |
 | E070 plan | 2026-05-14 | Phase 18 | **MJWarp ref-control commit parity 诊断计划**: 固定 `qpos_ref[0]/qvel_ref[0]/ctrl_ref[0:12]`, 对比 MuJoCo `mj_step` 与 MJWarp `step_env` 的 yaw/foot/qvel/contact/actuator force, 用于定位 E069 中 ref ctrl 仍漂的动力学 mismatch | 📋 待确认 |
 | E069 | 2026-05-14 | Phase 18 | **First-tick ref-control warmup 验证失败**: W02/W05 warmup ctrl diff=0, 证明 ref ctrl 确实提交; 但 t=0.017/0.033s yaw drift 仍 12.40/22.16°，B1=0.222/0.428m. 结论: first CEM override 不是主因, 真问题转向 MJWarp `step_env(ctrl_ref)` vs MuJoCo `mj_step(ctrl_ref)` 动力学不一致 | ❌ 详见 log 89 |
 | E068 | 2026-05-14 | Phase 18 | **MJWP init drift 诊断修正**: `mj_forward` init 完全对齐, init `mj_step` 只偏 0.22°; 真实 E062/E063 t=0.017/0.033s yaw drift=12/22° 来自 first committed CEM ctrl, robot ctrl 首帧偏 ref 1.56rad(object 仅0.01) | 诊断完成 |
@@ -275,6 +276,8 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - 🔬 E068 MJWP init drift diagnosis: 修正 log 87 根因判断 — CPU `mj_forward` 与 ref 完全对齐, init `mj_step` 只偏 0.22°, `mjwarp.put_data` 不放大; 真实 E062/E063/E067 在 first committed step 才快速漂移 (t=0.017/0.033s yaw err=12/22°), 且首帧 robot ctrl 偏 ref 1.56rad, object ctrl 仅0.01. 结论: 元凶是 first MPC tick CEM 立即覆盖 ref ctrl, 下一步 E069 验证 `warmup_steps` / ref-control warmup: `workspace/core4d/log/88_E068_mjwp_init_drift_results.md`
 - ❌ E069 first-tick ref-control warmup: W02/W05 均完整运行并保存视频/npz; 修复 `run_mjwp.py` 保存聚合 bug (`improvement` shape 不一致时跳过). 评估修正后 warmup ctrl diff=0, 但 yaw err 仍 12.40/22.16°, B1=0.222/0.428m, 视频 t=0.2s 已转身/单脚. 结论: first CEM override 被推翻, 下一步 E070 应做 MJWarp `step_env(ctrl_ref)` vs MuJoCo `mj_step(ctrl_ref)` parity trace: `workspace/core4d/log/89_E069_first_tick_warmup_results.md`
 - 📋 E070 plan: MJWarp ref-control commit parity 诊断, 固定同一 ref 初态和 `ctrl_ref[0:12]`, 逐 substep 对比 MuJoCo CPU 与 MJWarp 的 qpos/qvel/contact/actuator force, 不再继续 warmup/trust-region: `workspace/core4d/plan/75_E070_mjwarp_ref_control_parity_plan.md`
+- ✅ E070 results: parity 诊断反转根因 — CPU 和 MJWarp 在同一 ctrl 下完全一致; 当前 run_mjwp 的 `qpos_ctrl` (`qpos_ref[:, :nu]`) 精确复现 E069 early yaw drift 12.403/22.156°，而正确 `orig_ctrl` (原始 29-dim robot ctrl + scene_act object ctrl) 只有 0.574/1.075°. 结论: 根因是 scene_act ctrl_ref preprocessing 错误, 不是 MJWarp physics / object gains / CEM. E071 应修 `run_mjwp.py` ctrl mapping: `workspace/core4d/log/90_E070_mjwarp_ref_control_parity_results.md`
+- ⚠️ E071 results: 修复 `run_mjwp.py` scene_act ctrl mapping 后 box023 early drift 消失; yaw err t=0.017/0.033 从 E069 的 12.40/22.16° 降到 0.574/1.075°，与 E070 `orig_ctrl` parity 相差 <0.001°; B1 pre-contact max foot z 从 0.222m 降到 0.069m。但用户复查指出 2s 后没拿住箱子并摔倒，补评估确认 post-2s obj_err max/mean=0.308/0.133m，first obj_err>25cm at 2.00s，first pelvis_z<45cm at 3.32s。结论: qpos-as-ctrl 是 early drift 主因，但 E071 整体 FAIL；下一步 E072 聚焦 post-2s hold/place failure 诊断: `workspace/core4d/log/91_E071_scene_act_ctrl_mapping_fix_results.md`
 
 ## 脚本
 
@@ -317,3 +320,7 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E064 eval (baseline = E063, 同结构): `workspace/core4d/scripts/eval/eval_E064.py`
 - E064 dense 关键帧: `workspace/core4d/scripts/eval/extract_E064_keyframes.sh`
 - E064 一键脚本: `workspace/core4d/scripts/run_E064.sh`
+- E070 ref-control parity 诊断: `workspace/core4d/scripts/debug/diagnose_E070_ref_control_parity.py`
+- E070 train/debug 入口: `workspace/core4d/scripts/train/train_E070.sh`
+- E071 train: `workspace/core4d/scripts/train/train_E071.sh`
+- E071 eval: `workspace/core4d/scripts/eval/eval_E071.py`
