@@ -1,0 +1,11 @@
+# @package _global_
+# E074C: E073 + hold/contact continuity proximity reward.
+defaults:
+  - core4d_e073_box023
+  - _self_
+
+hold_contact_rew_scale: 2.0
+hold_contact_sigma: 0.05
+hold_contact_start_eval_time: 1.8
+hold_contact_end_eval_time: 3.0
+hold_contact_require_ref_contact: true

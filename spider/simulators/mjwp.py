@@ -927,6 +927,86 @@ def get_reward(
             # HDMI formula: mask=1 → gain*pos_rew, mask=0 → 1.0
             contact_hdmi_rew = (rew_stack * mask * gain + (1.0 - mask)).mean(dim=1)
 
+    # E074A: robot control trust-region guard.
+    ctrl_ref_guard_rew = torch.zeros(N, device=config.device)
+    if config.ctrl_ref_guard_scale > 0.0:
+        ctrl_sim = wp.to_torch(env.data_wp.ctrl)
+        ctrl_dim = min(ctrl_sim.shape[1], ctrl_ref.shape[0])
+        guard_dim = ctrl_dim
+        if config.ctrl_ref_guard_robot_only:
+            obj_dims = (
+                int(config.object_action_dims)
+                if config.object_action_dims > 0
+                else (6 if config.contact_guidance and ctrl_dim > 29 else 0)
+            )
+            guard_dim = max(ctrl_dim - obj_dims, 0)
+        if guard_dim > 0:
+            diff = ctrl_sim[:, :guard_dim] - ctrl_ref[:guard_dim].unsqueeze(0)
+            sigma = max(float(config.ctrl_ref_guard_sigma), 1e-6)
+            abs_scaled = torch.abs(diff) / sigma
+            huber = torch.where(
+                abs_scaled <= 1.0,
+                0.5 * abs_scaled * abs_scaled,
+                abs_scaled - 0.5,
+            )
+            time_arr = wp.to_torch(env.data_wp.time)
+            gate = (
+                (time_arr >= config.ctrl_ref_guard_start_eval_time)
+                & (time_arr <= config.ctrl_ref_guard_end_eval_time)
+            ).to(ctrl_sim.dtype)
+            ctrl_ref_guard_rew = -config.ctrl_ref_guard_scale * huber.mean(dim=1) * gate
+
+    # E074C: maintain near-field hand/object contact during reference hold phase.
+    hold_contact_rew = torch.zeros(N, device=config.device)
+    if (
+        config.hold_contact_rew_scale > 0.0
+        and config.hand_approach_body_ids
+        and config.hand_approach_obj_half_extents
+    ):
+        obj_body_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
+        if obj_body_id != -1:
+            xpos_sim = wp.to_torch(env.data_wp.xpos)
+            xquat_sim = wp.to_torch(env.data_wp.xquat)
+            obj_pos = xpos_sim[:, obj_body_id]
+            obj_quat = xquat_sim[:, obj_body_id]
+            hand_pos = xpos_sim[:, config.hand_approach_body_ids]
+            local = _lf_quat_apply_inverse(
+                obj_quat.unsqueeze(1).expand(-1, hand_pos.shape[1], -1),
+                hand_pos - obj_pos.unsqueeze(1),
+            )
+            half_ext = torch.tensor(
+                config.hand_approach_obj_half_extents,
+                device=config.device,
+                dtype=hand_pos.dtype,
+            )
+            clamped = torch.clamp(local, -half_ext, half_ext)
+            dist = (local - clamped).norm(dim=-1)
+            min_dist = dist.min(dim=1).values
+            time_arr = wp.to_torch(env.data_wp.time)
+            time_gate = (
+                (time_arr >= config.hold_contact_start_eval_time)
+                & (time_arr <= config.hold_contact_end_eval_time)
+            ).to(hand_pos.dtype)
+            if config.hold_contact_require_ref_contact:
+                ref_gate = (
+                    approach_mask_val
+                    if torch.is_tensor(approach_mask_val)
+                    else torch.tensor(
+                        approach_mask_val, device=config.device, dtype=hand_pos.dtype
+                    )
+                )
+            else:
+                ref_gate = torch.ones_like(time_gate)
+            sigma = max(float(config.hold_contact_sigma), 1e-6)
+            hold_contact_rew = (
+                config.hold_contact_rew_scale
+                * torch.exp(-min_dist / sigma)
+                * time_gate
+                * ref_gate
+            )
+
     reward = (
         qpos_rew
         + qvel_rew
@@ -937,6 +1017,8 @@ def get_reward(
         + hand_approach_rew
         + contact_mask_rew
         + contact_hdmi_rew
+        + ctrl_ref_guard_rew
+        + hold_contact_rew
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -957,6 +1039,9 @@ def get_reward(
         "task_obj_rew": task_obj_rew,
         "interact_rew": interact_rew,
         "hand_approach_rew": hand_approach_rew,
+        "contact_hdmi_rew": contact_hdmi_rew,
+        "ctrl_ref_guard_rew": ctrl_ref_guard_rew,
+        "hold_contact_rew": hold_contact_rew,
     }
     return reward, info
 

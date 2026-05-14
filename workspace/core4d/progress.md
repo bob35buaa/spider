@@ -1,3 +1,46 @@
+# E074+ Strategy Progress — 2026-05-14
+
+## 当前状态: Plan 已写入，等待用户审核 E074+ 总路线
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 恢复 `EXPERIMENT_TRACKER.md`、最新 plan/log、`progress.md`。
+- [x] 启用 subagent Halley 复盘 HDMI workflow 与 E071/E073 后剩余差异。
+- [x] 启用 subagent Euler 复盘 E037-E067 contact/reward 历史改动。
+- [x] 本地复读 log 82-93、E041c/E062/E065-E067 yaml、`run_hdmi.py`/`run_mjwp.py`/`mjwp.py` reward 与优化循环。
+- [x] 明确 E071 后结论重置：旧 pre-contact lunge 归因大多被 ctrl mapping bug 污染；当前主失败面是 post-2s hold/contact。
+- [x] 写入总计划: `workspace/core4d/plan/79_E074_plus_post_E071_hold_strategy_plan.md`。
+- [x] 写入 E074 前置分析日志: `workspace/core4d/log/94_E074_preflight_base_palm_normal_analysis.md`，覆盖 E060-E067 代码影响、E074 base、E062 palm normal 含义和影响。
+- [x] 更新 `EXPERIMENT_TRACKER.md`，加入 E074 preflight 索引。
+- [x] 写入 E074 实施与远程调度计划: `workspace/core4d/plan/80_E074_remote_execution_plan.md`。
+- [x] 修改 `spider/config.py` / `spider/simulators/mjwp.py`，新增默认关闭的 E074A ctrl guard 与 E074C hold contact reward。
+- [x] 新增 E074A/E074C override、训练脚本、评估脚本、远程启动与结果回收脚本。
+- [x] 验证: `py_compile` 通过；`bash -n` 通过；Hydra compose 确认 E074A/E074C override 生效；`git diff --check` 通过。
+- [x] 按 `experiment-planning-zh/remote-execution.md` 修正远程默认配置: `REMOTE_HOST=spider-remote`, `REMOTE_REPO=/home/xiayb/pHRI_workspace/spider`，并补充 tmux capture-pane/结果计数提示。
+
+## 核心结论
+
+- E073 是下一步可信 base：`contact_hdmi_target_uses_eef_offset=true` 小幅改善 contact 并消除摔倒，但没有解决 f130/f145 脱手。
+- E060-E067 的 task_obj/actuator/body-partition 结论暂不复用；保留代码开关但不纳入第一批。
+- E074 第一批建议只做两个单变量方向：
+  - E074A: E073 + robot ctrl trust-region guard。
+  - E074C: E073 + hold/contact continuity reward。
+- 第一波调度: 远程 A6000 GPU0 跑 E074A，GPU1 跑 E074C；本机只做编译/smoke 和结果回收后的评估。
+
+## 下一步
+
+- 等用户审核 `plan/79`。
+- 若批准，写 E074 具体实施 plan，再开始代码与训练脚本实现。
+
+## 追加分析: E062 palm normal 对 E074 base 的含义
+
+- E062 的 `contact_hdmi_palm_normal_left/right` 不是接触点位置，而是 contact_hdmi orientation reward 使用的 wrist-local 朝向向量。
+- E041c 默认 box025 指纹是 L=`[0,-1,0]`, R=`[0,+1,0]`; E062 对 box023 自动计算后改成双手 `[+1,0,0]`。
+- 该向量进入 `mjwp.py` 的 E041 orientation block: `palm_world = quat_apply(eef_quat, palm_local)`, 再与 `target_world-contact_point` 做 dot，作为 additive ori reward 的方向项。
+- 因 E073 -> E071W02 -> E062 -> E041c，E074 默认继承 E062 palm normal。它已经是 E071/E073 结果的一部分，后续不应默认移除；若要验证影响，应作为单独 ablation。
+
+---
+
 # E073 Progress — 2026-05-14
 
 ## 当前状态: ✅ E073 完成，target eef_offset 修正部分有效但未解决 hold

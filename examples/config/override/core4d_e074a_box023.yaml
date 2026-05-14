@@ -1,0 +1,11 @@
+# @package _global_
+# E074A: E073 + mild robot ctrl trust-region guard.
+defaults:
+  - core4d_e073_box023
+  - _self_
+
+ctrl_ref_guard_scale: 0.5
+ctrl_ref_guard_robot_only: true
+ctrl_ref_guard_sigma: 0.25
+ctrl_ref_guard_start_eval_time: 1.8
+ctrl_ref_guard_end_eval_time: 3.0

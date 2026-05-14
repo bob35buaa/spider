@@ -149,6 +149,20 @@ class Config:
     contact_hdmi_palm_normal_right: list[float] = field(
         default_factory=lambda: [0.0, 1.0, 0.0]
     )
+    # E074A: trust-region guard against robot actuator ctrl drifting too far
+    # from the reference controls during the post-contact hold window.
+    ctrl_ref_guard_scale: float = 0.0
+    ctrl_ref_guard_robot_only: bool = True
+    ctrl_ref_guard_sigma: float = 0.25
+    ctrl_ref_guard_start_eval_time: float = 1.8
+    ctrl_ref_guard_end_eval_time: float = 3.0
+    # E074C: proximity surrogate for maintaining hand-object contact in frames
+    # where the reference still indicates a hold/contact phase.
+    hold_contact_rew_scale: float = 0.0
+    hold_contact_sigma: float = 0.05
+    hold_contact_start_eval_time: float = 1.8
+    hold_contact_end_eval_time: float = 3.0
+    hold_contact_require_ref_contact: bool = True
     use_bounded_qpos_reward: bool = (
         False  # use exp(-dist/σ) instead of -dist for qpos reward
     )
