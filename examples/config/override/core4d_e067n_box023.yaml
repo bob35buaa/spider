@@ -1,0 +1,19 @@
+# @package _global_
+# E067-N: port HDMI body partition (6 lower + 6 upper, was 12+17).
+# Single-variable test: keep E062 baseline (strong actuator kp=500 + L2 task_obj),
+# only change body_ids to match HDMI exactly. log 85 §5 hypothesis.
+#
+# HDMI partitioning (spider/simulators/hdmi.py:819-823):
+#   lower = hip_pitch_link + knee_link + ankle_roll_link  (L+R = 6 bodies)
+#   upper = shoulder_pitch_link + elbow_link + wrist_yaw_link  (L+R = 6 bodies)
+# Body indices in box023_person1 scene_act.xml:
+#   lower: 2 (L_hip_pitch), 5 (L_knee), 7 (L_ankle_roll),
+#          8 (R_hip_pitch), 11 (R_knee), 13 (R_ankle_roll)
+#   upper: 17 (L_shoulder_pitch), 20 (L_elbow), 23 (L_wrist_yaw),
+#          24 (R_shoulder_pitch), 27 (R_elbow), 30 (R_wrist_yaw)
+defaults:
+  - core4d_e062_box023
+  - _self_
+
+local_frame_lower_ids: [2, 5, 7, 8, 11, 13]
+local_frame_upper_ids: [17, 20, 23, 24, 27, 30]
