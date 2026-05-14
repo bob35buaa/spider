@@ -26,6 +26,18 @@
 | 本地沙箱内 `git push` 触发 DNS 失败 | 1 | 用已批准的 escalated `run_E074_remote.sh` 重试，push 显示 up-to-date |
 | 远程 SSH 间歇超时，旧启动脚本无 `ConnectTimeout` 导致挂起 | 1 | 终止挂起进程；脚本增加 `BatchMode=yes`、`ConnectTimeout=20`、`ServerAlive*` |
 
+## 远程运行状态
+
+- 2026-05-14 21:02: 远程 `spider-remote:/home/xiayb/pHRI_workspace/spider` 已 fast-forward 到 `b112eac`。
+- tmux session: `E074`。
+- 远程启动命令: `bash workspace/core4d/scripts/train/train_E074.sh parallel 0 1`。
+- GPU 分配: E074A -> GPU0, E074C -> GPU1。
+- tmux 输出确认:
+  - `[21:02:26] launched E074A PID=1219883, E074C PID=1219884`
+  - `[21:02:26] === E074A_box023 override=core4d_e074a_box023 GPU=0 ===`
+  - `[21:02:26] === E074C_box023 override=core4d_e074c_box023 GPU=1 ===`
+- 初始结果计数: `0` 个 `.npz`，符合刚启动状态。
+
 ## 核心结论
 
 - E073 是下一步可信 base：`contact_hdmi_target_uses_eef_offset=true` 小幅改善 contact 并消除摔倒，但没有解决 f130/f145 脱手。
