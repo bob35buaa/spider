@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E074 | 2026-05-14 | Phase 18 | **post-2s hold/contact 首轮远程并行**: E074A ctrl guard 将 robot ctrl 大偏离 f101→f122, contact 45.7→54.3%, obj_err max 29.3→28.9cm, 视觉最接近成功但 f145 仍接近落地; E074C hold-contact 将 post2 contact 49.4→64.2%, SDF mean 6.6→4.3cm, 但 first zero contact 提前 f101、obj_err max 32.4cm、后段腿/箱干涉明显. 结论: ctrl guard 是安全组件; hold-contact surrogate 生效但目标错位, 不应原样组合 | ⚠️ 详见 log 95 |
 | E074 preflight | 2026-05-14 | Phase 18 | **E074 base/palm normal 前置分析**: 明确 E074 base=`E073 -> E071W02 -> E062 -> E041c`; E060-E067 中仅 E065 有共享 reward 代码但默认 inactive, E066/E067 YAML inactive; E062 palm normal 是 contact_hdmi orientation reward 的 wrist-local 朝向先验, box023 双手 `[+1,0,0]` 已包含在 E071/E073 结果中, E074 主线应保留并只作为后续 ablation 验证 | 📋 详见 log 94 |
 | E073 | 2026-05-14 | Phase 18 | **contact target eef_offset 口径修正**: dynamic target 从 ref wrist origin 改为 ref `wrist+eef_offset`; 训练日志确认 `uses_eef_offset=True`. early drift 未回归(yaw 0.574/1.075°, B1=0.080m); first zero contact frame100→108, post2 contact 44.4→49.4%, obj_err max 30.8→29.3cm, pelvis 不再低于45cm. 但 first obj_err>25cm 仍 frame100, 视觉 f130 后脱手/f145 箱落地, 结论=部分有效但未解决 hold | ⚠️ 详见 log 93 |
 | E072 | 2026-05-14 | Phase 18 | **box023 post-2s hold/place failure 诊断**: replay E071 qpos + scene snapshot; frame100/eval2.00s obj_err=30.8cm 且 sim hand-object contact=0(ref=1), pelvis 到 frame166/eval3.32s 才低于45cm; post2 contact frames sim 44.4% vs ref 80.2%; 结论=hold/contact 先失效, 摔倒是二阶后果, object ctrl mapping 非新问题 | ✅ 详见 log 92 |

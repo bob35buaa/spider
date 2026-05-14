@@ -38,6 +38,53 @@
   - `[21:02:26] === E074C_box023 override=core4d_e074c_box023 GPU=1 ===`
 - 初始结果计数: `0` 个 `.npz`，符合刚启动状态。
 
+## E074 回收状态
+
+- 2026-05-14 21:36: 已从 `spider-remote:/home/xiayb/pHRI_workspace/spider` scp 回收 E074 结果与日志。
+- 本地结果:
+  - `workspace/core4d/results/E074/E074A_box023.npz`
+  - `workspace/core4d/results/E074/E074A_box023.mp4`
+  - `workspace/core4d/results/E074/E074C_box023.npz`
+  - `workspace/core4d/results/E074/E074C_box023.mp4`
+  - `workspace/core4d/results/E074/comparison.csv`
+  - `workspace/core4d/results/E074/keyframes/{E074A,E074C}/f100..f180.jpg`
+- 本地日志:
+  - `logs/E074/E074A_box023.log`
+  - `logs/E074/E074C_box023.log`
+  - `logs/E074/eval_E074_local_after_pull.log`
+
+### 初步数值结果
+
+| 指标 | E073 | E074A ctrl guard | E074C hold contact |
+|------|-----:|-----------------:|-------------------:|
+| yaw 0.017/0.033 deg | 0.574 / 1.075 | 0.574 / 1.075 | 0.574 / 1.075 |
+| B1 pre-contact foot z | 0.080m | 0.083m | 0.085m |
+| first zero contact | f108 | f110 | f101 |
+| frame100-145 contact | 45.7% | 54.3% | 63.0% |
+| post2 contact | 49.4% | 54.3% | 64.2% |
+| post2 obj_err max | 0.293m | 0.289m | 0.324m |
+| post2 pelvis_z min | 0.663m | 0.692m | 0.701m |
+| post2 robot ctrl Linf max | 0.778(E073 prior) | 0.740 | 0.897 |
+
+初步判断:
+
+- E074A 小幅改善 contact/object/stability，符合“更保守”的预期，但 contact 仍不足。
+- E074C 明显提高 contact 与 hand SDF，但 first zero contact 反而提前到 f101，post2 obj_err max 变差到 0.324m，说明接触 reward 可能让手更贴近但没有改善物体跟随。
+- 两者均未造成 early drift 或摔倒回归。
+- 下一步需要按用户要求用 subagent 复核 E074A/E074C 视频关键帧后写正式 log 95。
+
+## E074 正式分析
+
+- [x] subagent Erdos 复核 E074A/E074C 关键帧。
+- [x] 写入正式结果日志: `workspace/core4d/log/95_E074_remote_hold_contact_results.md`。
+- [x] 更新 `EXPERIMENT_TRACKER.md` E074 行。
+
+正式结论:
+
+- E074A 是 partial positive：ctrl guard 将 robot ctrl 大偏离延后到 f122，视觉更接近成功，但 contact 提升不足。
+- E074C 是 metric positive / visually unsafe：post2 contact 达 64.2%，但 obj_err 变差，后段腿/箱干涉明显。
+- 下一步不应直接原样组合 E074A+C；推荐 E075B = E074A + time-limited weaker hold_contact。
+
 ## 核心结论
 
 - E073 是下一步可信 base：`contact_hdmi_target_uses_eef_offset=true` 小幅改善 contact 并消除摔倒，但没有解决 f130/f145 脱手。
