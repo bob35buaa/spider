@@ -103,6 +103,27 @@ def _extract_cli_overrides(cfg: DictConfig) -> dict:
     return _parse_override_tokens(sys.argv[1:])
 
 
+def _aggregate_info_list(info_list: list[dict]) -> dict:
+    info_aggregated = {}
+    for k in info_list[0].keys():
+        if any(k not in info for info in info_list):
+            loguru.logger.warning("Skipping info key '{}' because it is missing in some ticks.", k)
+            continue
+        values = [info[k] for info in info_list]
+        try:
+            info_aggregated[k] = np.stack(values, axis=0)
+        except ValueError as exc:
+            shapes = [np.shape(v) for v in values]
+            unique_shapes = sorted({str(shape) for shape in shapes})
+            loguru.logger.warning(
+                "Skipping info key '{}' because shapes vary across ticks: {} ({})",
+                k,
+                unique_shapes,
+                exc,
+            )
+    return info_aggregated
+
+
 def _assert_object_actuator_gains_zero(
     env, config: Config, stage: str, atol: float = 1e-4
 ) -> None:
@@ -1256,9 +1277,7 @@ def main(config: Config):
 
     # save retargeted trajectory
     if config.save_info and len(info_list) > 0:
-        info_aggregated = {}
-        for k in info_list[0].keys():
-            info_aggregated[k] = np.stack([info[k] for info in info_list], axis=0)
+        info_aggregated = _aggregate_info_list(info_list)
         np.savez(
             f"{config.output_dir}/trajectory_mjwp{'_act' if config.contact_guidance else ''}.npz",
             **info_aggregated,

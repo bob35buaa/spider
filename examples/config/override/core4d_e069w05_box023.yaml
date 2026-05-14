@@ -1,0 +1,8 @@
+# @package _global_
+# E069-W05: longer first-tick ref-control warmup for box023.
+# Tests whether a longer settle window prevents early lunge after E068 diagnosis.
+defaults:
+  - core4d_e062_box023
+  - _self_
+
+warmup_steps: 0.50

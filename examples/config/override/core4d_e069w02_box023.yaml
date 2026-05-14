@@ -1,0 +1,9 @@
+# @package _global_
+# E069-W02: first-tick ref-control warmup for box023.
+# Hypothesis: E068 showed first committed CEM ctrl deviates from ref by 1.56 rad.
+# Use existing warmup_steps to force ref ctrl for the first 0.20s.
+defaults:
+  - core4d_e062_box023
+  - _self_
+
+warmup_steps: 0.20

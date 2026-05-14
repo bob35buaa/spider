@@ -4,6 +4,9 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E070 plan | 2026-05-14 | Phase 18 | **MJWarp ref-control commit parity 诊断计划**: 固定 `qpos_ref[0]/qvel_ref[0]/ctrl_ref[0:12]`, 对比 MuJoCo `mj_step` 与 MJWarp `step_env` 的 yaw/foot/qvel/contact/actuator force, 用于定位 E069 中 ref ctrl 仍漂的动力学 mismatch | 📋 待确认 |
+| E069 | 2026-05-14 | Phase 18 | **First-tick ref-control warmup 验证失败**: W02/W05 warmup ctrl diff=0, 证明 ref ctrl 确实提交; 但 t=0.017/0.033s yaw drift 仍 12.40/22.16°，B1=0.222/0.428m. 结论: first CEM override 不是主因, 真问题转向 MJWarp `step_env(ctrl_ref)` vs MuJoCo `mj_step(ctrl_ref)` 动力学不一致 | ❌ 详见 log 89 |
+| E068 | 2026-05-14 | Phase 18 | **MJWP init drift 诊断修正**: `mj_forward` init 完全对齐, init `mj_step` 只偏 0.22°; 真实 E062/E063 t=0.017/0.033s yaw drift=12/22° 来自 first committed CEM ctrl, robot ctrl 首帧偏 ref 1.56rad(object 仅0.01) | 诊断完成 |
 | E001 | 2026-04-30 | Phase 0 | 数据管线: holosoma → SPIDER 格式, Box025 场景 XML | 通过 |
 | E002 | 2026-04-30 | Phase 1 | SPIDER MJWP 无引导 (Box025 p1): pelvis=0.10m, obj=0.83m (物体落地) | 完成 |
 | E003 | 2026-04-30 | Phase 1 | SPIDER MJWP 有引导 (Box025 p1): pelvis=0.07m, obj=0.83m (物体仍落地) | 完成 |
@@ -269,6 +272,9 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - ❌ E066 results: port HDMI actuator gains FAIL — soft actuator 不搬箱 (C4 jumped 3.10→112.01cm), B1 仍 lunge (0.53/0.75), 揭示第二 mismatch: body partition 稀释 (MJWP 12 lower bodies vs HDMI 6, mean() 把脚 outlier 稀释 2×). 教训 #13 (reward.mean 下 body 数加多反向稀释) + #14 (soft actuator 是 trade-off). → R3 E067 = port HDMI body partition + 双变体 N (narrow only) vs NS (narrow+soft+exp 完整 HDMI clone): `workspace/core4d/log/85_E066_results_actuator_port.md`
 - ❌❌ E067 results: port HDMI body partition (12→6) CATASTROPHIC FAIL — sim 做 handstand B1=1.30m, C3=6.9%, hypothesis 完全反了 (more bodies HELP, narrow 让 CEM 找更糟极端 pose). 3 round 全 FAIL, 触发暂停 ✋#3+#5. 诊断指向更深层 (PPO prior vs CEM, knot_dt, noise schedule). 教训 #15 + #16. **PAUSE 等用户决定 R4 方向**: `workspace/core4d/log/86_E067_results_synthesis_pause.md`
 - 🚨 R4-direct HDMI vs MJWP diagnosis: HDMI box023 完美 work (B1=0.066m, pelvis 稳, 物体真搬), HDMI ctrl = ctrl_ref + 13% residual; MJWP noise 实际 0.04 比 HDMI residual 0.13 还小, **真元凶是 init pose bug** — sim t=0 pelvis 偏 ref 22° yaw, HDMI 仅 0.6°. 候选: actuator kp 500 反作用 / mjwarp put_data 转换 / 保存 timing. 教训 #17. **PAUSE 等 R5 决策**: `workspace/core4d/log/87_R4_HDMI_diagnosis_init_pose_bug.md`
+- 🔬 E068 MJWP init drift diagnosis: 修正 log 87 根因判断 — CPU `mj_forward` 与 ref 完全对齐, init `mj_step` 只偏 0.22°, `mjwarp.put_data` 不放大; 真实 E062/E063/E067 在 first committed step 才快速漂移 (t=0.017/0.033s yaw err=12/22°), 且首帧 robot ctrl 偏 ref 1.56rad, object ctrl 仅0.01. 结论: 元凶是 first MPC tick CEM 立即覆盖 ref ctrl, 下一步 E069 验证 `warmup_steps` / ref-control warmup: `workspace/core4d/log/88_E068_mjwp_init_drift_results.md`
+- ❌ E069 first-tick ref-control warmup: W02/W05 均完整运行并保存视频/npz; 修复 `run_mjwp.py` 保存聚合 bug (`improvement` shape 不一致时跳过). 评估修正后 warmup ctrl diff=0, 但 yaw err 仍 12.40/22.16°, B1=0.222/0.428m, 视频 t=0.2s 已转身/单脚. 结论: first CEM override 被推翻, 下一步 E070 应做 MJWarp `step_env(ctrl_ref)` vs MuJoCo `mj_step(ctrl_ref)` parity trace: `workspace/core4d/log/89_E069_first_tick_warmup_results.md`
+- 📋 E070 plan: MJWarp ref-control commit parity 诊断, 固定同一 ref 初态和 `ctrl_ref[0:12]`, 逐 substep 对比 MuJoCo CPU 与 MJWarp 的 qpos/qvel/contact/actuator force, 不再继续 warmup/trust-region: `workspace/core4d/plan/75_E070_mjwarp_ref_control_parity_plan.md`
 
 ## 脚本
 
