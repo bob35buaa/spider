@@ -1,3 +1,94 @@
+# E073 Progress — 2026-05-14
+
+## 当前状态: ✅ E073 完成，target eef_offset 修正部分有效但未解决 hold
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 读取 `EXPERIMENT_TRACKER.md`、E072 plan/log、`progress.md`。
+- [x] 审查 `examples/run_mjwp.py` 与 `spider/simulators/mjwp.py` contact_hdmi dynamic target 实现。
+- [x] 发现 E040 dynamic target 口径不一致：target 使用 ref wrist body origin，reward 使用 sim `wrist + eef_offset` contact point。
+- [x] 写 E073 plan: `workspace/core4d/plan/78_E073_contact_target_offset_consistency_plan.md`。
+- [x] 修改 `spider/config.py`，新增 `contact_hdmi_target_uses_eef_offset`，默认 false。
+- [x] 修改 `examples/run_mjwp.py`，E073 打开字段时 dynamic target 改用 ref `wrist + eef_offset`。
+- [x] 新增 override: `examples/config/override/core4d_e073_box023.yaml`。
+- [x] 新增 E073 eval: `workspace/core4d/scripts/eval/eval_E073.py`。
+- [x] 新增 E073 train: `workspace/core4d/scripts/train/train_E073.sh`。
+- [x] `py_compile` 通过。
+- [x] 运行 `bash workspace/core4d/scripts/train/train_E073.sh 0`；日志确认 RTX 5090 可见，且 `E040 dynamic target ... uses_eef_offset=True` 生效。
+- [x] 输出 `eval_summary.json`、`timeseries.csv`、timeline plot、frame100-180 keyframes。
+- [x] 按用户要求将关键帧视觉复核交给 subagent Ampere，主线程未直接 `view_image`。
+- [x] 写 E073 结果 log: `workspace/core4d/log/93_E073_contact_target_offset_consistency_results.md`。
+
+## 当前实验
+
+- **Run ID**: E073
+- **阶段**: Complete
+- **目标**: 修正 dynamic target 的 eef_offset 口径，验证 frame100-145 hand-object contact 是否改善。
+
+## 关键结果
+
+| 指标 | E071/E072 | E073 |
+|------|----------:|-----:|
+| yaw err t=0.017/0.033 | 0.574 / 1.075 deg | 0.574 / 1.075 deg |
+| B1 pre-contact max foot z | 0.069m | 0.080m |
+| first obj_err >25cm | frame100 / 2.00s | frame100 / 2.00s |
+| first sim zero contact | frame100 / 2.00s | frame108 / 2.16s |
+| post2 sim contact frames | 44.4% | 49.4% |
+| post2 obj_err max | 0.308m | 0.293m |
+| first pelvis_z <45cm | frame166 / 3.32s | none |
+| post2 pelvis_z min | 0.207m | 0.663m |
+
+**视觉结论**: f100/f115 手和箱还较近；f130 起拿持质量明显变差；f145 箱子已明显落地/接触地面；f166/f168 未像 E071/E072 那样摔倒，但有脚/腿与箱体异常接触。
+
+**结论**: eef_offset target 口径修正改善了接触连续性和稳定性，但没有解决 2s 后真实 hold。E074 应继承 E073，并增加 robot ctrl trust-region guard，重点压 frame100-145 的断触和 robot ctrl 快速偏离。
+
+- 下一步: 规划 E074。
+
+---
+
+# E072 Progress — 2026-05-14
+
+## 当前状态: ✅ E072 完成，hold/contact 先失效已定位
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 读取 `EXPERIMENT_TRACKER.md`、E071 plan、E071 log、`progress.md`。
+- [x] 确认 E071 结论：0-2s init/early drift 修复；2.0s 后物体跟踪误差先升至 >25cm，约 3.32s robot pelvis/body z <45cm 后摔倒。
+- [x] 检查 E071 结果结构：`E071W02_box023.npz` 含 `qpos/qvel/ctrl/time/trace_ref`，scene snapshot 含 `scene_act.xml`，可以做 replay 诊断。
+- [x] 写入 E072 plan: `workspace/core4d/plan/77_E072_post2_hold_place_diagnosis_plan.md`。
+- [x] 新增 E072 eval 脚本: `workspace/core4d/scripts/eval/eval_E072.py`。
+- [x] 新增 E072 入口脚本: `workspace/core4d/scripts/train/train_E072.sh`。
+- [x] 运行 `bash workspace/core4d/scripts/train/train_E072.sh`，输出 `timeseries.csv`、`diagnosis_summary.json`、`contact_summary.csv`、timeline plot、frame-index keyframes。
+- [x] 复核关键帧 f100/f115/f130/f145/f166/f180。
+- [x] 写 E072 结果 log: `workspace/core4d/log/92_E072_post2_hold_place_diagnosis_results.md`。
+- [x] 更新 `EXPERIMENT_TRACKER.md`。
+
+## 当前实验
+
+- **Run ID**: E072
+- **阶段**: Complete
+- **目标**: 区分 post-2s failure 是 hand-object hold/contact 先丢，还是 putdown 阶段稳定性先崩。
+
+## 关键结果
+
+| 指标 | 结果 |
+|------|------|
+| first obj_err >25cm | frame 100 / eval 2.00s / 0.308m |
+| first sim hand-object zero contact | frame 100 / eval 2.00s, ref 同帧仍 contact=1 |
+| first robot ctrl Linf >0.5 | frame 109 / eval 2.18s |
+| first sim min hand SDF >10cm | frame 134 / eval 2.68s |
+| first pelvis_z <45cm | frame 166 / eval 3.32s |
+| post2 contact frames | sim 44.4% vs ref 80.2% |
+
+**结论**: E071 post-2s 是 hold/contact 先失效，随后 CEM 追 object/body target 导致前扑和摔倒。object ctrl diff max 仅 0.01，不是新 mapping 问题。
+
+## 下一步
+
+- E073 优先做 hold/contact consistency 或 contact-preserving target，不先做单纯 stability weight。
+- 同时考虑 robot ctrl trust-region guard，限制 frame 109 后的 robot ctrl Linf 级偏移。
+
+---
+
 # E068 Progress — 2026-05-14
 
 ## 当前状态: Plan 已写入，开始 init drift 诊断

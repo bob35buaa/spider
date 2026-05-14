@@ -804,6 +804,9 @@ def main(config: Config):
             T = qpos_ref.shape[0]
             n_eef = len(config.hand_approach_body_ids)
             target_np = np.zeros((T, n_eef, 3), dtype=np.float32)
+            eef_offset_np = np.asarray(config.contact_hdmi_eef_offset, dtype=np.float32)
+            if config.contact_hdmi_target_uses_eef_offset:
+                from scipy.spatial.transform import Rotation as _R_e073
             for t in range(T):
                 mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
                 mujoco.mj_forward(mj_model, mj_data_ref)
@@ -811,11 +814,22 @@ def main(config: Config):
                 obj_mat = mj_data_ref.xmat[obj_body_id_e040].reshape(3, 3)
                 for ei, hid in enumerate(config.hand_approach_body_ids):
                     hand_pos = mj_data_ref.xpos[hid]
-                    # Hand position in object local frame
+                    # Hand/contact point in object local frame. Historical
+                    # dynamic targets used the wrist body origin; E073 can
+                    # switch to the same wrist+eef_offset point used by reward.
+                    if config.contact_hdmi_target_uses_eef_offset:
+                        hand_quat = mj_data_ref.xquat[hid]
+                        hand_rot = _R_e073.from_quat(
+                            [hand_quat[1], hand_quat[2], hand_quat[3], hand_quat[0]]
+                        )
+                        contact_delta = hand_rot.apply(eef_offset_np)
+                        hand_pos = hand_pos + contact_delta
                     target_np[t, ei] = obj_mat.T @ (hand_pos - obj_pos)
             contact_target_per_frame = torch.tensor(target_np, device=config.device)
             loguru.logger.info(
-                "E040 dynamic target: shape={}", tuple(contact_target_per_frame.shape)
+                "E040 dynamic target: shape={}, uses_eef_offset={}",
+                tuple(contact_target_per_frame.shape),
+                config.contact_hdmi_target_uses_eef_offset,
             )
 
     if approach_mask_t is not None:

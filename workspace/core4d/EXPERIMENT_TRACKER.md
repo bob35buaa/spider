@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E073 | 2026-05-14 | Phase 18 | **contact target eef_offset 口径修正**: dynamic target 从 ref wrist origin 改为 ref `wrist+eef_offset`; 训练日志确认 `uses_eef_offset=True`. early drift 未回归(yaw 0.574/1.075°, B1=0.080m); first zero contact frame100→108, post2 contact 44.4→49.4%, obj_err max 30.8→29.3cm, pelvis 不再低于45cm. 但 first obj_err>25cm 仍 frame100, 视觉 f130 后脱手/f145 箱落地, 结论=部分有效但未解决 hold | ⚠️ 详见 log 93 |
+| E072 | 2026-05-14 | Phase 18 | **box023 post-2s hold/place failure 诊断**: replay E071 qpos + scene snapshot; frame100/eval2.00s obj_err=30.8cm 且 sim hand-object contact=0(ref=1), pelvis 到 frame166/eval3.32s 才低于45cm; post2 contact frames sim 44.4% vs ref 80.2%; 结论=hold/contact 先失效, 摔倒是二阶后果, object ctrl mapping 非新问题 | ✅ 详见 log 92 |
 | E070 | 2026-05-14 | Phase 18 | **MJWarp ref-control parity 诊断定位根因**: CPU MuJoCo 与 MJWarp 完全一致; `qpos_ctrl` 口径精确复现 E069 yaw 12.403/22.156° 且 vs E069 qpos≈0; `orig_ctrl` 口径降到 0.574/1.075°. 根因不是 physics/gains/CEM, 而是 `run_mjwp.py` 用 `qpos_ref[:, :nu]` 把 floating base 混入 robot ctrl | ✅ 详见 log 90 |
 | E070 plan | 2026-05-14 | Phase 18 | **MJWarp ref-control commit parity 诊断计划**: 固定 `qpos_ref[0]/qvel_ref[0]/ctrl_ref[0:12]`, 对比 MuJoCo `mj_step` 与 MJWarp `step_env` 的 yaw/foot/qvel/contact/actuator force, 用于定位 E069 中 ref ctrl 仍漂的动力学 mismatch | 📋 待确认 |
 | E069 | 2026-05-14 | Phase 18 | **First-tick ref-control warmup 验证失败**: W02/W05 warmup ctrl diff=0, 证明 ref ctrl 确实提交; 但 t=0.017/0.033s yaw drift 仍 12.40/22.16°，B1=0.222/0.428m. 结论: first CEM override 不是主因, 真问题转向 MJWarp `step_env(ctrl_ref)` vs MuJoCo `mj_step(ctrl_ref)` 动力学不一致 | ❌ 详见 log 89 |
@@ -278,6 +280,8 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - 📋 E070 plan: MJWarp ref-control commit parity 诊断, 固定同一 ref 初态和 `ctrl_ref[0:12]`, 逐 substep 对比 MuJoCo CPU 与 MJWarp 的 qpos/qvel/contact/actuator force, 不再继续 warmup/trust-region: `workspace/core4d/plan/75_E070_mjwarp_ref_control_parity_plan.md`
 - ✅ E070 results: parity 诊断反转根因 — CPU 和 MJWarp 在同一 ctrl 下完全一致; 当前 run_mjwp 的 `qpos_ctrl` (`qpos_ref[:, :nu]`) 精确复现 E069 early yaw drift 12.403/22.156°，而正确 `orig_ctrl` (原始 29-dim robot ctrl + scene_act object ctrl) 只有 0.574/1.075°. 结论: 根因是 scene_act ctrl_ref preprocessing 错误, 不是 MJWarp physics / object gains / CEM. E071 应修 `run_mjwp.py` ctrl mapping: `workspace/core4d/log/90_E070_mjwarp_ref_control_parity_results.md`
 - ⚠️ E071 results: 修复 `run_mjwp.py` scene_act ctrl mapping 后 box023 early drift 消失; yaw err t=0.017/0.033 从 E069 的 12.40/22.16° 降到 0.574/1.075°，与 E070 `orig_ctrl` parity 相差 <0.001°; B1 pre-contact max foot z 从 0.222m 降到 0.069m。但用户复查指出 2s 后没拿住箱子并摔倒，补评估确认 post-2s obj_err max/mean=0.308/0.133m，first obj_err>25cm at 2.00s，first pelvis_z<45cm at 3.32s。结论: qpos-as-ctrl 是 early drift 主因，但 E071 整体 FAIL；下一步 E072 聚焦 post-2s hold/place failure 诊断: `workspace/core4d/log/91_E071_scene_act_ctrl_mapping_fix_results.md`
+- ✅ E072 results: replay E071 qpos + scene snapshot 定位 post-2s failure order; frame100/eval2.00s obj_err=30.8cm 且 sim hand-object contact=0(ref=1), ref 直到 frame165/eval3.30s 才正常离手; pelvis 到 frame166/eval3.32s 才低于45cm. post2 contact frames sim 44.4% vs ref 80.2%, object ctrl diff max仅0.01. 结论: hold/contact 先失效, 摔倒是二阶后果; E073 应优先做 hold/contact consistency + robot ctrl trust-region guard: `workspace/core4d/log/92_E072_post2_hold_place_diagnosis_results.md`
+- ⚠️ E073 results: dynamic contact target 改为 ref `wrist+eef_offset` 后，口径与 reward 端一致；early drift 保持修复(yaw 0.574/1.075°, B1=0.080m)，first zero contact frame100→108，post2 contact 44.4→49.4%，post2 obj_err max 30.8→29.3cm，pelvis 不再低于45cm。但 first obj_err>25cm 仍 frame100，subagent 视觉复核显示 f130 后脱手/f145 箱落地，后段是“不倒但没拿住”。结论: target 口径修正部分有效，应作为 E074 base；下一步加 robot ctrl trust-region guard: `workspace/core4d/log/93_E073_contact_target_offset_consistency_results.md`
 
 ## 脚本
 
@@ -324,3 +328,7 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E070 train/debug 入口: `workspace/core4d/scripts/train/train_E070.sh`
 - E071 train: `workspace/core4d/scripts/train/train_E071.sh`
 - E071 eval: `workspace/core4d/scripts/eval/eval_E071.py`
+- E072 train/analysis入口: `workspace/core4d/scripts/train/train_E072.sh`
+- E072 eval replay诊断: `workspace/core4d/scripts/eval/eval_E072.py`
+- E073 train: `workspace/core4d/scripts/train/train_E073.sh`
+- E073 eval: `workspace/core4d/scripts/eval/eval_E073.py`

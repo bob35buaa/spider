@@ -137,6 +137,9 @@ class Config:
     contact_hdmi_dynamic_target: bool = (
         False  # True=use per-frame ref-derived target instead of fixed
     )
+    contact_hdmi_target_uses_eef_offset: bool = (
+        False  # True=derive dynamic target from ref wrist+eef_offset, not wrist origin
+    )
     # E041: orientation reward — palm must face object surface
     contact_hdmi_ori_weight: float = 0.0  # 0=disabled; >0 = enable orientation term
     contact_hdmi_ori_mode: str = "multiply"  # "multiply" | "additive" | "near_field"
