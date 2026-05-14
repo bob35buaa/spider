@@ -1,0 +1,15 @@
+# @package _global_
+# E066-A: E065-A (drop task_obj) + HDMI-aligned object actuator gains.
+# Hypothesis: stiff object actuator (kp 500) forces sim to push hard → COG
+# forward → single-foot back-lunge. HDMI uses kp=20 (25× weaker) + decay 0.85.
+# log 84 §6: E065 reward-form ablation FAIL'd, dynamics is the remaining gap.
+defaults:
+  - core4d_e065a_box023
+  - _self_
+
+# HDMI-aligned object actuator dynamics (was 500/500/50/50/1.0)
+init_pos_actuator_gain: 20.0
+init_pos_actuator_bias: 20.0
+init_rot_actuator_gain: 0.3
+init_rot_actuator_bias: 0.3
+guidance_decay_ratio: 0.85

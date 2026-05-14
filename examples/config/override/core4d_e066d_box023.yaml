@@ -1,0 +1,15 @@
+# @package _global_
+# E066-D: E065-D (HDMI exp form) + HDMI-aligned object actuator gains.
+# This is the FULL HDMI alignment: same body-tracking formula AND same
+# task_obj form AND same object actuator dynamics. If this still fails, the
+# remaining diff is knot_dt or initial pose.
+defaults:
+  - core4d_e065d_box023
+  - _self_
+
+# HDMI-aligned object actuator dynamics (was 500/500/50/50/1.0)
+init_pos_actuator_gain: 20.0
+init_pos_actuator_bias: 20.0
+init_rot_actuator_gain: 0.3
+init_rot_actuator_bias: 0.3
+guidance_decay_ratio: 0.85
