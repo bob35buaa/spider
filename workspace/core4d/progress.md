@@ -20,6 +20,49 @@
 - [x] Hydra compose 验证:
   - E075B: `ctrl_ref_guard_scale=0.5`, `hold_contact_rew_scale=1.0`, window 1.8-2.5, `contact_hdmi_target_uses_eef_offset=True`。
   - E075A: `ctrl_ref_guard_scale=0.5`, `hold_contact_rew_scale=0.5`, window 1.8-2.5, `contact_hdmi_target_uses_eef_offset=True`。
+- [x] 提交并推送 E075 实验脚本/config: `90d5b34 exp(core4d): E075 limited hold-contact remote sweep`。
+- [x] 远程 `spider-remote:/home/xiayb/pHRI_workspace/spider` 已 fast-forward 到 `90d5b34`。
+- [x] 启动远程 tmux session `E075`:
+  - E075B -> GPU0, PID 1238653。
+  - E075A -> GPU1, PID 1238654。
+  - 远程 scene snapshot: `workspace/core4d/results/E075/scene_snapshot/`。
+
+## 远程运行状态
+
+- 2026-05-14 21:57: tmux 输出确认两个 run 已启动。
+- 初始结果计数: `0` 个 `.npz`，符合刚启动状态。
+- 2026-05-14 22:19: 远程 E075 完成，已 scp 回收并完成本地 `eval_E075.py`。
+
+### 初步数值结果
+
+| 指标 | E074A | E074C | E075B scale1.0 limited | E075A scale0.5 limited |
+|------|------:|------:|-----------------------:|-----------------------:|
+| yaw 0.017/0.033 deg | 0.574 / 1.075 | 0.574 / 1.075 | 0.574 / 1.075 | 0.574 / 1.075 |
+| B1 pre-contact foot z | 0.083m | 0.085m | 0.083m | 0.085m |
+| first zero contact | f110 | f101 | f110 | f111 |
+| frame100-145 contact | 54.3% | 63.0% | 76.1% | 60.9% |
+| post2 contact | 54.3% | 64.2% | 67.9% | 61.7% |
+| post2 obj_err max | 0.289m | 0.324m | 0.287m | 0.290m |
+| post2 obj_err mean | 0.177m | 0.197m | 0.158m | 0.155m |
+| post2 pelvis_z min | 0.692m | 0.701m | 0.660m | 0.147m |
+| first robot ctrl Linf >0.5 | f122 | f114 | f117 | f100 |
+| post2 robot ctrl Linf max | 0.740 | 0.897 | 0.690 | 0.662 |
+| post2 min hand SDF mean | 0.073m | 0.043m | 0.057m | 0.054m |
+
+初步判断:
+
+- E075B 是当前数值最好的组合：contact 高于 E074C，object error 接近/略优 E074A，robot ctrl Linf 更低，pelvis 没有摔倒。
+- E075A 接触也改善，但 first robot ctrl Linf 在 f100 即超阈值，且 pelvis_z min=0.147m，稳定性明显回归，不宜作为主线。
+- 需要等待 subagent 视觉复核 E075B/E075A 关键帧后写正式 log。
+- [x] subagent Erdos 完成 E075A/E075B 关键帧视觉复核。
+- [x] 写入正式结果日志: `workspace/core4d/log/96_E075_limited_hold_contact_results.md`。
+- [x] 更新 `EXPERIMENT_TRACKER.md` E075 行。
+
+正式结论:
+
+- E075B 是 best-so-far partial positive：contact 大幅提升，object error 不退化，f180 站稳且箱子分离；但 f145-f166 释放仍不干净，first obj_err>25cm 仍 f100。
+- E075A 失败：f166-f180 出现身体/腿/箱强干涉并摔倒。
+- 下一步应以 E075B 为 base，先做 release/leg clearance replay 诊断，再设计放置后脱离/clearance reward。
 
 ## 当前实验
 
