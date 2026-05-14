@@ -1,3 +1,34 @@
+# E075 Progress — 2026-05-14
+
+## 当前状态: Plan 已写入，开始 E075 限时/弱化 hold_contact 远程并行实现
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 恢复 `EXPERIMENT_TRACKER.md`、最新 plan/log、`progress.md`。
+- [x] 读取远程执行指南 `.codex/skills/experiment-planning-zh/remote-execution.md`，确认 `spider-remote` 与 `/home/xiayb/pHRI_workspace/spider`。
+- [x] 复读 E074 计划/脚本/config，确认 E075 不需要改 reward 实现，只需新增两个组合 override 与 E075 脚本。
+- [x] 写入 E075 计划: `workspace/core4d/plan/81_E075_limited_hold_contact_remote_plan.md`。
+- [x] 新增 E075 override:
+  - `examples/config/override/core4d_e075b_box023.yaml` = E074A + hold_contact scale 1.0, window 1.8-2.5s。
+  - `examples/config/override/core4d_e075a_box023.yaml` = E074A + hold_contact scale 0.5, window 1.8-2.5s。
+- [x] 新增 E075 train/eval/remote/pull 脚本:
+  - `workspace/core4d/scripts/train/train_E075.sh`
+  - `workspace/core4d/scripts/eval/eval_E075.py`
+  - `workspace/core4d/scripts/run_E075_remote.sh`
+  - `workspace/core4d/scripts/pull_E075_remote_results.sh`
+- [x] 静态验证通过: `py_compile eval_E075.py`; `bash -n` 三个 shell 脚本。
+- [x] Hydra compose 验证:
+  - E075B: `ctrl_ref_guard_scale=0.5`, `hold_contact_rew_scale=1.0`, window 1.8-2.5, `contact_hdmi_target_uses_eef_offset=True`。
+  - E075A: `ctrl_ref_guard_scale=0.5`, `hold_contact_rew_scale=0.5`, window 1.8-2.5, `contact_hdmi_target_uses_eef_offset=True`。
+
+## 当前实验
+
+- **Run ID**: E075
+- **阶段**: Implement
+- **目标**: 在 E074A ctrl guard 基础上，对比 `hold_contact` 的限时中等强度(scale=1.0, 1.8-2.5s) 与限时弱强度(scale=0.5, 1.8-2.5s)，验证能否提升接触而不复现 E074C 的腿/箱干涉。
+
+---
+
 # E074+ Strategy Progress — 2026-05-14
 
 ## 当前状态: Plan 已写入，等待用户审核 E074+ 总路线
