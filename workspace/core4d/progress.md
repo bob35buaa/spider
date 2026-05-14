@@ -64,6 +64,13 @@
 - E075A 失败：f166-f180 出现身体/腿/箱强干涉并摔倒。
 - 下一步应以 E075B 为 base，先做 release/leg clearance replay 诊断，再设计放置后脱离/clearance reward。
 
+### 追加诊断: E075B f115-f130 右腿相位偏差
+
+- [x] 用户指出 E075B f120-f125 右腿相对 ref 突然前跨；已补抽 f115-f130 连续帧并交给 subagent Erdos 视觉复核。
+- [x] 视觉结论: 不是单帧视觉错觉。ref 在 f120 后进入停步/弯腰/准备放箱，右脚接近地面且趋于稳定；sim 仍在继续向前走一步，右腿从后摆连续前跨，到 f125-f130 与 ref 姿态明显分歧。
+- [x] 数值结论: f119-f125 sim right_foot XY 每帧位移约 7.5-9.7cm，而 ref 约 1.9-4.0cm；right_hip_pitch ctrl diff 在 f120-f124 成为主导偏离，约 -0.50rad。该段是真实步态/任务相位偏差，不只是 release 问题。
+- [x] 将用户关于 hand-crafted `hold_contact_start/end_eval_time` 泛化风险、HDMI contact label vs core4d estimated mask 差异、以及 E076 应优先 audit/fix contact mask 的讨论写入 `workspace/core4d/log/96_E075_limited_hold_contact_results.md`。
+
 ## 当前实验
 
 - **Run ID**: E075
