@@ -22,15 +22,15 @@ field_from_row() {
 }
 
 variants_for_split() {
-  local split=$1
-  awk -F '\t' -v split="$split" 'NF && $1 !~ /^#/ && $5 == split && $6 != "calib" {print $1}' "$VARIANTS_FILE"
+  local split_name=$1
+  awk -F '\t' -v want_split="$split_name" 'NF && $1 !~ /^#/ && $5 == want_split && $6 != "calib" {print $1}' "$VARIANTS_FILE"
 }
 
 snapshot_split() {
-  local split=$1
-  mapfile -t tasks < <(awk -F '\t' -v split="$split" 'NF && $1 !~ /^#/ && $5 == split && $6 != "calib" {print $2}' "$VARIANTS_FILE")
+  local split_name=$1
+  mapfile -t tasks < <(awk -F '\t' -v want_split="$split_name" 'NF && $1 !~ /^#/ && $5 == want_split && $6 != "calib" {print $2}' "$VARIANTS_FILE")
   if [ "${#tasks[@]}" -gt 0 ]; then
-    echo "[$(date '+%H:%M:%S')] === scene snapshot split=${split} ==="
+    echo "[$(date '+%H:%M:%S')] === scene snapshot split=${split_name} ==="
     bash workspace/core4d/scripts/convert/snapshot_scenes.sh E079 "${tasks[@]}"
   fi
 }
@@ -89,6 +89,10 @@ case "$MODE" in
   local|remote)
     snapshot_split "$MODE"
     mapfile -t variants < <(variants_for_split "$MODE")
+    if [ "${#variants[@]}" -eq 0 ]; then
+      echo "No E079 variants for split=${MODE}" >&2
+      exit 2
+    fi
     for variant in "${variants[@]}"; do
       run_one "$variant" "$GPU"
     done
