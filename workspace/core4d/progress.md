@@ -28,7 +28,12 @@
   - E078B: RTX 5090, `max_sim_steps=4`, 3cm mask 选 `eval_contact_mask_3cm`, `person_idx=1`, `len 227→322`, active L/R=45.0%/47.5%。
   - 两者均生成 `/tmp/e078_smoke_{a,b}/trajectory_mjwp_act.npz`，未触发 reward mask shape error。
 - [x] 强制纳入远程必需数据：E077 3cm mask 与 `box023_person2` SPIDER case；未纳入 `.codex/config.toml` / `__pycache__`。
-- [ ] commit + push 后启动远程 E078A/E078B 并行。
+- [x] commit + push 后启动远程 E078A/E078B 并行：
+  - Commit: `ddb2e69 exp(core4d): add E078 3cm contact mask sweep`
+  - Remote: `spider-remote:/home/xiayb/pHRI_workspace/spider`
+  - Session: `tmux E078`
+  - E078A -> GPU0, PID 1387310；E078B -> GPU1, PID 1387311。
+  - 15:40 初始结果计数为 `0` 个 `.npz`；远程 `nvidia-smi` 显示两张 RTX 6000 Ada 均有计算负载。
 
 ## 遇到的错误
 
@@ -36,6 +41,8 @@
 |------|---------|----------|
 | 沙箱内 `uv run` 无法访问 CUDA，报 `No CUDA GPUs are available` | 1 | 使用批准的 escalated GPU smoke run；`nvidia-smi` 与 Warp 均确认 RTX 5090 可用 |
 | `git diff --cached --check` 报 E077 CSV CRLF / E076 log trailing whitespace | 1 | 转为 LF 并移除末尾空格后通过 |
+| sandbox 内首次 `run_E078_remote.sh` 的 `git push` DNS 失败 | 1 | 用已批准的 escalated 远程脚本重试；远程 fast-forward 并启动 tmux |
+| 远程 `git pull` 提示 `trajectory_kinematic.npz` should have been LFS pointer | 1 | 文件仅 132KB 且已成功到远程，先不阻塞 E078；后续可统一整理 LFS 策略 |
 
 ---
 
