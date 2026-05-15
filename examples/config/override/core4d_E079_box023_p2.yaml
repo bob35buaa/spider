@@ -1,0 +1,17 @@
+# @package _global_
+# Auto-generated for E079 CORE4D generalization.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: box023_person2
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d/results/E079/contact_masks/box023_person2/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [1.0, 0.0, 0.0]
+contact_hdmi_palm_normal_right: [1.0, 0.0, 0.0]
+hold_contact_rew_scale: 0.0
+# Main E079 validation disables the box023-specific hold window.
+hold_contact_start_eval_time: 0.0
+hold_contact_end_eval_time: 0.0

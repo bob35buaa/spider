@@ -4,6 +4,19 @@
 
 ## 完成步骤
 
+- [x] 将 E077 验证成功的数据处理 pipeline 固化到本地文档与批处理入口：
+  - `workspace/core4d/data_preprocess/README.md`
+  - `workspace/core4d/data_preprocess/pipeline.sh`
+  - `workspace/core4d/data_preprocess/cases_box023.tsv`
+  - `workspace/core4d/data_preprocess/verify_processed_case.py`
+- [x] `pipeline.sh --dry-run` 通过，box023 示例会串起 contact mask、Holosoma convert/retarget、trim、SPIDER case 生成、scene_act 和 verify。
+- [x] `verify_processed_case.py` 已用 E077 现有 `box023_person2` 输出验证通过：qpos `(136,43)`，scene/scene_act `nq=43/42`，trimmed qpos 与 SPIDER trajectory 完全匹配。
+- [x] `README.md` 补充 raw、OmniRetarget/Holosoma、SPIDER、eval 与 MJWP runtime reference 的 FPS/时间轴说明；`pipeline.sh` 显式支持 `REF_FPS`/`EVAL_FPS` 覆盖。
+- [x] 新增 `workspace/core4d/data_preprocess/SCENE_TEMPLATE_GUIDE.md`，记录没有 `source_scene_task` 时如何制作 SPIDER `scene.xml` 模板、需要修改的字段、依据、校验步骤和常见错误。
+- [x] 修正预处理 pipeline 的 ref 来源口径：SPIDER CORE4D reference 默认来自 Holosoma pipeline 的 `trim_no_contact.py` 输出；移除通用路径下的固定窗口 trim，新增 `infer_holosoma_trim_window.py` 用于反查/核验 Holosoma trimmed window；E077 固定 trim 仅保留在 E077 目录作为历史复现脚本。
+- [x] 清理 `data_preprocess` pipeline 的机器相关硬编码：Holosoma/CORE4D/SMPL-X 保持为可覆盖的外部绝对路径配置；项目内路径保持相对 `REPO`；README 同步跨机器运行约定。
+- [x] 按本机使用习惯恢复 `pipeline.sh` 的本机默认外部路径；换机器仍可通过 `HOLOSOMA_DIR`、`CORE4D_REAL_ROOT`、`SMPLX_MODEL_DIR` 覆盖。
+
 - [x] 按 `experiment-planning-zh` 恢复实验上下文，确认最新计划为 `workspace/core4d/plan/83_E078_3cm_per_eef_contact_mask_cem_plan.md`。
 - [x] 在 `spider/config.py` 增加默认关闭的 3cm contact mask source 配置项，旧实验默认仍走 `rotated_sdf`。
 - [x] 修改 `examples/run_mjwp.py`，支持从 E077 `raw_contact_mask_3cm.npz` 读取 `(T, person, hand)` mask，并转换为 HDMI-style per-EEF `(T,2)` gating。
@@ -691,3 +704,39 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
   - 增加 `contact_hdmi_mask_source="core4d_3cm"`，从 E077 npz 读取 mask。
   - 保持旧 `rotated_sdf` 默认行为，避免影响其他实验。
 - 执行前待用户确认；当前未修改代码、未启动训练。
+
+---
+
+## E079 进展: 10+ 高接触质量 case 泛化验证
+
+- [x] 按 `experiment-planning-zh` 恢复 `EXPERIMENT_TRACKER.md`、最新 plan/log、`progress.md`。
+- [x] 复读 `log/99_E078_3cm_per_eef_mask_results.md`，确认本轮出发点：E078B/person2 证明算法在高质量 ref/contact 下可工作；E078A/person1 作为数据质量反例。
+- [x] 复读 `log/64_E054_case_tier_analysis_results.md` 和 `workspace/core4d/data_preprocess/README.md`，确认 6 个 B+C raw 序列为首批候选：box021、box023、bucket001、bucket005_s2、bucket007、desk021。
+- [x] 初步实验单位确定为 single-person case：对 6 个 B+C 序列构造 p1/p2 共 12 个候选，再用 3cm contact audit 筛选接触质量；`box023_person1` 保留为反例/guard，不计入成功样本。
+- [x] 读取远程执行规则；本轮远程只使用 `spider-remote` 的 GPU1，GPU0 当前占用高，不纳入调度。
+- [x] 写入 E079 总体计划：`workspace/core4d/plan/84_E079_core4d_generalization_10plus_plan.md`。
+- [x] E079 决策：主验证不沿用 box023 固定 `hold_contact_start/end_eval_time=1.8-2.5s`；该配置只保留作 E078B calibration，不作为泛化主结论。
+- [x] 将 E077 专用 scene 创建逻辑通用化为 `workspace/core4d/data_preprocess/create_spider_scene_from_template.py`，并让 `pipeline.sh` 调用通用脚本。
+- [x] 新增 E079 数据预处理 case 列表：`cases_E079_existing_p1.tsv` 用于已有 p1 的 mask/trim audit；`cases_E079_build_p2.tsv` 用于构造 6 个 p2 单人 SPIDER case。
+- [x] 新增 E079 实验 manifest 与脚本骨架：
+  - `workspace/core4d/scripts/E079/variants.tsv`
+  - `workspace/core4d/scripts/E079/generate_e079_overrides.py`
+  - `workspace/core4d/scripts/run_E079_preprocess.sh`
+  - `workspace/core4d/scripts/train/train_E079.sh`
+  - `workspace/core4d/scripts/run_E079_remote.sh`
+  - `workspace/core4d/scripts/pull_E079_remote_results.sh`
+  - `workspace/core4d/scripts/eval/eval_E079.py`
+  - `workspace/core4d/scripts/eval/eval_E079_contact_quality.py`
+- [x] 更新 `workspace/core4d/data_preprocess/README.md`，明确 `create_spider_scene_from_template.py` 是通用 scene 创建入口，E079 只是新增 case TSV。
+- [x] E079 p1 轻量预处理完成：使用已知 Holosoma trim window 跳过 retarget，为 6 个已有 p1 case 生成 `workspace/core4d/results/E079/contact_masks/*_person1/raw_contact_mask_3cm.npz`。
+- [x] 修复 `generate_core4d_contact_masks.py` 的短序列 audit 打印 bug：固定窗口越界时跳过打印，避免 `None` format 崩溃。
+- [x] E079 p2 构造进展：`box021_person2`、`box023_person2`、`bucket001_person2`、`bucket005_s2_person2`、`bucket007_person2` 已完成 SPIDER scene/trajectory/scene_act verify；`desk021_person2` 在 Holosoma retarget 中 `CVXPY solve failed: infeasible`，标记为 `preprocess_fail`，后续训练跳过。
+- [x] 生成 11 个 E079 per-case override（10 main + 1 guard）；Hydra compose 验证全部指向 E079 contact masks，且主验证 `hold_contact_rew_scale=0.0`。
+- [x] 发现并修正 E079 p2 构造中的一个复用风险：`box023_person2` 已由 E077/E078 验证，不应在 E079 build-p2 阶段被 auto trim 重建覆盖；已把它移到 `cases_E079_existing_p2.tsv`，`cases_E079_build_p2.tsv` 中禁用该行，并恢复 tracked SPIDER 数据到既有版本。
+- [x] 将通用 `pipeline.sh` 的 trim-window 控制流修正为：TSV 显式写 `trim_start/trim_frames` 时直接作为权威窗口，只有 `auto` 才从 Holosoma untrimmed/trimmed 反查；新增 `write_trim_window.py` 写入显式窗口 provenance。
+- [x] 重新生成 E079 `box023_person2` contact mask：`trim_start=42, trim_frames=136`，`eval_contact_mask_3cm` 长度恢复为 227；115-130 帧 audit 显示 person2 left/right 均为 `16/16` 接触。
+- [x] 更新 `workspace/core4d/data_preprocess/README.md`：补充显式 trim-window 语义、`write_trim_window.py`、`cases_E079_existing_p2.tsv`，并修正 `pipeline.sh` 处理步骤说明。
+- [x] 重新跑 E079 contact-quality 汇总：11 个可用 main/guard case 均为 `high_quality_proxy=True`，`box023_person2` 行为 `T_spider=136, trim_start=42`。
+- [x] 本机 RTX 5090 短 horizon smoke 通过：`core4d_E079_box023_p2`, `max_sim_steps=4`, E079 mask `eval_contact_mask_3cm` 读取成功，修正后 active L/R=45.0%/47.5%，输出 `/tmp/e079_smoke_box023_p2/trajectory_mjwp_act.npz`。
+- [x] 修正 E079 preprocess 默认入口：已有 p1 默认 `--skip-retarget --skip-spider`，只做显式窗口/contact mask；`desk021_person2` 已知 retarget infeasible，默认从 build-p2 TSV 禁用，避免一键 `all` 重复失败。
+- [x] 静态检查通过：E079/data_preprocess Python `py_compile`、bash `-n`、`git diff --check`。

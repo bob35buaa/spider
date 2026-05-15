@@ -1,0 +1,58 @@
+{
+  "task": "bucket005_s2_person2",
+  "case_dir": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket005_s2_person2",
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket005_s2_person1/scene.xml",
+  "trimmed": "workspace/core4d/results/E079/holosoma_bucket005_s2_person2/trimmed/20231002-004-person2-bucket005_with_obj_original.npz",
+  "trajectory": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket005_s2_person2/0/trajectory_kinematic.npz",
+  "trimmed_qpos_shape": [
+    148,
+    43
+  ],
+  "spider_qpos_shape": [
+    148,
+    43
+  ],
+  "spider_qvel_shape": [
+    148,
+    41
+  ],
+  "spider_ctrl_shape": [
+    148,
+    29
+  ],
+  "spider_contact_shape": [
+    148,
+    2
+  ],
+  "trimmed_qpos_matches_spider_qpos": true,
+  "scene": {
+    "path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket005_s2_person2/scene.xml",
+    "nq": 43,
+    "nv": 41,
+    "nu": 29
+  },
+  "scene_act": {
+    "path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket005_s2_person2/scene_act.xml",
+    "nq": 42,
+    "nv": 41,
+    "nu": 35
+  },
+  "first_object_qpos": [
+    0.06669526547193527,
+    0.8652502298355103,
+    0.2131509780883789,
+    0.5160148739814758,
+    0.5154022574424744,
+    0.4865954518318176,
+    0.4809512197971344
+  ],
+  "first_robot_root_qpos": [
+    -0.479386751232407,
+    1.2699779177625214,
+    0.8017422288438727,
+    0.7749638123081681,
+    -0.03556552734339071,
+    0.3747251959502622,
+    -0.5076881034607906
+  ]
+}

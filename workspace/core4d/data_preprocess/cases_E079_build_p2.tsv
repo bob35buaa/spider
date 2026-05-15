@@ -1,0 +1,7 @@
+# enabled	date	seq	person	object_name	object_model_rel	source_scene_task	target_task	trim_start	trim_frames	data_id	mask_slug
+1	20231018	030	person2	Box021	box/box021_m.obj	box021_person1	box021_person2	auto	auto	0	box021_person2
+0	20231008	045	person2	Box023	box/box023_m.obj	box023_person1	box023_person2	42	136	0	box023_person2
+1	20231030	094	person2	bucket001	bucket/bucket001_m.obj	bucket001_person1	bucket001_person2	auto	auto	0	bucket001_person2
+1	20231002	004	person2	bucket005	bucket/bucket005_m.obj	bucket005_s2_person1	bucket005_s2_person2	auto	auto	0	bucket005_s2_person2
+1	20231020	055	person2	Bucket007	bucket/bucket007_m.obj	bucket007_person1	bucket007_person2	auto	auto	0	bucket007_person2
+0	20231008	007	person2	Desk021	desk/desk021_m.obj	desk021_person1	desk021_person2	auto	auto	0	desk021_person2

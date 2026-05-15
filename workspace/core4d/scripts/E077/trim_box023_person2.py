@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Trim box023 person2 retargeting output to match person1's 42:178 slice."""
+"""E077-only fixed trim: box023 person2 retargeted[42:178].
+
+Do not use this as the general CORE4D preprocessing trim step. The general
+source of SPIDER CORE4D references is Holosoma's pipeline, especially
+workspace/pipeline/trim_no_contact.py.
+"""
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +27,8 @@ DEFAULT_OUT = (
 
 
 def main() -> None:
+    import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=DEFAULT_IN)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUT)
@@ -46,6 +52,7 @@ def main() -> None:
             payload[key] = value
     np.savez(args.output, **payload)
     print(f"Wrote {args.output}")
+    print(f"slice: [{start}:{end}]")
     print(f"qpos: {data['qpos'].shape} -> {payload['qpos'].shape}")
     if "human_joints" in payload:
         print(f"human_joints: {payload['human_joints'].shape}")

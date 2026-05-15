@@ -1,0 +1,6 @@
+{
+  "source": "case-file:workspace/core4d/data_preprocess/cases_E079_existing_p2.tsv",
+  "trim_start": 42,
+  "trim_end": 178,
+  "trim_frames": 136
+}

@@ -1,0 +1,14 @@
+# variant	task	mask_slug	person_idx	split	role
+E079_box021_p1	box021_person1	box021_person1	0	local	main
+E079_box023_p1	box023_person1	box023_person1	0	local	guard
+E079_bucket001_p1	bucket001_person1	bucket001_person1	0	local	main
+E079_bucket005_s2_p1	bucket005_s2_person1	bucket005_s2_person1	0	local	main
+E079_bucket007_p1	bucket007_person1	bucket007_person1	0	local	main
+E079_desk021_p1	desk021_person1	desk021_person1	0	local	main
+E079_box021_p2	box021_person2	box021_person2	1	remote	main
+E079_box023_p2	box023_person2	box023_person2	1	remote	main
+E079_bucket001_p2	bucket001_person2	bucket001_person2	1	remote	main
+E079_bucket005_s2_p2	bucket005_s2_person2	bucket005_s2_person2	1	remote	main
+E079_bucket007_p2	bucket007_person2	bucket007_person2	1	remote	main
+E079_desk021_p2	desk021_person2	desk021_person2	1	none	preprocess_fail
+E079_calib_box023_p2_hold	box023_person2	box023_person2	1	none	calib

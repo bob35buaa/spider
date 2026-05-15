@@ -1,0 +1,9 @@
+{
+  "untrimmed": "workspace/core4d/results/E079/holosoma_bucket001_person2/retargeted/20231030-094-person2-bucket001_with_obj_original.npz",
+  "trimmed": "workspace/core4d/results/E079/holosoma_bucket001_person2/trimmed/20231030-094-person2-bucket001_with_obj_original.npz",
+  "untrimmed_frames": 154,
+  "trimmed_frames": 122,
+  "trim_start": 32,
+  "trim_end": 154,
+  "trim_frames": 122
+}
