@@ -1,0 +1,9 @@
+# Scene snapshot for E080
+# Captured: 2026-05-15T23:06:41+08:00
+# Git HEAD: 711ce08 (feat/dual-robot-retarget)
+
+case                             file                       size  sha256
+box025_person2                   scene.xml                 30305  e18c80409df50bef59288edb35d0ca9d4d9a32dd3c3c696d20b2c33d1cb05a81
+box025_person2                   scene_act.xml             31174  47b859b29f38aa01cad3db7fc8470625c814ee5b07a8e8f5c91f03bdb938daa7
+box025_person2                   scene_act_meta.json          27  9099dc701f6c3e250c482ab120ebf210c2b9985c8e20aac14392d9daf0765bb3
+box025_person2                   task_info.json               79  f0245d46202c236bda87dcfab6545bbcbe8283256b3df9cd9ba22c6e08ff29b9

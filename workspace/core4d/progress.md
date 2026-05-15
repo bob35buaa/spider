@@ -772,3 +772,10 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] E080 短 horizon smoke 通过：
   - `core4d_E080_box025_p1`, `max_sim_steps=4`, mask `eval_contact_mask_3cm` len `207->298`, active L/R=`53.0%/60.4%`。
   - `core4d_E080_box025_p2`, `max_sim_steps=4`, mask `eval_contact_mask_3cm` len `207->298`, active L/R=`62.1%/62.1%`。
+- [x] 已提交并推送 E080 setup：commit `711ce08 exp(core4d): E080 box025 boundary-control setup`。
+- [x] 远程 `spider-remote` GPU1 已启动 `E080_box025_p2`，tmux session=`E080`；远程 `git pull --ff-only` 成功，活跃 box025 ignored 数据已随 git 同步。Git LFS 提示 3 个文件应为 pointer 但不是，本轮按普通 git blob 使用，不影响当前远程读取。
+- [x] 本地首次 `train_E080.sh local 0` 在 sandbox 中看不到 CUDA 失败；已按权限规则用提升权限重启，本机 RTX5090 正常识别，`E080_box025_p1` 已开始运行。
+- [x] E080 p1/p2 正式运行完成：本地 `E080_box025_p1` 与远程 GPU1 `E080_box025_p2` 均产出 `.npz/.mp4`，远程结果已回收到本地。
+- [x] E080 统一评估完成：case-window main success `2/2=100%`，fixed post2 numeric success `0/2=0%`。p1 case-window `obj mean/max=0.184/0.336m, sim contact=75.3%`；p2 `0.146/0.289m, sim contact=90.8%`。
+- [x] E080 视觉复核完成：subagent 判断 p2 明显好于 p1，但 p1/p2 都不能算真实搬运成功；p1 是趴箱/贴箱/推箱 false positive，p2 更像扶/推箱体。
+- [x] 已写入结果日志：`workspace/core4d/log/101_E080_box025_boundary_control_results.md`；已更新 `EXPERIMENT_TRACKER.md`。核心结论：box025 继续支持 Tier3/drop 历史判断，同时证明 case-window 三阈值会误判大物体负控。
