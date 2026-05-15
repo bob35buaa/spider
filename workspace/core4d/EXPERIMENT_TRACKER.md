@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E080 | 2026-05-15 | Phase 18 | **box025 大物体边界/负控复查**: 按 E079 no-hold + E077/E079 3cm mask 口径跑 `box025_person1/person2`。E054 已判定 box025 为 Tier3/drop (`dim_max=0.89m`)，因此本轮不是预期成功正例，而是校准“大物体结构性不可解”是否会被 case-window 三阈值误判。已写计划、生成 p1/p2 mask (`trim_start=38,T=124`) 和 E080 override；下一步本地 p1 + 远程 GPU1 p2 | 🚧 计划/脚本就绪 |
+| E079 | 2026-05-15 | Phase 18 | **CORE4D 10+ 高接触质量 case 泛化验证**: E077 pipeline 推广到 6 个 B+C 序列 p1/p2，`11/12` 可运行（`desk021_p2` Holosoma retarget infeasible）；主验证不使用 hand-crafted hold window。按用户纠正后接入 case-specific contact/intent window，并修正 role：`box023_p2` 是 E078 positive guard，`box023_p1` 是 main/已知失败反例。main `6/10=60%` 数值成功（fixed box023-post2 旧口径 `2/10`），低于 C3 `>=7/10`；用户复查后视觉口径更保守：`box021_p1` 视觉好但 ref 接触位置异常，`bucket007_p2`/`bucket005_s2_p2` 相对可信，`desk021_p1` 前段没抬起，`bucket005_s2_p1` 物体持续受力旋转，`box023_p1` false positive，`bucket007_p1` 是 trim/ref data issue。结论: 数据 pipeline work，算法有跨 case 正信号但泛化未过关，下一步需更强语义判据 + trim/ref feasibility/stability audit | ⚠️ 详见 log 100 |
 | E075 | 2026-05-14 | Phase 18 | **限时 hold_contact 组合验证**: E075B=E074A + hold_contact scale1.0/window1.8-2.5s 达到 best-so-far: frame100-145 contact 76.1%, post2 contact 67.9%, obj_err max 28.7cm, robot ctrl Linf max 0.690, f180 站稳且箱子分离; 但 first obj_err 仍 f100, f145-f166 释放不干净. E075A scale0.5 虽 hand SDF 更近但 f168 pelvis<45cm、f166-f180 摔倒/腿箱干涉. 结论: 采用 E075B 为下一步 base, 转 release/clearance 诊断 | ⚠️ 详见 log 96 |
 | E074 | 2026-05-14 | Phase 18 | **post-2s hold/contact 首轮远程并行**: E074A ctrl guard 将 robot ctrl 大偏离 f101→f122, contact 45.7→54.3%, obj_err max 29.3→28.9cm, 视觉最接近成功但 f145 仍接近落地; E074C hold-contact 将 post2 contact 49.4→64.2%, SDF mean 6.6→4.3cm, 但 first zero contact 提前 f101、obj_err max 32.4cm、后段腿/箱干涉明显. 结论: ctrl guard 是安全组件; hold-contact surrogate 生效但目标错位, 不应原样组合 | ⚠️ 详见 log 95 |
 | E074 preflight | 2026-05-14 | Phase 18 | **E074 base/palm normal 前置分析**: 明确 E074 base=`E073 -> E071W02 -> E062 -> E041c`; E060-E067 中仅 E065 有共享 reward 代码但默认 inactive, E066/E067 YAML inactive; E062 palm normal 是 contact_hdmi orientation reward 的 wrist-local 朝向先验, box023 双手 `[+1,0,0]` 已包含在 E071/E073 结果中, E074 主线应保留并只作为后续 ablation 验证 | 📋 详见 log 94 |
@@ -288,6 +290,8 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - 🔬 E076 contact source audit: 修正 E075 后续讨论中过强的“右手不应继续强接触”推断；CORE4D raw 没有人工 hand-contact 真值，官方 contact 也是 2cm/3cm 几何 proxy。`box023_person1` 源于 raw `20231008/045`，SPIDER ref = raw[42:178]；E075 f115-f130 是 50Hz eval 的 2.30-2.60s，对应 raw 111-120。raw 几何显示 person1 右手为边界接触(2cm:5/16, 3cm:16/16)，person2 双手强接触(2cm/3cm:16/16)。结论: 下一步应做 contact source alignment + per-hand mask 修复，而不是继续手写 hold/release window: `workspace/core4d/log/97_E076_contact_source_audit.md`
 - ✅ E077 results: 生成 CORE4D 3cm geometry-proxy contact mask，输出 raw `(178,2,2)` / SPIDER `(136,2,2)` / eval `(227,2,2)`；f115-f130 对应 raw111-120 下 p1R=16/16但均距2.12cm(边界接触)，p2双手强接触。构造 `box023_person2` 单人 SPIDER case 成功(qpos136×43, scene/scene_act load OK, scene_act euler=XZY)。重要 caveat: converted 层 p1/p2 object pose 完全一致，但 retarget qpos 因 person-specific smpl_scale 不同而最大差6.2cm，不能直接合成双机器人同场景，需 common-scale alignment: `workspace/core4d/log/98_E077_3cm_contact_mask_and_person2_results.md`
 - ⚠️/✅ E078 results: 3cm per-EEF contact mask 接入成功，但 E078A/person1 未解决 f119-f125 右腿相位偏差，right foot step sim/ref=0.531/0.159m、right hip pitch ctrl diff abs max=0.554rad，contact 还低于 E075B，说明 p1 更像数据/retarget 质量问题；E078B/person2 完整成功且动作质量明显更接近可用，right foot step sim/ref=0.0219/0.0255m、ctrl diff abs max=0.138rad，支持“person2 ref/contact 质量更好”的判断。下一步优先沿 person2 做可用性验证，p1 暂停 reward 调参: `workspace/core4d/log/99_E078_3cm_per_eef_mask_results.md`
+- ⚠️ E079 results: E077 pipeline 泛化验证完成，`11/12` 个 CORE4D single-person case 可运行；用户指出 fixed `box023` post2 window 不能横评后，已改用 `eval_contact_mask_3cm` 自动提取 case-specific contact/intent window；用户进一步纠正 `box023_p2` 才是 E078 positive guard，`box023_p1` 是 main/失败反例。重算后 main case-window 数值成功 `6/10`，fixed-window 旧口径 `2/10`；`box023_p2` guard 复现成功；用户复查视觉质量后修正：`box021_p1` 视觉好但 ref 接触位置异常，`desk021_p1` 前段没抬起，`bucket005_s2_p1` 物体持续受力旋转，`bucket007_p1` 是前摇/trim + ref 支撑问题。结论: 数据 pipeline work，CEM 有跨 case 正信号但判据/算法仍不足，下一步做更强语义指标与 trim/ref feasibility/stability audit: `workspace/core4d/log/100_E079_core4d_generalization_10plus_results.md`
+- 📋 E080 plan: `box025_person1/person2` 大物体 Tier3/drop 边界负控复查；已生成显式 trim `38/124` 的 3cm mask 与 E080 override，计划本地 p1 + 远程 GPU1 p2，不预设成功，重点校准 case-window 三阈值是否会误判大物体结构性失败: `workspace/core4d/plan/85_E080_box025_boundary_control_plan.md`
 
 ## 脚本
 
@@ -342,3 +346,11 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E078 train: `workspace/core4d/scripts/train/train_E078.sh`
 - E078 eval: `workspace/core4d/scripts/eval/eval_E078.py`
 - E078 remote/pull: `workspace/core4d/scripts/run_E078_remote.sh`, `workspace/core4d/scripts/pull_E078_remote_results.sh`
+- E079 preprocess: `workspace/core4d/scripts/run_E079_preprocess.sh`
+- E079 train: `workspace/core4d/scripts/train/train_E079.sh`
+- E079 eval/contact-quality: `workspace/core4d/scripts/eval/eval_E079.py`, `workspace/core4d/scripts/eval/eval_E079_contact_quality.py`
+- E079 remote/pull: `workspace/core4d/scripts/run_E079_remote.sh`, `workspace/core4d/scripts/pull_E079_remote_results.sh`
+- E080 preprocess: `workspace/core4d/scripts/run_E080_preprocess.sh`
+- E080 train: `workspace/core4d/scripts/train/train_E080.sh`
+- E080 eval: `workspace/core4d/scripts/eval/eval_E080.py`
+- E080 remote/pull: `workspace/core4d/scripts/run_E080_remote.sh`, `workspace/core4d/scripts/pull_E080_remote_results.sh`

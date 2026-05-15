@@ -15,7 +15,9 @@ E054 已完成 21 个 CORE4D case 的几何可达性和 intent 分级，6 个 B+
 | bucket007 | `bucket007_person1` | `20231020/055` | `Bucket007` | Tier2, both-hand |
 | desk021 | `desk021_person1` | `20231008/007` | `Desk021` | Tier2, both-hand |
 
-为了达到 10+ 样本，本轮实验单位定义为 single-person case：每个 raw 序列构造 `person1/person2` 两个单人 SPIDER case，共 12 个候选。`box023_person1` 明确作为反例/guard，不计入成功样本。
+为了达到 10+ 样本，本轮实验单位定义为 single-person case：每个 raw 序列构造 `person1/person2` 两个单人 SPIDER case，共 12 个候选。
+
+Post-hoc role correction（2026-05-15）：`box023_person2` 是 E078 已验证成功的 positive/calibration guard，不计入 main 成功率；`box023_person1` 是已知失败/数据质量反例，但仍作为 main 中的负例/false-positive 检查样本。
 
 ## Claims
 

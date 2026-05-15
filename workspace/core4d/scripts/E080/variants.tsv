@@ -1,0 +1,3 @@
+# variant	task	mask_slug	person_idx	split	role
+E080_box025_p1	box025_person1	box025_person1	0	local	main
+E080_box025_p2	box025_person2	box025_person2	1	remote	main

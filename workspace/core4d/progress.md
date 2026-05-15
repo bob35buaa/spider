@@ -742,3 +742,33 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 静态检查通过：E079/data_preprocess Python `py_compile`、bash `-n`、`git diff --check`。
 - [x] 启动前修复 E079 train 脚本 bug：`awk -v split=...` 会和 awk 内置 `split()` 冲突，改为 `want_split`，并增加空 split 保护。之前本机/远程首轮启动因此未真正跑 variant。
 - [x] 远程重启后发现 `box021_person2` scene 引用的 CORE4D object mesh 未同步到远程；补充纳入 E079 涉及的 object assets：box021、box023、bucket001、bucket005、bucket007、desk021。
+- [x] E079 正式训练完成：本地 RTX5090 串行跑完 6 个 local variant（含 `box023_p1` guard 和 `desk021_p1`），远程 `spider-remote` 仅 GPU1 跑完 5 个 p2 main variant。
+- [x] 远程结果已通过 `workspace/core4d/scripts/pull_E079_remote_results.sh` 回收到本地，并完成合并评估：`workspace/core4d/results/E079/comparison.csv`、`aggregate_summary.json`。
+- [x] 合并数值结果：11 个结果中 10 个 main + 1 个 guard；main numeric success = `3/10 = 30%`，成功 case 为 `desk021_p1`、`box023_p2`、`bucket007_p2`；`box023_p1` 作为 E078 数据质量反例 guard，不计入成功率。
+- [x] 已生成 11 个视频 contact sheet：`workspace/core4d/results/E079/keyframes/contact_sheets/*_sheet.jpg`，并启动 subagent 分组做可视化复核。
+- [x] E079 结果日志已写入：`workspace/core4d/log/100_E079_core4d_generalization_10plus_results.md`；`EXPERIMENT_TRACKER.md` 已补 E079 总览、结果索引和脚本索引。
+- [x] 按用户要求补充 E079 量化指标表说明：解释 `Numeric`、各指标含义、post2 统计窗口，以及指标来源于 `eval_E079.py`/`eval_E078.py` 和 `comparison.csv`。
+- [x] 用户指出 `post2=2.0s-3.6s` 是 box023 派生的接触/放置诊断窗口，不能直接作为多 case 泛化评估窗口；已修正 E079 log 和 tracker，将 `Numeric=3/10` 降级为 fixed-window diagnostic，C3 改为需要 per-case contact/intent window 后再正式验证。
+- [x] 已按用户要求实现并重跑 case-specific window 评估：`workspace/core4d/scripts/eval/eval_E079.py` 现在从每个 variant 的 `eval_contact_mask_3cm` 中取对应 person 左右手 OR 的首次/末次 active frame，并 padding 10 frame 作为 `case_window_*`；已更新 `comparison.csv`、`aggregate_summary.json`、每个 `eval_summary_E079_*.json/csv`、E079 log 和 tracker。
+- [x] 用户纠正 E079 role：`E079_box023_p2` 才是 E078 positive guard（已验证成功样本），`E079_box023_p1` 是 main 中的已知失败/数据质量反例。已修正 `workspace/core4d/scripts/E079/variants.tsv` 并重跑 eval：guard_results=`[E079_box023_p2]`，main case-window 仍为 `6/10`，fixed post2 旧口径变为 `2/10`；`box023_p1` 记录为 visual false positive。
+- [x] 用户进一步复查 `bucket007_p1` 视频：开头疑似第一视角摄像头开始录制的摸头/按摄像头前摇，trim 未剔除干净；同期 ref 右脚也疑似未稳定接地，属于 retarget/动捕支撑脚误差。sim 为避免单脚不稳左脚后撤一步，导致整体初始位置比 ref 后退并早期未接触物体，但后续 CEM 有弥补，后半段接触基本正常。已更新 E079 log/tracker：`bucket007_p1` 从简单 visual false positive 改为 trim/ref data-quality issue。
+- [x] 用户继续复查 E079 视觉质量并修正分类：`box021_p1` 视觉质量很好，但 ref 接触位置本身奇怪；`desk021_p1` 不是特别好，前段没抬起来、后段才相对正常；`bucket005_s2_p1` 不好，物体持续受机器人力而旋转。已更新 E079 log/tracker：`box021_p1` 提升为视觉正例但需 ref/contact 解释，`desk021_p1` 降为 partial，`bucket005_s2_p1` 标为 case-window overestimate。
+- [x] 注意：progress 中早期关于 E079 的 `box023_p1 guard`、fixed-post2 `3/10`、以及 `desk021_p1/bucket005_s2_p1 near-pass` 等条目是中间口径，已被上述 role 修正、case-specific window 复算和用户视觉复查覆盖；最终结论以 `log/100_E079_core4d_generalization_10plus_results.md` 为准。
+
+---
+
+## E080 进展: box025 边界/负控 case 复查
+
+- [x] 使用 `experiment-planning-zh` 恢复 E079 最终日志、E079 plan、tracker、progress 和远程执行规则。
+- [x] 回顾 E079 结论：E077 pipeline 已可泛化；下一步问题不是继续手写 hold window，而是加入更强成功判据、trim/ref feasibility audit，并用更多边界 case 校准 false positive。
+- [x] 根据用户要求把 E080 第一实验定为 `box025`。历史 E054 已把 `box025_p1/p2/box025_s2_p1` 标为 Tier 3 / drop，原因是物体 `dim_max=0.89m > 0.70m`，因此 E080 的 box025 应作为“大物体结构性负控/边界 case”，不应预设为成功正例。
+- [x] 核实本地 `box025_person1` 与 `box025_person2` 都已有 SPIDER case；`trajectory_kinematic.npz` 均为 124 帧，且与 Holosoma `retarget_replace_batch_trimmed` 完全一致。
+- [x] 核实 Holosoma untrimmed→trimmed 窗口：`box025_person1/person2` 都是 `trim_start=38, trim_frames=124`，可直接用 E077/E079 pipeline 生成 3cm mask，不需要重跑 Holosoma retarget。
+- [x] 已写入 E080 计划：`workspace/core4d/plan/85_E080_box025_boundary_control_plan.md`。E080 将 `box025_person1/person2` 作为 Tier 3 大物体边界/负控，用 E079 no-hold + 3cm mask + case-specific window 口径复查，而不是预设成功。
+- [x] 根据 subagent 只读审查修正 E080 plan：`box025_person2` 的 scene/trajectory、`box025_person1` 的 trajectory 以及 `example_datasets/processed/core4d/assets/objects/box025/box025_m.obj` 都在 `.gitignore` 下，远程启动前必须 `git add -f` 纳入活跃 case 数据，不能假设远程已有。
+- [x] E080 静态检查通过：`py_compile` 覆盖 E080 override/eval 以及 E079 eval 复用模块，`bash -n` 覆盖 E080 preprocess/train/remote/pull，`git diff --check` 通过。
+- [x] E080 预处理完成：生成 `workspace/core4d/results/E080/contact_masks/box025_person1` 和 `box025_person2` 的 3cm mask；两者 `trim_start=38`、`spider_contact_mask_3cm.shape=(124,2,2)`、`eval_contact_mask_3cm.shape=(207,2,2)`。目标 person 的 any-active p1=`63.7%`、p2=`62.1%`。
+- [x] E080 override 已生成：`core4d_E080_box025_p1.yaml` 与 `core4d_E080_box025_p2.yaml`，均继承 E079 no-hold 口径，palm normal 自动为 left `[0,-1,0]`、right `[0,1,0]`。
+- [x] E080 短 horizon smoke 通过：
+  - `core4d_E080_box025_p1`, `max_sim_steps=4`, mask `eval_contact_mask_3cm` len `207->298`, active L/R=`53.0%/60.4%`。
+  - `core4d_E080_box025_p2`, `max_sim_steps=4`, mask `eval_contact_mask_3cm` len `207->298`, active L/R=`62.1%/62.1%`。
