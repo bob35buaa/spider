@@ -1,0 +1,3 @@
+# variant	source_task	derived_task	mask_source_exp	mask_slug	person_idx	split	role
+E081_box025_p2_legobj	box025_person2	box025_person2_legobj	E080	box025_person2	1	local	main
+E081_box023_p2_legobj	box023_person2	box023_person2_legobj	E079	box023_person2	1	remote	guard

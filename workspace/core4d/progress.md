@@ -780,3 +780,16 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] E080 视觉复核完成：subagent 判断 p2 明显好于 p1，但 p1/p2 都不能算真实搬运成功；p1 是趴箱/贴箱/推箱 false positive，p2 更像扶/推箱体。
 - [x] 已写入结果日志：`workspace/core4d/log/101_E080_box025_boundary_control_results.md`；已更新 `EXPERIMENT_TRACKER.md`。核心结论：box025 继续支持 Tier3/drop 历史判断，同时证明 case-window 三阈值会误判大物体负控。
 - [x] E080 二次复核：用户指出 p2 视觉上像搬箱子，该观察成立；已修正 log/tracker 表述。p1 仍是 false positive；p2 改标为 partial positive / near-usable。几何证据：scene 只含 `left_hand_object/right_hand_object/object_floor`，无腿/脚-箱 contact pair；p1 腿/脚 adjusted SDF min `-13.7cm`、穿入帧 `40.7%`，p2 min `-4.6cm`、穿入帧 `20.2%`。因此腿不会物理支撑箱子，但 p1/p2 都有不同程度视觉/几何干涉，下一步 eval 应加入 leg-box interference 与 object lift/floor-contact。
+
+---
+
+## E081 进展: leg/foot-object collision 派生 scene 验证
+
+- [x] 已按用户约束写入计划：不直接修改原始 `scene_act.xml`，新建 `box025_person2_legobj` 与 `box023_person2_legobj` 派生任务；计划文件 `workspace/core4d/plan/86_E081_leg_object_collision_eval_plan.md`。
+- [x] 新增 E081 脚本：`create_legobj_cases.py`、`generate_e081_overrides.py`、`run_E081_preprocess.sh`、`train_E081.sh`、`run_E081_remote.sh`、`pull_E081_remote_results.sh`、`eval_E081.py`。
+- [x] E081 预处理完成：两个派生 task 均从原始 task 复制 scene/data，并只在派生 `scene_act.xml` 加 16 个腿/脚-`object_collision` pair；原始 `box025_person2/scene_act.xml` 与 `box023_person2/scene_act.xml` 无 diff。
+- [x] E081 override 生成完成：`core4d_E081_box025_p2_legobj.yaml` 使用 E080 的 `box025_person2` mask，`core4d_E081_box023_p2_legobj.yaml` 使用 E079 的 `box023_person2` mask，均保持 no-hold 口径。
+- [x] E081 静态检查通过：Python `py_compile`、bash `-n`、`git diff --check` 均通过。
+- [x] E081 短 horizon smoke 通过：
+  - `core4d_E081_box025_p2_legobj`, `task=box025_person2_legobj`, `max_sim_steps=4`, final object pos err `0.0406m`。
+  - `core4d_E081_box023_p2_legobj`, `task=box023_person2_legobj`, `max_sim_steps=4`, final object pos err `0.0100m`。

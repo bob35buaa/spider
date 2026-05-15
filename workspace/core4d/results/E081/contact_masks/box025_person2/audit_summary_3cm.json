@@ -1,0 +1,153 @@
+{
+  "seq_dir": "/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real/human_object_motions/20231011/048",
+  "mesh": "/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real/object_models/box/box025_m.obj",
+  "threshold_m": 0.03,
+  "sample_count": 20000,
+  "seed": 77,
+  "raw_frames": 162,
+  "trim_start": 38,
+  "spider_frames": 124,
+  "eval_frames": 207,
+  "axis": {
+    "person": [
+      "person1",
+      "person2"
+    ],
+    "hand": [
+      "left",
+      "right"
+    ]
+  },
+  "windows": [
+    {
+      "eval_window": [
+        100,
+        114
+      ],
+      "raw_window": [
+        98,
+        106
+      ],
+      "n": 15,
+      "person1_left": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 1.9900887086987495,
+        "min_dist_cm_min": 1.4176621101796627,
+        "min_dist_cm_max": 2.7443576604127884,
+        "vertices_lt_thresh_mean": 65.26666666666667
+      },
+      "person1_right": {
+        "contact_frames": 13,
+        "contact_ratio": 0.8666666666666667,
+        "min_dist_cm_mean": 0.6673997594043612,
+        "min_dist_cm_min": 0.016453361604362726,
+        "min_dist_cm_max": 3.673883154988289,
+        "vertices_lt_thresh_mean": 296.06666666666666
+      },
+      "person2_left": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.3793974655369918,
+        "min_dist_cm_min": 0.09908019565045834,
+        "min_dist_cm_max": 1.518075354397297,
+        "vertices_lt_thresh_mean": 255.46666666666667
+      },
+      "person2_right": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.11620308893422286,
+        "min_dist_cm_min": 0.07207918097265065,
+        "min_dist_cm_max": 0.23297807201743126,
+        "vertices_lt_thresh_mean": 398.6
+      }
+    },
+    {
+      "eval_window": [
+        115,
+        130
+      ],
+      "raw_window": [
+        107,
+        116
+      ],
+      "n": 16,
+      "person1_left": {
+        "contact_frames": 16,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 1.6880073773791082,
+        "min_dist_cm_min": 0.12048960197716951,
+        "min_dist_cm_max": 2.2643962875008583,
+        "vertices_lt_thresh_mean": 130.5
+      },
+      "person1_right": {
+        "contact_frames": 16,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.1578302173584234,
+        "min_dist_cm_min": 0.09974818676710129,
+        "min_dist_cm_max": 0.24126176722347736,
+        "vertices_lt_thresh_mean": 355.9375
+      },
+      "person2_left": {
+        "contact_frames": 16,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.2458827308146283,
+        "min_dist_cm_min": 0.12129087699577212,
+        "min_dist_cm_max": 0.40535135194659233,
+        "vertices_lt_thresh_mean": 242.125
+      },
+      "person2_right": {
+        "contact_frames": 16,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.10833383676072117,
+        "min_dist_cm_min": 0.03760795807465911,
+        "min_dist_cm_max": 0.17570547061040998,
+        "vertices_lt_thresh_mean": 358.3125
+      }
+    },
+    {
+      "eval_window": [
+        131,
+        145
+      ],
+      "raw_window": [
+        117,
+        125
+      ],
+      "n": 15,
+      "person1_left": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.6693003373220563,
+        "min_dist_cm_min": 0.2489711157977581,
+        "min_dist_cm_max": 1.3152774423360825,
+        "vertices_lt_thresh_mean": 176.0
+      },
+      "person1_right": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.27023388266873855,
+        "min_dist_cm_min": 0.06183486548252404,
+        "min_dist_cm_max": 0.557220121845603,
+        "vertices_lt_thresh_mean": 338.93333333333334
+      },
+      "person2_left": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.23710050232087573,
+        "min_dist_cm_min": 0.10667466558516026,
+        "min_dist_cm_max": 0.32052071765065193,
+        "vertices_lt_thresh_mean": 224.73333333333332
+      },
+      "person2_right": {
+        "contact_frames": 15,
+        "contact_ratio": 1.0,
+        "min_dist_cm_mean": 0.17448465107008815,
+        "min_dist_cm_min": 0.11566221946850419,
+        "min_dist_cm_max": 0.22291785571724176,
+        "vertices_lt_thresh_mean": 251.6
+      }
+    }
+  ],
+  "note": "3cm mask is a CORE4D visualization-style geometric proxy, not an annotated physical-contact label."
+}
