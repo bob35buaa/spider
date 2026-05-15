@@ -923,9 +923,44 @@ def get_reward(
             # Stack per-EEF rewards: (N, 2)
             rew_stack = torch.stack(per_eef_rew, dim=1)
             mask = approach_mask_val
+            if not torch.is_tensor(mask):
+                mask = torch.tensor(mask, device=config.device, dtype=rew_stack.dtype)
+            else:
+                mask = mask.to(device=config.device, dtype=rew_stack.dtype)
+            if mask.ndim == 0:
+                mask_eef = mask.view(1, 1).expand_as(rew_stack)
+            elif mask.ndim == 1:
+                if mask.shape[0] == rew_stack.shape[1]:
+                    # Current timestep per-EEF mask, e.g. (2,).
+                    mask_eef = mask.unsqueeze(0).expand_as(rew_stack)
+                elif mask.shape[0] == rew_stack.shape[0]:
+                    # Per-sample scalar mask, legacy behavior.
+                    mask_eef = mask.unsqueeze(1).expand_as(rew_stack)
+                elif mask.shape[0] == 1:
+                    mask_eef = mask.view(1, 1).expand_as(rew_stack)
+                else:
+                    # Horizon-shaped masks can appear in tracing; use the first timestep
+                    # for this reward call to preserve previous scalar-time behavior.
+                    mask_eef = mask[0].view(1, 1).expand_as(rew_stack)
+            elif mask.ndim == 2:
+                if mask.shape == rew_stack.shape:
+                    mask_eef = mask
+                elif mask.shape[1] == rew_stack.shape[1]:
+                    # Horizon x EEF mask: use current timestep.
+                    mask_eef = mask[0].unsqueeze(0).expand_as(rew_stack)
+                elif mask.shape[0] == rew_stack.shape[0] and mask.shape[1] == 1:
+                    mask_eef = mask.expand_as(rew_stack)
+                else:
+                    raise ValueError(
+                        f"Unsupported contact_hdmi mask shape {tuple(mask.shape)} for reward {tuple(rew_stack.shape)}"
+                    )
+            else:
+                raise ValueError(f"Unsupported contact_hdmi mask ndim {mask.ndim}")
             gain = config.contact_hdmi_gain
             # HDMI formula: mask=1 → gain*pos_rew, mask=0 → 1.0
-            contact_hdmi_rew = (rew_stack * mask * gain + (1.0 - mask)).mean(dim=1)
+            contact_hdmi_rew = (
+                rew_stack * mask_eef * gain + (1.0 - mask_eef)
+            ).mean(dim=1)
 
     # E074A: robot control trust-region guard.
     ctrl_ref_guard_rew = torch.zeros(N, device=config.device)
@@ -997,6 +1032,13 @@ def get_reward(
                         approach_mask_val, device=config.device, dtype=hand_pos.dtype
                     )
                 )
+                ref_gate = ref_gate.to(device=config.device, dtype=hand_pos.dtype)
+                if ref_gate.ndim == 1 and ref_gate.shape[0] == hand_pos.shape[1]:
+                    ref_gate = ref_gate.max().expand_as(time_gate)
+                elif ref_gate.ndim == 2 and ref_gate.shape[1] == hand_pos.shape[1]:
+                    ref_gate = ref_gate[0].max().expand_as(time_gate)
+                elif ref_gate.ndim > 1:
+                    ref_gate = ref_gate.reshape(-1)[0].expand_as(time_gate)
             else:
                 ref_gate = torch.ones_like(time_gate)
             sigma = max(float(config.hold_contact_sigma), 1e-6)

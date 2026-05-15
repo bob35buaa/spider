@@ -285,6 +285,9 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - ⚠️ E071 results: 修复 `run_mjwp.py` scene_act ctrl mapping 后 box023 early drift 消失; yaw err t=0.017/0.033 从 E069 的 12.40/22.16° 降到 0.574/1.075°，与 E070 `orig_ctrl` parity 相差 <0.001°; B1 pre-contact max foot z 从 0.222m 降到 0.069m。但用户复查指出 2s 后没拿住箱子并摔倒，补评估确认 post-2s obj_err max/mean=0.308/0.133m，first obj_err>25cm at 2.00s，first pelvis_z<45cm at 3.32s。结论: qpos-as-ctrl 是 early drift 主因，但 E071 整体 FAIL；下一步 E072 聚焦 post-2s hold/place failure 诊断: `workspace/core4d/log/91_E071_scene_act_ctrl_mapping_fix_results.md`
 - ✅ E072 results: replay E071 qpos + scene snapshot 定位 post-2s failure order; frame100/eval2.00s obj_err=30.8cm 且 sim hand-object contact=0(ref=1), ref 直到 frame165/eval3.30s 才正常离手; pelvis 到 frame166/eval3.32s 才低于45cm. post2 contact frames sim 44.4% vs ref 80.2%, object ctrl diff max仅0.01. 结论: hold/contact 先失效, 摔倒是二阶后果; E073 应优先做 hold/contact consistency + robot ctrl trust-region guard: `workspace/core4d/log/92_E072_post2_hold_place_diagnosis_results.md`
 - ⚠️ E073 results: dynamic contact target 改为 ref `wrist+eef_offset` 后，口径与 reward 端一致；early drift 保持修复(yaw 0.574/1.075°, B1=0.080m)，first zero contact frame100→108，post2 contact 44.4→49.4%，post2 obj_err max 30.8→29.3cm，pelvis 不再低于45cm。但 first obj_err>25cm 仍 frame100，subagent 视觉复核显示 f130 后脱手/f145 箱落地，后段是“不倒但没拿住”。结论: target 口径修正部分有效，应作为 E074 base；下一步加 robot ctrl trust-region guard: `workspace/core4d/log/93_E073_contact_target_offset_consistency_results.md`
+- 🔬 E076 contact source audit: 修正 E075 后续讨论中过强的“右手不应继续强接触”推断；CORE4D raw 没有人工 hand-contact 真值，官方 contact 也是 2cm/3cm 几何 proxy。`box023_person1` 源于 raw `20231008/045`，SPIDER ref = raw[42:178]；E075 f115-f130 是 50Hz eval 的 2.30-2.60s，对应 raw 111-120。raw 几何显示 person1 右手为边界接触(2cm:5/16, 3cm:16/16)，person2 双手强接触(2cm/3cm:16/16)。结论: 下一步应做 contact source alignment + per-hand mask 修复，而不是继续手写 hold/release window: `workspace/core4d/log/97_E076_contact_source_audit.md`
+- ✅ E077 results: 生成 CORE4D 3cm geometry-proxy contact mask，输出 raw `(178,2,2)` / SPIDER `(136,2,2)` / eval `(227,2,2)`；f115-f130 对应 raw111-120 下 p1R=16/16但均距2.12cm(边界接触)，p2双手强接触。构造 `box023_person2` 单人 SPIDER case 成功(qpos136×43, scene/scene_act load OK, scene_act euler=XZY)。重要 caveat: converted 层 p1/p2 object pose 完全一致，但 retarget qpos 因 person-specific smpl_scale 不同而最大差6.2cm，不能直接合成双机器人同场景，需 common-scale alignment: `workspace/core4d/log/98_E077_3cm_contact_mask_and_person2_results.md`
+- 🚀 E078 running plan: 将 E077 的 3cm contact proxy 接入 MJWP `contact_hdmi`，从 scalar mask 改为 HDMI-style per-EEF mask；远程并行跑 `E078A=box023_person1/person_idx0` 与 `E078B=box023_person2/person_idx1`，验证 p1 f115-f130 右腿相位偏差是否改善，并做 p2 单人 CEM sanity: `workspace/core4d/plan/83_E078_3cm_per_eef_contact_mask_cem_plan.md`
 
 ## 脚本
 
@@ -335,3 +338,7 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E072 eval replay诊断: `workspace/core4d/scripts/eval/eval_E072.py`
 - E073 train: `workspace/core4d/scripts/train/train_E073.sh`
 - E073 eval: `workspace/core4d/scripts/eval/eval_E073.py`
+- E077 contact/person2 build: `workspace/core4d/scripts/E077/`
+- E078 train: `workspace/core4d/scripts/train/train_E078.sh`
+- E078 eval: `workspace/core4d/scripts/eval/eval_E078.py`
+- E078 remote/pull: `workspace/core4d/scripts/run_E078_remote.sh`, `workspace/core4d/scripts/pull_E078_remote_results.sh`

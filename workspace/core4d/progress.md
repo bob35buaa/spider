@@ -1,3 +1,44 @@
+# E078 Progress — 2026-05-15
+
+## 当前状态: E078 计划已写入，正在实现 3cm per-EEF contact mask 的 CEM 实验脚本
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 恢复实验上下文，确认最新计划为 `workspace/core4d/plan/83_E078_3cm_per_eef_contact_mask_cem_plan.md`。
+- [x] 在 `spider/config.py` 增加默认关闭的 3cm contact mask source 配置项，旧实验默认仍走 `rotated_sdf`。
+- [x] 修改 `examples/run_mjwp.py`，支持从 E077 `raw_contact_mask_3cm.npz` 读取 `(T, person, hand)` mask，并转换为 HDMI-style per-EEF `(T,2)` gating。
+- [x] 修改 `spider/simulators/mjwp.py`，使 `contact_hdmi_rew` 支持 scalar、legacy `(N,)` 和 per-EEF `(N,2)` mask；`hold_contact` 只用 per-EEF mask 的 max 作为旧式 ref gate，避免形状污染。
+- [x] 新增 E078 override：
+  - `examples/config/override/core4d_e078a_box023_p1_3cm.yaml`
+  - `examples/config/override/core4d_e078b_box023_p2_3cm.yaml`
+- [x] 新增 E078 train/eval/remote/pull 脚本：
+  - `workspace/core4d/scripts/train/train_E078.sh`
+  - `workspace/core4d/scripts/eval/eval_E078.py`
+  - `workspace/core4d/scripts/run_E078_remote.sh`
+  - `workspace/core4d/scripts/pull_E078_remote_results.sh`
+
+## 待完成
+
+- [x] 静态验证通过：`py_compile` 覆盖 `spider/config.py`、`spider/simulators/mjwp.py`、`examples/run_mjwp.py`、`eval_E078.py`；`bash -n` 覆盖 E078 train/remote/pull。
+- [x] Hydra/_build_config 验证：
+  - E078A: `task=box023_person1`, `mask_person_idx=0`, E077 mask keys `(178,2,2)/(136,2,2)/(227,2,2)`。
+  - E078B: `task=box023_person2`, `mask_person_idx=1`, `data_path/model_path` 均存在。
+- [x] 本地短 horizon GPU smoke test 通过：
+  - E078A: RTX 5090, `max_sim_steps=4`, 3cm mask 选 `eval_contact_mask_3cm`, `person_idx=0`, `len 227→322`, active L/R=46.3%/45.0%。
+  - E078B: RTX 5090, `max_sim_steps=4`, 3cm mask 选 `eval_contact_mask_3cm`, `person_idx=1`, `len 227→322`, active L/R=45.0%/47.5%。
+  - 两者均生成 `/tmp/e078_smoke_{a,b}/trajectory_mjwp_act.npz`，未触发 reward mask shape error。
+- [x] 强制纳入远程必需数据：E077 3cm mask 与 `box023_person2` SPIDER case；未纳入 `.codex/config.toml` / `__pycache__`。
+- [ ] commit + push 后启动远程 E078A/E078B 并行。
+
+## 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|------|---------|----------|
+| 沙箱内 `uv run` 无法访问 CUDA，报 `No CUDA GPUs are available` | 1 | 使用批准的 escalated GPU smoke run；`nvidia-smi` 与 Warp 均确认 RTX 5090 可用 |
+| `git diff --cached --check` 报 E077 CSV CRLF / E076 log trailing whitespace | 1 | 转为 LF 并移除末尾空格后通过 |
+
+---
+
 # E075 Progress — 2026-05-14
 
 ## 当前状态: Plan 已写入，开始 E075 限时/弱化 hold_contact 远程并行实现
@@ -516,3 +557,117 @@ C6 face verification (intent 内):
 | first post-2s pelvis z < 45cm | 未统计 | 3.32s | 摔倒开始 |
 
 **修正结论**: E070 根因只对 early yaw/lunge 完全确认。scene_act 下 `qpos_ref[:, :nu]` fallback 是 box023 0-2s 初始漂移的主因；保留 raw robot ctrl 并由 scene_act conversion 补 object ctrl 后，初始漂移消失。但 E071 不是整体成功：2s 后 robot 没有稳定拿住箱子，约 3.3s 开始摔倒。下一步 E072 应聚焦 post-2s hold/place failure 诊断，而不是先做泛化 regression。
+
+---
+
+## 2026-05-15 E076 contact source audit 进展
+
+- [x] 使用 `experiment-planning-zh` 恢复 `EXPERIMENT_TRACKER.md`、E075 log 和 `progress.md`。
+- [x] 回收 subagent 结果：
+  - Fermat 确认 CORE4D raw 没有人手接触人工真值；官方 contact 是 SMPL-X/object 几何生成，`prepare_hho.py` 默认 2cm，visualization runtime contact 用 3cm。
+  - Laplace 确认当前 `box023_person1` 进入 SPIDER 后是单 G1 + object，`contact=(136,2)` 全帧 `[1,1]`，不是 CORE4D/HDMI label；E039/E075 mask 仍是单 G1 ref 的 scalar SDF proxy。
+- [x] 本地确认源序列：
+  - `box023_person1` 对应 raw `/mnt/.../CORE4D_Real/human_object_motions/20231008/045`，object=`Box023`，action=`move2_obs0`。
+  - Holosoma `trimmed` qpos 与 `retargeted[42:178]` 精确一致，因此 SPIDER 30Hz ref frame `k` 对应 raw frame `k+42`。
+- [x] 修正视频帧对齐：
+  - E075 视频/eval 是 50Hz，`f115-f130` 是 `2.30-2.60s`。
+  - 对应 30Hz ref frame 约 `69-78`，raw frame `111-120`，不是 raw/ref 的 `115-130`。
+- [x] raw 几何核验结果：
+  - 在 E075 `f115-f130` 对应 raw `111-120`，person1 左手强接触：min dist mean/min/max = `0.74/0.42/1.08cm`，2cm/3cm/5cm 均 16/16 帧。
+  - person1 右手是边界接触：min dist mean/min/max = `2.12/1.77/2.58cm`；2cm 阈值 5/16 帧，3cm 阈值 16/16 帧。
+  - person2 双手强接触：左手 `0.17/0.03/0.53cm`，右手 `0.11/0.04/0.17cm`，2cm/3cm/5cm 均 16/16 帧。
+- [x] 写入新诊断日志：`workspace/core4d/log/97_E076_contact_source_audit.md`。
+
+### 修正后的判断
+
+此前“ref 右手不一定应该继续强接触”的说法过强。当前证据只支持：
+
+- robot retarget / MuJoCo ref 里右手几何接触弱；
+- raw SMPL-X 里 person1 右手是 2cm 阈值边界、3cm 阈值持续接触；
+- person2 双手在同一阶段强接触，所以双人支撑必须纳入解释；
+- 当前 SPIDER contact/mask 不是 raw/HDMI label，下一步应先做 contact source alignment 和 per-hand mask 修复，而不是继续手写 hold/release 时间窗。
+
+---
+
+## E077 进展: 3cm contact mask + box023_person2 计划
+
+- [x] 已按 `experiment-planning-zh` 写入计划：`workspace/core4d/plan/82_E077_core4d_3cm_contact_mask_and_box023_person2_plan.md`。
+- [x] 初步检查本地没有现成的 `20231008-045-person2-Box023` Holosoma retarget 输出；person2 需要从 raw `20231008/045` 重新跑 `convert_core4d_to_omniretarget.py` + `robot_retarget.py`，不能直接复制 person1。
+- [x] 计划将 3cm mask 分成 raw/spider/eval 三个时间轴，避免再次混淆 30Hz ref frame 和 50Hz eval frame。
+
+### 当前 E077 决策
+
+- 先生成 3cm raw contact proxy，作为临时 contact mask “真值”。
+- 同时保存 min distance 与 contact vertex count，避免二值 mask 抹掉 person1 右手的边界接触信息。
+- person2 构造必须核验 `trimmed == retargeted[42:178]`、object qpos 与 person1 同窗口，以及 `scene.xml/scene_act.xml` MuJoCo load。
+
+### E077 实现进展
+
+- [x] 新增脚本：
+  - `workspace/core4d/scripts/E077/generate_core4d_contact_masks.py`
+  - `workspace/core4d/scripts/E077/trim_box023_person2.py`
+  - `workspace/core4d/scripts/E077/create_box023_person2_scene.py`
+  - `workspace/core4d/scripts/E077/verify_box023_person2.py`
+  - `workspace/core4d/scripts/E077/build_box023_person2.sh`
+- [x] `py_compile` 与 `bash -n` 通过。
+- [x] 已生成 3cm contact mask：
+  - `workspace/core4d/results/E077/contact_masks/box023/raw_contact_mask_3cm.npz`
+  - `workspace/core4d/results/E077/contact_masks/box023/raw_contact_mask_3cm.csv`
+  - `workspace/core4d/results/E077/contact_masks/box023/audit_summary_3cm.json`
+
+### E077 3cm mask 关键结果
+
+| eval window | raw window | p1 L | p1 R | p2 L | p2 R |
+|-------------|------------|------|------|------|------|
+| 100-114 | 102-110 | 15/15, mean 0.81cm | 13/15, mean 2.42cm | 15/15, mean 0.11cm | 15/15, mean 0.11cm |
+| 115-130 | 111-120 | 16/16, mean 0.74cm | 16/16, mean 2.12cm | 16/16, mean 0.17cm | 16/16, mean 0.11cm |
+| 131-145 | 121-129 | 5/15, mean 13.46cm | 4/15, mean 11.14cm | 2/15, mean 25.04cm | 5/15, mean 15.26cm |
+
+这复现并固化了 E076 结论：3cm 口径下 f115-f130 person1 右手为持续接触，但距离接近阈值边界；person2 双手强接触。
+
+### E077 person2 构造结果
+
+- [x] 修复 build 脚本环境：`convert_core4d_to_omniretarget.py` 需要先 source Holosoma `hsretargeting` conda 环境，否则找不到 `smplx`。
+- [x] person2 retarget 完成：
+  - `workspace/core4d/results/E077/holosoma_box023_person2/retargeted/20231008-045-person2-Box023_with_obj_original.npz`
+  - qpos shape `(178,43)`，final cost 约 `0.574`。
+- [x] person2 trim 完成：
+  - `workspace/core4d/results/E077/holosoma_box023_person2/trimmed/20231008-045-person2-Box023_with_obj_original.npz`
+  - qpos shape `(136,43)`，且 `trimmed == retargeted[42:178]`。
+- [x] SPIDER case 完成：
+  - `example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person2/scene.xml`
+  - `example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person2/0/trajectory_kinematic.npz`
+  - `example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person2/scene_act.xml`
+- [x] 核验完成：
+  - `scene.xml`: `nq=43,nv=41,nu=29`
+  - `scene_act.xml`: `nq=42,nv=41,nu=35`, euler `XZY`
+  - `trajectory_kinematic.npz`: qpos `(136,43)`, qvel `(136,41)`, ctrl `(136,29)`, contact `(136,2)` 全 1。
+- [x] 写入结果日志：`workspace/core4d/log/98_E077_3cm_contact_mask_and_person2_results.md`。
+
+### E077 关键 caveat
+
+converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPIDER 层 object qpos 不完全一致：
+
+- max abs diff `0.0621m`
+- position diff mean `[0.00018, 0.02700, -0.00697]`
+- quat diff max `0`
+
+原因是 Holosoma preprocess 按每个人的 `smpl_scale` 缩放 object xy/z 轨迹。结论：`box023_person2` 可以作为单人 case 使用，但不能和现有 `box023_person1` retarget qpos 直接合并成双机器人同场景；双人合成前必须做 common-scale/common-world alignment。
+
+---
+
+## E078 计划
+
+- [x] 用户确认下一轮方向：修改 3cm contact mask 并对齐 HDMI，在 `box023_person1` 和 `box023_person2` 两个单人 case 做 CEM 动力学重定向。
+- [x] 按用户要求先写计划、不执行实现。
+- [x] 已写入计划：`workspace/core4d/plan/83_E078_3cm_per_eef_contact_mask_cem_plan.md`。
+
+### E078 计划摘要
+
+- E078A: `box023_person1`，基于 E075B，读取 E077 3cm mask 的 `person_idx=0`。
+- E078B: `box023_person2`，构造 E075B-like p2 配置，读取 E077 3cm mask 的 `person_idx=1`。
+- 主改动：
+  - MJWP contact_hdmi mask 从 scalar `(T,)` 改成 HDMI-style per-EEF `(T,2)`。
+  - 增加 `contact_hdmi_mask_source="core4d_3cm"`，从 E077 npz 读取 mask。
+  - 保持旧 `rotated_sdf` 默认行为，避免影响其他实验。
+- 执行前待用户确认；当前未修改代码、未启动训练。

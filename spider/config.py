@@ -133,6 +133,12 @@ class Config:
     contact_hdmi_threshold: float = (
         0.30  # mask threshold: activate when hand-target < this (m)
     )
+    contact_hdmi_mask_source: str = (
+        "rotated_sdf"  # "rotated_sdf" | "core4d_3cm"
+    )
+    contact_hdmi_mask_path: str = ""
+    contact_hdmi_mask_person_idx: int = 0
+    contact_hdmi_mask_time_axis: str = "auto"  # "auto" | "spider" | "eval"
     # E040: dynamic per-frame contact target (from ref FK)
     contact_hdmi_dynamic_target: bool = (
         False  # True=use per-frame ref-derived target instead of fixed

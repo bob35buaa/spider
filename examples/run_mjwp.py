@@ -763,34 +763,89 @@ def main(config: Config):
         # Override body_xpos_ref with full version for local-frame
         body_xpos_ref = body_xpos_full_ref_t
 
-    # E039b: precompute per-EEF contact mask using correct ROTATED SDF
+    def _resize_contact_mask(mask_np: np.ndarray, target_len: int) -> np.ndarray:
+        """Nearest-neighbor resize along time, preserving per-EEF columns."""
+        if mask_np.shape[0] == target_len:
+            return mask_np.astype(np.float32)
+        if mask_np.shape[0] <= 0:
+            raise ValueError("contact mask has zero frames")
+        idx = np.round(
+            np.linspace(0, mask_np.shape[0] - 1, target_len)
+        ).astype(np.int64)
+        return mask_np[idx].astype(np.float32)
+
+    # E039b/E078: precompute per-EEF contact mask.
     if config.contact_hdmi_gain > 0.0 and config.hand_approach_body_ids:
         obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
-        if obj_body_id != -1 and config.hand_approach_obj_half_extents:
+        if config.contact_hdmi_mask_source == "core4d_3cm":
+            if not config.contact_hdmi_mask_path:
+                raise ValueError("contact_hdmi_mask_source=core4d_3cm requires contact_hdmi_mask_path")
+            mask_data = np.load(config.contact_hdmi_mask_path, allow_pickle=True)
+            target_len = qpos_ref.shape[0]
+            axis = config.contact_hdmi_mask_time_axis
+            if axis == "auto":
+                if "spider_contact_mask_3cm" in mask_data and mask_data["spider_contact_mask_3cm"].shape[0] == target_len:
+                    axis = "spider"
+                elif "eval_contact_mask_3cm" in mask_data and mask_data["eval_contact_mask_3cm"].shape[0] == target_len:
+                    axis = "eval"
+                else:
+                    # Prefer eval for MJWP because load_data normally upsamples 30Hz refs to 50Hz.
+                    axis = "eval" if "eval_contact_mask_3cm" in mask_data else "spider"
+            key = f"{axis}_contact_mask_3cm"
+            if key not in mask_data:
+                raise KeyError(f"{config.contact_hdmi_mask_path} missing {key}")
+            raw_mask = mask_data[key]
+            person_idx = int(config.contact_hdmi_mask_person_idx)
+            if raw_mask.ndim != 3 or raw_mask.shape[1] <= person_idx:
+                raise ValueError(
+                    f"{key} expected shape (T, person, hand), got {raw_mask.shape}, person_idx={person_idx}"
+                )
+            per_eef_mask_np = raw_mask[:, person_idx, :].astype(np.float32)
+            if per_eef_mask_np.shape[1] != len(config.hand_approach_body_ids):
+                raise ValueError(
+                    f"{key} hand dim {per_eef_mask_np.shape[1]} != hand bodies {len(config.hand_approach_body_ids)}"
+                )
+            original_len = per_eef_mask_np.shape[0]
+            per_eef_mask_np = _resize_contact_mask(per_eef_mask_np, target_len)
+            approach_mask_t = torch.tensor(per_eef_mask_np, device=config.device)
+            active_pct = per_eef_mask_np.mean(axis=0) * 100
+            loguru.logger.info(
+                "E078 core4d_3cm per-EEF mask: source={} key={} person_idx={} len {}→{} active L/R={:.1f}%/{:.1f}%",
+                config.contact_hdmi_mask_path,
+                key,
+                person_idx,
+                original_len,
+                target_len,
+                active_pct[0],
+                active_pct[1],
+            )
+        elif obj_body_id != -1 and config.hand_approach_obj_half_extents:
             half_ext = np.array(config.hand_approach_obj_half_extents)
             T_mask = qpos_ref.shape[0]
             threshold = config.contact_hdmi_threshold
-            per_eef_mask_np = np.zeros(T_mask, dtype=np.float32)
+            per_eef_mask_np = np.zeros(
+                (T_mask, len(config.hand_approach_body_ids)), dtype=np.float32
+            )
             for t in range(T_mask):
                 mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
                 mujoco.mj_forward(mj_model, mj_data_ref)
                 obj_pos = mj_data_ref.xpos[obj_body_id]
                 obj_mat = mj_data_ref.xmat[obj_body_id].reshape(3, 3)
-                for hid in config.hand_approach_body_ids:
+                for ei, hid in enumerate(config.hand_approach_body_ids):
                     hand_pos = mj_data_ref.xpos[hid]
                     # Correct rotated SDF: transform to object local frame
                     local = obj_mat.T @ (hand_pos - obj_pos)
                     clamped = np.clip(local, -half_ext, half_ext)
                     surf_dist = np.linalg.norm(local - clamped)
                     if surf_dist < threshold:
-                        per_eef_mask_np[t] = 1.0
-                        break
+                        per_eef_mask_np[t, ei] = 1.0
             # Override approach_mask with corrected version
             approach_mask_t = torch.tensor(per_eef_mask_np, device=config.device)
-            active_pct = per_eef_mask_np.mean() * 100
+            active_pct = per_eef_mask_np.mean(axis=0) * 100
             loguru.logger.info(
-                "E039b rotated-SDF mask: {:.1f}% frames active (threshold={:.2f}m)",
-                active_pct,
+                "E039b rotated-SDF per-EEF mask: L/R={:.1f}%/{:.1f}% frames active (threshold={:.2f}m)",
+                active_pct[0],
+                active_pct[1],
                 threshold,
             )
 
