@@ -741,3 +741,4 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 修正 E079 preprocess 默认入口：已有 p1 默认 `--skip-retarget --skip-spider`，只做显式窗口/contact mask；`desk021_person2` 已知 retarget infeasible，默认从 build-p2 TSV 禁用，避免一键 `all` 重复失败。
 - [x] 静态检查通过：E079/data_preprocess Python `py_compile`、bash `-n`、`git diff --check`。
 - [x] 启动前修复 E079 train 脚本 bug：`awk -v split=...` 会和 awk 内置 `split()` 冲突，改为 `want_split`，并增加空 split 保护。之前本机/远程首轮启动因此未真正跑 variant。
+- [x] 远程重启后发现 `box021_person2` scene 引用的 CORE4D object mesh 未同步到远程；补充纳入 E079 涉及的 object assets：box021、box023、bucket001、bucket005、bucket007、desk021。
