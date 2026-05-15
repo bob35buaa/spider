@@ -797,3 +797,6 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] E081 合并评估完成：`workspace/core4d/results/E081/comparison.csv`。聚合结果：main case-window `1/1=True`，main leg/lift proxy `0/1=False`，guard=`E081_box023_p2_legobj`。
 - [x] E081 关键量化结论：box025 p2 case-window 腿/箱 interference 从 E080 baseline `28.9%` 降到 `7.5%`，最小 adjusted SDF `-4.6cm -> -1.2cm`，obj mean/max `0.146/0.289 -> 0.143/0.271`；但 object bottom mean `-0.073m -> -0.075m`，floor-contact `60.1% -> 59.5%`，说明 lift/floor-contact 未改善。box023 p2 guard 基本稳定，obj mean `0.162 -> 0.164`，leg interference `0 -> 2.7%`。
 - [x] E081 结果日志已写入：`workspace/core4d/log/102_E081_leg_object_collision_results.md`；tracker 已更新。核心结论：新增腿/脚-箱碰撞是必要物理修正，但 box025_p2 主要瓶颈已转向 object lift/floor-contact，不是继续修腿穿模。
+- [x] 已按用户要求补充 E081 指标定义：`Leg intf` / `leg_box_interference_frames_pct`、`Leg contact` / `leg_object_contact_frames_pct`、`near_2cm`、`object_floor_contact_frames_pct`、`object_bottom_proxy_m` 的计算口径和解释均写入 log 102。
+- [x] 已补充 E081 脚本路径与可复现实验命令：指标脚本 `eval_E081.py`、派生 scene/override 生成脚本、train/local/remote/pull/eval/single 命令均写入 log 102。
+- [x] 已补充 E081 机制分析：E081 没有新增显式腿避障 reward/优化器改动，改善来自腿/脚-箱 contact pair 改变 MuJoCo 前向动力学，使穿箱控制序列在现有 objective 下间接受罚并被 CEM elite selection 淘汰。
