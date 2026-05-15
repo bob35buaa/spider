@@ -1,6 +1,6 @@
 # E078 Progress — 2026-05-15
 
-## 当前状态: E078 计划已写入，正在实现 3cm per-EEF contact mask 的 CEM 实验脚本
+## 当前状态: E078 已完成，结果日志已写入
 
 ## 完成步骤
 
@@ -34,6 +34,19 @@
   - Session: `tmux E078`
   - E078A -> GPU0, PID 1387310；E078B -> GPU1, PID 1387311。
   - 15:40 初始结果计数为 `0` 个 `.npz`；远程 `nvidia-smi` 显示两张 RTX 6000 Ada 均有计算负载。
+- [x] 2026-05-15 17:08: E078B 远程完成并已 scp 回收；本地 eval 跳过缺失 E078A，仅生成 E078B summary。
+  - E078B npz/video: `workspace/core4d/results/E078/E078B_box023_p2.{npz,mp4}`。
+  - E078B 初步数值: yaw 0.041/0.126deg, B1=0.081m, post2 contact=65.4%, post2 obj_err max/mean=0.308/0.156m, pelvis_z_min=0.700m, first robot ctrl Linf>0.5 at f140。
+  - E078B f119-f125 right foot XY step sum sim/ref = 0.0219/0.0255m，right hip pitch ctrl diff abs max=0.138rad。
+- [x] 远程 E078A 因 GPU0 被其他 `python` 同时占用，后段单步出现 57s/87s/80s；已停止远程 E078A 与 `tmux E078`。
+- [x] 本机 RTX 5090 重新运行 E078A，17:29 完成并落盘：
+  - E078A npz/video: `workspace/core4d/results/E078/E078A_box023_p1.{npz,mp4}`。
+  - 统一评估已重跑：`logs/E078/eval_E078_after_local_A.log`，`workspace/core4d/results/E078/comparison.csv` 现包含 E078A+E078B。
+  - E078A 初步数值: yaw 0.574/1.075deg, B1=0.084m, post2 contact=61.7%, post2 obj_err max/mean=0.287/0.160m, pelvis_z_min=0.663m, first robot ctrl Linf>0.5 at f116。
+  - E078A f119-f125 right foot XY step sum sim/ref = 0.531/0.159m，right hip pitch ctrl diff abs max=0.554rad；p1 右腿相位偏差没有被 3cm per-EEF mask 解决。
+  - E078B 对照: post2 contact=65.4%, first robot ctrl Linf>0.5 at f140, f119-f125 right foot XY step sum sim/ref = 0.0219/0.0255m。
+- [x] 写入正式结果日志：`workspace/core4d/log/99_E078_3cm_per_eef_mask_results.md`。
+- [x] 更新 `EXPERIMENT_TRACKER.md` E078 行。
 
 ## 遇到的错误
 
