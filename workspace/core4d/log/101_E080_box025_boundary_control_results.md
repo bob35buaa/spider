@@ -12,8 +12,9 @@ E080 按 E079 的 no-hold + 3cm per-EEF mask + case-specific window 口径跑了
 
 - 数据与运行：`box025_person1/person2` 都用显式 trim `38/124` 生成了 3cm mask；p1 本地 RTX5090 跑完，p2 远程 `spider-remote` GPU1 跑完。
 - 数值：case-specific window 下 p1/p2 都被三阈值判为 True，即 `2/2=100%`；fixed `post2` 旧口径均 False，即 `0/2=0%`。
-- 视觉：subagent 复核认为 p2 明显好于 p1，但两者都不应判为“真实搬运 box025”。p1 更像趴箱/贴箱/推箱，存在物体支撑和假接触嫌疑；p2 更接近“扶着箱体移动”，但仍更像推/扶，不是稳定抓持或抬搬。
-- 解释：`case-window=True` 在 box025 上只说明窗口内几何接触 proxy 和均值物体误差过阈值；它不能证明大物体语义搬运成功。E080 因此确认了 E079 之后的主要风险：当前三阈值会把大物体边界/负控 case 误读为成功。
+- 视觉复核修正：用户指出 p2 视觉上“挺像搬箱子”，该观察成立。更准确的判断是：p2 是 partial positive / near-usable，可视上明显接近搬/扶箱；p1 仍是 false positive，因为腿/箱几何干涉更重、物体跟踪更差。
+- 几何复核：scene 只定义了 `left_hand_object`、`right_hand_object`、`object_floor` 三类与箱子相关的 contact pair，没有腿/脚-箱子接触 pair。因此腿即使视觉靠近或穿入箱体，也不会在 MuJoCo 中给箱子提供物理支撑。
+- 解释：`case-window=True` 在 box025 上说明窗口内手-箱接触 proxy、稳定性和均值物体误差达标；但它还不能区分“真实抬搬/扶搬”与“靠近箱体但存在腿部穿模/箱体高度不足”。E080 因此确认了 E079 之后的主要风险：当前三阈值需要补充 leg-box interference、object lift/floor-contact、object max/orientation 等指标。
 
 ## 实验配置
 
@@ -47,8 +48,8 @@ Case-specific window 仍按 E079 口径：从当前 variant 的 `eval_contact_ma
 
 | Variant | Split | CaseWin | Fixed post2 | Window s | Obj mean/max m | Pelvis min m | Ref/Sim contact % | Hand SDF mean m | Ctrl Linf | Visual |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `E080_box025_p1` | local | True | False | 0.66-4.20 | 0.184/0.336 | 0.747 | 97.8/75.3 | 0.058 | 0.712 | false positive：趴箱/贴箱/推箱，不是真实搬运 |
-| `E080_box025_p2` | remote | True | False | 0.64-4.08 | 0.146/0.289 | 0.759 | 97.1/90.8 | 0.047 | 0.473 | partial/false positive：比 p1 好，像扶/推箱，不是稳定抓持搬运 |
+| `E080_box025_p1` | local | True | False | 0.66-4.20 | 0.184/0.336 | 0.747 | 97.8/75.3 | 0.058 | 0.712 | false positive：腿/箱几何干涉重，物体偏差大 |
+| `E080_box025_p2` | remote | True | False | 0.64-4.08 | 0.146/0.289 | 0.759 | 97.1/90.8 | 0.047 | 0.473 | partial positive：视觉上接近搬/扶箱，但仍需检查腿干涉和箱体高度 |
 
 聚合结果：
 
@@ -73,6 +74,23 @@ Case-specific window 仍按 E079 口径：从当前 variant 的 `eval_contact_ma
 | ref active 但 sim 无接触最长连续帧 | 22 帧 | 5 帧 | p2 接触连续性好于 p1 |
 | full pelvis min | 0.747m | 0.759m | 都没有摔倒；稳定性指标无法区分真假搬运 |
 
+二次复核补充：
+
+| 指标 | p1 | p2 | 解读 |
+|------|----|----|------|
+| 腿/脚-箱 adjusted SDF 最小值 | `-0.137m` | `-0.046m` | 负值表示腿/脚几何体穿入箱体碰撞盒；p1 明显更严重。 |
+| 腿/脚-箱 adjusted SDF `<0` 帧比例 | `101/248 = 40.7%` | `50/248 = 20.2%` | p2 仍有局部干涉，但强度和持续时间低于 p1。 |
+| 手-箱 MuJoCo contact 帧数 | `142/248` | `157/248` | p2 的手-箱接触连续性更好。 |
+| 腿/脚-箱 MuJoCo contact 帧数 | `0/248` | `0/248` | scene 没有腿/脚-箱 contact pair；腿部不会物理支撑箱子。 |
+| sim f100 箱底高度 proxy | `-0.017m` | `-0.039m` | 用 `object_z - half_z` 粗略估计；同期 ref 约 `+0.050m/+0.053m`，sim 抬箱高度不足。 |
+
+关键帧腿/箱几何干涉：
+
+| Variant | f100 | f115 | f125 | f160 | f180 |
+|---|---|---|---|---|---|
+| p1 | left_shin `-0.121m` | left_thigh `-0.029m` | left_thigh `-0.025m` | left_thigh `+0.004m` | lf2 `-0.021m` |
+| p2 | right_linkage_brace `-0.024m` | right_thigh `-0.020m` | rf3 `-0.010m` | rf3 `+0.054m` | rf2 `+0.153m` |
+
 ## 可视化观察
 
 视频复核由 subagent 只读观察完成，结论保守汇总如下。
@@ -86,7 +104,7 @@ Case-specific window 仍按 E079 口径：从当前 variant 的 `eval_contact_ma
 - `f160 / 3.20s`：视觉仍靠近箱体，但 timeseries 显示 `sim_total_contact_count=0`，说明接触代理已经断过。
 - `f180 / 3.60s`：sim 又回到弯腰贴箱状态，像重新靠上箱体，不像自然释放/放下。
 
-结论：p1 是明确视觉 false positive。case-window True 不能支持“真实搬运成功”。
+结论：p1 是明确 false positive。原因不是“完全不像搬箱子”，而是有明显腿/箱穿入和较大物体偏差；case-window True 不能单独支持“真实搬运成功”。
 
 ### `E080_box025_p2`
 
@@ -98,7 +116,7 @@ Case-specific window 仍按 E079 口径：从当前 variant 的 `eval_contact_ma
 - `f160-f180 / 3.20-3.60s`：后段释放不清楚，sim 到 `f180` 手仍在箱侧附近。
 - `f204 / 4.08s`：timeseries 显示 `sim_total_contact_count=0`、`sim_min_hand_sdf=0.114m`，说明窗口末端已脱离。
 
-结论：p2 比 p1 更好，可视为“接触/推扶箱体的粗阶段匹配”，但不能作为严格真实搬运成功样例。
+结论修正：p2 视觉上确实接近搬/扶箱，应标为 partial positive / near-usable，而不是简单否定。它仍不能直接作为严格成功样例，原因是 sim 箱体高度低于 ref，且 f100-f145 仍有右腿/脚与箱体的局部几何干涉；这些问题需要进入下一版指标。
 
 ## Claims 验证
 
@@ -106,15 +124,15 @@ Case-specific window 仍按 E079 口径：从当前 variant 的 `eval_contact_ma
 |------|------|------|
 | C1 pipeline 能处理 box025 p1/p2 | 通过 | 两个 mask 均生成成功，`trim_start=38`、`T_spider=124`、`T_eval=207`。 |
 | C2 no-hold CEM 能直接跑 box025 p1/p2 | 通过 | p1 本地、p2 远程 GPU1 均完整产出 `.npz/.mp4/eval summary`。 |
-| C3 box025 不应被误读为泛化成功 | 通过但暴露判据问题 | 人工视觉没有把 p1/p2 判为真实搬运；但 case-window 三阈值把两者都判 True，说明该数值口径仍会误判大物体负控。 |
-| C4 p1/p2 差异帮助判断失败来源 | 通过 | p2 比 p1 明显更好，但两者都不是稳定抓持搬运；这支持 box025 主要是大物体结构性边界，而不是单个 person 数据质量问题。 |
+| C3 box025 不应被误读为泛化成功 | 部分通过，需修正表述 | p1 是 false positive；p2 视觉上接近搬/扶箱，不能简单归为失败。当前三阈值仍不足，因为没有 leg-box interference 和 object lift/floor-contact。 |
+| C4 p1/p2 差异帮助判断失败来源 | 通过 | p2 比 p1 明显更好，说明 person/case 质量差异很关键；box025 不应只按 Tier3/drop 一刀切，需要区分 p1 false positive 与 p2 partial positive。 |
 | C5 远程只用 GPU1 | 通过 | 远程脚本以 `REMOTE_GPU=1` 启动；tmux session `E080` 完成 p2。 |
 
 ## 分析
 
-### 1. box025 是成功判据的负控，不是算法正例
+### 1. box025 不是单纯负例，p2 是有价值的边界正信号
 
-E054 已判定 box025 是 Tier3/drop，`dim_max=0.89m` 超出单 G1 的可行范围。E080 的视觉结果与这一历史判断一致：机器人能稳定站住，也能贴近/推扶箱体，但不能形成可信的抓持搬运。
+E054 已判定 box025 是 Tier3/drop，`dim_max=0.89m` 超出单 G1 的可行范围。E080 二次复核后需要更细分：p1 支持负控判断；p2 视觉上更接近真实搬/扶箱，说明该 case 不是完全不可用，而是处在“可视上接近、物理/几何指标仍不充分”的边界区域。
 
 ### 2. case-window 三阈值在大物体上会误判
 
@@ -133,13 +151,13 @@ case_window_obj_err_mean_m <= 0.20
 - object mean error 会被窗口均值掩盖，p1 `obj_err_max=0.336m` 已经明显偏离；
 - 当前指标没有物体姿态/旋转、接触力学方向、释放语义和“抓持 vs 推扶”的判别。
 
-### 3. p2 比 p1 好，但不足以改变 box025 结论
+### 3. p2 比 p1 好，且应改变原始文字结论
 
-p2 的 `obj_err_mean/max`、contact continuity、ctrl deviation 都优于 p1；视觉也更接近 ref。这个差异说明 person2 数据或动作更适合当前方法。但 p2 仍只是扶/推箱体的粗阶段匹配，不是严格搬运成功。因此它不能推翻 box025 Tier3/drop 的历史结论。
+p2 的 `obj_err_mean/max`、contact continuity、ctrl deviation 都优于 p1；视觉也更接近 ref。原日志里“p1/p2 都不应判为真实搬运”的表述过强。更准确的说法是：p1 是 false positive；p2 是 partial positive / near-usable，需要用腿/箱干涉、箱体离地高度、物体姿态误差进一步判定能否进入正样本集。
 
 ## 下一步建议
 
-1. 将 E080 作为 E079 成功判据的负控证据：case-window 三阈值不能单独作为 C3 成功标准。
+1. 将 E080 作为 E079 成功判据的修正证据：case-window 三阈值不能单独作为 C3 成功标准，但 p2 不能被简单当作失败。
 2. 在下一版 eval 中加入：
    - `case_window_obj_err_max_m` 阈值；
    - object orientation / rotation error；
@@ -147,8 +165,8 @@ p2 的 `obj_err_mean/max`、contact continuity、ctrl deviation 都优于 p1；�
    - early contact establishment；
    - release/putdown 阶段语义；
    - `visual_usable` / `semantic_success` 标签。
-3. 后续泛化验证不要把 Tier3/drop case 纳入成功率正样本；box025 只用于边界/负控或双机器人/大 humanoid 路线。
-4. 若要进一步研究 box025，应转向双人/双机器人或更大机器人，不应继续在单 G1 + 当前 CEM reward 上调参。
+3. 后续泛化验证对 Tier3/drop case 分开统计：p1 作为负控，p2 作为边界 partial positive，不能混在普通成功率里。
+4. 若继续研究 box025，下一步优先做 leg-box interference/lift-aware eval，而不是直接调 reward。
 
 ## 复现命令
 

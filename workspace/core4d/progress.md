@@ -779,3 +779,4 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] E080 统一评估完成：case-window main success `2/2=100%`，fixed post2 numeric success `0/2=0%`。p1 case-window `obj mean/max=0.184/0.336m, sim contact=75.3%`；p2 `0.146/0.289m, sim contact=90.8%`。
 - [x] E080 视觉复核完成：subagent 判断 p2 明显好于 p1，但 p1/p2 都不能算真实搬运成功；p1 是趴箱/贴箱/推箱 false positive，p2 更像扶/推箱体。
 - [x] 已写入结果日志：`workspace/core4d/log/101_E080_box025_boundary_control_results.md`；已更新 `EXPERIMENT_TRACKER.md`。核心结论：box025 继续支持 Tier3/drop 历史判断，同时证明 case-window 三阈值会误判大物体负控。
+- [x] E080 二次复核：用户指出 p2 视觉上像搬箱子，该观察成立；已修正 log/tracker 表述。p1 仍是 false positive；p2 改标为 partial positive / near-usable。几何证据：scene 只含 `left_hand_object/right_hand_object/object_floor`，无腿/脚-箱 contact pair；p1 腿/脚 adjusted SDF min `-13.7cm`、穿入帧 `40.7%`，p2 min `-4.6cm`、穿入帧 `20.2%`。因此腿不会物理支撑箱子，但 p1/p2 都有不同程度视觉/几何干涉，下一步 eval 应加入 leg-box interference 与 object lift/floor-contact。
