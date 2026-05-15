@@ -793,3 +793,7 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] E081 短 horizon smoke 通过：
   - `core4d_E081_box025_p2_legobj`, `task=box025_person2_legobj`, `max_sim_steps=4`, final object pos err `0.0406m`。
   - `core4d_E081_box023_p2_legobj`, `task=box023_person2_legobj`, `max_sim_steps=4`, final object pos err `0.0100m`。
+- [x] E081 setup 已提交推送：commit `f26e3be exp(core4d): E081 leg-object collision setup`；远程 `spider-remote` GPU1 已启动并完成 `E081_box023_p2_legobj`，本地 RTX5090 已完成 `E081_box025_p2_legobj`。
+- [x] E081 合并评估完成：`workspace/core4d/results/E081/comparison.csv`。聚合结果：main case-window `1/1=True`，main leg/lift proxy `0/1=False`，guard=`E081_box023_p2_legobj`。
+- [x] E081 关键量化结论：box025 p2 case-window 腿/箱 interference 从 E080 baseline `28.9%` 降到 `7.5%`，最小 adjusted SDF `-4.6cm -> -1.2cm`，obj mean/max `0.146/0.289 -> 0.143/0.271`；但 object bottom mean `-0.073m -> -0.075m`，floor-contact `60.1% -> 59.5%`，说明 lift/floor-contact 未改善。box023 p2 guard 基本稳定，obj mean `0.162 -> 0.164`，leg interference `0 -> 2.7%`。
+- [x] E081 结果日志已写入：`workspace/core4d/log/102_E081_leg_object_collision_results.md`；tracker 已更新。核心结论：新增腿/脚-箱碰撞是必要物理修正，但 box025_p2 主要瓶颈已转向 object lift/floor-contact，不是继续修腿穿模。

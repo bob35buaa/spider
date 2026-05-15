@@ -1,0 +1,11 @@
+{
+  "guard_results": [
+    "E081_box023_p2_legobj"
+  ],
+  "main_case_window_success_pct": 100.0,
+  "main_legobj_strict_proxy_success_pct": 0.0,
+  "num_main_case_window_success": 1,
+  "num_main_legobj_strict_proxy_success": 0,
+  "num_main_results": 1,
+  "num_results": 2
+}
