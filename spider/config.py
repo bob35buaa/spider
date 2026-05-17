@@ -91,6 +91,18 @@ class Config:
     partner_force_rot_clamp: float = (
         0.5  # max axis-angle magnitude (rad) to prevent large torques
     )
+    partner_force_ref_dt: float = (
+        -1.0  # reference dt for partner force indexing; <=0 uses config.ref_dt
+    )
+    partner_force_point_local: list[float] = field(
+        default_factory=list
+    )  # optional object-local support point; empty means apply force at COM
+    partner_force_force_clamp: float = (
+        0.0  # max external force norm in N; <=0 disables clamp
+    )
+    partner_force_torque_clamp: float = (
+        0.0  # max torque norm in Nm for support-point wrench; <=0 disables clamp
+    )
     # E027b: object PD override — object actuators track ref directly, CEM only optimizes robot
     object_pd_override: bool = False  # enable object actuator PD override in step_env
     object_pd_kp_pos: float = 2000.0  # position actuator gain (strong tracking)

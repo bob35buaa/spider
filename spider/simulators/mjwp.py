@@ -1489,101 +1489,146 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
 
     xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
 
-    # Gravity compensation: upward force on object
+    # Partner force owns the object wrench for this step. MuJoCo keeps xfrc_applied
+    # persistent, so do not accumulate stale spring forces across simulation steps.
+    xfrc_applied[:, obj_body_id, :6] = 0.0
+
+    def _clamp_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:
+        if max_norm <= 0:
+            return vec
+        norm = vec.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+        return torch.where(norm > max_norm, vec / norm * max_norm, vec)
+
+    # Gravity compensation: upward force on object.
     obj_mass = env.model_cpu.body_mass[obj_body_id]
     gravity_z = -env.model_cpu.opt.gravity[2]  # positive (9.81)
     upward_force = config.partner_force_scale * obj_mass * gravity_z
-    xfrc_applied[:, obj_body_id, 2] = upward_force
 
-    # Optional: damped spring toward reference position
-    if config.partner_force_spring_kp > 0 and hasattr(env, "partner_force_ref_pos"):
-        # Get current object position from qpos
-        qpos = wp.to_torch(env.data_wp.qpos)
-        qvel = wp.to_torch(env.data_wp.qvel)
-        # Object freejoint position: find the qpos address
-        obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
-        obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
-        obj_vadr = env.model_cpu.jnt_dofadr[obj_jnt_id]
-        obj_pos_sim = qpos[:, obj_qadr : obj_qadr + 3]  # (N, 3)
-        obj_vel_sim = qvel[:, obj_vadr : obj_vadr + 3]  # (N, 3)
+    point_local = list(config.partner_force_point_local or [])
+    point_mode = len(point_local) == 3
+    has_spring = config.partner_force_spring_kp > 0 and hasattr(
+        env, "partner_force_ref_pos"
+    )
+    has_rot_spring = config.partner_force_spring_kp_rot > 0 and hasattr(
+        env, "partner_force_ref_quat"
+    )
 
-        # Get reference pos for current time
-        time_arr = wp.to_torch(env.data_wp.time)
-        t = time_arr[0].item()
-        dt = 1.0 / 30.0  # ref fps
-        T = env.partner_force_ref_pos.shape[0]
-        idx = min(int(t / dt), T - 1)
-        ref_pos = env.partner_force_ref_pos[idx]  # (3,) on GPU
+    if not point_mode and not has_spring and not has_rot_spring:
+        xfrc_applied[:, obj_body_id, 2] = upward_force
+        wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+        return
 
-        # Ramp-up: linearly increase spring over first 0.5s to avoid initial jolt
-        ramp = min(t / 0.5, 1.0)
+    qpos = wp.to_torch(env.data_wp.qpos)
+    qvel = wp.to_torch(env.data_wp.qvel)
+    obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
+    obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
+    obj_vadr = env.model_cpu.jnt_dofadr[obj_jnt_id]
+    obj_pos_sim = qpos[:, obj_qadr : obj_qadr + 3]  # (N, 3)
+    obj_vel_sim = qvel[:, obj_vadr : obj_vadr + 3]  # (N, 3)
+    obj_quat_sim = qpos[:, obj_qadr + 3 : obj_qadr + 7]  # (N, 4) wxyz
+    obj_angvel_sim = qvel[:, obj_vadr + 3 : obj_vadr + 6]  # (N, 3)
+    quat_norm = obj_quat_sim.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+    obj_quat_sim = obj_quat_sim / quat_norm
 
-        # Damped spring: F = kp*(ref - pos) - kd*vel
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = time_arr[0].item()
+    dt = float(
+        getattr(
+            env,
+            "partner_force_ref_dt",
+            config.partner_force_ref_dt
+            if config.partner_force_ref_dt > 0
+            else config.ref_dt,
+        )
+    )
+    T = (
+        env.partner_force_ref_pos.shape[0]
+        if hasattr(env, "partner_force_ref_pos")
+        else 1
+    )
+    idx = min(int(t / dt), T - 1)
+    ramp = min(t / 0.5, 1.0)
+
+    force = torch.zeros_like(obj_pos_sim)
+    force[:, 2] = upward_force
+
+    if has_spring:
         kp = config.partner_force_spring_kp * ramp
         if config.partner_force_spring_kd < 0:
             kd = 2.0 * (obj_mass * config.partner_force_spring_kp) ** 0.5
         else:
             kd = config.partner_force_spring_kd
-        spring_force = kp * (ref_pos.unsqueeze(0) - obj_pos_sim) - kd * obj_vel_sim
-        xfrc_applied[:, obj_body_id, :3] += spring_force
+        ref_pos = env.partner_force_ref_pos[idx]  # (3,) on GPU
 
-        # E030: Orientation control via xfrc_applied torque
-        if config.partner_force_spring_kp_rot > 0 and hasattr(
-            env, "partner_force_ref_quat"
-        ):
-            from spider.math import quat_sub
-
-            # Object quaternion from qpos: freejoint stores (w,x,y,z)
-            obj_quat_sim = qpos[:, obj_qadr + 3 : obj_qadr + 7]  # (N, 4) wxyz
-            obj_angvel_sim = qvel[:, obj_vadr + 3 : obj_vadr + 6]  # (N, 3)
-
-            # Normalize quaternion (can become unnormalized in unstable rollouts)
-            quat_norm = obj_quat_sim.norm(dim=-1, keepdim=True).clamp(min=1e-8)
-            obj_quat_sim = obj_quat_sim / quat_norm
-
-            # Reference quaternion for current time
-            ref_quat = env.partner_force_ref_quat[idx]  # (4,) wxyz on GPU
-
-            # axis-angle error in world frame: quat_sub(ref, cur)
-            aa_err = quat_sub(
-                ref_quat.unsqueeze(0).expand(obj_quat_sim.shape[0], -1),
-                obj_quat_sim,
-            )  # (N, 3)
-
-            # Replace NaN with zero (from degenerate quaternions)
-            aa_err = torch.nan_to_num(aa_err, nan=0.0)
-
-            # Clamp axis-angle magnitude
-            aa_mag = aa_err.norm(dim=-1, keepdim=True).clamp(min=1e-8)
-            clamp_val = config.partner_force_rot_clamp
-            aa_err = torch.where(
-                aa_mag > clamp_val,
-                aa_err / aa_mag * clamp_val,
-                aa_err,
+        if point_mode:
+            local = torch.tensor(
+                point_local,
+                dtype=torch.float32,
+                device=obj_pos_sim.device,
+            ).unsqueeze(0)
+            local = local.expand(obj_pos_sim.shape[0], -1)
+            r_world = _lf_quat_apply(obj_quat_sim, local)
+            point_pos_sim = obj_pos_sim + r_world
+            point_vel_sim = obj_vel_sim + torch.cross(obj_angvel_sim, r_world, dim=-1)
+            ref_quat = env.partner_force_ref_quat[idx]
+            ref_r_world = _lf_quat_apply(
+                ref_quat.unsqueeze(0).expand(obj_pos_sim.shape[0], -1),
+                local,
             )
-
-            # Clamp angular velocity too
-            obj_angvel_sim = torch.nan_to_num(obj_angvel_sim, nan=0.0)
-            obj_angvel_sim = obj_angvel_sim.clamp(-10.0, 10.0)
-
-            # PD torque with ramp
-            kp_rot = config.partner_force_spring_kp_rot * ramp
-            if config.partner_force_spring_kd_rot < 0:
-                avg_inertia = float(np.mean(env.model_cpu.body_inertia[obj_body_id]))
-                kd_rot = 2.0 * (avg_inertia * config.partner_force_spring_kp_rot) ** 0.5
-            else:
-                kd_rot = config.partner_force_spring_kd_rot
-            torque = kp_rot * aa_err - kd_rot * obj_angvel_sim
-
-            # Clamp total torque magnitude to prevent instability
-            torque_mag = torque.norm(dim=-1, keepdim=True).clamp(min=1e-8)
-            max_torque = 5.0  # Nm — conservative limit
-            torque = torch.where(
-                torque_mag > max_torque,
-                torque / torque_mag * max_torque,
-                torque,
+            ref_point = ref_pos.unsqueeze(0) + ref_r_world
+            force = force + kp * (ref_point - point_pos_sim) - kd * point_vel_sim
+            force = _clamp_norm(
+                torch.nan_to_num(force, nan=0.0), config.partner_force_force_clamp
             )
-            xfrc_applied[:, obj_body_id, 3:6] += torque
+            torque = torch.cross(r_world, force, dim=-1)
+            torque = _clamp_norm(
+                torch.nan_to_num(torque, nan=0.0),
+                config.partner_force_torque_clamp,
+            )
+            xfrc_applied[:, obj_body_id, :3] = force
+            xfrc_applied[:, obj_body_id, 3:6] = torque
+        else:
+            force = force + kp * (ref_pos.unsqueeze(0) - obj_pos_sim) - kd * obj_vel_sim
+            force = _clamp_norm(
+                torch.nan_to_num(force, nan=0.0), config.partner_force_force_clamp
+            )
+            xfrc_applied[:, obj_body_id, :3] = force
+    else:
+        force = _clamp_norm(
+            torch.nan_to_num(force, nan=0.0), config.partner_force_force_clamp
+        )
+        xfrc_applied[:, obj_body_id, :3] = force
+
+    # E030: Orientation control via xfrc_applied torque. E005 keeps this disabled;
+    # support-site torque comes from r x F instead of an orientation PD loop.
+    if has_rot_spring:
+        from spider.math import quat_sub
+
+        ref_quat = env.partner_force_ref_quat[idx]  # (4,) wxyz on GPU
+        aa_err = quat_sub(
+            ref_quat.unsqueeze(0).expand(obj_quat_sim.shape[0], -1),
+            obj_quat_sim,
+        )
+        aa_err = torch.nan_to_num(aa_err, nan=0.0)
+
+        aa_mag = aa_err.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+        clamp_val = config.partner_force_rot_clamp
+        aa_err = torch.where(
+            aa_mag > clamp_val,
+            aa_err / aa_mag * clamp_val,
+            aa_err,
+        )
+
+        obj_angvel_sim = torch.nan_to_num(obj_angvel_sim, nan=0.0).clamp(-10.0, 10.0)
+        kp_rot = config.partner_force_spring_kp_rot * ramp
+        if config.partner_force_spring_kd_rot < 0:
+            avg_inertia = float(np.mean(env.model_cpu.body_inertia[obj_body_id]))
+            kd_rot = 2.0 * (avg_inertia * config.partner_force_spring_kp_rot) ** 0.5
+        else:
+            kd_rot = config.partner_force_spring_kd_rot
+        torque = kp_rot * aa_err - kd_rot * obj_angvel_sim
+        torque = _clamp_norm(torch.nan_to_num(torque, nan=0.0), 5.0)
+        xfrc_applied[:, obj_body_id, 3:6] += torque
 
     wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
 
@@ -1615,7 +1660,15 @@ def _update_object_weld_target(config: Config, env: MJWPEnv):
     # Get reference for current time
     time_arr = wp.to_torch(env.data_wp.time)
     t = time_arr[0].item()
-    dt = 1.0 / 30.0
+    dt = float(
+        getattr(
+            env,
+            "partner_force_ref_dt",
+            config.partner_force_ref_dt
+            if config.partner_force_ref_dt > 0
+            else config.ref_dt,
+        )
+    )
     T = env.partner_force_ref_pos.shape[0]
     idx = min(int(t / dt), T - 1)
 
@@ -1715,7 +1768,15 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
             qpos = wp.to_torch(env.data_wp.qpos)
             time_arr = wp.to_torch(env.data_wp.time)
             t = time_arr[0].item()
-            dt = 1.0 / 30.0
+            dt = float(
+                getattr(
+                    env,
+                    "partner_force_ref_dt",
+                    config.partner_force_ref_dt
+                    if config.partner_force_ref_dt > 0
+                    else config.ref_dt,
+                )
+            )
             T = env.partner_force_ref_pos.shape[0]
             idx = min(int(t / dt), T - 1)
             ref_pos = env.partner_force_ref_pos[idx]

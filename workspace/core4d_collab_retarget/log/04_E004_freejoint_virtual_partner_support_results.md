@@ -6,6 +6,8 @@
 
 E004 Wave A/B completed. Result: COM-level virtual partner support does not recover true-freejoint collaborative transport. All 9 evaluated variants kept `scene.xml` freejoint parity (`contact_guidance=false`, `nu=29`, `nq_obj=7`, no object actuators), but no main `box025_p2` variant reached useful proxy.
 
+Post-hoc caveat found while preparing E005: `_apply_partner_force` used a hard-coded `1/30` reference timestep. This matches `box025_person2_freejoint_legobj` (`task_info.ref_dt=1/30`), so E004 main `box025` is still a valid COM-force result; `box023_person2_freejoint_legobj` has no `ref_dt` field and uses config default `0.02`, so E004 guard spring timing may have lagged. E005 makes `partner_force_ref_dt` explicit and tests support-site geometry before making the final partner-force decision.
+
 ## Commands
 
 ```bash

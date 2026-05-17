@@ -652,10 +652,16 @@ def main(config: Config):
         env.partner_force_ref_quat = torch.tensor(
             obj_quat_ref_np, device=config.device, dtype=torch.float32
         )
+        env.partner_force_ref_dt = (
+            float(config.partner_force_ref_dt)
+            if config.partner_force_ref_dt > 0
+            else float(config.ref_dt)
+        )
         loguru.logger.info(
-            "Partner force spring: ref_pos shape={}, ref_quat shape={}",
+            "Partner force spring: ref_pos shape={}, ref_quat shape={}, ref_dt={}",
             tuple(env.partner_force_ref_pos.shape),
             tuple(env.partner_force_ref_quat.shape),
+            env.partner_force_ref_dt,
         )
 
     # E027b: object PD override — precompute ref pos/euler for scene_act object actuators
