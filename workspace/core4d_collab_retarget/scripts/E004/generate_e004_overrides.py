@@ -22,6 +22,7 @@ BASE = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
 VARIANTS = REPO / "workspace/core4d_collab_retarget/scripts/E004/variants.tsv"
 OUT_DIR = REPO / "examples/config/override"
 MASK_SOURCE_ROOT = REPO / "workspace/core4d_collab_retarget/results/E002/contact_masks"
+MASK_FALLBACK_ROOT = REPO / "workspace/core4d/results/E081/contact_masks"
 
 FIELDNAMES = [
     "variant",
@@ -67,7 +68,10 @@ def ref_npz_for_task(task: str) -> Path:
 def copy_mask(mask_slug: str, result_root: Path) -> Path:
     src = MASK_SOURCE_ROOT / mask_slug
     if not src.is_dir():
-        raise FileNotFoundError(src)
+        fallback = MASK_FALLBACK_ROOT / mask_slug
+        if not fallback.is_dir():
+            raise FileNotFoundError(f"{src} (fallback also missing: {fallback})")
+        src = fallback
     dst = result_root / "contact_masks" / mask_slug
     dst.mkdir(parents=True, exist_ok=True)
     for name in ["raw_contact_mask_3cm.npz", "raw_contact_mask_3cm.csv", "audit_summary_3cm.json"]:
