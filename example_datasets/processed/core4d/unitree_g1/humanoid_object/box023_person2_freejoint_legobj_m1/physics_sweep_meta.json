@@ -1,0 +1,24 @@
+{
+  "derived_task": "box023_person2_freejoint_legobj_m1",
+  "hand_object_friction": 2.0,
+  "inertia_scale": 0.2,
+  "new_diaginertia": [
+    0.03,
+    0.03,
+    0.020000000000000004
+  ],
+  "new_mass_kg": 1.0,
+  "note": "E003 true-freejoint physics sweep; source E002 derived task is not modified.",
+  "object_floor_friction": 1.0,
+  "object_geom": "object_collision",
+  "old_diaginertia": [
+    0.15,
+    0.15,
+    0.1
+  ],
+  "old_mass_kg": 5.0,
+  "patched_file": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person2_freejoint_legobj_m1/scene.xml",
+  "scene_mode": "freejoint_scene_xml",
+  "source_task": "box023_person2_freejoint_legobj",
+  "variant": "E003_box023_p2_m1"
+}

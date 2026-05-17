@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM 已完成。结论：当前 E081-style 单机器人 reward/control 在真 freejoint object 下失败，且 guard 也失败；下一步应做 E003 physics-feasibility sweep 或进入虚拟 grasp/contact 约束路线。新工作区实验编号从 `E001` 开始；`workspace/core4d` E081 是 baseline，不作为本工作区的 E082。
+E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM 已完成。结论：当前 E081-style 单机器人 reward/control 在真 freejoint object 下失败，且 guard 也失败；E003 physics-feasibility sweep 已开始实施，用于区分物理参数不可行与 reward/optimizer 不足。新工作区实验编号从 `E001` 开始；`workspace/core4d` E081 是 baseline，不作为本工作区的 E082。
 
 ## 完成步骤
 
@@ -41,6 +41,20 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - [x] 实现 E002 freejoint 派生 task / override / train / eval 脚本。
 - [x] 运行 E002 smoke + full CEM，对齐 E081 eval 和可视化。
 - [x] 规划 E003：true-freejoint mass/friction/contact feasibility sweep，优先使用远程双卡并行。
+- [x] 本轮已重新读取 `EXPERIMENT_TRACKER.md`、`progress.md`、E002 log 和 E003 plan，确认工作区仅 `.codex/config.toml` 与 `workspace/exp_task.md` 为既有未提交状态，E003 实现将避开它们。
+- [x] 已实现 E003 脚本骨架：
+  - `scripts/E003/variants.tsv`
+  - `scripts/E003/create_physics_sweep_cases.py`
+  - `scripts/E003/generate_e003_overrides.py`
+  - `scripts/run_E003_preprocess.sh`
+  - `scripts/train/train_E003.sh`
+  - `scripts/train/train_E003_remote_tmux.sh`
+  - `scripts/run_E003_remote.sh`
+  - `scripts/pull_E003_remote_results.sh`
+  - `scripts/eval/eval_E003.py`
+  - `log/03_E003_freejoint_physics_feasibility_sweep_results.md`
+- [x] E003 preprocess 已完成，生成四个 true-freejoint 派生 task 和四个 Hydra override；四个配置均为 `contact_guidance=false`、`scene_name=""`、`nq/nv/nu/nq_obj=43/41/29/7`、`ctrl_ref=29`。
+- [x] E003 GPU smoke 已通过：四个 variant 均生成 NPZ，`eval_E003.py` 已生成 `comparison.csv`/summary/timeseries/leg-object 指标。smoke 仅 `T=4`，不用于实验结论。
 - [ ] 实现并运行 E003。
 
 ## 遇到的错误

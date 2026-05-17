@@ -1,0 +1,5 @@
+# variant	source_task	derived_task	mask_source_exp	mask_slug	person_idx	remote_group	role	mass_kg	inertia_scale	hand_object_friction	object_floor_friction
+E003_box025_p2_m1	box025_person2_freejoint_legobj	box025_person2_freejoint_legobj_m1	E081	box025_person2	1	gpu0	main	1.0	0.2	2.0	1.0
+E003_box025_p2_m1_f4	box025_person2_freejoint_legobj	box025_person2_freejoint_legobj_m1_f4	E081	box025_person2	1	gpu0	main	1.0	0.2	4.0	0.5
+E003_box023_p2_m1	box023_person2_freejoint_legobj	box023_person2_freejoint_legobj_m1	E081	box023_person2	1	gpu1	guard	1.0	0.2	2.0	1.0
+E003_box023_p2_m1_f4	box023_person2_freejoint_legobj	box023_person2_freejoint_legobj_m1_f4	E081	box023_person2	1	gpu1	guard	1.0	0.2	4.0	0.5
