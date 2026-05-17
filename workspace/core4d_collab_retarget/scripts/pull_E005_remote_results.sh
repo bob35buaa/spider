@@ -32,16 +32,27 @@ REMOTE_VARIANTS=(
 scp "${SCP_OPTS[@]}" -r "${REMOTE_HOST}:${REMOTE_REPO}/workspace/core4d_collab_retarget/results/E005/contact_masks" workspace/core4d_collab_retarget/results/E005/ 2>/dev/null || true
 scp "${SCP_OPTS[@]}" -r "${REMOTE_HOST}:${REMOTE_REPO}/workspace/core4d_collab_retarget/results/E005/scene_snapshot" workspace/core4d_collab_retarget/results/E005/ 2>/dev/null || true
 
+PULLED_VARIANTS=()
 for variant in "${REMOTE_VARIANTS[@]}"; do
-  scp "${SCP_OPTS[@]}" "${REMOTE_HOST}:${REMOTE_REPO}/workspace/core4d_collab_retarget/results/E005/${variant}.npz" workspace/core4d_collab_retarget/results/E005/
+  remote_npz="${REMOTE_REPO}/workspace/core4d_collab_retarget/results/E005/${variant}.npz"
+  if ! ssh "${SCP_OPTS[@]}" "${REMOTE_HOST}" test -f "${remote_npz}"; then
+    echo "[$(date '+%H:%M:%S')] WARN missing remote result, skip ${variant}"
+    continue
+  fi
+  scp "${SCP_OPTS[@]}" "${REMOTE_HOST}:${remote_npz}" workspace/core4d_collab_retarget/results/E005/
   scp "${SCP_OPTS[@]}" "${REMOTE_HOST}:${REMOTE_REPO}/workspace/core4d_collab_retarget/results/E005/${variant}.mp4" workspace/core4d_collab_retarget/results/E005/ 2>/dev/null || true
   scp "${SCP_OPTS[@]}" -r "${REMOTE_HOST}:${REMOTE_REPO}/workspace/core4d_collab_retarget/results/E005/keyframes/${variant}" workspace/core4d_collab_retarget/results/E005/keyframes/ 2>/dev/null || true
   scp "${SCP_OPTS[@]}" "${REMOTE_HOST}:${REMOTE_REPO}/logs/core4d_collab_retarget/E005/${variant}.log" logs/core4d_collab_retarget/E005/
+  PULLED_VARIANTS+=("${variant}")
 done
 
 scp "${SCP_OPTS[@]}" "${REMOTE_HOST}:${REMOTE_REPO}/logs/core4d_collab_retarget/E005/remote_gpu0.log" logs/core4d_collab_retarget/E005/ 2>/dev/null || true
 scp "${SCP_OPTS[@]}" "${REMOTE_HOST}:${REMOTE_REPO}/logs/core4d_collab_retarget/E005/remote_gpu1.log" logs/core4d_collab_retarget/E005/ 2>/dev/null || true
 
 echo "[$(date '+%H:%M:%S')] running local E005 eval"
-.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E005.py | tee logs/core4d_collab_retarget/E005/eval_E005_local_after_pull.log
+if [ "${#PULLED_VARIANTS[@]}" -gt 0 ]; then
+  .venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E005.py "${PULLED_VARIANTS[@]}" | tee logs/core4d_collab_retarget/E005/eval_E005_local_after_pull.log
+else
+  echo "No remote E005 variant results found."
+fi
 echo "Done."

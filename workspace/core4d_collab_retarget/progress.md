@@ -56,12 +56,38 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - [x] E003 preprocess 已完成，生成四个 true-freejoint 派生 task 和四个 Hydra override；四个配置均为 `contact_guidance=false`、`scene_name=""`、`nq/nv/nu/nq_obj=43/41/29/7`、`ctrl_ref=29`。
 - [x] E003 GPU smoke 已通过：四个 variant 均生成 NPZ，`eval_E003.py` 已生成 `comparison.csv`/summary/timeseries/leg-object 指标。smoke 仅 `T=4`，不用于实验结论。
 - [x] E003 setup 已提交并推送：`a12d309 exp(core4d_collab_retarget): E003 physics sweep setup`。
-- [ ] E003 full 已在远端 tmux session `E003` 启动，GPU0 跑 box025 两个 variant，GPU1 跑 box023 两个 variant；远端既有 dirty state 未清理，`git pull --ff-only` 和 E003 preprocess 已成功。
+- [x] E003 full 已在远端 tmux session `E003` 启动，GPU0 跑 box025 两个 variant，GPU1 跑 box023 两个 variant；远端既有 dirty state 未清理，`git pull --ff-only` 和 E003 preprocess 已成功。
   - 已完成：`E003_box025_p2_m1.npz`、`E003_box023_p2_m1.npz`、`E003_box025_p2_m1_f4.npz`、`E003_box023_p2_m1_f4.npz`。
   - 远端/本地 eval 均完成，aggregate: `num_results=4`, `num_guard_physics_feasible_proxy=0`。
 - [x] E003 full 结论：`box025_m1_f4` 相比 E002 有改善但仍失败；`box023` guard 未恢复并出现腿/箱干涉和摔倒。被动 mass/friction 不是主要瓶颈，下一步转向 explicit virtual collaborator/support/contact constraint。
 - [x] 实现并运行 E003。
 - [x] 已写入 E004 计划：`workspace/core4d_collab_retarget/plan/04_E004_freejoint_virtual_partner_support_plan.md`，使用现有 `partner_force_*` freejoint 外力路径测试虚拟协作者支持。
+- [x] 用户要求把 E004 扩成较大规模实验；已补读 `workspace/core4d/log/22_E024_partner_force_results.md` 与 E028-E030 结果、参考未跟踪的 E004 v2 draft，并重写正式 E004 plan：
+  - Wave A：gravity-only control + `kp=10/20/40` translation spring + box023 guard。
+  - Wave B：只启用 reward-only hold-contact，不继承会打开 `scene_act/contact_guidance` 的 E078 defaults。
+  - Wave C：rotation torque 仅作为 position 成功后的隔离 probe，主线 full variants 全部 `kp_rot=0`。
+  - 并行策略：本地 1 卡跑 main anchor/hold-contact，远程 2 卡分别跑 box025 sweep 与 box023 guard。
+- [x] E004 setup 脚本已创建并通过静态检查：
+  - `scripts/E004/variants.tsv`
+  - `scripts/E004/generate_e004_overrides.py`
+  - `scripts/run_E004_preprocess.sh`
+  - `scripts/train/train_E004.sh`
+  - `scripts/train/train_E004_remote_tmux.sh`
+  - `scripts/run_E004_remote.sh`
+  - `scripts/pull_E004_remote_results.sh`
+  - `scripts/eval/eval_E004.py`
+  - `log/04_E004_freejoint_virtual_partner_support_results.md`
+- [x] E004 smoke 已通过：9 个 Wave A/B variants 均生成 `trajectory_mjwp.npz`，eval 显示全部 `contact_guidance=false`、`nu=29`、`nq_obj=7`、`kp_rot=0`、`E004_freejoint_parity_ok=True`。
+- [x] 远程首次启动时发现远端缺少本地 ignored 的 E002 contact mask 结果目录；已修复 `generate_e004_overrides.py`，优先使用本工作区 E002 mask，缺失时回退到 `workspace/core4d/results/E081/contact_masks`。
+- [x] E004 full 已完成：9 个 Wave A/B variants 全部保持 true-freejoint parity；main `box025` 无 useful proxy，gravity-only `0.660/1.288m`、spring/hold variants 约 `0.768-0.771/1.549-1.577m`；guard `box023_s10/s20` stable 但不 transport，`box023_s10_hc` 摔倒。远程 GPU1 的 `box023_s20` 与 `box023_s10_hc` 均卡住后已终止并本地补跑完成。
+- [x] E005 计划已写入：`workspace/core4d_collab_retarget/plan/05_E005_partner_force_timing_support_site_plan.md`。关键发现：`_apply_partner_force` 使用硬编码 `1/30` ref dt；box025 task_info 本身是 30Hz，所以 E004 main 不被 timing 推翻，box023 guard 使用默认 50Hz 因而需要 E005 显式复查。E005 同时做 COM vs support-site 对照。
+- [x] E005 实现与 smoke 已完成：新增 `partner_force_ref_dt`、`partner_force_point_local`、force/torque clamp；support-site 用 object-local point 的等效 wrench `F, r x F`，并保持 `kp_rot=0`。9 个 variants 的 4-step smoke 全部完成，eval aggregate: `num_results=9`, `num_freejoint_parity_ok=9`, `num_guard_stable_proxy=3`。
+- [x] **头脑风暴 session (2026-05-17)**：生成 5 个候选假设（H001-H005），覆盖 Physics/Algorithm/Optimizer 类别。
+  - H001 (物理参数) ❌ 已被 E003 证伪：1kg + 高摩擦仍然失败
+  - H003 (Partner Proxy 3D 力) ✅ 选定：与 sim2real 终端目标对齐，复用 Mode D 代码
+  - H002/H004/H005 推迟为后备方案
+  - 文件：`ideas/brainstorm_2026-05-17.md`, `ideas/HYPOTHESIS_BACKLOG.md`
+  - E004 plan 已按用户反馈重写为大规模 H003 sweep → 下一步实现 E004 脚本并跑 smoke/full
 
 ## 遇到的错误
 
@@ -72,3 +98,23 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 | 初始思路误把新方向计划称为 E082 | 1 | 按用户纠正，新工作区编号从 E001 开始 |
 | `video-frames/scripts/frame.sh` 无可执行位，直接运行报“权限不够” | 1 | 改用 `bash frame.sh ...` 成功抽帧 |
 | E002 sandbox smoke 中 PyTorch/Warp 看不到 CUDA | 1 | 已用提升权限运行 GPU smoke；CPU run 会在 Warp graph capture 处失败，因为 MJWarp capture 要求 CUDA device |
+| E004 remote GPU1 `box023_s20` / `box023_s10_hc` 临近结尾无 GPU 利用率且未写 trajectory | 2 | 终止远端卡住进程，保留 interrupted log，改为本地单 variant 补跑；最终 9 个结果全部完成 |
+| E005 前复查发现 partner-force ref index 硬编码 30Hz | 1 | 将 ref dt 改为 `config.ref_dt`/`partner_force_ref_dt`；box025 显式 30Hz，box023 显式 50Hz，E004 main 结论保留但 guard timing 需复查 |
+| E005 远程 `box023_p2_xneg_s10` 卡住 | 1 | 进程停在 `sim_steps=34/272`，日志 21:32 后不更新且 GPU 利用率 0%；已终止该远程进程，`xpos_s10` 未启动。本轮只分析 7 个实际 full 结果，排除 4-step smoke NPZ |
+
+## 2026-05-17 22:20 E005 远程回收与分析
+
+- 已读取 E005 plan/log/tracker，并检查远程 tmux `E005` 状态。
+- 远程完成并拉回：
+  - `E005_box025_p2_com_s40`
+  - `E005_box025_p2_yneg_s40`
+  - `E005_box025_p2_ypos_s20`
+  - `E005_box023_p2_com_s10`
+- 已修改 `scripts/pull_E005_remote_results.sh`：远程 variant 缺失时跳过并记录 warning，不再让整个回收流程失败。
+- 已重新评估 7 个 full 结果：6 个 `box025` main + 1 个 `box023` COM guard。
+- E005 aggregate：`num_results=7`、`num_freejoint_parity_ok=7`、`num_main_useful_proxy=0`、`num_guard_stable_proxy=1`。
+- 主要结论：corrected COM 最好 `box025_com_s20 = 0.678/1.325m`，接近但未超过 E004 gravity-only；support-site variants floor contact 升到 `94-97%`，不是有效双端支撑。
+- 已生成可视化拼图：`workspace/core4d_collab_retarget/results/E005/e005_full_keyframe_montage.jpg`。
+- 已更新：
+  - `workspace/core4d_collab_retarget/log/05_E005_partner_force_timing_support_site_results.md`
+  - `workspace/core4d_collab_retarget/EXPERIMENT_TRACKER.md`
