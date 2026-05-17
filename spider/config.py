@@ -125,7 +125,9 @@ class Config:
     support_proxy_height_tau: float = (
         0.0  # low-pass time constant for proxy height; <=0 tracks ref height
     )
-    support_proxy_ref_dt: float = -1.0  # <=0 uses config.ref_dt
+    support_proxy_ref_dt: float = (
+        -1.0
+    )  # <=0 uses config.sim_dt because qpos_ref is already interpolated
     support_proxy_force_clamp: float = 0.0
     support_proxy_torque_clamp: float = 0.0
     # E027b: object PD override — object actuators track ref directly, CEM only optimizes robot

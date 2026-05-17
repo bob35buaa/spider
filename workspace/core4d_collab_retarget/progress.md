@@ -209,3 +209,29 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - proxy 自身在 `box025` main 中水平位移约 `0.79-0.84m`，仍明显小于参考 object 的 `1.57m`；support point 与 proxy gap 约 `0.15-0.20m`。因此 E006 不只是力不够，而是 proxy target、object support point、robot contact 没有闭合成可传递水平牵引的系统。
 - 进一步读代码发现一个 E006 时间索引风险：`_load_support_proxy()` 接收到的 `qpos_ref` 已经被 `spider/io.py::load_data()` 插值到 `sim_dt`；但 E006 override 把 `support_proxy_ref_dt` 显式设成原始 `ref_dt=0.0333`。这样 `idx=int(t / support_proxy_ref_dt)` 在 4.13s 只索引到约第 124 帧，而插值后的参考轨迹实际有约 248 帧，导致 proxy target 只走完约半段参考平移。这很可能是 E006 “不平移只翻转”的首要实现原因。
 - 后续 E007 不应只继续扫 `support_proxy_connector_kp`；需要显式处理水平运输约束/接触闭环，例如 mocap contact pad、robot-side support/contact reward、或把 proxy gap/effort 纳入 reward。
+
+## 2026-05-18 11:05 E007 计划与脚本准备
+
+- 用户要求后续迭代直到 work，并明确 eval 要对齐 E081 而不是 E005；已读取 E081 log / `eval_E081.py` / `comparison.csv`，确认 E081 main baseline 为 `box025_p2_legobj` obj `0.143/0.271m`、hand `89.0%`、leg intf `7.5%`、floor `59.5%`，guard 为 `box023_p2_legobj` obj `0.164/0.317m`、floor `34.7%`。
+- 已写入 E007 plan：`workspace/core4d_collab_retarget/plan/07_E007_support_proxy_timebase_e081_plan.md`。
+- 已修改 support proxy 默认时间基准：
+  - `spider/config.py`: `support_proxy_ref_dt <= 0` 默认使用 `config.sim_dt`。
+  - `spider/simulators/mjwp.py`: `_load_support_proxy()` 和 `_apply_support_proxy_force()` 默认用 `sim_dt` 索引已插值的 proxy reference。
+- 已新增 E007 脚本骨架：
+  - `scripts/E007/variants.tsv`
+  - `scripts/E007/generate_e007_overrides.py`
+  - `scripts/run_E007_preprocess.sh`
+  - `scripts/train/train_E007.sh`
+  - `scripts/train/train_E007_remote_tmux.sh`
+  - `scripts/run_E007_remote.sh`
+  - `scripts/pull_E007_remote_results.sh`
+  - `scripts/eval/eval_E007.py`
+- E007 eval 已从 E005 support-site 对比改为 E081 对齐：输出 proxy timebase ratio、object xy transport ratio、object rotation、`E007_reaches_E081_transport_proxy`、`E007_beats_or_matches_E081_majority`。
+- 下一步：运行 py_compile + preprocess；然后按用户要求先对 `train_E007.sh`、`run_E007_remote.sh`、`pull_E007_remote_results.sh` 发起预授权。
+- py_compile / bash syntax 检查已通过；`bash workspace/core4d_collab_retarget/scripts/run_E007_preprocess.sh` 已成功生成 7 个 E007 override。
+- 预授权已完成：
+  - `bash workspace/core4d_collab_retarget/scripts/train/train_E007.sh`
+  - `bash workspace/core4d_collab_retarget/scripts/run_E007_remote.sh`
+  - `bash workspace/core4d_collab_retarget/scripts/pull_E007_remote_results.sh`
+- E007 4-step smoke 已完成：7/7 变体均产出 freejoint `trajectory_mjwp.npz`。
+- Smoke eval 已完成：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`；4-step 的 transport ratio / E081 majority 不作为结论，只验证 E007 eval 字段写出。

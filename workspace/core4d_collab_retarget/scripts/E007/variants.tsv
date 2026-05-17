@@ -1,0 +1,8 @@
+# variant	source_task	mask_slug	person_idx	queue	role	wave	point_local_x	point_local_y	point_local_z	support_proxy_gravity_scale	support_proxy_connector_kp	support_proxy_connector_kd	support_proxy_xy_velocity_scale	support_proxy_max_xy_speed	support_proxy_height_tau	support_proxy_ref_dt	support_proxy_force_clamp	support_proxy_torque_clamp	hold_contact_rew_scale	hold_contact_sigma	hold_contact_start_eval_time	hold_contact_end_eval_time	hold_contact_require_ref_contact
+E007_box025_p2_yneg_k20_simdt	box025_person2_freejoint_legobj	box025_person2	1	local	main	A	0.0	-0.38	0.30	0.5	20.0	-1.0	1.0	0.8	0.0	-1.0	120.0	25.0	0.0	0.05	0.0	0.0	true
+E007_box025_p2_ypos_k20_simdt	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	A	0.0	0.38	0.30	0.5	20.0	-1.0	1.0	0.8	0.0	-1.0	120.0	25.0	0.0	0.05	0.0	0.0	true
+E007_box025_p2_yneg_k40_simdt	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	B	0.0	-0.38	0.30	0.5	40.0	-1.0	1.0	0.8	0.0	-1.0	140.0	30.0	0.0	0.05	0.0	0.0	true
+E007_box025_p2_ypos_k40_simdt	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	B	0.0	0.38	0.30	0.5	40.0	-1.0	1.0	0.8	0.0	-1.0	140.0	30.0	0.0	0.05	0.0	0.0	true
+E007_box025_p2_yneg_k20_hc_simdt	box025_person2_freejoint_legobj	box025_person2	1	local	main	C	0.0	-0.38	0.30	0.5	20.0	-1.0	1.0	0.8	0.0	-1.0	120.0	25.0	1.0	0.05	1.8	2.5	true
+E007_box023_p2_xneg_k10_simdt	box023_person2_freejoint_legobj	box023_person2	1	remote_gpu1	guard	A	-0.16	0.0	0.10	0.5	10.0	-1.0	1.0	0.8	0.0	-1.0	80.0	15.0	0.0	0.05	0.0	0.0	true
+E007_box023_p2_xpos_k10_simdt	box023_person2_freejoint_legobj	box023_person2	1	remote_gpu1	guard	B	0.16	0.0	0.10	0.5	10.0	-1.0	1.0	0.8	0.0	-1.0	80.0	15.0	0.0	0.05	0.0	0.0	true

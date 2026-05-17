@@ -1680,10 +1680,13 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
         obj_quat_ref, point_local.unsqueeze(0).expand(T, -1)
     )
 
+    # qpos_ref passed into this function has already been interpolated to
+    # config.sim_dt by spider.io.load_data(). Index proxy_ref on that time base
+    # unless a legacy experiment explicitly pins support_proxy_ref_dt.
     dt = (
         float(config.support_proxy_ref_dt)
         if config.support_proxy_ref_dt > 0
-        else float(config.ref_dt)
+        else float(config.sim_dt)
     )
     proxy_pos = torch.empty_like(support_ref)
     proxy_pos[0] = support_ref[0]
@@ -1776,7 +1779,7 @@ def _apply_support_proxy_force(config: Config, env: MJWPEnv):
 
     time_arr = wp.to_torch(env.data_wp.time)
     t = time_arr[0].item()
-    dt = float(getattr(env, "support_proxy_ref_dt", config.ref_dt))
+    dt = float(getattr(env, "support_proxy_ref_dt", config.sim_dt))
     T = env.support_proxy_ref_pos.shape[0]
     idx = min(int(t / dt), T - 1)
     proxy_pos = env.support_proxy_ref_pos[idx].unsqueeze(0).expand(N, -1)
