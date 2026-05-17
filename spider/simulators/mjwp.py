@@ -191,6 +191,8 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> MJWPEnv:
     # Load mocap partner trajectory if configured
     if config.mocap_partner_trajectory:
         _load_mocap_partner(config, env)
+    if config.support_proxy_enabled:
+        _load_support_proxy(config, env, qpos_ref)
 
     return env
 
@@ -395,6 +397,13 @@ def _lf_quat_apply(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 def _lf_quat_apply_inverse(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     """Rotate vector v by inverse of quaternion q."""
     return _lf_quat_apply(_lf_quat_conjugate(q), v)
+
+
+def _clamp_vector_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:
+    if max_norm <= 0:
+        return vec
+    norm = vec.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+    return torch.where(norm > max_norm, vec / norm * max_norm, vec)
 
 
 def _lf_axis_angle_from_quat(q: torch.Tensor) -> torch.Tensor:
@@ -1633,6 +1642,203 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
     wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
 
 
+def _support_proxy_point_local(config: Config) -> list[float]:
+    point_local = list(config.support_proxy_point_local or [])
+    if len(point_local) != 3:
+        raise ValueError(
+            "support_proxy_enabled requires support_proxy_point_local=[x,y,z]."
+        )
+    return [float(v) for v in point_local]
+
+
+def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
+    """Precompute a kinematic support-body proxy trajectory from object ref.
+
+    The proxy is intentionally not a MuJoCo freejoint body in E006. It is an
+    independent controller target whose connector wrench is applied to the true
+    freejoint object at an object-local support site.
+    """
+    if config.nq_obj != 7 or config.contact_guidance:
+        raise ValueError(
+            "support_proxy_enabled currently requires true-freejoint object "
+            f"(contact_guidance=false, nq_obj=7), got nq_obj={config.nq_obj}."
+        )
+
+    point_local = torch.tensor(
+        _support_proxy_point_local(config),
+        dtype=torch.float32,
+        device=config.device,
+    )
+    qpos_ref_t = qpos_ref.to(config.device).to(torch.float32)
+    obj_pos_ref = qpos_ref_t[:, -7:-4]
+    obj_quat_ref = qpos_ref_t[:, -4:]
+    obj_quat_ref = obj_quat_ref / obj_quat_ref.norm(dim=-1, keepdim=True).clamp(
+        min=1e-8
+    )
+    T = obj_pos_ref.shape[0]
+    support_ref = obj_pos_ref + _lf_quat_apply(
+        obj_quat_ref, point_local.unsqueeze(0).expand(T, -1)
+    )
+
+    dt = (
+        float(config.support_proxy_ref_dt)
+        if config.support_proxy_ref_dt > 0
+        else float(config.ref_dt)
+    )
+    proxy_pos = torch.empty_like(support_ref)
+    proxy_pos[0] = support_ref[0]
+
+    max_xy_step = (
+        float(config.support_proxy_max_xy_speed) * dt
+        if config.support_proxy_max_xy_speed > 0
+        else 0.0
+    )
+    xy_scale = float(config.support_proxy_xy_velocity_scale)
+    height_tau = float(config.support_proxy_height_tau)
+    height_alpha = 1.0 if height_tau <= 0 else dt / (height_tau + dt)
+
+    for i in range(1, T):
+        delta_xy = (support_ref[i, :2] - support_ref[i - 1, :2]) * xy_scale
+        if max_xy_step > 0:
+            delta_norm = delta_xy.norm().clamp(min=1e-8)
+            if bool(delta_norm > max_xy_step):
+                delta_xy = delta_xy / delta_norm * max_xy_step
+        proxy_pos[i, :2] = proxy_pos[i - 1, :2] + delta_xy
+        proxy_pos[i, 2] = proxy_pos[i - 1, 2] + height_alpha * (
+            support_ref[i, 2] - proxy_pos[i - 1, 2]
+        )
+
+    proxy_vel = torch.zeros_like(proxy_pos)
+    if T > 1:
+        proxy_vel[1:] = (proxy_pos[1:] - proxy_pos[:-1]) / max(dt, 1e-8)
+        proxy_vel[0] = proxy_vel[1]
+
+    env.support_proxy_point_local = point_local
+    env.support_proxy_ref_pos = proxy_pos.detach()
+    env.support_proxy_ref_vel = proxy_vel.detach()
+    env.support_proxy_ref_dt = dt
+    env.support_proxy_last_force = torch.zeros(
+        (env.num_worlds, 3), device=config.device, dtype=torch.float32
+    )
+    env.support_proxy_last_torque = torch.zeros(
+        (env.num_worlds, 3), device=config.device, dtype=torch.float32
+    )
+    env.support_proxy_last_pos = proxy_pos[:1].repeat(env.num_worlds, 1).detach()
+    env.support_proxy_last_vel = proxy_vel[:1].repeat(env.num_worlds, 1).detach()
+    env.support_proxy_last_support_point_pos = env.support_proxy_last_pos.clone()
+    env.support_proxy_last_support_point_vel = torch.zeros_like(
+        env.support_proxy_last_support_point_pos
+    )
+    env.support_proxy_last_idx = 0
+    loguru.logger.info(
+        "E006 support proxy: ref_pos={}, point_local={}, dt={}, kp={}, "
+        "xy_vel_scale={}, max_xy_speed={}, height_tau={}",
+        tuple(proxy_pos.shape),
+        _support_proxy_point_local(config),
+        dt,
+        config.support_proxy_connector_kp,
+        config.support_proxy_xy_velocity_scale,
+        config.support_proxy_max_xy_speed,
+        config.support_proxy_height_tau,
+    )
+
+
+def _apply_support_proxy_force(config: Config, env: MJWPEnv):
+    """Apply a connector wrench from the virtual support proxy to the object."""
+    if not hasattr(env, "support_proxy_ref_pos"):
+        return
+
+    obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
+    if obj_body_id == -1:
+        return
+
+    xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
+    xfrc_applied[:, obj_body_id, :6] = 0.0
+
+    qpos = wp.to_torch(env.data_wp.qpos)
+    qvel = wp.to_torch(env.data_wp.qvel)
+    obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
+    obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
+    obj_vadr = env.model_cpu.jnt_dofadr[obj_jnt_id]
+    obj_pos_sim = qpos[:, obj_qadr : obj_qadr + 3]
+    obj_vel_sim = qvel[:, obj_vadr : obj_vadr + 3]
+    obj_quat_sim = qpos[:, obj_qadr + 3 : obj_qadr + 7]
+    obj_angvel_sim = qvel[:, obj_vadr + 3 : obj_vadr + 6]
+    obj_quat_sim = obj_quat_sim / obj_quat_sim.norm(dim=-1, keepdim=True).clamp(
+        min=1e-8
+    )
+
+    N = obj_pos_sim.shape[0]
+    local = env.support_proxy_point_local.unsqueeze(0).expand(N, -1)
+    r_world = _lf_quat_apply(obj_quat_sim, local)
+    support_point_pos = obj_pos_sim + r_world
+    support_point_vel = obj_vel_sim + torch.cross(obj_angvel_sim, r_world, dim=-1)
+
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = time_arr[0].item()
+    dt = float(getattr(env, "support_proxy_ref_dt", config.ref_dt))
+    T = env.support_proxy_ref_pos.shape[0]
+    idx = min(int(t / dt), T - 1)
+    proxy_pos = env.support_proxy_ref_pos[idx].unsqueeze(0).expand(N, -1)
+    proxy_vel = env.support_proxy_ref_vel[idx].unsqueeze(0).expand(N, -1)
+
+    obj_mass = env.model_cpu.body_mass[obj_body_id]
+    gravity_z = -env.model_cpu.opt.gravity[2]
+    gravity_force = torch.zeros_like(support_point_pos)
+    gravity_force[:, 2] = config.support_proxy_gravity_scale * obj_mass * gravity_z
+
+    ramp = min(t / 0.5, 1.0)
+    kp = float(config.support_proxy_connector_kp) * ramp
+    if config.support_proxy_connector_kd < 0:
+        kd = 2.0 * (obj_mass * max(float(config.support_proxy_connector_kp), 0.0)) ** 0.5
+    else:
+        kd = float(config.support_proxy_connector_kd)
+    kd *= ramp
+
+    force = gravity_force + kp * (proxy_pos - support_point_pos) + kd * (
+        proxy_vel - support_point_vel
+    )
+    force = _clamp_vector_norm(
+        torch.nan_to_num(force, nan=0.0), config.support_proxy_force_clamp
+    )
+    torque = torch.cross(r_world, force, dim=-1)
+    torque = _clamp_vector_norm(
+        torch.nan_to_num(torque, nan=0.0), config.support_proxy_torque_clamp
+    )
+
+    xfrc_applied[:, obj_body_id, :3] = force
+    xfrc_applied[:, obj_body_id, 3:6] = torque
+    env.support_proxy_last_force = force.detach()
+    env.support_proxy_last_torque = torque.detach()
+    env.support_proxy_last_pos = proxy_pos.detach()
+    env.support_proxy_last_vel = proxy_vel.detach()
+    env.support_proxy_last_support_point_pos = support_point_pos.detach()
+    env.support_proxy_last_support_point_vel = support_point_vel.detach()
+    env.support_proxy_last_idx = idx
+    wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+
+
+def get_support_proxy_state(config: Config, env: MJWPEnv) -> dict[str, np.ndarray]:
+    """Return first-world support proxy diagnostics for trajectory saving."""
+    if not config.support_proxy_enabled or not hasattr(env, "support_proxy_last_force"):
+        return {}
+
+    def _first(tensor: torch.Tensor) -> np.ndarray:
+        return tensor[0].detach().cpu().numpy().astype(np.float32)
+
+    return {
+        "support_proxy_force": _first(env.support_proxy_last_force),
+        "support_proxy_torque": _first(env.support_proxy_last_torque),
+        "support_proxy_pos": _first(env.support_proxy_last_pos),
+        "support_proxy_vel": _first(env.support_proxy_last_vel),
+        "support_point_pos": _first(env.support_proxy_last_support_point_pos),
+        "support_point_vel": _first(env.support_proxy_last_support_point_vel),
+        "support_proxy_ref_idx": np.asarray(
+            int(getattr(env, "support_proxy_last_idx", -1)), dtype=np.int32
+        ),
+    }
+
+
 def _update_object_weld_target(config: Config, env: MJWPEnv):
     """Update the mocap 'object_target' body to track the reference trajectory.
 
@@ -1747,6 +1953,9 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         # E024: apply partner force on object (simulating human partner support)
         if config.partner_force_scale > 0:
             _apply_partner_force(config, env)
+        # E006: COLA-style virtual support proxy owns the object wrench when enabled.
+        if config.support_proxy_enabled:
+            _apply_support_proxy_force(config, env)
         # E030: update weld target mocap body (for scene_weld.xml)
         if config.scene_name == "scene_weld":
             _update_object_weld_target(config, env)

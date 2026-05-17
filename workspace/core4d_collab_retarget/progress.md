@@ -118,3 +118,54 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已更新：
   - `workspace/core4d_collab_retarget/log/05_E005_partner_force_timing_support_site_results.md`
   - `workspace/core4d_collab_retarget/EXPERIMENT_TRACKER.md`
+
+## 2026-05-17 22:50 CUDA / 远程权限预检
+
+- 本机 `nvidia-smi` 可访问 GPU：`NVIDIA GeForce RTX 5090`，Driver `580.126.09`，CUDA `13.0`。
+- 普通沙箱内 `.venv/bin/python -c "import torch"` 显示 `cuda_available=False`、`cuda_device_count=0`，不能作为本机实验入口判断依据。
+- 已用提升权限运行真实 MJWarp smoke：
+  - 命令入口：`env UV_CACHE_DIR=/tmp/uv-cache CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl PYTHONUNBUFFERED=1 .venv/bin/python -u examples/run_mjwp.py ...`
+  - override/task：`core4d_collab_E005_box025_p2_com_s20` / `box025_person2_freejoint_legobj`
+  - 结果：Warp 初始化 `cuda:0 = NVIDIA GeForce RTX 5090`，4-step smoke 正常完成，输出 `/tmp/e005_cuda_probe/trajectory_mjwp.npz`。
+- 远程 `ssh -o BatchMode=yes spider-remote` 正常；远端 hostname 为 `embodied-2x6000Ada`，可见 2 张 `NVIDIA RTX 6000 Ada Generation`，仓库路径 `/home/xiayb/pHRI_workspace/spider` 存在。
+- 远端 `.venv/bin/python` 的 PyTorch CUDA 正常：`cuda_available=True`、`cuda_device_count=2`。
+
+## 2026-05-17 22:58 E006 support-body proxy 审计
+
+- 已读取 COLA paper note、E005 plan/log、`spider/config.py`、`examples/run_mjwp.py` 与 `spider/simulators/mjwp.py` 的 partner-force / mocap / weld 路径。
+- 关键约束：当前 `mjwp.py` 的 object reward、qpos override、eval 口径大量假设 object 是末尾 `nq_obj=7`；如果直接把 dynamic support body 作为额外 freejoint 加到模型尾部，会破坏 `qpos_ref`/`qvel_ref` 与 model `nq/nv` 的维度断言，也会让 `qpos[:, -nq_obj:]` 不再指向 object。
+- 现有可复用路线：
+  - E004/E005：`_apply_partner_force` 通过 `xfrc_applied` 给 object body 写外力/力矩，稳定且不改变 `nu=29`。
+  - 旧 `scene_mocap_partner.xml`：用两个 mocap partner hand geom 与 object 接触，`_update_mocap_partner` 可在 rollout 内更新 mocap 位姿。
+  - `scene_weld.xml`：用 `object_target` mocap + soft weld 直接拉 object，语义太接近 object actuator，不适合作为主线，但可作为 MJWarp equality smoke 参考。
+- E006 最小安全路线倾向：保持 object true-freejoint 与 `nu=29`，新增“support-body proxy controller”作为独立目标/状态记录；首版用 object-local support site 的速度/高度/yaw PD 生成 proxy wrench，并记录 partner effort / end-height 指标。后续若需要更接近 COLA，再尝试 mocap contact pad 或额外 dynamic body，但不能在首轮直接改 `nq` 尾部布局。
+- 已写入 E006 中文计划：`workspace/core4d_collab_retarget/plan/06_E006_cola_support_body_proxy_plan.md`。
+- 已更新 tracker：新增 E006 plan 行与关键指标演进占位。
+
+## 2026-05-17 23:08 E006 implementation draft
+
+- 已新增 E006 support proxy 配置字段到 `spider/config.py`，默认关闭，不影响既有实验。
+- 已在 `spider/simulators/mjwp.py` 中实现：
+  - setup 时从 object ref support site 预计算 proxy pose/velocity；
+  - step 时用 proxy-to-support-site spring/damper + gravity share 生成 object wrench；
+  - `get_support_proxy_state` 输出 force/torque/proxy/support point 诊断。
+- 已在 `examples/run_mjwp.py` 中把 support proxy 诊断保存进 `trajectory_mjwp.npz`。
+- 已新增 E006 脚本骨架：
+  - `scripts/E006/variants.tsv`
+  - `scripts/E006/generate_e006_overrides.py`
+  - `scripts/run_E006_preprocess.sh`
+  - `scripts/train/train_E006.sh`
+  - `scripts/train/train_E006_remote_tmux.sh`
+  - `scripts/run_E006_remote.sh`
+  - `scripts/pull_E006_remote_results.sh`
+  - `scripts/eval/eval_E006.py`
+- 下一步：运行 preprocess + Python 编译检查 + 7 variant smoke。
+
+## 2026-05-17 23:05 E006 smoke
+
+- `py_compile` 通过：`spider/config.py`、`spider/simulators/mjwp.py`、`examples/run_mjwp.py`、E006 generator/eval。
+- `bash workspace/core4d_collab_retarget/scripts/run_E006_preprocess.sh` 成功生成 7 个 E006 override。
+- 本机 CUDA smoke 已完成：`bash workspace/core4d_collab_retarget/scripts/train/train_E006.sh smoke 0`，7/7 变体均产出 `trajectory_mjwp.npz`。
+- NPZ 已确认包含 `support_proxy_force`、`support_proxy_torque`、`support_proxy_pos`、`support_proxy_vel`、`support_point_pos`、`support_point_vel`、`support_proxy_ref_idx`。
+- E006 smoke eval 已完成：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_guard_stable_proxy=2`。该结果仅验证 wiring，4-step 指标不作为实验结论。
+- smoke 中 `box025_yneg_k20_v1` support force mean/max 约 `22.9/23.8N`，connector gap mean 约 `0.044m`，说明 proxy force 记录口径正常。

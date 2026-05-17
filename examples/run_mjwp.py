@@ -49,6 +49,7 @@ from spider.simulators.mjwp import (
     get_qpos,
     get_qvel,
     get_reward,
+    get_support_proxy_state,
     get_terminal_reward,
     get_terminate,
     get_trace,
@@ -1289,6 +1290,18 @@ def main(config: Config):
 
                 # step environment for ctrl_steps
                 step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}
+                if config.support_proxy_enabled:
+                    step_info.update(
+                        {
+                            "support_proxy_force": [],
+                            "support_proxy_torque": [],
+                            "support_proxy_pos": [],
+                            "support_proxy_vel": [],
+                            "support_point_pos": [],
+                            "support_point_vel": [],
+                            "support_proxy_ref_idx": [],
+                        }
+                    )
                 for i in range(config.ctrl_steps):
                     ctrl_step = ctrls[i]
 
@@ -1325,6 +1338,10 @@ def main(config: Config):
                     step_info["qvel"].append(mj_data.qvel.copy())
                     step_info["time"].append(mj_data.time)
                     step_info["ctrl"].append(mj_data.ctrl.copy())
+                    if config.support_proxy_enabled:
+                        support_state = get_support_proxy_state(config, env)
+                        for key, value in support_state.items():
+                            step_info[key].append(value.copy())
                 for k in step_info:
                     step_info[k] = np.stack(step_info[k], axis=0)
                 infos.update(step_info)

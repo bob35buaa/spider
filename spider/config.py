@@ -103,6 +103,31 @@ class Config:
     partner_force_torque_clamp: float = (
         0.0  # max torque norm in Nm for support-point wrench; <=0 disables clamp
     )
+    # E006: COLA-style virtual support-body proxy. This keeps the object true
+    # freejoint and applies a connector wrench from an independent proxy target.
+    support_proxy_enabled: bool = False
+    support_proxy_point_local: list[float] = field(
+        default_factory=list
+    )  # object-local support site; required when enabled
+    support_proxy_gravity_scale: float = (
+        0.5  # fraction of object weight supplied by support proxy
+    )
+    support_proxy_connector_kp: float = 0.0
+    support_proxy_connector_kd: float = (
+        -1.0  # -1 = critical damping with object mass and connector_kp
+    )
+    support_proxy_xy_velocity_scale: float = (
+        1.0  # scale reference support-site XY velocity before integration
+    )
+    support_proxy_max_xy_speed: float = (
+        0.0  # m/s clip for proxy horizontal command; <=0 disables clip
+    )
+    support_proxy_height_tau: float = (
+        0.0  # low-pass time constant for proxy height; <=0 tracks ref height
+    )
+    support_proxy_ref_dt: float = -1.0  # <=0 uses config.ref_dt
+    support_proxy_force_clamp: float = 0.0
+    support_proxy_torque_clamp: float = 0.0
     # E027b: object PD override — object actuators track ref directly, CEM only optimizes robot
     object_pd_override: bool = False  # enable object actuator PD override in step_env
     object_pd_kp_pos: float = 2000.0  # position actuator gain (strong tracking)
