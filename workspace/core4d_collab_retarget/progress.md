@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-E001 已完成并提交推送；E002 freejoint leg-object control audit setup 已实现并完成静态/维度验证，下一步需要在可见 CUDA 的环境中运行 smoke/full CEM。新工作区实验编号从 `E001` 开始；`workspace/core4d` E081 是 baseline，不作为本工作区的 E082。
+E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM 已完成。结论：当前 E081-style 单机器人 reward/control 在真 freejoint object 下失败，且 guard 也失败；下一步应做 E003 physics-feasibility sweep 或进入虚拟 grasp/contact 约束路线。新工作区实验编号从 `E001` 开始；`workspace/core4d` E081 是 baseline，不作为本工作区的 E082。
 
 ## 完成步骤
 
@@ -27,6 +27,10 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit setup �
   - `box023_person2_freejoint_legobj`
 - [x] 复查 E070 qpos-as-ctrl parity bug；已修复 freejoint/scene_act 切换下的 ctrl fallback 隐患，并新增 ref/model 维度断言。
 - [x] E002 GPU smoke 已通过；eval 脚本可在 freejoint `scene.xml` / `nq_obj=7` / `nu=29` 下输出 summary。
+- [x] E002 full local CEM 已完成：
+  - main `E002_box025_p2_freejoint`: case-window obj mean/max `0.703/1.356m`，hand contact `89.6%`，leg intf `0.0%`，floor contact `85.5%`，strict False。
+  - guard `E002_box023_p2_freejoint`: case-window obj mean/max `0.830/1.488m`，hand contact `72.0%`，leg intf `0.0%`，floor contact `88.7%`，strict False。
+  - 相比 E081，真 freejoint 物体在 main 和 guard 都显著退化，确认当前 pipeline 依赖 object actuator guidance。
 
 ## 待完成
 
@@ -35,7 +39,9 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit setup �
 - [x] 汇总 E081 baseline eval+可视化验收口径。
 - [x] 形成 E002+ 可执行实验列表，选择首个实验写 plan 后再实现。
 - [x] 实现 E002 freejoint 派生 task / override / train / eval 脚本。
-- [ ] 运行 E002 smoke + full CEM，对齐 E081 eval 和可视化。
+- [x] 运行 E002 smoke + full CEM，对齐 E081 eval 和可视化。
+- [x] 规划 E003：true-freejoint mass/friction/contact feasibility sweep，优先使用远程双卡并行。
+- [ ] 实现并运行 E003。
 
 ## 遇到的错误
 

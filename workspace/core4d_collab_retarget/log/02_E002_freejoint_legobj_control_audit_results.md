@@ -4,7 +4,7 @@
 
 ## Status
 
-E002 setup 已实现；正在等待 GPU smoke/full CEM。
+E002 full CEM 已完成；结论是当前 E081 reward/control 口径在真 freejoint 物体下失败。
 
 ## Setup
 
@@ -21,6 +21,55 @@ bash workspace/core4d_collab_retarget/scripts/train/train_E002.sh local 0
 ```
 
 ## Results
+
+Full run:
+
+```bash
+bash workspace/core4d_collab_retarget/scripts/train/train_E002.sh local 0
+```
+
+输出：
+
+- `workspace/core4d_collab_retarget/results/E002/comparison.csv`
+- `workspace/core4d_collab_retarget/results/E002/E002_box025_p2_freejoint.{npz,mp4}`
+- `workspace/core4d_collab_retarget/results/E002/E002_box023_p2_freejoint.{npz,mp4}`
+- keyframes: `workspace/core4d_collab_retarget/results/E002/keyframes/`
+
+### Full metrics
+
+| Variant | Role | contact_guidance | nu | nq_obj | obj mean/max | hand contact | leg intf | floor contact | bottom mean | Success |
+|---------|------|------------------|----|--------|--------------|--------------|----------|---------------|-------------|---------|
+| `E002_box025_p2_freejoint` | main | False | 29 | 7 | `0.703/1.356m` | `89.6%` | `0.0%` | `85.5%` | `-0.073m` | numeric False, case-window False, strict False |
+| `E002_box023_p2_freejoint` | guard | False | 29 | 7 | `0.830/1.488m` | `72.0%` | `0.0%` | `88.7%` | `0.026m` | numeric False, case-window False, strict False |
+
+E081 baseline 同口径：
+
+| Variant | Role | obj mean/max | hand contact | leg intf | floor contact | bottom mean | Success |
+|---------|------|--------------|--------------|----------|---------------|-------------|---------|
+| `E081_box025_p2_legobj` | main | `0.143/0.271m` | `89.0%` | `7.5%` | `59.5%` | `-0.075m` | numeric False, case-window True, strict False |
+| `E081_box023_p2_legobj` | guard | `0.164/0.317m` | `66.7%` | `2.7%` | `34.7%` | `0.144m` | numeric True, case-window True, strict True |
+
+### Frame-level check
+
+| Variant | Frame | obj err | sim/ref obj z | hand contact | floor contact | note |
+|---------|-------|---------|---------------|--------------|---------------|------|
+| box025 | f125 | `0.848m` | `0.404/0.482m` | 2 | 2 | sim box remains floor-supported while ref has translated away |
+| box025 | f160 | `1.334m` | `0.383/0.413m` | 0 | 2 | hands lose contact; object remains on floor |
+| box023 | f125 | `1.387m` | `0.225/0.469m` | 2 | 1 | small box is tilted/contacted but far from ref |
+| box023 | f204 | `1.463m` | `0.157/0.149m` | 0 | 4 | object has fallen/settled; hand contact gone |
+
+### Interpretation
+
+E002 answers the original freejoint question directly:
+
+- The current E081-style reward stack is strongly dependent on `scene_act` object actuator guidance.
+- Removing object actuator guidance does not merely degrade the large-box main case; it also breaks the small-box guard that E081 passed.
+- The optimizer still finds hand-object contacts (`89.6%` and `72.0%`) and keeps leg/box interference at `0%`, so failure is not missing hand proximity or leg collision. It is the inability to generate stable object transport through physical contact alone.
+- Visual/keyframe checks match the metrics: sim objects remain floor-supported or tilt/fall while the ref object translates/lifts away.
+
+### Follow-up
+
+E003 should not just rerun the same freejoint setting. The next useful experiment is a physics-feasibility sweep: object mass/contact/friction sensitivity under the same true-freejoint evaluation. If lighter/higher-friction objects still fail, we should move to explicit virtual grasp/contact constraints or dual-agent support rather than expecting the current single-agent CEM reward to solve freejoint transport.
 
 ## E070 parity bug 复查
 
