@@ -55,7 +55,13 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `log/03_E003_freejoint_physics_feasibility_sweep_results.md`
 - [x] E003 preprocess 已完成，生成四个 true-freejoint 派生 task 和四个 Hydra override；四个配置均为 `contact_guidance=false`、`scene_name=""`、`nq/nv/nu/nq_obj=43/41/29/7`、`ctrl_ref=29`。
 - [x] E003 GPU smoke 已通过：四个 variant 均生成 NPZ，`eval_E003.py` 已生成 `comparison.csv`/summary/timeseries/leg-object 指标。smoke 仅 `T=4`，不用于实验结论。
-- [ ] 实现并运行 E003。
+- [x] E003 setup 已提交并推送：`a12d309 exp(core4d_collab_retarget): E003 physics sweep setup`。
+- [ ] E003 full 已在远端 tmux session `E003` 启动，GPU0 跑 box025 两个 variant，GPU1 跑 box023 两个 variant；远端既有 dirty state 未清理，`git pull --ff-only` 和 E003 preprocess 已成功。
+  - 已完成：`E003_box025_p2_m1.npz`、`E003_box023_p2_m1.npz`、`E003_box025_p2_m1_f4.npz`、`E003_box023_p2_m1_f4.npz`。
+  - 远端/本地 eval 均完成，aggregate: `num_results=4`, `num_guard_physics_feasible_proxy=0`。
+- [x] E003 full 结论：`box025_m1_f4` 相比 E002 有改善但仍失败；`box023` guard 未恢复并出现腿/箱干涉和摔倒。被动 mass/friction 不是主要瓶颈，下一步转向 explicit virtual collaborator/support/contact constraint。
+- [x] 实现并运行 E003。
+- [x] 已写入 E004 计划：`workspace/core4d_collab_retarget/plan/04_E004_freejoint_virtual_partner_support_plan.md`，使用现有 `partner_force_*` freejoint 外力路径测试虚拟协作者支持。
 
 ## 遇到的错误
 

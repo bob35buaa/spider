@@ -4,7 +4,7 @@
 
 ## Status
 
-E003 implementation and GPU smoke completed. Full CEM pending.
+E003 full CEM completed. Result: lowering mass and increasing hand/object friction does not recover true-freejoint success.
 
 ## Setup
 
@@ -22,7 +22,8 @@ E003 implementation and GPU smoke completed. Full CEM pending.
 ```bash
 bash workspace/core4d_collab_retarget/scripts/run_E003_preprocess.sh
 bash workspace/core4d_collab_retarget/scripts/train/train_E003.sh smoke 0
-bash workspace/core4d_collab_retarget/scripts/train/train_E003.sh local 0
+bash workspace/core4d_collab_retarget/scripts/run_E003_remote.sh
+bash workspace/core4d_collab_retarget/scripts/pull_E003_remote_results.sh
 ```
 
 ## Results
@@ -56,18 +57,56 @@ Smoke uses `max_sim_steps=4`, so the table below only verifies execution/eval pl
 | `E003_box023_p2_m1` | 4 | 29 | 7 | `0.010/0.013m` | `0.0%` | `0.0%` | `100.0%` |
 | `E003_box023_p2_m1_f4` | 4 | 29 | 7 | `0.010/0.013m` | `0.0%` | `0.0%` | `100.0%` |
 
-Full CEM 待运行后填写。
+### Full metrics
+
+Full CEM was launched on `spider-remote` in tmux session `E003`.
+
+| Variant | Role | mass/friction | obj mean/max | hand contact | leg intf | floor contact | bottom mean | Success |
+|---------|------|---------------|--------------|--------------|----------|---------------|-------------|---------|
+| `E003_box025_p2_m1` | main | `1kg`, hand `2`, floor `1` | `0.622/1.190m` | `82.7%` | `0.0%` | `70.5%` | `-0.072m` | case-window False, strict False |
+| `E003_box025_p2_m1_f4` | main | `1kg`, hand `4`, floor `0.5` | `0.400/0.795m` | `93.6%` | `1.7%` | `76.9%` | `-0.083m` | case-window False, strict False |
+| `E003_box023_p2_m1` | guard | `1kg`, hand `2`, floor `1` | `0.831/1.512m` | `60.7%` | `11.3%` | `98.0%` | `0.040m` | case-window False, strict False |
+| `E003_box023_p2_m1_f4` | guard | `1kg`, hand `4`, floor `0.5` | `0.947/1.678m` | `64.7%` | `10.0%` | `68.0%` | `0.005m` | case-window False, strict False |
+
+Comparison to E002/E081:
+
+| Case | E081 actuator-guided baseline | E002 true-freejoint | Best E003 true-freejoint | Interpretation |
+|------|-------------------------------|---------------------|--------------------------|----------------|
+| `box025_p2` | obj `0.143/0.271m`, hand `89.0%`, leg `7.5%`, floor `59.5%`, case-window True | obj `0.703/1.356m`, hand `89.6%`, leg `0.0%`, floor `85.5%` | `m1_f4`: obj `0.400/0.795m`, hand `93.6%`, leg `1.7%`, floor `76.9%` | lighter/high-friction improves transport but remains far from E081 and still floor-supported |
+| `box023_p2` | obj `0.164/0.317m`, hand `66.7%`, leg `2.7%`, floor `34.7%`, strict True | obj `0.830/1.488m`, hand `72.0%`, leg `0.0%`, floor `88.7%` | `m1`: obj `0.831/1.512m`; `m1_f4`: obj `0.947/1.678m` | physics sweep does not recover guard; high friction destabilizes/falls |
+
+### Frame-level check
+
+| Variant | Frame | obj err | sim/ref obj z | hand contact | floor contact | leg contact | observation |
+|---------|-------|---------|---------------|--------------|---------------|-------------|-------------|
+| `box025_m1` | f125 | `0.705m` | `0.407/0.482m` | 1 | 0 | 0 | sim box remains near robot and lags ref translation |
+| `box025_m1` | f160 | `1.178m` | `0.379/0.413m` | 0 | 2 | 0 | hand contact lost; box remains floor-supported |
+| `box025_m1_f4` | f125 | `0.466m` | `0.417/0.482m` | 1 | 0 | 0 | better than E002 but still clearly behind ref |
+| `box025_m1_f4` | f160 | `0.779m` | `0.383/0.413m` | 2 | 0 | 0 | hand contact persists, but object still not transported far enough |
+| `box023_m1` | f125 | `1.370m` | `0.244/0.469m` | 1 | 1 | 3 | small box is supported/perturbed by leg contacts, not clean hand carry |
+| `box023_m1_f4` | f125 | `1.574m` | `0.156/0.469m` | 0 | 4 | 0 | robot has fallen over the box; visual failure despite reduced floor friction |
+| `box023_m1_f4` | f204 | `0.312m` | `0.246/0.149m` | 0 | 0 | 0 | object happens to be closer, but robot is fully fallen and task is invalid |
+
+Keyframes:
+
+- `workspace/core4d_collab_retarget/results/E003/keyframes/E003_box025_p2_m1_f4/f125.jpg`
+- `workspace/core4d_collab_retarget/results/E003/keyframes/E003_box025_p2_m1_f4/f160.jpg`
+- `workspace/core4d_collab_retarget/results/E003/keyframes/E003_box023_p2_m1/f125.jpg`
+- `workspace/core4d_collab_retarget/results/E003/keyframes/E003_box023_p2_m1_f4/f125.jpg`
+- `workspace/core4d_collab_retarget/results/E003/keyframes/E003_box023_p2_m1_f4/f204.jpg`
 
 ## Claims
 
 | Claim | Status |
 |-------|--------|
-| C1 物理参数是主要瓶颈 | 待评估 |
-| C2 当前 reward/optimizer 是主要瓶颈 | 待评估 |
-| C3 接触增强没有通过腿/地板作弊 | 待评估 |
+| C1 物理参数是主要瓶颈 | Rejected. `box025_m1_f4` improves over E002, but still fails by a wide margin; `box023` guard does not recover. |
+| C2 当前 reward/optimizer 是主要瓶颈 | Supported. True-freejoint failure persists after mass/friction changes, so the current single-agent CEM reward/contact model is insufficient for object transport. |
+| C3 接触增强没有通过腿/地板作弊 | Mixed/failed. Main stays mostly clean, but guard has `10-11%` leg-box interference and visual robot fallover. |
 
 ## Next
 
-1. 运行 full CEM 并用 E003 evaluator 对齐 E002/E081 指标。
-2. 抽取/检查关键帧 f100/f125/f160。
-3. 根据 mass/friction sweep 结果决定是否进入 virtual grasp/contact constraint 或 dual-agent support。
+E004 should stop tuning passive physics alone. The next useful experiment is an explicit assistance/contact model:
+
+1. Add a virtual collaborator/support term for freejoint object transport, aligned with the eventual sim2real setup where a human supports the other side.
+2. Keep object true-freejoint in evaluation; do not return to `scene_act` object actuator tracking as the claimed result.
+3. Evaluate against the same E081/E002/E003 metrics and keyframes.
