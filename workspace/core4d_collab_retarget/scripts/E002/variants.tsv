@@ -1,0 +1,3 @@
+# variant	source_task	derived_task	mask_source_exp	mask_slug	person_idx	split	role
+E002_box025_p2_freejoint	box025_person2	box025_person2_freejoint_legobj	E081	box025_person2	1	local	main
+E002_box023_p2_freejoint	box023_person2	box023_person2_freejoint_legobj	E081	box023_person2	1	local	guard

@@ -1,0 +1,23 @@
+# @package _global_
+# Auto-generated for E002 true-freejoint leg/foot-object audit.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: box025_person2_freejoint_legobj
+scene_name: ""
+contact_guidance: false
+object_pd_override: false
+object_action_dims: 0
+object_actuator_ids: []
+object_actuator_names: []
+
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E002/contact_masks/box025_person2/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [0.0, 1.0, 0.0]
+hold_contact_rew_scale: 0.0
+hold_contact_start_eval_time: 0.0
+hold_contact_end_eval_time: 0.0

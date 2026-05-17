@@ -59,14 +59,19 @@ def load_data(
         )
         if config.embodiment_type in ["bimanual", "right", "left"]:
             ctrl_ref = qpos_ref[:, : -config.nq_obj]
-        elif config.embodiment_type in ["humanoid", "humanoid_object"]:
-            nq_obj = config.nq_obj if config.nq_obj > 0 else 0
-            if nq_obj > 0:
-                ctrl_ref = np.concatenate(
-                    [qpos_ref[:, 7:-nq_obj], qpos_ref[:, -nq_obj:]], axis=-1
-                )
+        elif config.embodiment_type == "humanoid_object":
+            object_action_dims = max(int(getattr(config, "object_action_dims", 0)), 0)
+            if int(getattr(config, "nu", -1)) > 0:
+                robot_ctrl_dim = max(int(config.nu) - object_action_dims, 0)
             else:
-                ctrl_ref = qpos_ref[:, 7:]
+                nq_obj = config.nq_obj if config.nq_obj > 0 else 0
+                robot_ctrl_dim = max(qpos_ref.shape[1] - 7 - nq_obj, 0)
+            # Humanoid-object controls are robot actuators only. A freejoint
+            # object has no actuator channels; scene_act object controls are
+            # constructed later by the runner from the object reference pose.
+            ctrl_ref = qpos_ref[:, 7 : 7 + robot_ctrl_dim]
+        elif config.embodiment_type == "humanoid":
+            ctrl_ref = qpos_ref[:, 7:]
         elif config.embodiment_type in ["CMU", "DanceDB"]:
             ctrl_ref = qpos_ref[:, 7:]
         else:

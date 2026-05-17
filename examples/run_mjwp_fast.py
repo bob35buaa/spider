@@ -233,6 +233,23 @@ def main(config: Config):
     )
 
     ref_data = (qpos_ref, qvel_ref, ctrl_ref, contact, contact_pos)
+    ref_dims = {
+        "qpos_ref": (int(qpos_ref.shape[1]), int(config.nq)),
+        "qvel_ref": (int(qvel_ref.shape[1]), int(config.nv)),
+        "ctrl_ref": (int(ctrl_ref.shape[1]), int(config.nu)),
+    }
+    bad_ref_dims = {
+        name: dims for name, dims in ref_dims.items() if dims[0] != dims[1]
+    }
+    if bad_ref_dims:
+        detail = ", ".join(
+            f"{name}={got} expected {expected}"
+            for name, (got, expected) in bad_ref_dims.items()
+        )
+        raise ValueError(
+            "Reference/model dimension mismatch after preprocessing: "
+            f"{detail}. This usually means ctrl_ref is not actuator-space."
+        )
     config.max_sim_steps = (
         config.max_sim_steps
         if config.max_sim_steps > 0

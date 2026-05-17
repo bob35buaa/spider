@@ -637,8 +637,10 @@ def get_reward(
 
         # Joint tracking from qpos (joint angles only, not base)
         if config.embodiment_type == "humanoid_object":
-            jt_sim = qpos_sim[:, 7:-7] if qpos_sim.shape[1] > 14 else qpos_sim[:, 7:]
-            jt_ref = qpos_ref[7:-7] if qpos_ref.shape[0] > 14 else qpos_ref[7:]
+            nq_obj = max(int(config.nq_obj), 0)
+            obj_start = -nq_obj if nq_obj > 0 else None
+            jt_sim = qpos_sim[:, 7:obj_start]
+            jt_ref = qpos_ref[7:obj_start]
             jt_err = (jt_sim - jt_ref.unsqueeze(0)).abs().mean(dim=1)
         else:
             jt_err = torch.zeros(N, device=config.device)
