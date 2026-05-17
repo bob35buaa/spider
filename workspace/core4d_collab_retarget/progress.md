@@ -266,3 +266,25 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `bash workspace/core4d_collab_retarget/scripts/pull_E008_remote_results.sh __codex_auth_probe__`
 - E008 smoke 已完成：7/7 变体产出 4-step NPZ；eval aggregate 为 `num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_main_proxy_support_tracking_ok=5`。4-step `E008_beats_or_matches_E081_majority` 不作为结论。
 - 已将 `spider/simulators/mjwp.py` 中 support proxy 日志文案从 `E006 support proxy` 改为通用 `support proxy`，不改施力公式；`py_compile` 复查通过。
+
+## 2026-05-18 12:30 E008 full 进行中
+
+- 已启动 E008 full：
+  - 本地：`E008_box025_p2_yneg_k20_vmax0`、`E008_box025_p2_yneg_k40_vmax0`
+  - 远程 GPU0：`E008_box025_p2_ypos_k20_vmax0`、`E008_box025_p2_yneg_k20_vmax2`、`E008_box025_p2_ypos_k20_vmax2`
+  - 远程 GPU1：`E008_box023_p2_xneg_k10_vmax0`、`E008_box023_p2_xpos_k10_vmax0`
+- 远程 `E008_box023_p2_xneg_k10_vmax0` 在 `96/272` 处超过 3 分钟无进展、GPU 利用率 0%、CPU 100%，已终止并保留日志；随后单独启动 `E008_box023_p2_xpos_k10_vmax0`。
+- 首个 full `E008_box025_p2_yneg_k20_vmax0` 已完成并单独 eval：
+  - proxy gate 通过：`E008_proxy_xy_disp_ratio_vs_ref_support = 1.000`，final gap `~1e-7m`
+  - object xy ratio `0.711`，case-window xy ratio `0.672`
+  - object rotation `12.7deg`
+  - obj mean/max `0.485/0.827m`
+  - hand contact `43.4%`
+  - floor contact `69.9%`
+  - leg-box interference `22.0%`
+- 结论暂定：E007 限速是关键瓶颈之一；不限速后物体开始大幅平移且旋转下降，但仍未达到 E081，主要剩余问题变成手端闭环不足与腿/箱干涉过高。
+- E008 full 最终显式评估 6 个完整结果：5 main + 1 guard；远程 `xneg` full 被排除，避免使用 smoke NPZ。
+- Aggregate：`num_results=6`、`num_main_proxy_support_tracking_ok=5`、`num_main_reaches_E081_transport_proxy=0`、`num_guard_stable_proxy=1`。
+- 最好结果 `E008_box025_p2_ypos_k20_vmax2`：obj mean/max `0.363/0.684m`，hand `78.0%`，floor `64.7%`，leg intf `2.9%`，xy ratio `0.724`，rot `13.6deg`，proxy ratio `0.998`。
+- 可视化确认：best 变体不再只是原地旋转，已明显水平平移；但后半段 sim 仍滞后 ref，手端不像 E081 那样形成稳定托举，语义仍不是干净双端搬运。
+- 已写入 E008 结果日志：`workspace/core4d_collab_retarget/log/08_E008_support_proxy_speed_unclamped_e081_results.md`；下一步 E009 应基于 `ypos_k20_vmax2` 做 robot-side hold-contact/support 闭环或 contact pad。
