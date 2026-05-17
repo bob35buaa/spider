@@ -1,0 +1,13 @@
+# variant	source_task	mask_slug	person_idx	queue	role	wave	partner_force_scale	partner_force_spring_kp	partner_force_spring_kd	partner_force_spring_kp_rot	partner_force_spring_kd_rot	partner_force_rot_clamp	hold_contact_rew_scale	hold_contact_sigma	hold_contact_start_eval_time	hold_contact_end_eval_time	hold_contact_require_ref_contact
+E004_box025_p2_g05	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	control	A	0.5	0.0	-1.0	0.0	-1.0	0.10	0.0	0.05	0.0	0.0	true
+E004_box025_p2_s10	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	A	0.5	10.0	-1.0	0.0	-1.0	0.10	0.0	0.05	0.0	0.0	true
+E004_box025_p2_s20	box025_person2_freejoint_legobj	box025_person2	1	local	main	A	0.5	20.0	-1.0	0.0	-1.0	0.10	0.0	0.05	0.0	0.0	true
+E004_box025_p2_s40	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	A	0.5	40.0	-1.0	0.0	-1.0	0.10	0.0	0.05	0.0	0.0	true
+E004_box023_p2_s10	box023_person2_freejoint_legobj	box023_person2	1	remote_gpu1	guard	A	0.5	10.0	-1.0	0.0	-1.0	0.10	0.0	0.05	0.0	0.0	true
+E004_box023_p2_s20	box023_person2_freejoint_legobj	box023_person2	1	remote_gpu1	guard	A	0.5	20.0	-1.0	0.0	-1.0	0.10	0.0	0.05	0.0	0.0	true
+E004_box025_p2_s20_hc	box025_person2_freejoint_legobj	box025_person2	1	local	main	B	0.5	20.0	-1.0	0.0	-1.0	0.10	1.0	0.05	1.8	2.5	true
+E004_box025_p2_s40_hc	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	B	0.5	40.0	-1.0	0.0	-1.0	0.10	1.0	0.05	1.8	2.5	true
+E004_box023_p2_s10_hc	box023_person2_freejoint_legobj	box023_person2	1	remote_gpu1	guard	B	0.5	10.0	-1.0	0.0	-1.0	0.10	1.0	0.05	1.8	2.5	true
+# Optional Wave C probes are intentionally not included in default smoke/full queues.
+# E004_box025_p2_s20_rot025_probe	box025_person2_freejoint_legobj	box025_person2	1	probe	main	C	0.5	20.0	-1.0	0.25	-1.0	0.10	1.0	0.05	1.8	2.5	true
+# E004_box025_p2_s20_rot050_probe	box025_person2_freejoint_legobj	box025_person2	1	probe	main	C	0.5	20.0	-1.0	0.50	-1.0	0.10	1.0	0.05	1.8	2.5	true

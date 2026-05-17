@@ -1,0 +1,33 @@
+# @package _global_
+# Auto-generated for E004 true-freejoint virtual partner support.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: box023_person2_freejoint_legobj
+scene_name: ""
+contact_guidance: false
+object_pd_override: false
+object_action_dims: 0
+object_actuator_ids: []
+object_actuator_names: []
+
+partner_force_scale: 0.5
+partner_force_spring_kp: 10.0
+partner_force_spring_kd: -1.0
+partner_force_spring_kp_rot: 0.0
+partner_force_spring_kd_rot: -1.0
+partner_force_rot_clamp: 0.10
+
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E004/contact_masks/box023_person2/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [1.0, 0.0, 0.0]
+contact_hdmi_palm_normal_right: [1.0, 0.0, 0.0]
+
+hold_contact_rew_scale: 1.0
+hold_contact_sigma: 0.05
+hold_contact_start_eval_time: 1.8
+hold_contact_end_eval_time: 2.5
+hold_contact_require_ref_contact: true
