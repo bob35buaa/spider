@@ -11,7 +11,7 @@
 | E001 | 2026-05-17 | Exploration | 基于 core4d E081 baseline，审计 object/freejoint 控制口径、E081 eval+可视化验收口径，并深读 SPIDER / DynaRetarget / 双人交互控制论文。结论：active E079-E081 是 `scene_act` actuator-guided object，不是真 freejoint 物理搬运；E002 应优先做 freejoint-legobj 对照 | ✅ 详见 log 01 |
 | E002 | 2026-05-17 | Freejoint Audit | **真 freejoint + leg-object collision 对照**: 新建 `box025_person2_freejoint_legobj` / `box023_person2_freejoint_legobj`，关闭 `scene_act/contact_guidance/object actuator`，并修复/防护 E070 同类 qpos-as-ctrl 隐患；full CEM 显示 main/guard 都无法通过真实接触跟踪 object ref | ✅ 详见 log 02 |
 | E003 | 2026-05-17 | Physics Feasibility | **true-freejoint 物理参数可行性 sweep**: 在 E002 基础上改 object mass/friction。`box025_m1_f4` 从 E002 `0.703m` 改善到 `0.400m` case-window obj mean，但仍失败且 floor contact `76.9%`；`box023` guard 未恢复并出现 `10-11%` 腿/箱干涉/摔倒 | ✅ 详见 log 03 |
-| E004 | 2026-05-17 | Virtual Partner | **true-freejoint 虚拟协作者支持计划**: 使用现有 `partner_force_*` 外力路径在 freejoint object 上施加重力补偿/弹簧/旋转支持，测试是否能表达 sim2real 中真实人类支撑另一侧的因素，同时保持 `nu=29`、no object actuator | 📋 计划中 |
+| E004 | 2026-05-17 | Virtual Partner | **true-freejoint 大规模虚拟协作者支持计划**: 基于 E024/E028-E030 与 E004 v2 先验，重新设计 gravity-only control、translation spring `kp=10/20/40`、hold-contact reward-only、以及隔离 rotation probe 的多轮 sweep；主线保持 `nu=29`、`nq_obj=7`、no object actuator | 📋 计划中 |
 
 ## Baseline
 
