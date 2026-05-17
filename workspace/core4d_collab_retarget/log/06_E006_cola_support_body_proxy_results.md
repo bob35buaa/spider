@@ -103,6 +103,21 @@ bash workspace/core4d_collab_retarget/scripts/pull_E006_remote_results.sh
 - `box023_xneg` 的 floor/object 指标看起来更好，但 pelvis 低到 `0.069m`，可视化应判为机器人摔倒/跪倒后物体被 proxy/地面主导。
 - `box023_xpos` 姿态稳定，但 object 仍明显不跟随，不构成 transport。
 
+### 追加诊断：平移不足、旋转过量
+
+后验重读 E006 `trajectory_mjwp.npz` 后，视频里的“物体几乎不平移、主要旋转”是量化成立的：
+
+- `box025_person2_freejoint_legobj` 参考 object 水平净位移约 `1.57m`，起终姿态旋转只有约 `2.0deg`。
+- E006 `box025` main 实际水平净位移只有 `0.21-0.50m`，但 object 起终姿态旋转约 `20.6-47.6deg`。
+- 典型变体：`E006_box025_p2_yneg_k40_v1` xy 净位移 `0.495m`、旋转 `47.6deg`；`E006_box025_p2_ypos_k20_v1` xy 净位移 `0.341m`、旋转 `33.3deg`；`E006_box025_p2_yneg_k20_v05` xy 净位移 `0.211m`、旋转 `20.6deg`。
+
+这说明 E006 的优化容易用“贴地 + 绕局部支撑点翻转”来吃掉部分 tracking 误差，而不是形成参考所需的水平运输。原因至少有两层：
+
+1. support-site wrench 本身会把竖直支撑力通过 `r x F` 转成力矩；当机器人手端没有建立稳定接触闭环时，这个力矩更容易驱动箱体旋转，而不是产生可控水平平移。
+2. E006 存在一个时间索引风险：`_load_support_proxy()` 接收到的 `qpos_ref` 已经被 `spider/io.py::load_data()` 插值到 `sim_dt`，但 E006 override 显式写入 `support_proxy_ref_dt=0.0333`。运行中 `idx=int(t / support_proxy_ref_dt)` 在约 `4.13s` 只索引到第 `124` 帧，而插值后的参考长度约为原始 2 倍，导致 proxy target 只走完约半段水平参考。实际记录中 `box025` proxy 水平位移约 `0.79-0.84m`，明显小于参考 object 的 `1.57m`。
+
+因此 E006 的失败不能只归因于 `kp` 不够；首要修正应是让 support proxy 使用插值后参考的时间基准（`sim_dt` 或直接按 `sim_step` 索引），再评估是否仍出现“旋转替代平移”。若时间修正后仍失败，再进入 mocap contact pad / robot-side contact reward 路线。
+
 ## Claims 验证
 
 | Claim | 结论 | 证据 |

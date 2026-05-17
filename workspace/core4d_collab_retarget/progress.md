@@ -197,3 +197,15 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已生成关键帧拼图：`workspace/core4d_collab_retarget/results/E006/e006_full_keyframe_montage.jpg`。
 - 已写入 E006 结果日志：`workspace/core4d_collab_retarget/log/06_E006_cola_support_body_proxy_results.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：E006 标记完成，并记录“工程接入成功、算法未改善”的结论。
+
+## 2026-05-18 10:30 E006 失败模式追加诊断：平移不足、旋转过量
+
+- 根据 E006 视频直觉重新读 `trajectory_mjwp.npz`：`box025_person2_freejoint_legobj` 参考 object 水平净位移约 `1.57m`，起终姿态旋转只有约 `2.0deg`。
+- E006 `box025` main 的实际水平净位移只有 `0.21-0.50m`，但 object 起终姿态旋转约 `20.6-47.6deg`；这支持“箱体不真正平移，主要贴地/绕支撑点翻转”的失败模式。
+- 典型例子：
+  - `E006_box025_p2_yneg_k40_v1`: xy 净位移 `0.495m`、object path `0.832m`、旋转 `47.6deg`。
+  - `E006_box025_p2_ypos_k20_v1`: xy 净位移 `0.341m`、object path `0.628m`、旋转 `33.3deg`。
+  - `E006_box025_p2_yneg_k20_v05`: xy 净位移 `0.211m`、旋转 `20.6deg`。
+- proxy 自身在 `box025` main 中水平位移约 `0.79-0.84m`，仍明显小于参考 object 的 `1.57m`；support point 与 proxy gap 约 `0.15-0.20m`。因此 E006 不只是力不够，而是 proxy target、object support point、robot contact 没有闭合成可传递水平牵引的系统。
+- 进一步读代码发现一个 E006 时间索引风险：`_load_support_proxy()` 接收到的 `qpos_ref` 已经被 `spider/io.py::load_data()` 插值到 `sim_dt`；但 E006 override 把 `support_proxy_ref_dt` 显式设成原始 `ref_dt=0.0333`。这样 `idx=int(t / support_proxy_ref_dt)` 在 4.13s 只索引到约第 124 帧，而插值后的参考轨迹实际有约 248 帧，导致 proxy target 只走完约半段参考平移。这很可能是 E006 “不平移只翻转”的首要实现原因。
+- 后续 E007 不应只继续扫 `support_proxy_connector_kp`；需要显式处理水平运输约束/接触闭环，例如 mocap contact pad、robot-side support/contact reward、或把 proxy gap/effort 纳入 reward。
