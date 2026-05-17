@@ -169,3 +169,31 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - NPZ 已确认包含 `support_proxy_force`、`support_proxy_torque`、`support_proxy_pos`、`support_proxy_vel`、`support_point_pos`、`support_point_vel`、`support_proxy_ref_idx`。
 - E006 smoke eval 已完成：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_guard_stable_proxy=2`。该结果仅验证 wiring，4-step 指标不作为实验结论。
 - smoke 中 `box025_yneg_k20_v1` support force mean/max 约 `22.9/23.8N`，connector gap mean 约 `0.044m`，说明 proxy force 记录口径正常。
+
+## 2026-05-17 23:06 E006 full 启动
+
+- E006 setup 已提交并推送：`817fc39 exp(core4d_collab_retarget): E006 support proxy setup`。
+- 已启动远程 tmux `E006`：`bash workspace/core4d_collab_retarget/scripts/run_E006_remote.sh`。
+  - remote GPU0 队列：`E006_box025_p2_yneg_k40_v1`、`E006_box025_p2_yneg_k20_v05`、`E006_box025_p2_ypos_k20_v1`。
+  - remote GPU1 队列：`E006_box023_p2_xneg_k10_v1`、`E006_box023_p2_xpos_k10_v1`。
+- 已启动本地 full：`bash workspace/core4d_collab_retarget/scripts/train/train_E006.sh local_wave 0`。
+  - local 队列：`E006_box025_p2_yneg_k20_v1`、`E006_box025_p2_yneg_k20_v1_hc`。
+- 23:24 本地 `E006_box025_p2_yneg_k20_v1` 已完成并进入 `E006_box025_p2_yneg_k20_v1_hc`。
+- 23:30 远程 GPU0 `E006_box025_p2_yneg_k40_v1` 已完成；远程 GPU1 `E006_box023_p2_xneg_k10_v1` 已完成。
+- 23:42 本地 local_wave 两个 full 已完成并通过 eval：
+  - `E006_box025_p2_yneg_k20_v1`: obj mean/max `0.769/1.514m`，hand contact `52.6%`，floor `93.1%`，support force mean `22.6N`。
+  - `E006_box025_p2_yneg_k20_v1_hc`: obj mean/max `0.767/1.503m`，hand contact `64.7%`，floor `93.6%`，support force mean `22.9N`。
+  - 初步判断：本地两个 main 没有超过 E005 support-site，等远程刚度/速度/side 和 guard 完成后统一分析。
+- 23:48 远程 GPU0 `E006_box025_p2_yneg_k20_v05` 已完成，已进入最后一个 `E006_box025_p2_ypos_k20_v1`。
+- 23:53 远程 GPU1 `E006_box023_p2_xpos_k10_v1` 已完成；远程仅剩 GPU0 `E006_box025_p2_ypos_k20_v1`。
+
+## 2026-05-18 00:43 E006 full 回收与分析
+
+- 远程最后一个 `E006_box025_p2_ypos_k20_v1` 已完成；`bash workspace/core4d_collab_retarget/scripts/pull_E006_remote_results.sh` 已回收远程 5 个结果、视频、keyframes 和日志。
+- 已重新运行全量 eval：`.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E006.py --all`。
+- 最终 aggregate：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_main_useful_proxy=0`、`num_main_beats_E005_support_site_proxy=0`、`num_guard_stable_proxy=1`。
+- main best：`E006_box025_p2_ypos_k20_v1` obj mean/max `0.704/1.410m`，hand contact `78.0%`，floor `91.3%`，force mean/max `25.6/32.9N`。
+- guard：`E006_box023_p2_xneg_k10_v1` obj `0.662/1.151m`、floor `60.0%` 但 pelvis min `0.069m`，判为摔倒；`xpos` pelvis stable but object `0.847/1.441m`。
+- 已生成关键帧拼图：`workspace/core4d_collab_retarget/results/E006/e006_full_keyframe_montage.jpg`。
+- 已写入 E006 结果日志：`workspace/core4d_collab_retarget/log/06_E006_cola_support_body_proxy_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：E006 标记完成，并记录“工程接入成功、算法未改善”的结论。
