@@ -1734,7 +1734,7 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
     )
     env.support_proxy_last_idx = 0
     loguru.logger.info(
-        "E006 support proxy: ref_pos={}, point_local={}, dt={}, kp={}, "
+        "support proxy: ref_pos={}, point_local={}, dt={}, kp={}, "
         "xy_vel_scale={}, max_xy_speed={}, height_tau={}",
         tuple(proxy_pos.shape),
         _support_proxy_point_local(config),

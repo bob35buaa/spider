@@ -250,3 +250,19 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `E007_e081_majority_score = 1/6`
 - 诊断：dt 修正确实生效，日志显示 `_load_support_proxy dt=0.0166667`；但 `support_proxy_max_xy_speed=0.8` 成为新的限速瓶颈。参考 support point 在快速段速度超过 0.8m/s，proxy 最终只走完约 `69%` 参考水平位移，object 仍只走 `29%` 并旋转替代平移。
 - 已停止剩余本地/远程 E007 队列，避免继续跑同一限速配置。下一步进入 E008：高/不限速 support proxy，并优先检查 proxy ratio 是否 `>=0.95`。
+
+## 2026-05-18 12:18 E008 计划与脚本骨架
+
+- 已写入 E008 中文计划：`workspace/core4d_collab_retarget/plan/08_E008_support_proxy_speed_unclamped_e081_plan.md`。
+- E008 的首要 gate 是 proxy 自身完整平移：`proxy_xy_disp / ref_support_xy_disp >= 0.95` 且 final gap 小；第二层才比较 E081 transport 指标。
+- 已新增 `workspace/core4d_collab_retarget/scripts/E008/variants.tsv`：7 个变体，覆盖 `support_proxy_max_xy_speed=0.0`（不限速）和 `2.0m/s`，main 对齐 `box025_p2`，guard 检查 `box023_p2`。
+- 已从 E007 复制 E008 脚本骨架并完成 E007→E008 命名替换；下一步增强 `eval_E008.py` 的 reference support point 诊断，并做静态检查/预授权。
+- 已增强 `eval_E008.py`：新增 `E008_ref_support_xy_disp_m`、`E008_proxy_xy_disp_ratio_vs_ref_support`、`E008_proxy_final_gap_to_ref_support_m`、`E008_proxy_support_tracking_ok`，并将 `E008_reaches_E081_transport_proxy` 绑定到 proxy gate。
+- 静态检查已通过：`py_compile` 覆盖 E008 generator/eval，`bash -n` 覆盖 E008 preprocess/train/remote/pull 脚本。
+- `bash workspace/core4d_collab_retarget/scripts/run_E008_preprocess.sh` 已成功生成 7 个 Hydra overrides；`support_proxy_ref_dt=-1.0`、`contact_guidance=false`、`object_action_dims=0`、`partner_force_scale=0.0`。
+- E008 预授权已完成：
+  - `bash workspace/core4d_collab_retarget/scripts/train/train_E008.sh __codex_auth_probe__ 0`
+  - `bash workspace/core4d_collab_retarget/scripts/run_E008_remote.sh __codex_auth_probe__`
+  - `bash workspace/core4d_collab_retarget/scripts/pull_E008_remote_results.sh __codex_auth_probe__`
+- E008 smoke 已完成：7/7 变体产出 4-step NPZ；eval aggregate 为 `num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_main_proxy_support_tracking_ok=5`。4-step `E008_beats_or_matches_E081_majority` 不作为结论。
+- 已将 `spider/simulators/mjwp.py` 中 support proxy 日志文案从 `E006 support proxy` 改为通用 `support proxy`，不改施力公式；`py_compile` 复查通过。
