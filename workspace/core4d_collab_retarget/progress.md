@@ -235,3 +235,18 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `bash workspace/core4d_collab_retarget/scripts/pull_E007_remote_results.sh`
 - E007 4-step smoke 已完成：7/7 变体均产出 freejoint `trajectory_mjwp.npz`。
 - Smoke eval 已完成：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`；4-step 的 transport ratio / E081 majority 不作为结论，只验证 E007 eval 字段写出。
+
+## 2026-05-18 11:55 E007 partial full 早停
+
+- E007 full 已启动：本地跑 `E007_box025_p2_yneg_k20_simdt` / `E007_box025_p2_yneg_k20_hc_simdt`，远程 GPU0 跑 3 个 box025，远程 GPU1 跑 2 个 box023 guard。
+- 本地首个 full `E007_box025_p2_yneg_k20_simdt` 完成后立即单独 eval：
+  - `case_window_obj_err_mean/max = 0.625/1.205m`
+  - hand contact `61.3%`
+  - floor contact `93.1%`
+  - `E007_object_xy_disp_ratio = 0.291`
+  - `E007_object_rot_deg = 41.6deg`
+  - `E007_proxy_xy_disp_ratio_vs_ref_obj = 0.693`
+  - `E007_reaches_E081_transport_proxy = false`
+  - `E007_e081_majority_score = 1/6`
+- 诊断：dt 修正确实生效，日志显示 `_load_support_proxy dt=0.0166667`；但 `support_proxy_max_xy_speed=0.8` 成为新的限速瓶颈。参考 support point 在快速段速度超过 0.8m/s，proxy 最终只走完约 `69%` 参考水平位移，object 仍只走 `29%` 并旋转替代平移。
+- 已停止剩余本地/远程 E007 队列，避免继续跑同一限速配置。下一步进入 E008：高/不限速 support proxy，并优先检查 proxy ratio 是否 `>=0.95`。
