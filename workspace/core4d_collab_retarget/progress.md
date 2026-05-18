@@ -604,3 +604,27 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 独立 scene/data 检查通过：4/4 variant 均为 model `nq/nv/nu=49/47/29`，data `qpos/qvel/ctrl=(T,49)/(T,47)/(T,29)`；support 非 mocap、6 joints、q/d 地址 `36/35`；object q/d 地址 `42/41`，保持最后 7 qpos / 6 qvel。
 - E015 4-step smoke 已完成两遍（第二遍验证 snapshot manifest），4/4 产出 NPZ；`eval_E015.py --all` aggregate: `num_freejoint_parity_ok=4`、`num_support_dynamic_scene_ok=4`、`num_object_last_ok=4`、`num_no_direct_wrench=4`、`num_pd_metrics_present=4`。4-step 的 target/guard 指标不作效果结论。
 - NPZ diagnostics 已确认包含 `support_proxy_force`、`support_proxy_torque`、`support_proxy_pos`、`support_proxy_vel`、`support_point_pos`、`support_point_vel`、`support_proxy_ref_idx`。
+
+## 2026-05-19 03:50 E015 setup commit / full 启动
+
+- E015 setup 已提交并推送：`82663f2 exp(core4d_collab_retarget): set up E015 dynamic support`。
+- 首次远程启动在 SSH 连接阶段超时；随后单独 SSH 重试成功，远端 hostname `embodied-2x6000Ada`，两张 `NVIDIA RTX 6000 Ada Generation` 可见。
+- 本地 full 已启动：`E015_box025_p2_m2_kp500`。
+- 远程 tmux `E015` 已启动：GPU0 队列 `E015_box025_p2_m1_kp500 -> E015_box025_p2_m2_kp1000`，GPU1 队列 `E015_box023_p2_m2_kp500`。
+- 本地 runtime 日志确认 dynamic support 加载：`qadr=36`、`dadr=35`、ref `support_qpos=(298,6)`、`pos_kp=500`、auto `pos_kd=63.2455`、`rot_kp=80`、auto `rot_kd=2.5298`。
+
+## 2026-05-19 04:00 E015 本地 default main 完成
+
+- 本地 `E015_box025_p2_m2_kp500` full 已完成并自动 eval。
+- 结果未过 soft target：case-window obj `0.311/0.418m`，hand `63.6%`，floor `43.4%`，leg `2.3%`，object xy ratio `1.197`，rot `50.3deg`。
+- Support diagnostics：support-object weld gap 小（mean/max `0.016/0.068m`），但 support target lag 明显（mean/max `0.127/0.195m`），PD force max 打到 `250N` clamp，torque max 打到 `80Nm` clamp；`E015_effort_reasonable=false`，diagnostic=`dynamic_support_lag`。
+- 初步判断：default dynamic support 没有复现 E014 的近刚性 tracking；失败主要是 dynamic support target lag + PD saturation，并伴随 object rotation shortcut。等待远程 m1/kp1000/guard 完成后统一决定是否触发 E015b effort/PD tuning。
+
+## 2026-05-19 04:25 E015 full 完成
+
+- 远程 E015 已完成并回收：`E015_box025_p2_m1_kp500`、`E015_box025_p2_m2_kp1000`、`E015_box023_p2_m2_kp500`。
+- 全量 `eval_E015.py --all` 完成：`num_results=4`、`num_freejoint_parity_ok=4`、`num_support_dynamic_scene_ok=4`、`num_object_last_ok=4`、`num_no_direct_wrench=4`、`num_pd_metrics_present=4`、`num_main_soft_target_pass=0`、`num_main_effort_reasonable=0`、`num_numerical_instability=2`、`num_guard_stable=1`。
+- Main 结果：default `m2_kp500` 是 dynamic support lag + clamp；`m1_kp500` 和 `m2_kp1000` 均出现 NaN 轨迹/黑帧，diagnostic=`numerical_instability`。
+- Guard `box023_m2_kp500` 稳定，obj `0.097/0.239m`、pelvis min `0.682m`、force `50/154N`，但 hand contact `47.3% < 61.7%`，不通过 guard soft target。
+- 已生成 `workspace/core4d_collab_retarget/results/E015/keyframes/E015_visual_montage.jpg` 和 `results/E015/visual_eval.md`；视觉结论与 numeric 一致：default main 大旋转，m1/kp1000 后段渲染失效，guard 稳但接触弱。
+- 已写入 E015 结果日志：`workspace/core4d_collab_retarget/log/15_E015_cola_ab_dynamic_support_pd_results.md`，并更新 `EXPERIMENT_TRACKER.md`。结论：E015 差于 E014，按规则触发 E015b effort/PD tuning 分析，不跳 E016。

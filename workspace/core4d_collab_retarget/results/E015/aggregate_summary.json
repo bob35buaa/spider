@@ -1,0 +1,30 @@
+{
+  "diagnostic_classes": {
+    "dynamic_support_lag": 1,
+    "numerical_instability": 2,
+    "robot_side_contact_gap": 1
+  },
+  "guard_results": [
+    "E015_box023_p2_m2_kp500"
+  ],
+  "main_results": [
+    "E015_box025_p2_m2_kp500",
+    "E015_box025_p2_m1_kp500",
+    "E015_box025_p2_m2_kp1000"
+  ],
+  "num_freejoint_parity_ok": 4,
+  "num_guard_results": 1,
+  "num_guard_stable": 1,
+  "num_main_effort_reasonable": 0,
+  "num_main_full_success": 0,
+  "num_main_lag_free": 0,
+  "num_main_push_vs_carry_ok": 1,
+  "num_main_results": 3,
+  "num_main_soft_target_pass": 0,
+  "num_no_direct_wrench": 4,
+  "num_numerical_instability": 2,
+  "num_object_last_ok": 4,
+  "num_pd_metrics_present": 4,
+  "num_results": 4,
+  "num_support_dynamic_scene_ok": 4
+}

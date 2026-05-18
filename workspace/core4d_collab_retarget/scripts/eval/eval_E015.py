@@ -453,6 +453,22 @@ def evaluate_variant(
     summary["E015_soft_leg_ok"] = leg_ok
     summary["E015_push_vs_carry_ok"] = push_vs_carry_ok
     summary["E015_lag_free"] = lag_free
+    finite_keys = [
+        "case_window_obj_err_mean_m",
+        "case_window_obj_err_max_m",
+        "post2_pelvis_z_min_m",
+        "E015_object_xy_disp_ratio",
+        "E015_case_window_support_force_norm_n_mean",
+        "E015_case_window_support_force_norm_n_max",
+        "E015_case_window_support_gap_norm_m_mean",
+        "E015_case_window_support_target_gap_mean_m",
+    ]
+    summary["E015_numerical_instability"] = bool(
+        any(
+            key in summary and not np.isfinite(float(summary[key]))
+            for key in finite_keys
+        )
+    )
     summary["E015_soft_target_pass"] = bool(
         obj_ok
         and hand_ok
@@ -473,7 +489,9 @@ def evaluate_variant(
         and summary["E015_anchor_not_com_oracle"]
     )
 
-    if summary["E015_full_success"]:
+    if summary["E015_numerical_instability"]:
+        diagnostic = "numerical_instability"
+    elif summary["E015_full_success"]:
         diagnostic = "soft_target_effort_ok"
     elif summary["E015_soft_target_pass"] and not effort_ok:
         diagnostic = "target_pass_effort_overdrive"
@@ -557,6 +575,9 @@ def main() -> None:
         ),
         "num_pd_metrics_present": sum(
             bool(r["E015_pd_metrics_present"]) for r in summaries
+        ),
+        "num_numerical_instability": sum(
+            bool(r["E015_numerical_instability"]) for r in summaries
         ),
         "num_main_soft_target_pass": sum(
             bool(r["E015_soft_target_pass"]) for r in main_rows
