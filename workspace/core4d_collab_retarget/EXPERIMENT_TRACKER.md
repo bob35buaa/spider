@@ -16,6 +16,7 @@
 | E006 | 2026-05-18 | COLA Proxy | **COLA-style support-body proxy 迁移**: 保持 object true-freejoint 与 `nu=29`，不新增 freejoint body；在 MJWarp step 内用独立 support proxy trajectory + soft connector wrench 传力，并记录 partner effort / connector gap。7/7 parity ok，但 main 无 useful，best `box025_ypos_k20` 仍 `0.704/1.410m`、floor `91.3%` | ✅ 详见 log 06 |
 | E007 | 2026-05-18 | Timebase + E081 Eval | **support proxy 时间基准修正 + E081 对齐验收**: 修正 `support_proxy_ref_dt<=0` 默认使用插值后 `sim_dt`；首个 full 证明 dt 修正生效，但 `support_proxy_max_xy_speed=0.8` 成为新限速瓶颈，proxy 只走 `69%`、object 只走 `29%` | ⚠️ partial，详见 log 07 |
 | E008 | 2026-05-18 | Proxy Speed Gate | **support proxy 高/不限速与 E081 搬运验收**: 5/5 main proxy gate 通过；best `ypos_k20_vmax2` 达到 object xy ratio `0.724`、rot `13.6deg`、obj `0.363/0.684m`，明显优于 E007 但仍未达 E081 transport gate | ✅ 详见 log 08 |
+| E009 | 2026-05-18 | Contact Closure | **E008 best + robot-side hold-contact 闭环**: 基于 `ypos_k20_vmax2` 扫 hold-contact scale/window，目标补 hand contact 与 object tracking，继续用 E081 transport gate 验收 | 🟡 Plan/implementation 中 |
 
 ## Baseline
 
@@ -37,6 +38,7 @@
 | E007 plan | E081 baseline main `box025_p2_legobj`: obj `0.143/0.271m`、hand `89.0%`、leg intf `7.5%`、floor `59.5%`；guard `box023_p2_legobj`: obj `0.164/0.317m`、floor `34.7%` | E007 不再以 E005 为验收基线；先验证 dt-corrected proxy 能否完整走参考平移，再决定是否进入 contact-pad / robot-side reward |
 | E007 partial | `E007_box025_p2_yneg_k20_simdt`: obj `0.625/1.205m`、hand `61.3%`、floor `93.1%`、object xy ratio `0.291`、rot `41.6deg`、proxy xy ratio `0.693`、E081 majority `1/6` | dt fix 生效但 max-speed clamp 截断 proxy；E008 需先测试高/不限速 proxy |
 | E008 full | 6 个 full 结果：5 main + 1 guard，`num_main_proxy_support_tracking_ok=5`，`num_main_reaches_E081_transport_proxy=0`；best `E008_box025_p2_ypos_k20_vmax2` obj `0.363/0.684m`、hand `78.0%`、floor `64.7%`、leg intf `2.9%`、xy ratio `0.724` | 限速修正显著改善 transport，但剩余瓶颈是 robot hand/support 闭环；E009 应基于 best ypost 方向做 hold-contact/contact-pad，而非继续扫 speed/kp |
+| E009 plan | 6 个 variants：main 围绕 `ypos_k20_vmax2` 的 HC `0.5/1/2` 与 `vmax0_hc1`，guard 使用稳定 `xpos` 方向 | 若 hand contact 提升但 obj error 不降，E010 转 contact pad / soft constraint |
 
 ## Plans
 
@@ -48,6 +50,7 @@
 - E006: `workspace/core4d_collab_retarget/plan/06_E006_cola_support_body_proxy_plan.md`
 - E007: `workspace/core4d_collab_retarget/plan/07_E007_support_proxy_timebase_e081_plan.md`
 - E008: `workspace/core4d_collab_retarget/plan/08_E008_support_proxy_speed_unclamped_e081_plan.md`
+- E009: `workspace/core4d_collab_retarget/plan/09_E009_ypos_hold_contact_closure_e081_plan.md`
 
 ## Logs
 

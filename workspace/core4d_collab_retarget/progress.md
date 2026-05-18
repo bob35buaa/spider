@@ -288,3 +288,18 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 最好结果 `E008_box025_p2_ypos_k20_vmax2`：obj mean/max `0.363/0.684m`，hand `78.0%`，floor `64.7%`，leg intf `2.9%`，xy ratio `0.724`，rot `13.6deg`，proxy ratio `0.998`。
 - 可视化确认：best 变体不再只是原地旋转，已明显水平平移；但后半段 sim 仍滞后 ref，手端不像 E081 那样形成稳定托举，语义仍不是干净双端搬运。
 - 已写入 E008 结果日志：`workspace/core4d_collab_retarget/log/08_E008_support_proxy_speed_unclamped_e081_results.md`；下一步 E009 应基于 `ypos_k20_vmax2` 做 robot-side hold-contact/support 闭环或 contact pad。
+
+## 2026-05-18 13:12 E009 计划与脚本骨架
+
+- 已提交并推送 E008 结果日志：`28d2d85 docs(core4d_collab_retarget): record E008 speed gate results`。
+- 已写入 E009 中文计划：`workspace/core4d_collab_retarget/plan/09_E009_ypos_hold_contact_closure_e081_plan.md`。
+- E009 目标：围绕 E008 best `ypos_k20_vmax2` 加 robot-side hold-contact 闭环，测试 hand contact 是否能从 `78%` 提升到 `>=80-85%` 并同步降低 object error。
+- 已新增 E009 variants：4 个 main（HC 0.5/1/2 + `vmax0_hc1`）与 2 个稳定 `box023_xpos` guard。
+- 已从 E008 复制 E009 脚本骨架并完成命名替换；`eval_E009.py` 新增 `E009_improves_E008_best` 与相对 E008 best 的 delta 字段。
+- 静态检查通过：E009 generator/eval `py_compile`，E009 shell scripts `bash -n`。
+- `bash workspace/core4d_collab_retarget/scripts/run_E009_preprocess.sh` 已成功生成 6 个 Hydra overrides。
+- E009 预授权已完成：
+  - `bash workspace/core4d_collab_retarget/scripts/train/train_E009.sh __codex_auth_probe__ 0`
+  - `bash workspace/core4d_collab_retarget/scripts/run_E009_remote.sh __codex_auth_probe__`
+  - `bash workspace/core4d_collab_retarget/scripts/pull_E009_remote_results.sh __codex_auth_probe__`
+- E009 smoke 已完成：6/6 变体产出 4-step NPZ；eval aggregate `num_results=6`、`num_freejoint_parity_ok=6`、`num_support_proxy_metrics_present=6`、`num_main_proxy_support_tracking_ok=4`。4-step majority 不作为结论。
