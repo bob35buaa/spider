@@ -7,7 +7,7 @@ model = "gpt-5.5"
 web_search = "live"    # "cached" | "live" | "disabled"
 
 # 推理强度
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 
 # 代码审查 Profile
 [profiles.review]
@@ -33,6 +33,7 @@ personality = "pragmatic"    # "friendly" | "pragmatic" | "none"
 shell_snapshot = true
 undo = true
 web_search = true
+goals = true
 
 # 信任的项目（跳过信任确认）
 [projects."/home/ubuntu/Workspace/spider"]
@@ -41,6 +42,11 @@ trust_level = "trusted"
 [projects."/home/ubuntu/Workspace/holosoma"]
 trust_level = "trusted"
 
+[projects."/home/ubuntu/Workspace/CORE4D-Instructions"]
+trust_level = "trusted"
+
+[projects."/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real"]
+trust_level = "trusted"
 
 [[skills.config]]
 path = ".codex/skills/experiment-planning-zh/SKILL.md"
