@@ -434,3 +434,10 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已生成并检查 E011 视觉拼图：`workspace/core4d_collab_retarget/results/E011/keyframes/e011_visual_montage.jpg`。视觉结论：COM-only main 不再像 E006 一样原地旋转，kp 越大平移越明显；`g1` 能离地和平移但手端脱开；E008+COM k25/k50 仍有明显姿态偏差；guard k100 后期摔倒。
 - 已写入中文结果日志：`workspace/core4d_collab_retarget/log/11_E011_soft_object_tether_diagnostic_e081_results.md`，并更新 `EXPERIMENT_TRACKER.md`。
 - 当前 E006 失败解释收敛：E006 的“只旋转、不平移”主要来自 off-COM support wrench 的 `r x F` 力矩捷径 + `support_proxy_ref_dt` timebase 截断 + robot-side 闭环弱；E011 证明改成 COM spring 可恢复平移，但 E081 级精度还需要 robot-side/partner-side 双点闭合，而不是继续加单点/单 COM 外力。
+
+## 2026-05-18 18:52 E012 计划
+
+- 已写入 E012 中文计划：`workspace/core4d_collab_retarget/plan/12_E012_dual_point_partner_pose_closure_plan.md`。
+- 计划核心：不再扫单 COM kp/gravity；新增 dual-point partner-side local feature spring，在 `box025` partner 侧面用两个点 `[+/-x, +0.38, 0.30]` 同时跟随 reference object，对比 E011 k100 是否能降低 obj error，同时防止 E006 单点 off-COM 旋转捷径。
+- E012 计划 8 个 full variants：6 个 main 覆盖 dual-point 间距/kp/gravity/object-reward shaping，2 个 guard 覆盖 `box023` 稳定性。
+- 下一步实现 `partner_force_points_local` multi-point spring、E012 overrides/scripts/eval，并先跑 smoke。
