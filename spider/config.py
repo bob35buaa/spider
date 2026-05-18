@@ -140,6 +140,16 @@ class Config:
     )  # <=0 uses config.sim_dt because qpos_ref is already interpolated
     support_proxy_force_clamp: float = 0.0
     support_proxy_torque_clamp: float = 0.0
+    # E015: dynamic support body driven by generalized PD forces while still
+    # coupled to the object via a soft equality/weld constraint.
+    support_dynamic_body_name: str = "support_dynamic_anchor"
+    support_dynamic_mass: float = 2.0
+    support_dynamic_pos_kp: float = 0.0
+    support_dynamic_pos_kd: float = -1.0
+    support_dynamic_rot_kp: float = 0.0
+    support_dynamic_rot_kd: float = -1.0
+    support_dynamic_force_clamp: float = 0.0
+    support_dynamic_torque_clamp: float = 0.0
     # E027b: object PD override — object actuators track ref directly, CEM only optimizes robot
     object_pd_override: bool = False  # enable object actuator PD override in step_env
     object_pd_kp_pos: float = 2000.0  # position actuator gain (strong tracking)

@@ -192,7 +192,7 @@ def setup_env(config: Config, ref_data: tuple[torch.Tensor, ...]) -> MJWPEnv:
     if config.mocap_partner_trajectory:
         _load_mocap_partner(config, env)
     if config.support_proxy_enabled:
-        _load_support_proxy(config, env, qpos_ref)
+        _load_support_proxy(config, env, qpos_ref, qvel_ref)
 
     return env
 
@@ -1794,14 +1794,19 @@ def _support_proxy_point_local(config: Config) -> list[float]:
     return [float(v) for v in point_local]
 
 
-def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
+def _load_support_proxy(
+    config: Config,
+    env: MJWPEnv,
+    qpos_ref: torch.Tensor,
+    qvel_ref: torch.Tensor | None = None,
+):
     """Precompute a kinematic support-body proxy trajectory from object ref.
 
     The proxy is intentionally not a MuJoCo freejoint body in E006. It is an
     independent controller target whose connector wrench is applied to the true
     freejoint object at an object-local support site.
     """
-    valid_modes = {"wrench", "mocap_pad", "wrench_pad"}
+    valid_modes = {"wrench", "mocap_pad", "wrench_pad", "dynamic_weld"}
     if config.support_proxy_mode not in valid_modes:
         raise ValueError(
             f"Unknown support_proxy_mode={config.support_proxy_mode!r}; "
@@ -1877,6 +1882,8 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
     env.support_proxy_ref_vel = proxy_vel.detach()
     env.support_proxy_ref_quat = obj_quat_ref.detach()
     env.support_proxy_ref_dt = dt
+    if config.support_proxy_mode == "dynamic_weld":
+        _load_dynamic_support_ref(config, env, qpos_ref_t, qvel_ref, dt)
     env.support_proxy_last_force = torch.zeros(
         (env.num_worlds, 3), device=config.device, dtype=torch.float32
     )
@@ -1901,6 +1908,182 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
         config.support_proxy_max_xy_speed,
         config.support_proxy_height_tau,
     )
+
+
+def _dynamic_support_joint_addrs(config: Config, env: MJWPEnv) -> tuple[int, int]:
+    if hasattr(env, "_support_dynamic_qadr") and hasattr(env, "_support_dynamic_dadr"):
+        return int(env._support_dynamic_qadr), int(env._support_dynamic_dadr)
+
+    body_id = mujoco.mj_name2id(
+        env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, config.support_dynamic_body_name
+    )
+    if body_id == -1:
+        raise ValueError(
+            f"support dynamic body {config.support_dynamic_body_name!r} not found."
+        )
+    if env.model_cpu.body_mocapid[body_id] >= 0:
+        raise ValueError(
+            f"support dynamic body {config.support_dynamic_body_name!r} must not be mocap."
+        )
+
+    jadr = int(env.model_cpu.body_jntadr[body_id])
+    jnum = int(env.model_cpu.body_jntnum[body_id])
+    if jadr < 0 or jnum != 6:
+        raise ValueError(
+            f"{config.support_dynamic_body_name} requires exactly 6 scalar joints, "
+            f"got {jnum}."
+        )
+
+    qaddrs = [int(env.model_cpu.jnt_qposadr[jadr + i]) for i in range(jnum)]
+    daddrs = [int(env.model_cpu.jnt_dofadr[jadr + i]) for i in range(jnum)]
+    if qaddrs != list(range(qaddrs[0], qaddrs[0] + 6)):
+        raise ValueError(f"support dynamic qpos addresses are not contiguous: {qaddrs}")
+    if daddrs != list(range(daddrs[0], daddrs[0] + 6)):
+        raise ValueError(f"support dynamic dof addresses are not contiguous: {daddrs}")
+
+    env._support_dynamic_body_id = body_id
+    env._support_dynamic_qadr = qaddrs[0]
+    env._support_dynamic_dadr = daddrs[0]
+    return qaddrs[0], daddrs[0]
+
+
+def _load_dynamic_support_ref(
+    config: Config,
+    env: MJWPEnv,
+    qpos_ref: torch.Tensor,
+    qvel_ref: torch.Tensor | None,
+    dt: float,
+) -> None:
+    qadr, dadr = _dynamic_support_joint_addrs(config, env)
+    if qpos_ref.shape[1] < qadr + 6:
+        raise ValueError(
+            "dynamic support reference qpos is too short: "
+            f"{qpos_ref.shape[1]} < {qadr + 6}."
+        )
+    env.support_dynamic_ref_qpos = qpos_ref[:, qadr : qadr + 6].detach()
+
+    if qvel_ref is not None:
+        qvel_ref_t = qvel_ref.to(config.device).to(torch.float32)
+        if qvel_ref_t.shape[1] >= dadr + 6:
+            env.support_dynamic_ref_qvel = qvel_ref_t[:, dadr : dadr + 6].detach()
+        else:
+            env.support_dynamic_ref_qvel = torch.zeros_like(
+                env.support_dynamic_ref_qpos
+            )
+    else:
+        ref_vel = torch.zeros_like(env.support_dynamic_ref_qpos)
+        if env.support_dynamic_ref_qpos.shape[0] > 1:
+            ref_vel[1:] = (
+                env.support_dynamic_ref_qpos[1:]
+                - env.support_dynamic_ref_qpos[:-1]
+            ) / max(dt, 1e-8)
+            ref_vel[0] = ref_vel[1]
+        env.support_dynamic_ref_qvel = ref_vel.detach()
+
+    body_id = int(getattr(env, "_support_dynamic_body_id"))
+    avg_inertia = float(np.mean(env.model_cpu.body_inertia[body_id]))
+    pos_kp = max(float(config.support_dynamic_pos_kp), 0.0)
+    rot_kp = max(float(config.support_dynamic_rot_kp), 0.0)
+    env.support_dynamic_pos_kd = (
+        2.0 * (max(float(config.support_dynamic_mass), 1e-6) * pos_kp) ** 0.5
+        if config.support_dynamic_pos_kd < 0
+        else float(config.support_dynamic_pos_kd)
+    )
+    env.support_dynamic_rot_kd = (
+        2.0 * (max(avg_inertia, 1e-8) * rot_kp) ** 0.5
+        if config.support_dynamic_rot_kd < 0
+        else float(config.support_dynamic_rot_kd)
+    )
+    loguru.logger.info(
+        "dynamic support: qadr={}, dadr={}, ref_qpos={}, pos_kp={}, "
+        "pos_kd={}, rot_kp={}, rot_kd={}, mass={}, inertia={}",
+        qadr,
+        dadr,
+        tuple(env.support_dynamic_ref_qpos.shape),
+        config.support_dynamic_pos_kp,
+        env.support_dynamic_pos_kd,
+        config.support_dynamic_rot_kp,
+        env.support_dynamic_rot_kd,
+        config.support_dynamic_mass,
+        avg_inertia,
+    )
+
+
+def _wrap_angle_pi(x: torch.Tensor) -> torch.Tensor:
+    return torch.remainder(x + torch.pi, 2.0 * torch.pi) - torch.pi
+
+
+def _apply_dynamic_support_pd(config: Config, env: MJWPEnv):
+    """Drive a dynamic 6-DoF support body with generalized PD forces."""
+    if not hasattr(env, "support_dynamic_ref_qpos"):
+        return
+
+    qadr, dadr = _dynamic_support_joint_addrs(config, env)
+    qpos = wp.to_torch(env.data_wp.qpos)
+    qvel = wp.to_torch(env.data_wp.qvel)
+    qfrc_applied = wp.to_torch(env.data_wp.qfrc_applied)
+    qfrc_applied[:, dadr : dadr + 6] = 0.0
+
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = time_arr[0].item()
+    dt = float(getattr(env, "support_proxy_ref_dt", config.sim_dt))
+    T = env.support_dynamic_ref_qpos.shape[0]
+    idx = min(int(t / dt), T - 1)
+
+    target_qpos = env.support_dynamic_ref_qpos[idx].unsqueeze(0).expand(
+        env.num_worlds, -1
+    )
+    target_qvel = env.support_dynamic_ref_qvel[idx].unsqueeze(0).expand(
+        env.num_worlds, -1
+    )
+    cur_qpos = qpos[:, qadr : qadr + 6]
+    cur_qvel = qvel[:, dadr : dadr + 6]
+
+    pos_err = target_qpos[:, :3] - cur_qpos[:, :3]
+    rot_err = _wrap_angle_pi(target_qpos[:, 3:6] - cur_qpos[:, 3:6])
+    pos_force = (
+        float(config.support_dynamic_pos_kp) * pos_err
+        + float(env.support_dynamic_pos_kd) * (target_qvel[:, :3] - cur_qvel[:, :3])
+    )
+    rot_torque = (
+        float(config.support_dynamic_rot_kp) * rot_err
+        + float(env.support_dynamic_rot_kd) * (target_qvel[:, 3:6] - cur_qvel[:, 3:6])
+    )
+    pos_force = _clamp_vector_norm(
+        torch.nan_to_num(pos_force, nan=0.0), config.support_dynamic_force_clamp
+    )
+    rot_torque = _clamp_vector_norm(
+        torch.nan_to_num(rot_torque, nan=0.0), config.support_dynamic_torque_clamp
+    )
+    qfrc_applied[:, dadr : dadr + 3] = pos_force
+    qfrc_applied[:, dadr + 3 : dadr + 6] = rot_torque
+    wp.copy(env.data_wp.qfrc_applied, wp.from_torch(qfrc_applied))
+
+    obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
+    if obj_body_id == -1:
+        return
+    obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
+    obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
+    obj_vadr = env.model_cpu.jnt_dofadr[obj_jnt_id]
+    obj_pos_sim = qpos[:, obj_qadr : obj_qadr + 3]
+    obj_vel_sim = qvel[:, obj_vadr : obj_vadr + 3]
+    obj_quat_sim = qpos[:, obj_qadr + 3 : obj_qadr + 7]
+    obj_angvel_sim = qvel[:, obj_vadr + 3 : obj_vadr + 6]
+    obj_quat_sim = obj_quat_sim / obj_quat_sim.norm(dim=-1, keepdim=True).clamp(
+        min=1e-8
+    )
+    local = env.support_proxy_point_local.unsqueeze(0).expand(env.num_worlds, -1)
+    r_world = _lf_quat_apply(obj_quat_sim, local)
+    support_point_pos = obj_pos_sim + r_world
+    support_point_vel = obj_vel_sim + torch.cross(obj_angvel_sim, r_world, dim=-1)
+
+    env.support_proxy_last_force = pos_force.detach()
+    env.support_proxy_last_torque = rot_torque.detach()
+    env.support_proxy_last_pos = cur_qpos[:, :3].detach()
+    env.support_proxy_last_vel = cur_qvel[:, :3].detach()
+    env.support_proxy_last_support_point_pos = support_point_pos.detach()
+    env.support_proxy_last_support_point_vel = support_point_vel.detach()
+    env.support_proxy_last_idx = idx
 
 
 def _apply_support_proxy_force(config: Config, env: MJWPEnv):
@@ -2216,6 +2399,8 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
             "wrench_pad",
         }:
             _update_support_proxy_mocap_pad(config, env)
+        if config.support_proxy_enabled and config.support_proxy_mode == "dynamic_weld":
+            _apply_dynamic_support_pd(config, env)
         # E030: update weld target mocap body (for scene_weld.xml)
         if config.scene_name == "scene_weld":
             _update_object_weld_target(config, env)

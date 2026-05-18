@@ -570,3 +570,37 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - Guard 两条稳定：`t02` obj `0.043/0.080m`、`hc1` obj `0.042/0.080m`，floor `33.3%`，leg `0.0%`，pelvis min `0.689-0.691m`。
 - 已用 `video-frames` skill / ffmpeg 生成并检查 E014 contact sheets：main object 与 ref 基本重合，无 E012 rotation shortcut；blue support anchor 在 object 侧面 offset，不是 COM；guard 姿态稳定，无摔倒/跪倒。
 - 已写入 E014 结果日志：`workspace/core4d_collab_retarget/log/14_E014_cola_b_kinematic_weld_results.md`，并更新 `EXPERIMENT_TRACKER.md`。结论：COLA-B 成立，E014b 不触发；下一步按总路线进入 E015 dynamic support + PD 或 pipeline 对接验证。
+
+## 2026-05-19 02:47 E015 计划启动
+
+- 已按 E014 结论进入 E015，不触发 E014b，也不跳 E016。
+- 已写入 E015 中文计划：`workspace/core4d_collab_retarget/plan/15_E015_cola_ab_dynamic_support_pd_plan.md`。
+- E015 实现口径确定为 3 slide + 3 hinge 的 dynamic support body，而不是 support freejoint：模型维度预计 `nq=49/nv=47/nu=29`，support qpos/qvel 插入 robot 与 object 之间，object 仍保持最后 7 维，避免破坏现有 object-last eval/reward 口径。
+- 下一步实现 E015 scene/data generator、`support_proxy_mode=dynamic_weld`、qfrc PD runtime、脚本和 eval。
+
+## 2026-05-19 03:10 E015 实现继续
+
+- 已恢复 E015 上下文并复查总路线、E014 结果日志和当前 runtime diff。E015 继续按计划推进 dynamic support + PD，不触发 E016。
+- 当前未提交的相关改动包括 `spider/config.py` 的 dynamic support 配置字段，以及 `spider/simulators/mjwp.py` 的 `support_proxy_mode=dynamic_weld`、support 6-DoF joint 地址检查、reference qpos/qvel 加载和 `qfrc_applied` PD 写入逻辑。
+- 下一步补齐 E015 variants、scene/data generator、override generator、preprocess/train/remote/eval 脚本，然后做静态检查与 smoke。
+
+## 2026-05-19 03:25 E015 上下文恢复补记
+
+- 已按用户要求重新读取 `EXPERIMENT_TRACKER.md`、`progress.md`、`docs/03_agent_execution_plan_E013_E016*.md`、E015 plan、E013/E014 log、`results/E013/e014_soft_targets.json`。
+- 权威口径确认：E015 support 使用 3 slide + 3 hinge 标量 joints，目标模型维度 `nq=49/nv=47/nu=29`；qpos/qvel 布局必须为 `robot + support(6) + object`，object 保持最后 7 qpos；support 不新增 actuator、不进 CEM ctrl，PD 只通过 `qfrc_applied` 写 generalized force。
+- 代码现状确认：`spider/config.py` 与 `spider/simulators/mjwp.py` 已有 dynamic support 字段和 `support_proxy_mode=dynamic_weld` 半成品；尚缺 E015 variants、scene/data generator、override/preprocess/train/remote/pull/eval 脚本与 smoke 验证。
+
+## 2026-05-19 03:40 E015 脚本实现
+
+- 已新增 E015 初始 4 variants：默认 main 本地跑，剩余两个 main 走远程 GPU0，guard 走远程 GPU1。
+- 已新增 `generate_e015_assets.py`：基于原始 freejoint scene 插入 `support_dynamic_anchor` 3 slide + 3 hinge 标量 joints，并生成增广 `trajectory_kinematic.npz`，布局为 `qpos robot(36)+support(6)+object(7)`、`qvel robot(35)+support(6)+object(6)`。
+- 已新增 `generate_e015_overrides.py`、`run_E015_preprocess.sh`、`train_E015.sh`、`train_E015_remote_tmux.sh`、`run_E015_remote.sh`、`pull_E015_remote_results.sh`、`eval_E015.py`。
+- E015 eval 会显式检查 `nq/nv/nu=49/47/29`、object-last、support 非 mocap 6 joints、`dynamic_weld` 配置、无 object actuator / object kinematic / partner-force direct wrench，以及 support PD force/torque diagnostics。
+
+## 2026-05-19 03:45 E015 preprocess / smoke
+
+- 静态检查通过：`spider/config.py`、`spider/simulators/mjwp.py`、`examples/run_mjwp.py`、E015 assets/override/eval 的 `py_compile`，以及 E015 shell 脚本 `bash -n`。
+- `run_E015_preprocess.sh` 已生成 4 个 dynamic scene、4 个增广 data NPZ、4 个 Hydra override。
+- 独立 scene/data 检查通过：4/4 variant 均为 model `nq/nv/nu=49/47/29`，data `qpos/qvel/ctrl=(T,49)/(T,47)/(T,29)`；support 非 mocap、6 joints、q/d 地址 `36/35`；object q/d 地址 `42/41`，保持最后 7 qpos / 6 qvel。
+- E015 4-step smoke 已完成两遍（第二遍验证 snapshot manifest），4/4 产出 NPZ；`eval_E015.py --all` aggregate: `num_freejoint_parity_ok=4`、`num_support_dynamic_scene_ok=4`、`num_object_last_ok=4`、`num_no_direct_wrench=4`、`num_pd_metrics_present=4`。4-step 的 target/guard 指标不作效果结论。
+- NPZ diagnostics 已确认包含 `support_proxy_force`、`support_proxy_torque`、`support_proxy_pos`、`support_proxy_vel`、`support_point_pos`、`support_point_vel`、`support_proxy_ref_idx`。
