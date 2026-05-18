@@ -1490,6 +1490,50 @@ def _apply_object_pd_override(config: Config, env: MJWPEnv):
     wp.copy(env.data_wp.ctrl, wp.from_torch(ctrl))
 
 
+def _object_kinematic_override_enabled(config: Config) -> bool:
+    return bool(config.object_kinematic_override) or config.partner_force_spring_kp < 0
+
+
+def _apply_object_kinematic_override(config: Config, env: MJWPEnv):
+    """E013: Write a true-freejoint object state from the reference trajectory."""
+    if not hasattr(env, "object_kinematic_ref_qpos"):
+        return
+    if config.nq_obj != 7:
+        raise ValueError(
+            "object_kinematic_override requires nq_obj=7 true-freejoint object."
+        )
+
+    obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
+    if obj_body_id == -1:
+        return
+    obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
+    if obj_jnt_id < 0:
+        return
+    obj_qadr = int(env.model_cpu.jnt_qposadr[obj_jnt_id])
+    obj_vadr = int(env.model_cpu.jnt_dofadr[obj_jnt_id])
+
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = float(time_arr[0].item())
+    dt = float(getattr(env, "object_kinematic_ref_dt", config.sim_dt))
+    T = int(env.object_kinematic_ref_qpos.shape[0])
+    idx = min(max(int(t / max(dt, 1e-8) + 1e-6), 0), T - 1)
+
+    qpos = wp.to_torch(env.data_wp.qpos)
+    qpos[:, obj_qadr : obj_qadr + 7] = env.object_kinematic_ref_qpos[
+        idx
+    ].unsqueeze(0)
+    wp.copy(env.data_wp.qpos, wp.from_torch(qpos))
+
+    if bool(config.object_kinematic_set_qvel) and hasattr(
+        env, "object_kinematic_ref_qvel"
+    ):
+        qvel = wp.to_torch(env.data_wp.qvel)
+        qvel[:, obj_vadr : obj_vadr + 6] = env.object_kinematic_ref_qvel[
+            idx
+        ].unsqueeze(0)
+        wp.copy(env.data_wp.qvel, wp.from_torch(qvel))
+
+
 def _apply_partner_force(config: Config, env: MJWPEnv):
     """Apply external force on the object body to simulate partner support.
 
@@ -2165,6 +2209,8 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         # E027b: object PD override — set object actuator ctrl to track ref
         if config.object_pd_override and hasattr(env, "object_pd_ref_pos"):
             _apply_object_pd_override(config, env)
+        if _object_kinematic_override_enabled(config):
+            _apply_object_kinematic_override(config, env)
         # Update partner mocap positions within rollout (E013: intra-rollout update)
         if (
             config.mocap_partner_intra_step
@@ -2173,28 +2219,8 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         ):
             _update_mocap_partner(env)
         wp.capture_launch(env.graph)
-        # E029: kinematic object override AFTER physics step
-        if hasattr(env, "partner_force_ref_pos") and config.partner_force_spring_kp < 0:
-            qpos = wp.to_torch(env.data_wp.qpos)
-            time_arr = wp.to_torch(env.data_wp.time)
-            t = time_arr[0].item()
-            dt = float(
-                getattr(
-                    env,
-                    "partner_force_ref_dt",
-                    config.partner_force_ref_dt
-                    if config.partner_force_ref_dt > 0
-                    else config.ref_dt,
-                )
-            )
-            T = env.partner_force_ref_pos.shape[0]
-            idx = min(int(t / dt), T - 1)
-            ref_pos = env.partner_force_ref_pos[idx]
-            qpos[:, 36:39] = ref_pos.unsqueeze(0)
-            if hasattr(env, "partner_force_ref_quat"):
-                ref_quat = env.partner_force_ref_quat[idx]
-                qpos[:, 39:43] = ref_quat.unsqueeze(0)
-            wp.copy(env.data_wp.qpos, wp.from_torch(qpos))
+        if _object_kinematic_override_enabled(config):
+            _apply_object_kinematic_override(config, env)
 
 
 def save_env_params(config: Config, env: MJWPEnv):

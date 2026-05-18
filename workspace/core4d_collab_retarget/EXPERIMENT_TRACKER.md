@@ -19,7 +19,8 @@
 | E009 | 2026-05-18 | Contact Closure | **E008 best + robot-side hold-contact 闭环**: 6 个 full 结果完成；4/4 main proxy gate 通过，但 `num_main_reaches_E081_transport_proxy=0`、`num_main_improves_E008_best=0`。best-ish `hc05` obj `0.395/0.726m`、hand `76.9%`、floor `62.4%`、rot `18.2deg`，仍差于 E008/E081；强 HC 引入旋转/腿干涉 | ✅ 详见 log 09 |
 | E010 | 2026-05-18 | Contact Pad | **mocap contact pad 虚拟协作者支持**: 7 个 full 结果完成；5/5 main proxy gate 通过且 true-freejoint parity ok，但 `num_main_reaches_E081_transport_proxy=0`、`num_main_improves_E008_best=0`。contact pad 保持较高手接触，却未把物体带离高 floor-contact/低 xy transport 失败区 | ✅ 详见 log 10 |
 | E011 | 2026-05-18 | Soft Tether Diagnostic | **soft object tether 诊断 E081 所需外部 coupling**: 9 个 full 结果完成；COM spring 能压低 E006 的旋转捷径并恢复平移，best `box025_com_k100` 达 xy `0.905`、rot `3.5deg`，但 obj 仍 `0.340/0.673m`，7/7 main 都未达 E081 transport gate | ✅ 详见 log 11 |
-| E012 | 2026-05-18 | Dual Point Closure | **dual-point partner pose closure 诊断**: setup/smoke 完成；已实现 `partner_force_points_local` multi-point spring，8 个 variants/本地与远程脚本/eval 均就绪；4-step smoke 8/8 通过、dual-point config/freejoint parity/partner-force metrics 均 ok，下一步启动 full | 🟠 Running |
+| E012 | 2026-05-18 | Dual Point Closure | **dual-point partner pose closure 诊断**: 8 个 full 结果完成；8/8 true-freejoint parity ok，但 main `0/6` 达到 E081 transport，`pose_closure_helped=0`，best-by-error `k150` obj `0.306/0.606m` 伴随 rot `97.8deg`；2/2 guard 不稳定 | ✅ 详见 log 12 |
+| E013 | 2026-05-19 | Object Oracle | **true-freejoint object oracle**: 2 条 full 完成；2/2 oracle config ok，main obj `0.011/0.038m`、xy `1.000`、rot `2.0deg`，guard obj `0.017/0.064m` 且 stable。E013 证明 true-freejoint oracle 不限制 E081 级 object target，E014 soft target 已生成 | ✅ 详见 log 13 |
 
 ## Baseline
 
@@ -44,7 +45,8 @@
 | E009 full | 6 个 full 结果：4 main + 2 guard，`num_main_proxy_support_tracking_ok=4`、`num_main_reaches_E081_transport_proxy=0`、`num_main_improves_E008_best=0`；`hc2` obj mean 略低到 `0.344m` 但 hand `66.5%`、rot `38.5deg`，`vmax0_hc1` xy `0.789` 但 hand `55.5%`、rot `38.6deg` | hold-contact reward 不能闭合 robot-side 支撑；E010 转结构性 contact pad / soft constraint，而不是继续加 reward |
 | E010 full | 7 个 full 结果：5 main + 2 guard，`num_main_proxy_support_tracking_ok=5`、`num_main_reaches_E081_transport_proxy=0`、`num_main_improves_E008_best=0`；best-ish `pad10_vmax2_hc05` obj `0.680/1.295m`、hand `83.8%`、floor `83.8%`、xy `0.276`，`pad16` xy 最高也只有 `0.326` | 单个 mocap contact pad 不能替代 direct wrench；它减少旋转捷径但也几乎不传递运输。E011 应做 soft equality/weld diagnostic，量化离 E081 还差多少 partner coupling |
 | E011 full | 9 个 full 结果：7 main + 2 guard，`num_freejoint_parity_ok=9`、`num_partner_force_metrics_present=9`、`num_main_reaches_E081_transport=0`、`num_main_improves_E008_best=1`；best main `box025_com_k100` obj `0.340/0.673m`、hand `86.1%`、floor `61.3%`、xy `0.905`、rot `3.5deg`；`g1` xy `0.971`/floor `22.5%` 但 hand `75.1%` | COM spring 证明 E006 的“只旋转”来自 off-COM wrench + 弱闭环；外部 coupling 能恢复平移但不能达到 E081 精度。下一步转向双点/双手 partner constraint 或 robot-side hand/support pose shaping |
-| E012 setup | 已实现 dual-point feature spring，E012 smoke 8/8 通过；`num_dual_points_config_ok=8`、`num_freejoint_parity_ok=8`、`num_partner_force_metrics_present=8`；本机 RTX 5090 与远程 2x RTX 6000 Ada 权限探针通过 | 仅确认 wiring，不评价效果；下一步 full 对齐 E081 gate 和 E011 best `0.340/0.673m` |
+| E012 full | 8 个 full 结果：6 main + 2 guard，`num_dual_points_config_ok=8`、`num_freejoint_parity_ok=8`、`num_main_reaches_E081_transport=0`、`num_main_pose_closure_helped=0`、`num_guard_stable=0`；diagnostic=`rotation_shortcut:4`、`insufficient_coupling:2`、`guard_unstable:2`；main best-by-error `k150` obj `0.306/0.606m`、xy `0.980`、floor `59.5%`，但 rot `97.8deg`、torque max `30Nm` | dual-point partner force 没有修好 E011 精度缺口，反而重新打开 off-COM torque shortcut；下一步应限制 partner 力矩通道或转 robot-side hand/support pose shaping |
+| E013 full | 2 个 full 结果：`num_freejoint_oracle_config_ok=2`、`num_near_e081_obj_oracle=2`、`num_guard_stable=1`；main obj `0.011/0.038m`、hand `78.6%`、floor `57.8%`、leg `0.0%`、xy `1.000`；guard obj `0.017/0.064m`、hand `72.7%`、floor `34.7%`、leg `0.0%` | Oracle 证明 E081 object target 在 true-freejoint data/eval 下可达，后续软 target main 为 obj `<=0.193/0.371m`、hand `>=73.6%`、floor `<=69.5%`；E014 应进入 COLA-B 位置约束 |
 
 ## Plans
 
@@ -60,6 +62,7 @@
 - E010: `workspace/core4d_collab_retarget/plan/10_E010_mocap_contact_pad_support_e081_plan.md`
 - E011: `workspace/core4d_collab_retarget/plan/11_E011_soft_object_tether_diagnostic_e081_plan.md`
 - E012: `workspace/core4d_collab_retarget/plan/12_E012_dual_point_partner_pose_closure_plan.md`
+- E013: `workspace/core4d_collab_retarget/plan/13_E013_true_freejoint_object_oracle_plan.md`
 
 ## Logs
 
@@ -74,6 +77,8 @@
 - E009: `workspace/core4d_collab_retarget/log/09_E009_ypos_hold_contact_closure_e081_results.md`
 - E010: `workspace/core4d_collab_retarget/log/10_E010_mocap_contact_pad_support_e081_results.md`
 - E011: `workspace/core4d_collab_retarget/log/11_E011_soft_object_tether_diagnostic_e081_results.md`
+- E012: `workspace/core4d_collab_retarget/log/12_E012_dual_point_partner_pose_closure_results.md`
+- E013: `workspace/core4d_collab_retarget/log/13_E013_true_freejoint_object_oracle_results.md`
 
 ## Git
 

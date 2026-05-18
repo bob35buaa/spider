@@ -1,0 +1,3 @@
+# variant	source_task	mask_slug	person_idx	queue	role	wave
+E013_box025_p2_obj_oracle	box025_person2_freejoint_legobj	box025_person2	1	local	main	A
+E013_box023_p2_obj_oracle	box023_person2_freejoint_legobj	box023_person2	1	local	guard	A

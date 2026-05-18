@@ -636,6 +636,35 @@ def main(config: Config):
     # setup env with initial state from first sim qpos
     env = setup_env(config, ref_data)
 
+    # E013: freejoint object oracle. This is intentionally separate from
+    # object_pd_override, which only works for scene_act object actuators.
+    object_kinematic_enabled = bool(config.object_kinematic_override) or (
+        config.partner_force_spring_kp < 0
+    )
+    if object_kinematic_enabled and config.embodiment_type in ["humanoid_object"]:
+        if int(config.nq_obj) != 7:
+            raise ValueError(
+                "object_kinematic_override requires true-freejoint object "
+                f"with nq_obj=7, got nq_obj={config.nq_obj}."
+            )
+        env.object_kinematic_ref_qpos = qpos_ref[:, -7:].to(
+            config.device, dtype=torch.float32
+        )
+        env.object_kinematic_ref_qvel = qvel_ref[:, -6:].to(
+            config.device, dtype=torch.float32
+        )
+        env.object_kinematic_ref_dt = (
+            float(config.object_kinematic_ref_dt)
+            if config.object_kinematic_ref_dt > 0
+            else float(config.sim_dt)
+        )
+        loguru.logger.info(
+            "Object kinematic oracle: ref_qpos shape={}, ref_qvel shape={}, ref_dt={}",
+            tuple(env.object_kinematic_ref_qpos.shape),
+            tuple(env.object_kinematic_ref_qvel.shape),
+            env.object_kinematic_ref_dt,
+        )
+
     # E025/E026/E028/E030: precompute partner force reference object positions + quaternions
     if (
         config.partner_force_spring_kp > 0 or config.scene_name == "scene_weld"

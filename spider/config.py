@@ -141,6 +141,12 @@ class Config:
     object_pd_override: bool = False  # enable object actuator PD override in step_env
     object_pd_kp_pos: float = 2000.0  # position actuator gain (strong tracking)
     object_pd_kp_rot: float = 2000.0  # rotation actuator gain
+    # E013: true-freejoint object oracle. Unlike object_pd_override, this does
+    # not require scene_act object actuators; it writes the object freejoint
+    # state from the interpolated reference before and after each physics step.
+    object_kinematic_override: bool = False
+    object_kinematic_ref_dt: float = -1.0  # <=0 uses sim_dt
+    object_kinematic_set_qvel: bool = True
     # E025: hand approach reward — guides hands toward object surface
     hand_approach_rew_scale: float = (
         0.0  # weight of hand-to-object-surface distance reward

@@ -465,3 +465,80 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 静态检查通过：E012 generator/eval 与核心 Python `py_compile`；E012 shell 脚本 `bash -n`；variants 每行 38 列。
 - E012 4-step smoke 已完成：8/8 变体产出 NPZ，`partner_force_force` / `partner_force_torque` 诊断字段存在。
 - E012 smoke eval 仅作 wiring 验证，不能作为效果结论：aggregate 显示 `num_results=8`、`num_dual_points_config_ok=8`、`num_freejoint_parity_ok=8`、`num_partner_force_metrics_present=8`、`num_main_reaches_E081_transport=0`。下一步提交 setup 后启动 full：本地跑 2 个 local main，远程两卡跑 6 个 remote 变体。
+
+## 2026-05-18 22:49 E012 full 运行中
+
+- 已提交并推送 E012 setup：`b507451 exp(core4d_collab_retarget): set up E012 dual point closure`。
+- 远程首轮在 `E012_box025_p2_dualy_x20_k50_g05` / `E012_box025_p2_dualy_x30_k100_g05` 约 `38-40/248` 后日志停更，两个进程仍各占约 100% CPU；判断为可能的单步求解慢/卡住，而非 SSH/CUDA 权限问题。
+- 已新增并推送 watchdog 修复：`03618ba exp(core4d_collab_retarget): add E012 watchdog`。远程 tmux 默认 `RUN_STALL_TIMEOUT_SECONDS=300`，单变体 300s 无日志更新则 kill 并继续队列。
+- watchdog 版远程已重启并越过上次卡点，目前两卡首批均继续推进（约 `122/248`），暂无 timeout 记录。
+- 本地第一条 full `E012_box025_p2_dualy_x20_k100_g05` 完成并单独 eval：obj `0.362/0.660m`、hand `80.9%`、floor `64.7%`、leg `1.2%`、xy ratio `0.788`、rot `20.6deg`、partner force mean/max `33.9/128.8N`、torque max `30.0Nm`（打到 clamp）。
+- 对比 E011 best `E011_box025_p2_com_xyz_k100`：E012 dual k100 的 obj mean 差 `+0.021m`，obj max 小幅好 `-0.012m`，但 rotation 超过 `15deg` gate，`E012_pose_closure_helped=false`，diagnostic=`insufficient_coupling`。初步判断：双点闭合没有直接解决 E011 的 E081 精度缺口，且引入额外姿态力矩负担；等待 obj3、x30/g08/k150 与 guard 结果确认是否有局部例外。
+
+## 2026-05-18 23:12 E012 远程部分回收
+
+- 本地 `local_wave` 两条已完成；收尾时 `train_E012.sh` 报过一次 shell 语法错误，但 `bash -n` 复查当前脚本通过，且两条 full NPZ 与局部 eval 已产出。
+- 已执行 `pull_E012_remote_results.sh` 回收远程；当前只拉回远程首批两条 full：`E012_box025_p2_dualy_x20_k50_g05` 与 `E012_box025_p2_dualy_x30_k100_g05`。
+- 远程 tmux `E012` 仍在运行：GPU0 正跑 `E012_box025_p2_dualy_x20_k150_g05`，GPU1 正跑 `E012_box025_p2_dualy_x20_k100_g08`，两者约在 `130/248`，之后还会各自串行跑一个 `box023` guard。
+- 本地结果目录里 `k150/g08/guard` 仍有 19KB smoke 占位 NPZ；在远程 full 覆盖前不能纳入最终结论。
+- 已对 4 条 full 显式局部 eval：aggregate `num_results=4`、`num_main_reaches_E081_transport=0`、diagnostic=`insufficient_coupling:2` / `rotation_shortcut:2`。
+- 4 条阶段性结果：`x20_k50` obj `0.466/0.899m`、xy `0.815`、rot `9.0deg`，coupling 不足；`x20_k100` obj `0.362/0.660m`、xy `0.788`、rot `20.6deg`，object max 略好但旋转超标；`x20_k100_obj3` obj `0.360/0.643m` 但 xy `0.539`、rot `147.3deg`；`x30_k100` hand `90.2%`、floor `54.9%` 但 rot `142.4deg`。当前趋势是 dual-point 越强/力臂越大越容易走姿态力矩捷径。
+
+## 2026-05-18 23:24 E012 main 六条完成
+
+- 已回收远程第二批 main：`E012_box025_p2_dualy_x20_k150_g05` 与 `E012_box025_p2_dualy_x20_k100_g08`，两个 `box023` guard 已在远程开始运行。
+- 已对 6 条 main full 显式 eval：aggregate `num_results=6`、`num_main_reaches_E081_transport=0`、`num_main_pose_closure_helped=0`、diagnostic=`insufficient_coupling:2` / `rotation_shortcut:4`。
+- 关键新增结果：`g08` hand `90.8%`、floor `52.6%`、xy ratio `1.050`，但 obj `0.363/0.729m`、rot `138.4deg`；`k150` obj 最好 `0.306/0.606m`、xy `0.980`、floor `59.5%`，但 rot `97.8deg`、torque max `30Nm`，仍是 rotation shortcut。
+- 阶段性结论：E012 的双点虚拟力把 “E011 COM spring 的平移 coupling” 换成了 “off-COM torque shortcut”。`k150/g08` 虽然能改善 xy/floor/obj 的局部指标，但旋转大到不可接受，不能判为协作搬运。
+
+## 2026-05-18 23:48 E012 full 完成
+
+- 远程 E012 已结束，tmux session 退出；已回收 6 条远程 full 结果与视频，合并本地 2 条 full 结果。
+- 8 条显式 full eval 完成：`num_results=8`、`num_main_results=6`、`num_guard_results=2`、`num_freejoint_parity_ok=8`、`num_dual_points_config_ok=8`、`num_partner_force_metrics_present=8`、`num_main_reaches_E081_transport=0`、`num_main_pose_closure_helped=0`、`num_guard_stable=0`。诊断分布：`rotation_shortcut=4`、`insufficient_coupling=2`、`guard_unstable=2`。
+- Main 最好 object error 是 `E012_box025_p2_dualy_x20_k150_g05`：obj `0.306/0.606m`，相对 E011 best 改善 `-0.034/-0.067m`，但 rot `97.8deg`、torque max `30Nm`，属于旋转捷径；不能判 work。
+- Guard 两条均失败：`guard_k50` pelvis min `0.052m`、leg intf `22.0%`、rot `172.9deg`；`guard_k100` pelvis min `0.543m`、floor `75.3%`、obj `0.682/1.273m`，仍未稳定。
+- 已生成并检查关键帧拼图：`workspace/core4d_collab_retarget/results/E012/keyframes/e012_visual_montage.jpg`。视觉观察与量化一致：main 的强 coupling 末帧出现箱体大角度姿态偏转；两个 guard 明显倒地/跪倒。
+
+## 2026-05-19 00:52 E013-E016 路线恢复与 E013 前置判断
+
+- 目标文档 `workspace/core4d_collab_retarget/docs/03_agent_execution_plan_E013_E016.md` 当前是 0 行未跟踪文件，不能直接作为可执行计划；已从 `docs/01_direction_review_2026-05-18.md` 和 `docs/02_E011_k100_vs_E081_full_metric_comparison.md` 恢复路线。
+- 恢复出的下一步顺序：E013 true-freejoint object oracle 必做；E014 做 COLA 特征 B（kinematic support + 6-DoF/weld 位置约束）；E014b 条件触发 stiffness sweep；E015 加 COLA 特征 A（dynamic support + PD）；E015b/E015c 条件 sweep；E016 仅作为 COLA sweep 后的回退/正交验证。
+- E012 full 已完成并符合路线预期：spring/multi-point force 范式不再继续扫参，强 coupling 主要打开 rotation shortcut。
+- 初步代码判断：现有 `object_pd_override` 只覆盖 `scene_act` 的 6 维 object actuator ctrl；E013 要在 true-freejoint scene 上做 oracle，不能简单设置 `object_pd_override=true`。需要复用或规范化 freejoint kinematic override 口径（`partner_force_spring_kp < 0` 分支）或新增专用配置字段。
+- 已补全用户点名的执行计划文档：`workspace/core4d_collab_retarget/docs/03_agent_execution_plan_E013_E016.md`。该文档把 E013-E016 条件链明确为 E013 oracle -> E014 COLA-B -> E014b 条件 sweep -> E015 COLA-A+B -> E015b/E015c 条件 sweep -> E016 回退/正交验证。
+- 已写入 E013 正式计划：`workspace/core4d_collab_retarget/plan/13_E013_true_freejoint_object_oracle_plan.md`。下一步开始实现 E013 的显式 freejoint object kinematic oracle 配置、脚本与 eval。
+- 已实现 E013 第一版代码/脚本：
+  - `spider/config.py` 新增 `object_kinematic_override` / `object_kinematic_ref_dt` / `object_kinematic_set_qvel`；
+  - `examples/run_mjwp.py` 在 E013 口径下预加载 ref object qpos/qvel；
+  - `spider/simulators/mjwp.py` 每 step 前后写 true-freejoint object qpos/qvel；
+  - 新增 E013 variants、override generator、preprocess、train、eval 脚本。
+- 下一步做静态检查与 override 生成，然后跑 E013 smoke。
+- 静态检查通过：核心 Python 与 E013 generator/eval `py_compile`，E013 shell 脚本 `bash -n`，variants 每行 7 列。
+- `run_E013_preprocess.sh` 已生成两个 override：`core4d_collab_E013_box025_p2_obj_oracle.yaml`、`core4d_collab_E013_box023_p2_obj_oracle.yaml`。人工检查关键字段符合 true-freejoint oracle：`scene_name=scene`、`contact_guidance=false`、`object_pd_override=false`、`object_kinematic_override=true`、`object_action_dims=0`、`object_actuator_ids=[]`。
+- E013 4-step smoke 已完成：2/2 变体产出 NPZ；显式 eval 通过，aggregate 为 `num_results=2`、`num_freejoint_oracle_config_ok=2`、`num_near_e081_obj_oracle=2`、`num_guard_stable=1`。该结果只验证 wiring，不作为 full 效果结论。
+- 下一步启动 E013 full（本地顺序跑 main + guard）。
+
+## 2026-05-19 00:44 E013 full 启动
+
+- 已启动 `bash workspace/core4d_collab_retarget/scripts/train/train_E013.sh full 0`。
+- 当前正在跑 main `E013_box025_p2_obj_oracle`；日志确认 object kinematic oracle 已加载：`ref_qpos shape=(298, 7)`、`ref_qvel shape=(298, 6)`、`ref_dt=0.0166667`。
+- 00:45 监控：main 到 `36/248`，每 2 个 sim step 约 `9.2s`，暂无 CUDA/OOM/卡住迹象。full NPZ 尚未覆盖 smoke。
+- 00:50 监控：main 到 `72/248`，每 2 个 sim step 约 `8.9-9.1s`，仍稳定运行；guard 尚未开始。
+- 00:56 监控：main 到 `106/248`，仍无异常日志；运行进度接近一半。
+- 01:02 监控：main 到 `150/248`，约 60% 完成，计划时间仍稳定在 `~9.0s/2 sim steps`。
+- 01:08 监控：main 到 `186/248`，后半程略快（约 `8.8-8.9s/2 sim steps`），预计数分钟后进入 guard。
+- 01:01（日志时间）main `E013_box025_p2_obj_oracle` 已完成，full NPZ 已覆盖 smoke：`1.1MB`。脚本已进入 guard `E013_box023_p2_obj_oracle`，当前 guard 刚启动到 `12/272`。
+- 01:04（日志时间）guard 到 `46/272`，每 2 个 sim step 约 `9.1s`，暂无异常；guard NPZ 仍是 smoke 占位，等待 full 完成覆盖。
+- 01:12（日志时间）guard 到 `90/272`，约三分之一完成，速度稳定，暂无异常。
+- 01:18（日志时间）guard 到 `136/272`，一半完成，仍稳定。
+- 01:24（日志时间）guard 到 `180/272`，约三分之二完成，后半程约 `8.7-8.9s/2 sim steps`。
+- 01:30（日志时间）guard 到 `224/272`，进入最后四分之一，暂无异常。
+
+## 2026-05-19 01:21 E013 full 完成
+
+- E013 full 已完成并自动 eval。Full NPZ 已覆盖 smoke：main `1.1MB`，guard `1.2MB`；视频、keyframes、scene_snapshot、comparison、aggregate、`e014_soft_targets.json` 均已落盘。
+- Final aggregate：`num_results=2`、`num_freejoint_oracle_config_ok=2`、`num_near_e081_obj_oracle=2`、`num_guard_stable=1`。
+- Main `E013_box025_p2_obj_oracle`：obj `0.011/0.038m`、hand `78.6%`、floor `57.8%`、leg `0.0%`、xy ratio `1.000`、rot `1.99deg`、pelvis min `0.765m`。
+- Guard `E013_box023_p2_obj_oracle`：obj `0.017/0.064m`、hand `72.7%`、floor `34.7%`、leg `0.0%`、xy ratio `1.000`、rot `3.05deg`、pelvis min `0.688m`。
+- 已用 `video-frames` skill 的 `frame.sh` 从两个视频抽取关键帧并生成 contact sheet：`workspace/core4d_collab_retarget/results/E013/keyframes_skill/main_sheet.jpg`、`guard_sheet.jpg`。视觉观察：object 与 ref 基本重合，无 E012 式大旋转；main 手端接触持续性不足，guard 姿态稳定。
+- 已写入 E013 结果日志：`workspace/core4d_collab_retarget/log/13_E013_true_freejoint_object_oracle_results.md`，并更新 `EXPERIMENT_TRACKER.md`。下一步按 `docs/03_agent_execution_plan_E013_E016.md` 创建 E014 COLA-B 位置约束计划。
