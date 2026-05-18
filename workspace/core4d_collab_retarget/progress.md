@@ -303,3 +303,50 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `bash workspace/core4d_collab_retarget/scripts/run_E009_remote.sh __codex_auth_probe__`
   - `bash workspace/core4d_collab_retarget/scripts/pull_E009_remote_results.sh __codex_auth_probe__`
 - E009 smoke 已完成：6/6 变体产出 4-step NPZ；eval aggregate `num_results=6`、`num_freejoint_parity_ok=6`、`num_support_proxy_metrics_present=6`、`num_main_proxy_support_tracking_ok=4`。4-step majority 不作为结论。
+
+## 2026-05-18 13:46 E009 full 启动
+
+- 已确认 E009 当前结果均为 4-step smoke：6 个 eval summary 的 `T=4`，NPZ mtime 13:39-13:40，不能作为正式结果。
+- 本轮启动 E009 full：远程执行 `run_E009_remote.sh`，本地执行 `train_E009.sh local_wave 0`。正式评估时必须确认 full NPZ 覆盖 smoke 后再使用。
+- 13:58 监控：本地 `E009_box025_p2_ypos_k20_vmax2_hc1` 到 `118/248`；远程 GPU0 `E009_box025_p2_ypos_k20_vmax2_hc05` 到 `104/248`；远程 GPU1 `E009_box023_p2_xpos_k10_vmax0_hc1` 到 `106/272`。三路 GPU/日志均活跃，暂无卡住迹象。
+- 14:12 监控：本地 `E009_box025_p2_ypos_k20_vmax2_hc1` 已完成并覆盖 smoke，NPZ 形状 `(124,2,43)`；本地自动进入 `E009_box025_p2_ypos_k20_vmax0_hc1`。远程 GPU0 `hc05` 已完成并进入 `hc2`；远程 GPU1 guard `hc1` 已完成并进入 guard `hc2`。远程两个 full NPZ 已落盘，后续回收时再统一本地 eval。
+- 14:26 本地 E009 队列完成。local-only eval 暂时覆盖了 `comparison.csv`/`aggregate_summary.json`，正式结果需等远程 pull 后用 6 个 full 变体显式重评。初步本地指标：`hc1` obj `0.441/0.825m`、hand `74.6%`、floor `63.0%`、xy `0.737`、rot `15.2deg`；`vmax0_hc1` obj `0.382/0.719m`、hand `55.5%`、floor `69.4%`、xy `0.789`、rot `38.6deg`。二者均未达 E081 transport gate，也未改善 E008 best。
+
+## 2026-05-18 14:36 E006 失败补充复盘：旋转替代平移
+
+- 按用户对可视化视频的观察，重查 E006 main 的 object/proxy 轨迹：参考 `box025_p2` object 水平净位移约 `1.571m`、起终旋转约 `2.0deg`；E006 main 实际 object 水平净位移只有 `0.211-0.495m`，但起终旋转达到 `20.6-47.6deg`。
+- 代表值：`yneg_k40` object xy `0.495m`、rot `47.6deg`；`ypos_k20` object xy `0.341m`、rot `33.3deg`；`yneg_k20_v05` object xy `0.211m`、rot `20.6deg`。
+- 复核 support proxy：E006 写死 `support_proxy_ref_dt=0.0333`，而运行时 qpos_ref 已按 `sim_dt` 插值；最终 `support_proxy_ref_idx=124`，proxy 自身只走约 `0.789-0.841m`（v05 为 `0.433m`），未覆盖参考全程。该时间基准错误后来在 E007 修正。
+- 力学解释：support force 施加在 object-local 远端点 `[0, +/-0.38, 0.30]`，`torque = r x F`；当机器人手端接触闭环弱、物体仍高比例贴地时，系统更容易绕地面/支撑点翻转来降低局部误差，而不是把 COM 水平运输出去。
+- 决策含义：E006 失败不能再归因于 kp 不够；仅增大 stiffness/hold-contact 不会解决首要问题。E007/E008 已证明先修正 proxy timebase/speed gate 后平移明显增加，后续应继续围绕 robot-side 闭环/contact pad，而不是回到 E006 的直接 wrench 扫参。
+
+## 2026-05-18 14:39 E009 full 回收与结论
+
+- 远程 E009 已完成并回收；`pull_E009_remote_results.sh` 自动 eval 只覆盖 4 个远程变体，因此显式重评 6 个 full NPZ。
+- 6 个 full NPZ 均已确认不是 smoke：main `qpos=(124,2,43)`，guard `qpos=(136,2,43)`。
+- 最终 aggregate：`num_results=6`、`num_freejoint_parity_ok=6`、`num_main_proxy_support_tracking_ok=4`、`num_main_reaches_E081_transport_proxy=0`、`num_main_improves_E008_best=0`、`num_guard_stable_proxy=1`。
+- E009 best-ish `hc05`：obj `0.395/0.726m`、hand `76.9%`、floor `62.4%`、leg intf `3.5%`、xy ratio `0.710`、rot `18.2deg`，比 E008 best obj mean 差 `+0.032m`。
+- `hc2` 虽然 obj mean `0.344m` 略低于 E008 best，但 hand 降到 `66.5%`、floor 升到 `70.5%`、rot `38.5deg`，属于旋转/地面替代，不是搬运。
+- `vmax0_hc1` xy ratio `0.789` 达标，但 hand `55.5%`、rot `38.6deg`，同样不是有效双端搬运。
+- 已提取 E009 关键帧到 `workspace/core4d_collab_retarget/results/E009/keyframes/`，并写入 E009 结果日志 `workspace/core4d_collab_retarget/log/09_E009_ypos_hold_contact_closure_e081_results.md`。
+- 决策：E010 不再继续 hold-contact scale sweep，转向结构性 contact pad / soft constraint，让 partner support 通过 MuJoCo contact/约束进入 object，而不是继续 direct wrench + reward。
+
+## 2026-05-18 14:46 E010 计划
+
+- 已写入 E010 中文计划：`workspace/core4d_collab_retarget/plan/10_E010_mocap_contact_pad_support_e081_plan.md`。
+- E010 的核心假设：E006/E009 的旋转替代平移来自 direct off-COM wrench + robot hand 闭环弱；下一轮让 virtual partner 作为 mocap/contact pad 与 object 接触传力，而不是继续直接写 `xfrc_applied`。
+- 计划 variants：5 个 `box025_p2` main 覆盖 ypos/yneg、pad size、vmax、轻量 HC；2 个 `box023_p2` guard 覆盖 xpos pad size/HC。
+- 成功标准继续对齐 E081 transport gate：obj `<=0.20/0.40m`、hand `>=80%`、floor `<=75%`、xy `>=0.75`、rot `<=15deg`、true-freejoint parity ok；若 pad 独自搬而 hand 不参与，不算 work。
+
+## 2026-05-18 15:58 E010 实现与 smoke
+
+- 已新增 E010 最小实现：
+  - `spider/config.py` 新增 `support_proxy_mode` 与 `support_proxy_mocap_body_name`；
+  - `spider/simulators/mjwp.py` 支持 `support_proxy_mode=mocap_pad`，复用 support proxy trajectory 更新 `support_proxy_pad` mocap body，并在该模式禁用 direct object wrench；
+  - 新增 `scene_contact_pad08/10/12/16.xml` 生成脚本，contact pad 为 mocap body，不进入 qpos/ctrl；
+  - 新增 E010 variants、preprocess/train/remote/pull/eval 脚本。
+- 静态检查通过：`py_compile` 覆盖 config/mjwp/E010 generator/eval，`bash -n` 覆盖 E010 shell 脚本。
+- `run_E010_preprocess.sh` 已生成 4 个 contact-pad scene XML 与 7 个 overrides；MuJoCo 加载检查：`nq=43,nv=41,nu=29,nmocap=1,npair=43`。
+- 首次 smoke 失败原因：E010 variants 误写 `person_idx=2`，而 raw mask shape 是 `(T,2,2)`；已修正为 `person_idx=1` 并重新生成 overrides。
+- E010 4-step smoke 完成：7/7 变体均产出 NPZ。Smoke eval aggregate：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_main_proxy_support_tracking_ok=5`、`num_guard_stable_proxy=2`。4-step majority 不作为效果结论。
+- E010 本地训练、远程启动、远程回收脚本已预授权；下一步提交 E009/E010 setup 后启动 full。

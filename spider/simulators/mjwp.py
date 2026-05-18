@@ -1658,6 +1658,12 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
     independent controller target whose connector wrench is applied to the true
     freejoint object at an object-local support site.
     """
+    valid_modes = {"wrench", "mocap_pad", "wrench_pad"}
+    if config.support_proxy_mode not in valid_modes:
+        raise ValueError(
+            f"Unknown support_proxy_mode={config.support_proxy_mode!r}; "
+            f"expected one of {sorted(valid_modes)}."
+        )
     if config.nq_obj != 7 or config.contact_guidance:
         raise ValueError(
             "support_proxy_enabled currently requires true-freejoint object "
@@ -1821,6 +1827,85 @@ def _apply_support_proxy_force(config: Config, env: MJWPEnv):
     wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
 
 
+def _update_support_proxy_mocap_pad(config: Config, env: MJWPEnv):
+    """Move a mocap contact pad to the support proxy target."""
+    if not hasattr(env, "support_proxy_ref_pos"):
+        return
+
+    if not hasattr(env, "_support_proxy_mocap_id"):
+        body_id = mujoco.mj_name2id(
+            env.model_cpu,
+            mujoco.mjtObj.mjOBJ_BODY,
+            config.support_proxy_mocap_body_name,
+        )
+        if body_id == -1:
+            env._support_proxy_mocap_id = -1
+            loguru.logger.warning(
+                "support proxy mocap body '{}' not found; mocap_pad disabled.",
+                config.support_proxy_mocap_body_name,
+            )
+            return
+        env._support_proxy_mocap_id = env.model_cpu.body_mocapid[body_id]
+        if env._support_proxy_mocap_id < 0:
+            loguru.logger.warning(
+                "support proxy body '{}' is not a mocap body; mocap_pad disabled.",
+                config.support_proxy_mocap_body_name,
+            )
+            return
+
+    if env._support_proxy_mocap_id < 0:
+        return
+
+    time_arr = wp.to_torch(env.data_wp.time)
+    t = time_arr[0].item()
+    dt = float(getattr(env, "support_proxy_ref_dt", config.sim_dt))
+    T = env.support_proxy_ref_pos.shape[0]
+    idx = min(int(t / dt), T - 1)
+    proxy_pos = env.support_proxy_ref_pos[idx]
+    proxy_vel = env.support_proxy_ref_vel[idx]
+
+    mocap_pos_all = wp.to_torch(env.data_wp.mocap_pos)
+    mocap_quat_all = wp.to_torch(env.data_wp.mocap_quat)
+    mid = env._support_proxy_mocap_id
+    N = mocap_pos_all.shape[0]
+    mocap_pos_all[:, mid] = proxy_pos.unsqueeze(0).expand(N, -1)
+    mocap_quat_all[:, mid] = torch.tensor(
+        [1.0, 0.0, 0.0, 0.0], device=proxy_pos.device, dtype=proxy_pos.dtype
+    ).unsqueeze(0).expand(N, -1)
+
+    obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
+    if obj_body_id == -1:
+        return
+    xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
+    xfrc_applied[:, obj_body_id, :6] = 0.0
+    wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+
+    qpos = wp.to_torch(env.data_wp.qpos)
+    qvel = wp.to_torch(env.data_wp.qvel)
+    obj_jnt_id = env.model_cpu.body_jntadr[obj_body_id]
+    obj_qadr = env.model_cpu.jnt_qposadr[obj_jnt_id]
+    obj_vadr = env.model_cpu.jnt_dofadr[obj_jnt_id]
+    obj_pos_sim = qpos[:, obj_qadr : obj_qadr + 3]
+    obj_vel_sim = qvel[:, obj_vadr : obj_vadr + 3]
+    obj_quat_sim = qpos[:, obj_qadr + 3 : obj_qadr + 7]
+    obj_angvel_sim = qvel[:, obj_vadr + 3 : obj_vadr + 6]
+    obj_quat_sim = obj_quat_sim / obj_quat_sim.norm(dim=-1, keepdim=True).clamp(
+        min=1e-8
+    )
+    local = env.support_proxy_point_local.unsqueeze(0).expand(N, -1)
+    r_world = _lf_quat_apply(obj_quat_sim, local)
+    support_point_pos = obj_pos_sim + r_world
+    support_point_vel = obj_vel_sim + torch.cross(obj_angvel_sim, r_world, dim=-1)
+
+    env.support_proxy_last_force = torch.zeros_like(support_point_pos)
+    env.support_proxy_last_torque = torch.zeros_like(support_point_pos)
+    env.support_proxy_last_pos = proxy_pos.unsqueeze(0).expand(N, -1).detach()
+    env.support_proxy_last_vel = proxy_vel.unsqueeze(0).expand(N, -1).detach()
+    env.support_proxy_last_support_point_pos = support_point_pos.detach()
+    env.support_proxy_last_support_point_vel = support_point_vel.detach()
+    env.support_proxy_last_idx = idx
+
+
 def get_support_proxy_state(config: Config, env: MJWPEnv) -> dict[str, np.ndarray]:
     """Return first-world support proxy diagnostics for trajectory saving."""
     if not config.support_proxy_enabled or not hasattr(env, "support_proxy_last_force"):
@@ -1956,9 +2041,17 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         # E024: apply partner force on object (simulating human partner support)
         if config.partner_force_scale > 0:
             _apply_partner_force(config, env)
-        # E006: COLA-style virtual support proxy owns the object wrench when enabled.
-        if config.support_proxy_enabled:
+        # E006/E010: support proxy can act via direct wrench, mocap contact pad, or both.
+        if config.support_proxy_enabled and config.support_proxy_mode in {
+            "wrench",
+            "wrench_pad",
+        }:
             _apply_support_proxy_force(config, env)
+        if config.support_proxy_enabled and config.support_proxy_mode in {
+            "mocap_pad",
+            "wrench_pad",
+        }:
+            _update_support_proxy_mocap_pad(config, env)
         # E030: update weld target mocap body (for scene_weld.xml)
         if config.scene_name == "scene_weld":
             _update_object_weld_target(config, env)

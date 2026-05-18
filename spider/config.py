@@ -106,6 +106,10 @@ class Config:
     # E006: COLA-style virtual support-body proxy. This keeps the object true
     # freejoint and applies a connector wrench from an independent proxy target.
     support_proxy_enabled: bool = False
+    support_proxy_mode: str = (
+        "wrench"  # "wrench" | "mocap_pad" | "wrench_pad"
+    )
+    support_proxy_mocap_body_name: str = "support_proxy_pad"
     support_proxy_point_local: list[float] = field(
         default_factory=list
     )  # object-local support site; required when enabled
