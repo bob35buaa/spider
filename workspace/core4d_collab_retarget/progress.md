@@ -405,3 +405,32 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - E011 smoke 已完成：9/9 变体产出 4-step NPZ；显式 eval 输出 `num_results=9`、`num_freejoint_parity_ok=9`、`num_partner_force_metrics_present=9`、`num_support_proxy_metrics_present=2`。
 - 4-step smoke 中 object 指标不作为实验结论；当前只确认 wiring、partner force 诊断字段、E011 eval aggregate 均可用。
 - E011 本地训练、远程启动、远程回收脚本预授权 probe 已完成。
+
+## 2026-05-18 17:34 E011 full 启动
+
+- 已提交并推送 E011 setup：`8ba6268 exp(core4d_collab_retarget): set up E011 soft tether diagnostic`。
+- 已启动 E011 full：
+  - 本地 GPU0：`E011_box025_p2_com_xyz_k20` -> `E011_box025_p2_ypos_k20_vmax2_com_k25` -> `E011_box025_p2_ypos_k20_vmax2_com_k50`
+  - 远程 GPU0：`E011_box025_p2_com_xyz_k50` -> `E011_box025_p2_com_xyz_k100` -> `E011_box025_p2_com_xyz_k50_g1`
+  - 远程 GPU1：`E011_box025_p2_com_xyz_k50_rot1` -> `E011_box023_p2_com_xyz_k50` -> `E011_box023_p2_com_xyz_k100`
+- 17:34 监控：本地首个约到 `26/248`；远程 GPU0/GPU1 首个均约到 `24/248`；三路 GPU util `44-47%`，暂无 OOM/卡死。当前 full 单步计划耗时约 `9-11.5s`。
+- 17:40 监控：本地 `E011_box025_p2_com_xyz_k20` 到约 `120/248`；远程 GPU0 `E011_box025_p2_com_xyz_k50` 到约 `106/248`；远程 GPU1 `E011_box025_p2_com_xyz_k50_rot1` 到约 `100/248`。三路日志均正常推进，未见 CUDA/SSH 权限问题；远程 tmux pane 只保留启动横幅，实际进度以后直接看 variant 日志。
+- 17:45 监控与 E006 复核：本地首个到约 `168/248`，远程 GPU0/GPU1 首个到约 `148/248`、`138/248`。重读 E006 日志后确认用户视频观察的量化原因：E006 一方面 `support_proxy_ref_dt=0.0333` 在 sim_dt 插值参考上只走约半段；另一方面 off-COM connector 的 `r x F` 在手端闭环弱、floor 高时形成旋转捷径。E011 的 COM-level spring 结果将直接验证“去掉 off-COM/timebase 后是否恢复平移”。
+- 17:50 本地首个 full `E011_box025_p2_com_xyz_k20` 完成，NPZ 已从 smoke 覆盖为 full（约 `1.1MB`），关键帧已生成。单 variant eval：diagnostic=`insufficient_coupling`，obj `0.533/1.035m`，hand `86.7%`，floor `58.4%`，leg `1.2%`，xy `0.969/1.571m`（ratio `0.617`），rot `4.9deg`（ref `2.0deg`），partner force mean/max `26.3/35.1N`，torque max `0`，effort reasonable，parity ok。初步解释：COM k20 已明显去掉 E006 的旋转捷径和高 floor 问题，但 coupling 强度不足，仍达不到 E081 transport。
+- 17:54 已部分回收远程 GPU0 首个 `E011_box025_p2_com_xyz_k50` 并 eval：diagnostic=`insufficient_coupling`，majority score `4/6`，obj `0.451/0.851m`，hand `85.0%`，floor `62.4%`，leg `0.0%`，xy `1.307/1.571m`（ratio `0.832`），rot `2.7deg`，partner force mean/max `30.1/43.4N`，torque max `0`，effort reasonable。解释更新：COM k50 能恢复水平平移且不走旋转/地面捷径，但绝对 object tracking error 仍大，说明剩余瓶颈不是单纯“能不能推动 COM”，而是姿态/高度/robot-object 相对位形没有进入 E081 级闭环。
+- 17:56 已部分回收远程 GPU1 首个 `E011_box025_p2_com_xyz_k50_rot1` 并 eval：diagnostic=`insufficient_coupling`，majority score `4/6`，obj `0.427/0.835m`，hand `83.2%`，floor `56.6%`，leg `0.0%`，xy ratio `0.763`，rot `2.8deg`，partner force mean/max `28.9/42.7N`，torque max `1.5Nm`，effort reasonable。弱 orientation tether 略降 obj/floor，但没有解决 E081 error；residual rotation 不是主要瓶颈。
+- 18:01 监控：本地第二条 `E011_box025_p2_ypos_k20_vmax2_com_k25` 到约 `150/248`；远程 GPU0 `E011_box025_p2_com_xyz_k100` 到约 `104/248`；远程 GPU1 `E011_box023_p2_com_xyz_k50` 到约 `88/272`。三路继续稳定，暂无 OOM/卡死；已回收的 k20/k50/rot1 共同支持“COM 施力能恢复平移，E006 失败含明显 off-COM 旋转捷径；但 E081 级精确搬运仍没闭合”。
+- 18:09 本地第二条 `E011_box025_p2_ypos_k20_vmax2_com_k25` 完成并 eval：diagnostic=`insufficient_coupling`，majority score `3/6`，obj `0.420/0.792m`，hand `87.9%`，floor `69.4%`，leg `0.0%`，xy ratio `0.686`，rot `24.8deg`；proxy tracking ok，support force mean/max `27.9/58.8N`，partner force mean/max `7.9/19.7N`，effort ok，parity ok。相对 E008 best，obj mean/max 变差 `+0.057/+0.109m`，xy ratio 变差 `-0.038`，rot 增加 `+11.2deg`。结论：E008 best 加少量 COM coupling 没有跨过门槛，反而重新诱发部分旋转。
+- 18:16 已回收远程 GPU0 第二条 `E011_box025_p2_com_xyz_k100` 并 eval：diagnostic=`robot_side_blocked`，majority score `4/6`，obj `0.340/0.673m`，hand `86.1%`，floor `61.3%`，leg `0.0%`，xy ratio `0.905`，rot `3.5deg`，partner force mean/max `32.6/53.1N`，effort ok，parity ok。它相对 E008 best 改善 obj mean/max `-0.023/-0.010m`、xy ratio `+0.181`、rot `-10.1deg`，但仍未达到 E081 gate（obj 仍高于 `0.20/0.40m`）。强 COM tether 已能恢复平移但不能恢复 E081 级精确轨迹，指向 robot-side/姿态闭环瓶颈。
+- 18:18 已回收远程 GPU1 guard `E011_box023_p2_com_xyz_k50` 并 eval：guard stable true，diagnostic=`insufficient_coupling`，obj `0.681/1.235m`，hand `55.3%`，floor `51.3%`，leg `0.0%`，pelvis min `0.683m`，xy ratio `0.774`，rot `10.7deg`，partner force mean/max `43.0/70.2N`，effort ok，parity ok。它说明 COM 口径没有破坏 guard 稳定性，但 guard 仍不构成协作搬运。
+- 18:28 本地队列完成；`E011_box025_p2_ypos_k20_vmax2_com_k50` eval：diagnostic=`insufficient_coupling`，majority score `4/6`，obj `0.378/0.718m`，hand `83.8%`，floor `65.9%`，leg `4.0%`，xy ratio `0.811`，rot `13.85deg`，proxy tracking ok，support force mean/max `27.3/46.2N`，partner force mean/max `11.9/27.8N`，effort ok，parity ok。相对 E008 best，xy ratio 改善 `+0.087`，但 obj mean/max 变差 `+0.015/+0.035m`，rot 基本持平；E008+COM k25/k50 都不是有效修补路线。
+- 18:37 已回收远程 GPU0 `E011_box025_p2_com_xyz_k50_g1` 并 eval：diagnostic=`insufficient_coupling`，majority score `3/6`，obj `0.350/0.694m`，hand `75.1%`，floor `22.5%`，leg `0.0%`，xy ratio `0.971`，rot `11.1deg`，partner force mean/max `49.1/58.7N`，z mean `48.0N`，effort ok，parity ok。gravity scale=1 能显著降低 floor 并基本走完水平路径，但 hand contact 掉到 `<80%` 且 obj error 仍高；这更像外部竖直支撑拉走物体，而不是机器人手端闭合的协作搬运。
+
+## 2026-05-18 18:43 E011 full 完成
+
+- 远程最后一个 guard `E011_box023_p2_com_xyz_k100` 已完成并回收；远程 tmux session 已结束。
+- 已对 9 个 full NPZ 显式重评，最终 aggregate：`num_results=9`、`num_main_results=7`、`num_guard_results=2`、`num_freejoint_parity_ok=9`、`num_partner_force_metrics_present=9`、`num_support_proxy_metrics_present=2`、`num_main_reaches_E081_transport=0`、`num_main_beats_or_matches_E081_majority=4`、`num_main_improves_E008_best=1`、`num_guard_stable=1`，diagnostic classes：`insufficient_coupling=7`、`robot_side_blocked=2`。
+- Guard k100：obj `0.351/0.604m`、hand `57.3%`、floor `33.3%`、leg `18.7%`、pelvis min `0.113m`、xy ratio `0.963`、rot `9.2deg`，tracking 改善但不稳定/摔倒。
+- 已生成并检查 E011 视觉拼图：`workspace/core4d_collab_retarget/results/E011/keyframes/e011_visual_montage.jpg`。视觉结论：COM-only main 不再像 E006 一样原地旋转，kp 越大平移越明显；`g1` 能离地和平移但手端脱开；E008+COM k25/k50 仍有明显姿态偏差；guard k100 后期摔倒。
+- 已写入中文结果日志：`workspace/core4d_collab_retarget/log/11_E011_soft_object_tether_diagnostic_e081_results.md`，并更新 `EXPERIMENT_TRACKER.md`。
+- 当前 E006 失败解释收敛：E006 的“只旋转、不平移”主要来自 off-COM support wrench 的 `r x F` 力矩捷径 + `support_proxy_ref_dt` timebase 截断 + robot-side 闭环弱；E011 证明改成 COM spring 可恢复平移，但 E081 级精度还需要 robot-side/partner-side 双点闭合，而不是继续加单点/单 COM 外力。
