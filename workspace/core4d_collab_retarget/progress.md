@@ -441,3 +441,27 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 计划核心：不再扫单 COM kp/gravity；新增 dual-point partner-side local feature spring，在 `box025` partner 侧面用两个点 `[+/-x, +0.38, 0.30]` 同时跟随 reference object，对比 E011 k100 是否能降低 obj error，同时防止 E006 单点 off-COM 旋转捷径。
 - E012 计划 8 个 full variants：6 个 main 覆盖 dual-point 间距/kp/gravity/object-reward shaping，2 个 guard 覆盖 `box023` 稳定性。
 - 下一步实现 `partner_force_points_local` multi-point spring、E012 overrides/scripts/eval，并先跑 smoke。
+
+## 2026-05-18 22:26 E012 实现 / 授权 / smoke
+
+- 已实现 E012 双点虚拟协作力：
+  - `spider/config.py` 新增 `partner_force_points_local`；
+  - `spider/simulators/mjwp.py` 在该字段非空时，将 spring force 分配到多个 object-local feature points，再合成 net force 与 `sum(r_i x F_i)` torque 写入 object `xfrc_applied`；
+  - 单点 `partner_force_point_local` 与 COM spring 行为保持兼容，双点字段优先生效。
+- 已新增 E012 通用脚本：
+  - `workspace/core4d_collab_retarget/scripts/E012/variants.tsv`
+  - `workspace/core4d_collab_retarget/scripts/E012/generate_e012_overrides.py`
+  - `workspace/core4d_collab_retarget/scripts/run_E012_preprocess.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E012.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E012_remote_tmux.sh`
+  - `workspace/core4d_collab_retarget/scripts/run_E012_remote.sh`
+  - `workspace/core4d_collab_retarget/scripts/pull_E012_remote_results.sh`
+  - `workspace/core4d_collab_retarget/scripts/eval/eval_E012.py`
+- `run_E012_preprocess.sh` 已生成 8 个 overrides；示例主变体使用 `partner_force_points_local: [[0.2, 0.38, 0.3], [-0.2, 0.38, 0.3]]`。
+- 权限/资源探针已完成：
+  - 本机 `nvidia-smi`：RTX 5090，CUDA driver 可见；
+  - 远程 `spider-remote`：2 张 RTX 6000 Ada，SSH 可用；
+  - E012 本地训练、远程启动、远程回收脚本前缀均已授权。
+- 静态检查通过：E012 generator/eval 与核心 Python `py_compile`；E012 shell 脚本 `bash -n`；variants 每行 38 列。
+- E012 4-step smoke 已完成：8/8 变体产出 NPZ，`partner_force_force` / `partner_force_torque` 诊断字段存在。
+- E012 smoke eval 仅作 wiring 验证，不能作为效果结论：aggregate 显示 `num_results=8`、`num_dual_points_config_ok=8`、`num_freejoint_parity_ok=8`、`num_partner_force_metrics_present=8`、`num_main_reaches_E081_transport=0`。下一步提交 setup 后启动 full：本地跑 2 个 local main，远程两卡跑 6 个 remote 变体。

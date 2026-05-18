@@ -1496,6 +1496,8 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
     Models the human partner holding one side of the object, providing:
     1. Gravity compensation: upward force = partner_force_scale * object_weight
     2. (Optional) Spring: pull toward reference position with partner_force_spring_kp
+    3. (Optional) Multi-point spring: track object-local support points and
+       synthesize a net wrench from their distributed forces.
 
     This enables single-robot retargeting of cooperative carrying tasks.
     """
@@ -1517,8 +1519,18 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
     gravity_z = -env.model_cpu.opt.gravity[2]  # positive (9.81)
     upward_force = config.partner_force_scale * obj_mass * gravity_z
 
+    points_local_raw = list(config.partner_force_points_local or [])
+    points_local: list[list[float]] = []
+    for point in points_local_raw:
+        point_list = list(point)
+        if len(point_list) != 3:
+            raise ValueError(
+                "partner_force_points_local entries must be [x, y, z] triples."
+            )
+        points_local.append([float(v) for v in point_list])
+    multi_point_mode = len(points_local) > 0
     point_local = list(config.partner_force_point_local or [])
-    point_mode = len(point_local) == 3
+    point_mode = len(point_local) == 3 and not multi_point_mode
     has_spring = config.partner_force_spring_kp > 0 and hasattr(
         env, "partner_force_ref_pos"
     )
@@ -1528,7 +1540,7 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
     last_force = torch.zeros((env.num_worlds, 3), device=config.device, dtype=torch.float32)
     last_torque = torch.zeros_like(last_force)
 
-    if not point_mode and not has_spring and not has_rot_spring:
+    if not multi_point_mode and not point_mode and not has_spring and not has_rot_spring:
         xfrc_applied[:, obj_body_id, 2] = upward_force
         last_force[:, 2] = upward_force
         env.partner_force_last_force = last_force.detach()
@@ -1578,7 +1590,60 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
             kd = config.partner_force_spring_kd
         ref_pos = env.partner_force_ref_pos[idx]  # (3,) on GPU
 
-        if point_mode:
+        if multi_point_mode:
+            points = torch.tensor(
+                points_local,
+                dtype=torch.float32,
+                device=obj_pos_sim.device,
+            )
+            num_points = points.shape[0]
+            local = points.unsqueeze(0).expand(obj_pos_sim.shape[0], -1, -1)
+
+            q_expand = (
+                obj_quat_sim.unsqueeze(1)
+                .expand(-1, num_points, -1)
+                .reshape(-1, 4)
+            )
+            r_world = _lf_quat_apply(
+                q_expand,
+                local.reshape(-1, 3),
+            ).reshape(obj_pos_sim.shape[0], num_points, 3)
+            point_pos_sim = obj_pos_sim.unsqueeze(1) + r_world
+            point_vel_sim = obj_vel_sim.unsqueeze(1) + torch.cross(
+                obj_angvel_sim.unsqueeze(1).expand(-1, num_points, -1),
+                r_world,
+                dim=-1,
+            )
+
+            ref_quat = env.partner_force_ref_quat[idx]
+            ref_q_expand = (
+                ref_quat.view(1, 1, 4)
+                .expand(obj_pos_sim.shape[0], num_points, -1)
+                .reshape(-1, 4)
+            )
+            ref_r_world = _lf_quat_apply(
+                ref_q_expand,
+                local.reshape(-1, 3),
+            ).reshape(obj_pos_sim.shape[0], num_points, 3)
+            ref_point = ref_pos.view(1, 1, 3) + ref_r_world
+
+            point_force = (
+                (kp / num_points) * (ref_point - point_pos_sim)
+                - (kd / num_points) * point_vel_sim
+            )
+            point_force[:, :, 2] += upward_force / num_points
+            point_force = torch.nan_to_num(point_force, nan=0.0)
+            force = point_force.sum(dim=1)
+            force = _clamp_norm(force, config.partner_force_force_clamp)
+            torque = torch.cross(r_world, point_force, dim=-1).sum(dim=1)
+            torque = _clamp_norm(
+                torch.nan_to_num(torque, nan=0.0),
+                config.partner_force_torque_clamp,
+            )
+            xfrc_applied[:, obj_body_id, :3] += force
+            xfrc_applied[:, obj_body_id, 3:6] += torque
+            last_torque = last_torque + torque
+        elif point_mode:
             local = torch.tensor(
                 point_local,
                 dtype=torch.float32,

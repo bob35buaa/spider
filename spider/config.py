@@ -97,6 +97,9 @@ class Config:
     partner_force_point_local: list[float] = field(
         default_factory=list
     )  # optional object-local support point; empty means apply force at COM
+    partner_force_points_local: list[list[float]] = field(
+        default_factory=list
+    )  # optional object-local support points; overrides partner_force_point_local when non-empty
     partner_force_force_clamp: float = (
         0.0  # max external force norm in N; <=0 disables clamp
     )
