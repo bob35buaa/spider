@@ -8,11 +8,11 @@ mkdir -p "$LOGS"
 
 echo "[$(date '+%H:%M:%S')] === E012 remote tmux worker start ==="
 
-SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E012.sh remote_gpu0 0 \
+RUN_STALL_TIMEOUT_SECONDS="${RUN_STALL_TIMEOUT_SECONDS:-300}" SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E012.sh remote_gpu0 0 \
   > "$LOGS/remote_gpu0.log" 2>&1 &
 PID0=$!
 
-SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E012.sh remote_gpu1 1 \
+RUN_STALL_TIMEOUT_SECONDS="${RUN_STALL_TIMEOUT_SECONDS:-300}" SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E012.sh remote_gpu1 1 \
   > "$LOGS/remote_gpu1.log" 2>&1 &
 PID1=$!
 

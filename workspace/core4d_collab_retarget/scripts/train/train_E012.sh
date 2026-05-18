@@ -82,7 +82,8 @@ run_one() {
   local gpu=$2
   shift 2
   local extra_args=("$@")
-  local row task override out_dir npz_out
+  local row task override out_dir npz_out variant_log run_pid start_ts
+  local timeout_s stall_s now_ts mtime_ts run_status
   row="$(variant_row "$variant")"
   if [ -z "$row" ]; then
     echo "Unknown E012 variant: $variant" >&2
@@ -92,6 +93,7 @@ run_one() {
   override="$(override_for_variant "$variant")"
   out_dir="$RESULTS/${variant}_outdir"
   mkdir -p "$out_dir"
+  variant_log="$LOGS/${variant}.log"
 
   echo "[$(date '+%H:%M:%S')] === ${variant} task=${task} override=${override} GPU=${gpu} ==="
   CUDA_VISIBLE_DEVICES="$gpu" MUJOCO_GL=egl PYTHONUNBUFFERED=1 .venv/bin/python -u examples/run_mjwp.py \
@@ -101,7 +103,42 @@ run_one() {
     output_dir="$out_dir" \
     video_output_path="$RESULTS/${variant}.mp4" \
     "${extra_args[@]}" \
-    > "$LOGS/${variant}.log" 2>&1
+    > "$variant_log" 2>&1 &
+  run_pid=$!
+  start_ts="$(date +%s)"
+  timeout_s="${RUN_TIMEOUT_SECONDS:-0}"
+  stall_s="${RUN_STALL_TIMEOUT_SECONDS:-0}"
+  while kill -0 "$run_pid" 2>/dev/null; do
+    sleep 30
+    now_ts="$(date +%s)"
+    if [ "$timeout_s" -gt 0 ] && [ $((now_ts - start_ts)) -gt "$timeout_s" ]; then
+      echo "[$(date '+%H:%M:%S')] ERROR ${variant} timed out after ${timeout_s}s" | tee -a "$variant_log" >&2
+      kill "$run_pid" 2>/dev/null || true
+      sleep 10
+      kill -9 "$run_pid" 2>/dev/null || true
+      wait "$run_pid" 2>/dev/null || true
+      return 124
+    fi
+    if [ "$stall_s" -gt 0 ] && [ -f "$variant_log" ]; then
+      mtime_ts="$(stat -c %Y "$variant_log")"
+      if [ $((now_ts - mtime_ts)) -gt "$stall_s" ]; then
+        echo "[$(date '+%H:%M:%S')] ERROR ${variant} stalled: no log update for ${stall_s}s" | tee -a "$variant_log" >&2
+        kill "$run_pid" 2>/dev/null || true
+        sleep 10
+        kill -9 "$run_pid" 2>/dev/null || true
+        wait "$run_pid" 2>/dev/null || true
+        return 124
+      fi
+    fi
+  done
+  set +e
+  wait "$run_pid"
+  run_status=$?
+  set -e
+  if [ "$run_status" -ne 0 ]; then
+    echo "[$(date '+%H:%M:%S')] ERROR ${variant} exited with status ${run_status}" >&2
+    return "$run_status"
+  fi
 
   npz_out="$out_dir/trajectory_mjwp.npz"
   if [ ! -f "$npz_out" ]; then
@@ -123,13 +160,18 @@ run_variants() {
     echo "No E012 variants selected" >&2
     exit 2
   fi
+  local status=0
   snapshot_variants "${variants[@]}"
   for variant in "${variants[@]}"; do
-    run_one "$variant" "$gpu"
+    if ! run_one "$variant" "$gpu"; then
+      echo "[$(date '+%H:%M:%S')] WARN ${variant} failed; continuing E012 queue" | tee -a "$LOGS/failed_${MODE}.log" >&2
+      status=1
+    fi
   done
   if [ "${SKIP_EVAL:-0}" != "1" ]; then
     .venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E012.py "${variants[@]}" | tee "$LOGS/eval_${MODE}.log"
   fi
+  return "$status"
 }
 
 case "$MODE" in
