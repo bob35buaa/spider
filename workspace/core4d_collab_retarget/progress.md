@@ -542,3 +542,20 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - Guard `E013_box023_p2_obj_oracle`：obj `0.017/0.064m`、hand `72.7%`、floor `34.7%`、leg `0.0%`、xy ratio `1.000`、rot `3.05deg`、pelvis min `0.688m`。
 - 已用 `video-frames` skill 的 `frame.sh` 从两个视频抽取关键帧并生成 contact sheet：`workspace/core4d_collab_retarget/results/E013/keyframes_skill/main_sheet.jpg`、`guard_sheet.jpg`。视觉观察：object 与 ref 基本重合，无 E012 式大旋转；main 手端接触持续性不足，guard 姿态稳定。
 - 已写入 E013 结果日志：`workspace/core4d_collab_retarget/log/13_E013_true_freejoint_object_oracle_results.md`，并更新 `EXPERIMENT_TRACKER.md`。下一步按 `docs/03_agent_execution_plan_E013_E016.md` 创建 E014 COLA-B 位置约束计划。
+
+## 2026-05-19 01:49 E014 计划启动
+
+- 已写入 E014 中文计划：`workspace/core4d_collab_retarget/plan/14_E014_cola_b_kinematic_weld_plan.md`。
+- 计划核心：不复用旧 `scene_weld/object_target` 的 COM zero-relpose object oracle，而是在 true-freejoint scene 中添加 `support_weld_anchor` mocap body，并用 object-local support point 作为 weld `relpose`。
+- E014 support target 由 object ref pose 派生：main local point `[0.0, 0.38, 0.30]`，guard local point `[0.16, 0.0, 0.10]`；mocap quat 跟随 ref object quat，以测试 COLA-B 的 kinematic support + 6-DoF soft equality。
+- 下一步实现 scene generator、`support_proxy_mocap_quat_mode=object_ref`、E014 overrides/train/eval，然后先跑 smoke。
+- 已完成 E014 第一版实现：
+  - `spider/config.py` 新增 `support_proxy_mocap_quat_mode`，默认 `identity`，E014 使用 `object_ref`；
+  - `spider/simulators/mjwp.py` 在 `_load_support_proxy` 保存 object ref quat，并在 `_update_support_proxy_mocap_pad` 中按配置写入 mocap quat；
+  - 新增 E014 variants、scene generator、override generator、preprocess、train、remote launch/pull、eval 脚本。
+- E014 eval 会检查 freejoint parity、非 COM oracle scene、无 direct wrench、support gap、E013 soft target、lag-free 和 push-vs-carry gate。下一步运行静态检查和 `run_E014_preprocess.sh`。
+- 静态检查通过：核心 Python 与 E014 generator/eval `py_compile`，E014 shell 脚本 `bash -n`，variants 每行 21 列。
+- `run_E014_preprocess.sh` 已生成 3 个 E014 scene XML 和 6 个 overrides；MuJoCo 编译检查确认三个 scene 均保持 `nq=43`、`nv=41`、`nu=29`、`nmocap=1`。
+- 人工检查主/guard scene：都含 `support_weld_anchor` 与 `e014_support_weld`；main relpose 为 `0 0.38 0.3 1 0 0 0`，guard relpose 为 `0.16 0 0.1 1 0 0 0`，未出现 `object_target`。
+- E014 4-step smoke 已完成：6/6 变体产出 NPZ；显式 eval 通过，aggregate 为 `num_results=6`、`num_freejoint_parity_ok=6`、`num_anchor_not_com_oracle=6`、`num_no_direct_wrench=6`、`num_support_proxy_metrics_present=6`。smoke 只验证 wiring，不作为效果结论。
+- 下一步提交 E014 setup 并启动 full：本地 `local_wave` 跑 main t02 + guard t02，远程两卡跑 t05 / t02_hc1 / g08 / guard_hc1。

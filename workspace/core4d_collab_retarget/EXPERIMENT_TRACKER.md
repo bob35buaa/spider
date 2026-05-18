@@ -21,6 +21,7 @@
 | E011 | 2026-05-18 | Soft Tether Diagnostic | **soft object tether 诊断 E081 所需外部 coupling**: 9 个 full 结果完成；COM spring 能压低 E006 的旋转捷径并恢复平移，best `box025_com_k100` 达 xy `0.905`、rot `3.5deg`，但 obj 仍 `0.340/0.673m`，7/7 main 都未达 E081 transport gate | ✅ 详见 log 11 |
 | E012 | 2026-05-18 | Dual Point Closure | **dual-point partner pose closure 诊断**: 8 个 full 结果完成；8/8 true-freejoint parity ok，但 main `0/6` 达到 E081 transport，`pose_closure_helped=0`，best-by-error `k150` obj `0.306/0.606m` 伴随 rot `97.8deg`；2/2 guard 不稳定 | ✅ 详见 log 12 |
 | E013 | 2026-05-19 | Object Oracle | **true-freejoint object oracle**: 2 条 full 完成；2/2 oracle config ok，main obj `0.011/0.038m`、xy `1.000`、rot `2.0deg`，guard obj `0.017/0.064m` 且 stable。E013 证明 true-freejoint oracle 不限制 E081 级 object target，E014 soft target 已生成 | ✅ 详见 log 13 |
+| E014 | 2026-05-19 | COLA-B Soft Weld | **kinematic support body + soft weld/equality 位置约束**: 已完成计划、scene/override/train/eval 脚手架和 6/6 smoke。口径为 `support_weld_anchor` mocap + object-local non-COM relpose，不使用 `scene_weld/object_target` COM oracle | 🚧 full 待跑 |
 
 ## Baseline
 
@@ -63,6 +64,7 @@
 - E011: `workspace/core4d_collab_retarget/plan/11_E011_soft_object_tether_diagnostic_e081_plan.md`
 - E012: `workspace/core4d_collab_retarget/plan/12_E012_dual_point_partner_pose_closure_plan.md`
 - E013: `workspace/core4d_collab_retarget/plan/13_E013_true_freejoint_object_oracle_plan.md`
+- E014: `workspace/core4d_collab_retarget/plan/14_E014_cola_b_kinematic_weld_plan.md`
 
 ## Logs
 

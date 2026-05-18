@@ -113,6 +113,9 @@ class Config:
         "wrench"  # "wrench" | "mocap_pad" | "wrench_pad"
     )
     support_proxy_mocap_body_name: str = "support_proxy_pad"
+    support_proxy_mocap_quat_mode: str = (
+        "identity"  # "identity" | "object_ref"; used by E014 weld anchor
+    )
     support_proxy_point_local: list[float] = field(
         default_factory=list
     )  # object-local support site; required when enabled

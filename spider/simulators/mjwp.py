@@ -1807,6 +1807,13 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
             f"Unknown support_proxy_mode={config.support_proxy_mode!r}; "
             f"expected one of {sorted(valid_modes)}."
         )
+    valid_quat_modes = {"identity", "object_ref"}
+    if config.support_proxy_mocap_quat_mode not in valid_quat_modes:
+        raise ValueError(
+            f"Unknown support_proxy_mocap_quat_mode="
+            f"{config.support_proxy_mocap_quat_mode!r}; "
+            f"expected one of {sorted(valid_quat_modes)}."
+        )
     if config.nq_obj != 7 or config.contact_guidance:
         raise ValueError(
             "support_proxy_enabled currently requires true-freejoint object "
@@ -1868,6 +1875,7 @@ def _load_support_proxy(config: Config, env: MJWPEnv, qpos_ref: torch.Tensor):
     env.support_proxy_point_local = point_local
     env.support_proxy_ref_pos = proxy_pos.detach()
     env.support_proxy_ref_vel = proxy_vel.detach()
+    env.support_proxy_ref_quat = obj_quat_ref.detach()
     env.support_proxy_ref_dt = dt
     env.support_proxy_last_force = torch.zeros(
         (env.num_worlds, 3), device=config.device, dtype=torch.float32
@@ -2012,9 +2020,16 @@ def _update_support_proxy_mocap_pad(config: Config, env: MJWPEnv):
     mid = env._support_proxy_mocap_id
     N = mocap_pos_all.shape[0]
     mocap_pos_all[:, mid] = proxy_pos.unsqueeze(0).expand(N, -1)
-    mocap_quat_all[:, mid] = torch.tensor(
-        [1.0, 0.0, 0.0, 0.0], device=proxy_pos.device, dtype=proxy_pos.dtype
-    ).unsqueeze(0).expand(N, -1)
+    if (
+        config.support_proxy_mocap_quat_mode == "object_ref"
+        and hasattr(env, "support_proxy_ref_quat")
+    ):
+        mocap_quat = env.support_proxy_ref_quat[idx]
+    else:
+        mocap_quat = torch.tensor(
+            [1.0, 0.0, 0.0, 0.0], device=proxy_pos.device, dtype=proxy_pos.dtype
+        )
+    mocap_quat_all[:, mid] = mocap_quat.unsqueeze(0).expand(N, -1)
 
     obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
     if obj_body_id == -1:

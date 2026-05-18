@@ -1,0 +1,7 @@
+# variant	source_task	mask_slug	person_idx	queue	role	wave	scene_name	support_proxy_point_local_x	support_proxy_point_local_y	support_proxy_point_local_z	weld_solref_timeconst	weld_solimp_1	weld_solimp_2	weld_solimp_width	support_proxy_gravity_scale	hold_contact_rew_scale	hold_contact_sigma	hold_contact_start_eval_time	hold_contact_end_eval_time	hold_contact_require_ref_contact
+E014_box025_p2_jointB_t02	box025_person2_freejoint_legobj	box025_person2	1	local	main	A	scene_e014_jointB_y038_z030_t02	0.0	0.38	0.30	0.02	0.9	0.95	0.001	0.5	0.0	0.05	0.64	4.08	true
+E014_box025_p2_jointB_t05	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	A	scene_e014_jointB_y038_z030_t05	0.0	0.38	0.30	0.05	0.9	0.95	0.001	0.5	0.0	0.05	0.64	4.08	true
+E014_box025_p2_jointB_t02_g08	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu1	main	A	scene_e014_jointB_y038_z030_t02	0.0	0.38	0.30	0.02	0.9	0.95	0.001	0.8	0.0	0.05	0.64	4.08	true
+E014_box025_p2_jointB_t02_hc1	box025_person2_freejoint_legobj	box025_person2	1	remote_gpu0	main	A	scene_e014_jointB_y038_z030_t02	0.0	0.38	0.30	0.02	0.9	0.95	0.001	0.5	1.0	0.05	0.64	4.08	true
+E014_box023_p2_jointB_t02	box023_person2_freejoint_legobj	box023_person2	1	local	guard	A	scene_e014_jointB_x016_z010_t02	0.16	0.0	0.10	0.02	0.9	0.95	0.001	0.5	0.0	0.05	0.64	4.08	true
+E014_box023_p2_jointB_t02_hc1	box023_person2_freejoint_legobj	box023_person2	1	remote_gpu1	guard	A	scene_e014_jointB_x016_z010_t02	0.16	0.0	0.10	0.02	0.9	0.95	0.001	0.5	1.0	0.05	0.64	4.08	true
