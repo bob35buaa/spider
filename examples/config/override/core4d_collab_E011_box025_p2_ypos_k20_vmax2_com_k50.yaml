@@ -1,0 +1,50 @@
+# @package _global_
+# Auto-generated for E011 soft object tether diagnostic.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: box025_person2_freejoint_legobj
+scene_name: scene
+contact_guidance: false
+object_pd_override: false
+object_action_dims: 0
+object_actuator_ids: []
+object_actuator_names: []
+
+partner_force_scale: 0.0
+partner_force_spring_kp: 50.0
+partner_force_spring_kd: -1.0
+partner_force_spring_kp_rot: 0.0
+partner_force_spring_kd_rot: -1.0
+partner_force_rot_clamp: 0.15
+partner_force_ref_dt: 0.0166667
+partner_force_point_local: []
+partner_force_force_clamp: 120.0
+partner_force_torque_clamp: 0.0
+
+support_proxy_enabled: true
+support_proxy_mode: wrench
+support_proxy_point_local: [0, 0.38, 0.3]
+support_proxy_gravity_scale: 0.5
+support_proxy_connector_kp: 20.0
+support_proxy_connector_kd: -1.0
+support_proxy_xy_velocity_scale: 1.0
+support_proxy_max_xy_speed: 2.0
+support_proxy_height_tau: 0.0
+support_proxy_ref_dt: -1.0
+support_proxy_force_clamp: 120.0
+support_proxy_torque_clamp: 25.0
+
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E011/contact_masks/box025_person2/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [0.0, 1.0, 0.0]
+
+hold_contact_rew_scale: 0.0
+hold_contact_sigma: 0.05
+hold_contact_start_eval_time: 0.64
+hold_contact_end_eval_time: 4.08
+hold_contact_require_ref_contact: true

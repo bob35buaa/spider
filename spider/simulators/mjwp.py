@@ -406,6 +406,13 @@ def _clamp_vector_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:
     return torch.where(norm > max_norm, vec / norm * max_norm, vec)
 
 
+def _clear_object_wrench_once(env: MJWPEnv, obj_body_id: int, xfrc_applied: torch.Tensor):
+    """Clear persistent object xfrc once per step before accumulating helpers."""
+    if not getattr(env, "_object_wrench_cleared_this_step", False):
+        xfrc_applied[:, obj_body_id, :6] = 0.0
+        env._object_wrench_cleared_this_step = True
+
+
 def _lf_axis_angle_from_quat(q: torch.Tensor) -> torch.Tensor:
     """Convert quaternion to axis-angle. q: (..., 4) wxyz -> (..., 3)."""
     sin_half = torch.norm(q[..., 1:], dim=-1, keepdim=True).clamp(min=1e-8)
@@ -1497,10 +1504,7 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
         return
 
     xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
-
-    # Partner force owns the object wrench for this step. MuJoCo keeps xfrc_applied
-    # persistent, so do not accumulate stale spring forces across simulation steps.
-    xfrc_applied[:, obj_body_id, :6] = 0.0
+    _clear_object_wrench_once(env, obj_body_id, xfrc_applied)
 
     def _clamp_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:
         if max_norm <= 0:
@@ -1521,9 +1525,14 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
     has_rot_spring = config.partner_force_spring_kp_rot > 0 and hasattr(
         env, "partner_force_ref_quat"
     )
+    last_force = torch.zeros((env.num_worlds, 3), device=config.device, dtype=torch.float32)
+    last_torque = torch.zeros_like(last_force)
 
     if not point_mode and not has_spring and not has_rot_spring:
         xfrc_applied[:, obj_body_id, 2] = upward_force
+        last_force[:, 2] = upward_force
+        env.partner_force_last_force = last_force.detach()
+        env.partner_force_last_torque = last_torque.detach()
         wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
         return
 
@@ -1594,19 +1603,21 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
                 torch.nan_to_num(torque, nan=0.0),
                 config.partner_force_torque_clamp,
             )
-            xfrc_applied[:, obj_body_id, :3] = force
-            xfrc_applied[:, obj_body_id, 3:6] = torque
+            xfrc_applied[:, obj_body_id, :3] += force
+            xfrc_applied[:, obj_body_id, 3:6] += torque
+            last_torque = last_torque + torque
         else:
             force = force + kp * (ref_pos.unsqueeze(0) - obj_pos_sim) - kd * obj_vel_sim
             force = _clamp_norm(
                 torch.nan_to_num(force, nan=0.0), config.partner_force_force_clamp
             )
-            xfrc_applied[:, obj_body_id, :3] = force
+            xfrc_applied[:, obj_body_id, :3] += force
     else:
         force = _clamp_norm(
             torch.nan_to_num(force, nan=0.0), config.partner_force_force_clamp
         )
-        xfrc_applied[:, obj_body_id, :3] = force
+        xfrc_applied[:, obj_body_id, :3] += force
+    last_force = last_force + force
 
     # E030: Orientation control via xfrc_applied torque. E005 keeps this disabled;
     # support-site torque comes from r x F instead of an orientation PD loop.
@@ -1638,8 +1649,31 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
         torque = kp_rot * aa_err - kd_rot * obj_angvel_sim
         torque = _clamp_norm(torch.nan_to_num(torque, nan=0.0), 5.0)
         xfrc_applied[:, obj_body_id, 3:6] += torque
+        last_torque = last_torque + torque
 
+    env.partner_force_last_force = last_force.detach()
+    env.partner_force_last_torque = last_torque.detach()
     wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+
+
+def get_partner_force_state(config: Config, env: MJWPEnv) -> dict[str, np.ndarray]:
+    """Return first-world partner force diagnostics for trajectory saving."""
+    if (
+        config.partner_force_scale <= 0
+        and config.partner_force_spring_kp <= 0
+        and config.partner_force_spring_kp_rot <= 0
+    ):
+        return {}
+    if not hasattr(env, "partner_force_last_force"):
+        return {}
+
+    def _first(tensor: torch.Tensor) -> np.ndarray:
+        return tensor[0].detach().cpu().numpy().astype(np.float32)
+
+    return {
+        "partner_force_force": _first(env.partner_force_last_force),
+        "partner_force_torque": _first(env.partner_force_last_torque),
+    }
 
 
 def _support_proxy_point_local(config: Config) -> list[float]:
@@ -1762,7 +1796,7 @@ def _apply_support_proxy_force(config: Config, env: MJWPEnv):
         return
 
     xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
-    xfrc_applied[:, obj_body_id, :6] = 0.0
+    _clear_object_wrench_once(env, obj_body_id, xfrc_applied)
 
     qpos = wp.to_torch(env.data_wp.qpos)
     qvel = wp.to_torch(env.data_wp.qvel)
@@ -1815,8 +1849,8 @@ def _apply_support_proxy_force(config: Config, env: MJWPEnv):
         torch.nan_to_num(torque, nan=0.0), config.support_proxy_torque_clamp
     )
 
-    xfrc_applied[:, obj_body_id, :3] = force
-    xfrc_applied[:, obj_body_id, 3:6] = torque
+    xfrc_applied[:, obj_body_id, :3] += force
+    xfrc_applied[:, obj_body_id, 3:6] += torque
     env.support_proxy_last_force = force.detach()
     env.support_proxy_last_torque = torque.detach()
     env.support_proxy_last_pos = proxy_pos.detach()
@@ -1876,9 +1910,10 @@ def _update_support_proxy_mocap_pad(config: Config, env: MJWPEnv):
     obj_body_id = mujoco.mj_name2id(env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object")
     if obj_body_id == -1:
         return
-    xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
-    xfrc_applied[:, obj_body_id, :6] = 0.0
-    wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
+    if config.support_proxy_mode == "mocap_pad":
+        xfrc_applied = wp.to_torch(env.data_wp.xfrc_applied)
+        _clear_object_wrench_once(env, obj_body_id, xfrc_applied)
+        wp.copy(env.data_wp.xfrc_applied, wp.from_torch(xfrc_applied))
 
     qpos = wp.to_torch(env.data_wp.qpos)
     qvel = wp.to_torch(env.data_wp.qvel)
@@ -2036,10 +2071,15 @@ def step_env(config: Config, env: MJWPEnv, ctrl_mujoco: torch.Tensor):
         ctrl_mujoco = ctrl_mujoco.unsqueeze(0).repeat(env.num_worlds, 1)
     # Ensure we operate on the correct CUDA context/device
     with wp.ScopedDevice(env.device):
+        env._object_wrench_cleared_this_step = False
         # apply perturbation
         env = apply_perturbation(config, env)
         # E024: apply partner force on object (simulating human partner support)
-        if config.partner_force_scale > 0:
+        if (
+            config.partner_force_scale > 0
+            or config.partner_force_spring_kp > 0
+            or config.partner_force_spring_kp_rot > 0
+        ):
             _apply_partner_force(config, env)
         # E006/E010: support proxy can act via direct wrench, mocap contact pad, or both.
         if config.support_proxy_enabled and config.support_proxy_mode in {

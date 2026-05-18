@@ -46,6 +46,7 @@ from spider.postprocess.get_success_rate import compute_object_tracking_error
 from spider.simulators.mjwp import (
     compute_contact_point_delta,
     copy_sample_state,
+    get_partner_force_state,
     get_qpos,
     get_qvel,
     get_reward,
@@ -1302,6 +1303,18 @@ def main(config: Config):
                             "support_proxy_ref_idx": [],
                         }
                     )
+                partner_force_enabled = (
+                    config.partner_force_scale > 0
+                    or config.partner_force_spring_kp > 0
+                    or config.partner_force_spring_kp_rot > 0
+                )
+                if partner_force_enabled:
+                    step_info.update(
+                        {
+                            "partner_force_force": [],
+                            "partner_force_torque": [],
+                        }
+                    )
                 for i in range(config.ctrl_steps):
                     ctrl_step = ctrls[i]
 
@@ -1341,6 +1354,10 @@ def main(config: Config):
                     if config.support_proxy_enabled:
                         support_state = get_support_proxy_state(config, env)
                         for key, value in support_state.items():
+                            step_info[key].append(value.copy())
+                    if partner_force_enabled:
+                        partner_state = get_partner_force_state(config, env)
+                        for key, value in partner_state.items():
                             step_info[key].append(value.copy())
                 for k in step_info:
                     step_info[k] = np.stack(step_info[k], axis=0)

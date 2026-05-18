@@ -350,3 +350,58 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 首次 smoke 失败原因：E010 variants 误写 `person_idx=2`，而 raw mask shape 是 `(T,2,2)`；已修正为 `person_idx=1` 并重新生成 overrides。
 - E010 4-step smoke 完成：7/7 变体均产出 NPZ。Smoke eval aggregate：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_main_proxy_support_tracking_ok=5`、`num_guard_stable_proxy=2`。4-step majority 不作为效果结论。
 - E010 本地训练、远程启动、远程回收脚本已预授权；下一步提交 E009/E010 setup 后启动 full。
+
+## 2026-05-18 16:01 E010 full 启动
+
+- 已提交并推送 E010 setup：`e0a6488 exp(core4d_collab_retarget): set up E010 contact pad support`。
+- 已启动 E010 full：
+  - 本地 GPU0：`E010_box025_p2_ypos_pad10_vmax2` -> `E010_box025_p2_ypos_pad10_vmax2_hc05`
+  - 远程 GPU0：`E010_box025_p2_ypos_pad16_vmax2` -> `E010_box025_p2_ypos_pad10_vmax0` -> `E010_box025_p2_yneg_pad10_vmax2`
+  - 远程 GPU1：`E010_box023_p2_xpos_pad08_vmax0` -> `E010_box023_p2_xpos_pad12_vmax0`
+- 16:01 首轮监控：远程 GPU0/GPU1 日志均已进入首个变体，GPU util 约 `44%/39%`；本地 full 正在运行首个 `pad10_vmax2`。
+- 16:04 监控：本地 `pad10_vmax2` 到 `90/248`；远程 GPU0 `pad16_vmax2` 到 `76/248`；远程 GPU1 `pad08_vmax0` 到 `78/272`。三路均稳定，暂无 OOM/卡死，但 contact-pad 模式单步计划耗时约 `9-10.6s`，比 E009 更慢。
+- 16:21 本地首个 `E010_box025_p2_ypos_pad10_vmax2` 完成并单独 eval：obj `0.714/1.376m`、hand `90.8%`、floor `92.5%`、leg intf `0.6%`、xy ratio `0.172`、rot `13.3deg`、proxy ratio `0.998`、connector gap mean `0.658m`。结论：小 contact pad 未能把 partner-side 支撑传进 object，虽然 hand contact 高，但 object 基本不运输；等待 pad16/vmax0 验证是否为 pad 尺寸/速度问题。
+- 16:30 监控：远程首批 `pad16_vmax2` 与 `pad08_vmax0` 已完成并进入第二批；本地 `hc05` 到 `156/248`，远程 GPU0 `pad10_vmax0` 到 `98/248`，远程 GPU1 `pad12_vmax0` 到 `78/272`。首个本地结果提示 pad10 接触面可能不足或 pad-object contact 没有效传力，待 pad16/vmax0 验证。
+- 16:38 本地 E010 队列完成。local-only eval（2 个 main）：
+  - `pad10_vmax2`: obj `0.714/1.376m`、hand `90.8%`、floor `92.5%`、xy `0.172`、rot `13.3deg`、gap `0.658m`
+  - `pad10_vmax2_hc05`: obj `0.680/1.295m`、hand `83.8%`、floor `83.8%`、xy `0.276`、rot `17.4deg`、gap `0.620m`
+- 本地结论：pad10 contact pad 即使配轻量 HC 也没有有效运输，object 仍高度贴地且 support-point gap 很大；远程 pad16/vmax0/yneg 结果决定是否继续 contact-pad 尺寸/速度方向。
+- 16:47 监控：远程 GPU0 已完成 `pad16_vmax2` 与 `pad10_vmax0`，进入最后一个 `yneg_pad10_vmax2`（约 `40/248`）；远程 GPU1 `pad12_vmax0` 到 `254/272`，即将完成。剩余主要等待 GPU0 最后一个 main。
+
+## 2026-05-18 17:05 E010 full 结论与 E006 失败链条更新
+
+- 远程 E010 已完成并回收；显式重评 7 个 full NPZ，main `qpos=(124,2,43)`，guard `qpos=(136,2,43)`，均不是 smoke。
+- 最终 aggregate：`num_results=7`、`num_freejoint_parity_ok=7`、`num_support_proxy_metrics_present=7`、`num_main_proxy_support_tracking_ok=5`、`num_main_reaches_E081_transport_proxy=0`、`num_main_improves_E008_best=0`、`num_guard_stable_proxy=1`。
+- E010 main 指标整体失败：`pad10_vmax2` obj `0.714/1.376m`、hand `90.8%`、floor `92.5%`、xy `0.172`；`pad16_vmax2` obj `0.698/1.334m`、hand `87.3%`、floor `84.4%`、xy `0.326`；`pad10_vmax2_hc05` obj `0.680/1.295m`、hand `83.8%`、floor `83.8%`、xy `0.276`。
+- 可视化关键帧确认：ref box 已大幅水平移动，sim box 仍靠近起点；hand contact 高但不等于托举/运输，object 高比例贴地，support-point gap `0.62-0.66m`。
+- 结合用户对 E006 视频的判断，当前失败链条更新为：E006 direct off-COM wrench 会出现“旋转替代平移”；E008 修正 timebase/speed 后能恢复部分平移；E009 说明 hold-contact reward 不能闭合 robot-side 支撑；E010 说明单个 mocap contact pad 又太弱/几何不对，不能有效传力。
+- 已写入 E010 中文结果日志：`workspace/core4d_collab_retarget/log/10_E010_mocap_contact_pad_support_e081_results.md`，并更新 `EXPERIMENT_TRACKER.md`。
+- 下一步 E011 不继续扫 pad size / vmax / HC；计划做 soft equality/weld diagnostic，在 E008 best 上定量测出达到 E081 transport 所需的最小外部 coupling，再决定是否落到真实 partner mocap hands / 双点接触。
+
+## 2026-05-18 17:15 E011 诊断实现前置修复
+
+- 已准备 E011 的 soft object tether 诊断口径：复用已有 `partner_force_spring` 作为 object COM reference spring，但这需要修正两个工程口径。
+- `spider/simulators/mjwp.py`：`step_env` 现在在 `partner_force_spring_kp>0` 或 `partner_force_spring_kp_rot>0` 时也会调用 `_apply_partner_force`，不再要求 `partner_force_scale>0`；这允许纯 soft tether（无额外重力补偿）作为诊断。
+- `spider/simulators/mjwp.py`：object `xfrc_applied` 改为每 step 只清一次，partner force 与 support proxy wrench 可以累加，避免 E011 组合 E008 best + COM tether 时互相覆盖。
+- `examples/run_mjwp.py`：新增保存 `partner_force_force` / `partner_force_torque` 诊断字段，方便 E011 eval 统计外部 coupling effort。
+- 静态检查通过：`.venv/bin/python -m py_compile spider/simulators/mjwp.py examples/run_mjwp.py`。
+- 已写入 E011 中文计划：`workspace/core4d_collab_retarget/plan/11_E011_soft_object_tether_diagnostic_e081_plan.md`。
+- E011 的核心目的不是给最终算法开绿灯，而是量化达到 E081 transport 至少需要多强 external coupling，并区分 `physical_candidate` / `external_only_success` / `robot_side_blocked` / `rotation_shortcut`。
+- 已新增 E011 变体与脚本骨架：
+  - `workspace/core4d_collab_retarget/scripts/E011/variants.tsv`：9 个变体，覆盖 COM-only kp 20/50/100、gravity scale、弱 rot tether、E008 best + COM tether，以及 box023 guard；
+  - `workspace/core4d_collab_retarget/scripts/E011/generate_e011_overrides.py`
+  - `workspace/core4d_collab_retarget/scripts/run_E011_preprocess.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E011.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E011_remote_tmux.sh`
+  - `workspace/core4d_collab_retarget/scripts/run_E011_remote.sh`
+  - `workspace/core4d_collab_retarget/scripts/pull_E011_remote_results.sh`
+  - `workspace/core4d_collab_retarget/scripts/eval/eval_E011.py`
+- 静态检查通过：E011 generator/eval + `spider/simulators/mjwp.py` + `examples/run_mjwp.py` 的 `py_compile`，E011 shell 脚本 `bash -n`，variants 每行均为 34 列。
+
+## 2026-05-18 17:31 E011 preprocess / smoke
+
+- `bash workspace/core4d_collab_retarget/scripts/run_E011_preprocess.sh` 已成功生成 9 个 E011 overrides；COM-only 变体 `support_proxy_enabled=false`，E008+COM 变体 `support_proxy_enabled=true` 且保持 `ypos/k20/vmax2` 口径。
+- 首次 sandbox 内 smoke 因无 CUDA 失败：`RuntimeError: No CUDA GPUs are available`；已使用授权后的本地 CUDA 重新运行。
+- E011 smoke 已完成：9/9 变体产出 4-step NPZ；显式 eval 输出 `num_results=9`、`num_freejoint_parity_ok=9`、`num_partner_force_metrics_present=9`、`num_support_proxy_metrics_present=2`。
+- 4-step smoke 中 object 指标不作为实验结论；当前只确认 wiring、partner force 诊断字段、E011 eval aggregate 均可用。
+- E011 本地训练、远程启动、远程回收脚本预授权 probe 已完成。
