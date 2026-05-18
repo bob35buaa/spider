@@ -21,7 +21,7 @@
 | E011 | 2026-05-18 | Soft Tether Diagnostic | **soft object tether 诊断 E081 所需外部 coupling**: 9 个 full 结果完成；COM spring 能压低 E006 的旋转捷径并恢复平移，best `box025_com_k100` 达 xy `0.905`、rot `3.5deg`，但 obj 仍 `0.340/0.673m`，7/7 main 都未达 E081 transport gate | ✅ 详见 log 11 |
 | E012 | 2026-05-18 | Dual Point Closure | **dual-point partner pose closure 诊断**: 8 个 full 结果完成；8/8 true-freejoint parity ok，但 main `0/6` 达到 E081 transport，`pose_closure_helped=0`，best-by-error `k150` obj `0.306/0.606m` 伴随 rot `97.8deg`；2/2 guard 不稳定 | ✅ 详见 log 12 |
 | E013 | 2026-05-19 | Object Oracle | **true-freejoint object oracle**: 2 条 full 完成；2/2 oracle config ok，main obj `0.011/0.038m`、xy `1.000`、rot `2.0deg`，guard obj `0.017/0.064m` 且 stable。E013 证明 true-freejoint oracle 不限制 E081 级 object target，E014 soft target 已生成 | ✅ 详见 log 13 |
-| E014 | 2026-05-19 | COLA-B Soft Weld | **kinematic support body + soft weld/equality 位置约束**: 已完成计划、scene/override/train/eval 脚手架和 6/6 smoke。口径为 `support_weld_anchor` mocap + object-local non-COM relpose，不使用 `scene_weld/object_target` COM oracle | 🚧 full 待跑 |
+| E014 | 2026-05-19 | COLA-B Soft Weld | **kinematic support body + soft weld/equality 位置约束**: 6 条 full 完成；6/6 true-freejoint parity ok、non-COM anchor ok、no direct wrench，4/4 main 过 E013 soft target，2/2 guard stable。best main `t02` obj `0.056/0.087m`、hand `86.7%`、floor `51.4%`、leg `0%` | ✅ 详见 log 14 |
 
 ## Baseline
 
@@ -48,6 +48,7 @@
 | E011 full | 9 个 full 结果：7 main + 2 guard，`num_freejoint_parity_ok=9`、`num_partner_force_metrics_present=9`、`num_main_reaches_E081_transport=0`、`num_main_improves_E008_best=1`；best main `box025_com_k100` obj `0.340/0.673m`、hand `86.1%`、floor `61.3%`、xy `0.905`、rot `3.5deg`；`g1` xy `0.971`/floor `22.5%` 但 hand `75.1%` | COM spring 证明 E006 的“只旋转”来自 off-COM wrench + 弱闭环；外部 coupling 能恢复平移但不能达到 E081 精度。下一步转向双点/双手 partner constraint 或 robot-side hand/support pose shaping |
 | E012 full | 8 个 full 结果：6 main + 2 guard，`num_dual_points_config_ok=8`、`num_freejoint_parity_ok=8`、`num_main_reaches_E081_transport=0`、`num_main_pose_closure_helped=0`、`num_guard_stable=0`；diagnostic=`rotation_shortcut:4`、`insufficient_coupling:2`、`guard_unstable:2`；main best-by-error `k150` obj `0.306/0.606m`、xy `0.980`、floor `59.5%`，但 rot `97.8deg`、torque max `30Nm` | dual-point partner force 没有修好 E011 精度缺口，反而重新打开 off-COM torque shortcut；下一步应限制 partner 力矩通道或转 robot-side hand/support pose shaping |
 | E013 full | 2 个 full 结果：`num_freejoint_oracle_config_ok=2`、`num_near_e081_obj_oracle=2`、`num_guard_stable=1`；main obj `0.011/0.038m`、hand `78.6%`、floor `57.8%`、leg `0.0%`、xy `1.000`；guard obj `0.017/0.064m`、hand `72.7%`、floor `34.7%`、leg `0.0%` | Oracle 证明 E081 object target 在 true-freejoint data/eval 下可达，后续软 target main 为 obj `<=0.193/0.371m`、hand `>=73.6%`、floor `<=69.5%`；E014 应进入 COLA-B 位置约束 |
+| E014 full | 6 个 full 结果：`num_freejoint_parity_ok=6`、`num_anchor_not_com_oracle=6`、`num_no_direct_wrench=6`、`num_main_soft_target_pass=4`、`num_guard_stable=2`；main obj `0.056-0.082 / 0.085-0.142m`、hand `85.5-90.8%`、floor `49.7-51.4%`、leg `0%`、xy `0.995-0.999`、rot `1.6-2.2deg` | COLA-B 位置约束成立；E014b 不触发。下一步进入 E015 dynamic support + PD 或 pipeline 对接验证，而不是 E016 回退 |
 
 ## Plans
 
@@ -81,6 +82,7 @@
 - E011: `workspace/core4d_collab_retarget/log/11_E011_soft_object_tether_diagnostic_e081_results.md`
 - E012: `workspace/core4d_collab_retarget/log/12_E012_dual_point_partner_pose_closure_results.md`
 - E013: `workspace/core4d_collab_retarget/log/13_E013_true_freejoint_object_oracle_results.md`
+- E014: `workspace/core4d_collab_retarget/log/14_E014_cola_b_kinematic_weld_results.md`
 
 ## Git
 

@@ -559,3 +559,14 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 人工检查主/guard scene：都含 `support_weld_anchor` 与 `e014_support_weld`；main relpose 为 `0 0.38 0.3 1 0 0 0`，guard relpose 为 `0.16 0 0.1 1 0 0 0`，未出现 `object_target`。
 - E014 4-step smoke 已完成：6/6 变体产出 NPZ；显式 eval 通过，aggregate 为 `num_results=6`、`num_freejoint_parity_ok=6`、`num_anchor_not_com_oracle=6`、`num_no_direct_wrench=6`、`num_support_proxy_metrics_present=6`。smoke 只验证 wiring，不作为效果结论。
 - 下一步提交 E014 setup 并启动 full：本地 `local_wave` 跑 main t02 + guard t02，远程两卡跑 t05 / t02_hc1 / g08 / guard_hc1。
+- 已提交并推送 E014 setup：`ed14966 exp(core4d_collab_retarget): set up E014 soft weld`。
+- 远程 `spider-remote` tmux session `E014` 已启动；远程预处理成功生成 3 个 scene XML 与 6 个 overrides。
+- 本地 `local_wave` 已启动，当前运行 `E014_box025_p2_jointB_t02`，之后串行跑 `E014_box023_p2_jointB_t02`。
+- 本地 `local_wave` 已完成并自动 eval。Full NPZ 已覆盖 smoke：main `1.2MB`、guard `1.4MB`。
+- 本地 E014 t02 是强阳性：main obj `0.056/0.087m`、hand `86.7%`、floor `51.4%`、leg `0.0%`、xy ratio `0.999`、rot `2.2deg`、support gap mean/max `0.060/0.098m`，`E014_soft_target_pass=true`；guard obj `0.043/0.080m`、hand `74.7%`、floor `33.3%`、leg `0.0%`、pelvis min `0.689m`，`E014_guard_stable=true`。
+- 远程第一批 main `t05` / `g08` 已完成并生成 1.2MB full NPZ；远程第二批 `t02_hc1` / `guard_hc1` 仍在运行。
+- 远程 E014 已结束并回收；6 条 full 显式总评完成。Final aggregate：`num_results=6`、`num_freejoint_parity_ok=6`、`num_anchor_not_com_oracle=6`、`num_no_direct_wrench=6`、`num_support_proxy_metrics_present=6`、`num_main_soft_target_pass=4`、`num_main_lag_free=4`、`num_main_push_vs_carry_ok=4`、`num_guard_stable=2`，diagnostic 全部为 `soft_target_pass`。
+- Main 全部通过 E013 soft target：`t02` obj `0.056/0.087m`、`t05` obj `0.082/0.142m`、`g08` obj `0.057/0.088m`、`hc1` obj `0.057/0.085m`；hand `85.5-90.8%`、floor `49.7-51.4%`、leg `0.0%`、xy ratio `0.995-0.999`、rot `1.6-2.2deg`。
+- Guard 两条稳定：`t02` obj `0.043/0.080m`、`hc1` obj `0.042/0.080m`，floor `33.3%`，leg `0.0%`，pelvis min `0.689-0.691m`。
+- 已用 `video-frames` skill / ffmpeg 生成并检查 E014 contact sheets：main object 与 ref 基本重合，无 E012 rotation shortcut；blue support anchor 在 object 侧面 offset，不是 COM；guard 姿态稳定，无摔倒/跪倒。
+- 已写入 E014 结果日志：`workspace/core4d_collab_retarget/log/14_E014_cola_b_kinematic_weld_results.md`，并更新 `EXPERIMENT_TRACKER.md`。结论：COLA-B 成立，E014b 不触发；下一步按总路线进入 E015 dynamic support + PD 或 pipeline 对接验证。
