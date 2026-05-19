@@ -1,0 +1,53 @@
+# @package _global_
+# Auto-generated for E018b canonical support-proxy anchors.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: bucket001_person2_freejoint_legobj_e018b
+scene_name: scene_e018b_jointB_bucket001_p2_canonical_t02
+contact_guidance: false
+object_pd_override: false
+object_kinematic_override: false
+object_action_dims: 0
+object_actuator_ids: []
+object_actuator_names: []
+
+partner_force_scale: 0.0
+partner_force_spring_kp: 0.0
+partner_force_spring_kd: -1.0
+partner_force_spring_kp_rot: 0.0
+partner_force_spring_kd_rot: -1.0
+partner_force_ref_dt: -1.0
+partner_force_point_local: []
+partner_force_points_local: []
+partner_force_force_clamp: 0.0
+partner_force_torque_clamp: 0.0
+
+support_proxy_enabled: true
+support_proxy_mode: mocap_pad
+support_proxy_mocap_body_name: support_weld_anchor
+support_proxy_mocap_quat_mode: object_ref
+support_proxy_point_local: [0, 0.1891, 0.156922]
+support_proxy_gravity_scale: 0.5
+support_proxy_connector_kp: 0.0
+support_proxy_connector_kd: 0.0
+support_proxy_xy_velocity_scale: 1.0
+support_proxy_max_xy_speed: 0.0
+support_proxy_height_tau: 0.0
+support_proxy_ref_dt: -1.0
+support_proxy_force_clamp: 0.0
+support_proxy_torque_clamp: 0.0
+
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E018b/contact_masks/bucket001_person2/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [1.0, 0.0, 0.0]
+
+hold_contact_rew_scale: 0.0
+hold_contact_sigma: 0.05
+hold_contact_start_eval_time: 0.64
+hold_contact_end_eval_time: 4.08
+hold_contact_require_ref_contact: true

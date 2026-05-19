@@ -752,3 +752,219 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 按用户要求检查 E014 原视频：`E014_box025_p2_jointB_t02.mp4` 为 `1440x480 @ 50fps / 248` 帧，`E014_box023_p2_jointB_t02.mp4` 为 `1440x480 @ 50fps / 272` 帧。
 - 已将 `render_E016_visuals.py` 默认参数改为单侧 `720x480`、输出 `1440x480`、`50fps`，并展开 MJWP 保存的 `(T,2,nq)` sim substeps；reference qpos 使用与 `spider.io.load_data` 一致的 `interp` 上采样到相同帧数。
 - 已重刷全量 13 个 E016 视频；批量 `ffprobe` 验证 13/13 均为 `1440x480 @ 50fps`。其中 `E016_box025_p2` 为 248 帧、`E016_box023_p2` 为 272 帧，与 E014 对照 case 帧数一致。
+
+## 2026-05-19 18:45 E017 anchor audit 启动
+
+- 用户要求优化 anchor 选择，并找出 E016 中哪些 case 可能因 anchor 选择错误导致结果不行；本轮按 `experiment-planning-zh` 新建 E017。
+- 已确认 E014 anchor 是手工 case-specific object-local support point：`box025_p2=[0,0.38,0.30]`，`box023_p2=[0.16,0,0.10]`。E014 目标是隔离验证 soft-weld 结构，而不是自动 anchor 推断。
+- 已确认 E016 anchor 方法是 `mask_active_ref_palm_centroid_surface_clamp`：active palm local points 全局 centroid 后 snap 到 x/y 表面。`box023_p2` 的 active palm 在 `+X/-X` 双峰，centroid 抵消后错误 snap 到 `+Y`，是当前明确的 anchor failure。
+- 已创建 E017 plan 和初始结果日志，下一步实现 anchor audit / face-cluster selector 并跑 13-case 静态分析。
+
+### 2026-05-19 18:58 E017 实现入口确认
+
+- 已复查 E016 preprocess：`generate_e016_assets.py` 同时复制 freejoint case、补腿/物体 contact pair、用 centroid 推断 anchor、生成 `scene_e016_jointB_*`；`generate_e016_overrides.py` 从 manifest 生成 Hydra override。
+- E017 不改动已有 E016 结果，新增 `scripts/E017/` 和 `results/E017/`。实现策略：先用同一批 E016 variants 做 anchor audit，再用 face-cluster 方法写入 `scene_e017_jointB_*` 和 E017 override。
+- 远程规则已复查：若 E017 跑 3 个以上独立 case，应使用本地 1 卡 + 远端 2 卡并行；当前先完成 preprocess/audit 和少量关键 case 验证，再按结果决定是否分发 10+ case。
+
+### 2026-05-19 19:08 E017 脚本实现
+
+- 新增 `scripts/E017/audit_select_anchors.py`：读取 E016 variants/manifest/comparison，输出 `anchor_audit.csv/json`；对 centroid cancellation、E014 seed face mismatch、low support 进行分类，并生成 E017 scene/manifest。
+- 新增 `scripts/E017/generate_e017_overrides.py`、`scripts/run_E017_preprocess.sh`、`scripts/train/train_E017.sh`、`scripts/eval/eval_E017.py`，沿用 E016 的 freejoint/no-direct-wrench/paper metrics 验收口径，但 scene/weld 改为 `scene_e017_jointB_*` / `e017_support_weld`。
+- 当前选择策略：明确/疑似 centroid cancellation 的 case 走 `face_cluster`；其余 case 保留 E016 centroid face，但把 z 上限收紧到 `0.65 * half_z`，避免 box025_p2 这类 anchor 高度过顶。
+
+### 2026-05-19 19:16 E017 anchor audit 完成
+
+- `run_E017_preprocess.sh --force` 已完成，产物：`results/E017/anchor_audit.csv`、`anchor_audit_summary.json`、`manifest.tsv`，以及 15 个 E017 override（13 个自动选择 + 2 个 E014 seed 对照）。
+- 13-case audit 分类：`box023_p2` 为 `likely_anchor_wrong_manual_mismatch`；`box025_p1`、`bucket005_s2_p2` 为 `possible_anchor_wrong_centroid_cancellation`；`bucket005_s2_p1` 为 `ambiguous_low_confidence_centroid`；`box025_p2` 为 `manual_seed_face_matches_current`，保留 +Y 面但将 z 从 `0.399` 降到 `0.305`。
+- 生成的关键候选：`E017_box023_p2_face_cluster=[0.153,0.089,0.115]`、`E017_box023_p2_e014_seed=[0.16,0,0.10]`、`E017_box025_p2_centroid_v2=[0.006,0.378,0.305]`、`E017_box025_p2_e014_seed=[0,0.38,0.30]`。
+
+### 2026-05-19 19:24 E017 subset 并行准备
+
+- 已新增远程入口 `scripts/run_E017_remote.sh` 和 `scripts/train/train_E017_remote_tmux.sh`；由于当前 E017 尚在验证中，远程启动脚本会用 `rsync` 同步未提交的 E017 脚本，再在远端 preprocess。
+- `train_E017.sh` 新增 `remote_subset_gpu0/remote_subset_gpu1`，只跑 `role=anchor_debug/manual_seed` 且匹配对应 queue 的候选，避免远端误跑全部 15 个 manifest rows。
+- subset 计划：本地 GPU 跑 4 个 local 对照（`box023_p2 face_cluster/e014_seed`、`box025_p2 centroid_v2/e014_seed`）；远端 GPU0 跑 `box025_p1_face_cluster` 和 `bucket005_s2_p2_face_cluster`，远端 GPU1 跑 `bucket005_s2_p1_face_cluster`。
+
+### 2026-05-19 19:32 E017 subset 暂停
+
+- 用户指出应先汇报 anchor audit 结果再跑实验；该反馈正确。已停止远端 `E017` tmux，并杀掉本地 `train_E017.sh local_quick` / `run_mjwp.py` 进程。
+- 停止时尚未产生 E017 NPZ 结果；当前可交付的是 anchor audit 与候选 manifest，不再继续占用 GPU，等待用户确认下一步实验选择。
+- 已向用户汇报 audit 表中关键分类：明确 anchor 错为 `box023_p2`；疑似 centroid cancellation 为 `box025_p1`、`bucket005_s2_p2`；低置信但可能主要是 robot artifact 为 `bucket005_s2_p1`；`box025_p2` face 与 E014 一致但高度应降到 E014 附近。
+
+### 2026-05-19 19:40 E017 audit 口径修正
+
+- 用户修正实验逻辑：E014 `box023_p2` / `box025_p2` anchor 应作为已验证 GT；E016 anchor 与 E017 anchor 都是被审核/评测对象，而不是只审核 E016 再默认 E017 正确。
+- 下一步补充审核输出：对已知 GT case 计算 E016/E017 与 GT 的 face/坐标距离/是否通过；对无 GT case 用 contact-mask face support、centroid cancellation、E016 指标失败类型做弱监督归因。
+- 暂不跑算法验证；只有在“明确错误/可能错误” case 列表输出并确认后，再对这些 case 跑 E017 自动 anchor 和必要的 GT 上限对照。
+
+### 2026-05-19 19:50 E016/E017 anchor 审核与分层完成
+
+- 新增审核输出：`results/E017/anchor_method_audit.csv`（E016 vs E017 auto 逐方法质量）、`results/E017/e016_anchor_failure_attribution.csv`（E016 失败归因分层）、`results/E017/manifest_validation.tsv`（只含明确/可能错误验证项）。
+- GT 对齐结果：`box023_p2` E016 为 `gt_face_mismatch`，E017 auto 为 `gt_near_with_offset`；`box025_p2` E016 为 `gt_near_with_offset`（z 偏差约 `0.099m`），E017 auto 为 `gt_pass`。
+- 第一批算法验证只跑 4 个 source case / 6 个 variants：`box023_p2`（E017 auto + E014 seed）、`box025_p1`（E017 auto）、`box025_p2`（E017 auto + E014 seed）、`bucket005_s2_p2`（E017 auto）。`bucket005_s2_p1` 降为弱证据，不进第一批。
+
+### 2026-05-19 19:58 E017 validation 运行中
+
+- 已启动本地 validation manifest：本地 GPU 跑 `box023_p2_face_cluster`、`box023_p2_e014_seed`、`box025_p2_centroid_v2`、`box025_p2_e014_seed`。
+- 已启动远端 E017 tmux，并用本地 `manifest_validation.tsv` 覆盖远端生成结果，远端 GPU0 跑 `box025_p1_face_cluster`，GPU1 跑 `bucket005_s2_p2_face_cluster`。
+- 注意：远端自身缺完整 E016 comparison，因此远端 preprocess 不能独立生成相同 validation manifest；本轮以本地审核结果为准，显式同步 validation manifest 后运行。
+
+### 2026-05-19 20:35 E017 validation 完成
+
+- 6/6 validation NPZ 已完成并统一 eval，视频也已生成到 `results/E017/visual/`；渲染参数为 `1440x480 @ 50fps`，恢复了 moving mocap anchor。
+- 结论：`box025_p2` 的 anchor 高度偏差被验证为主要因素，`centroid_v2` 和 E014 seed 均从 E016 fail 变为 E017 pass；`box025_p1` 与 `bucket005_s2_p2` face-cluster 无实质改善，不支持 anchor 主因。
+- `box023_p2`：E017 auto 已把 face 从 E016 错误 `+Y` 修到 GT `+X`，但 quick validation 中 E017 auto 与 E014 seed 都未改善接触/视觉。复查发现 E014 full run 用 `opt_steps=32`，本轮 E016/E017 quick 用 `opt_steps=4`，因此 box023 需要 full-budget 控制实验后才能最终判断自动 anchor 是否接近 E014。
+
+### 2026-05-19 21:05 E017 另一侧语义审核修正
+
+- 用户指出 anchor 应核对“另一侧/partner support 与物体的接触点”。已复查代码：E016 `infer_support_point()` 与 E017 auto `_load_support_points()` 都读取 `row["person_idx"]` 的 active palm mask，因此算法输入是 `selected_person_contact_mask`，不是显式 counterpart/partner-side contact。
+- 已修改 `scripts/E017/audit_select_anchors.py`：保留 selected-person audit，同时新增 counterpart-person 弱证据通道，输出 `partner_source_task`、`partner_top_face`、`selected_partner_top_relation`、`partner_side_status` 等列。
+- 已重跑 audit，不启动训练、不重写 scene：`anchor_audit.csv` 显示 13 case 中 selected/partner dominant face 相同 8 个、不同 3 个、对侧 1 个、缺 counterpart task 1 个；`anchor_method_audit_summary.json` 显示 E016 centroid 的 `partner_face_match=5`、`partner_face_mismatch=7`、`partner_task_missing=1`。
+- 关键结论：E014 两个 GT case 的 support anchor 都与 counterpart-person dominant face 不同，因此 counterpart mask 不能覆盖 E014 GT；它只能作为无 GT case 的弱证据。E017 log/plan 已同步修正该口径。
+
+### 2026-05-19 21:25 E017 anchor 位置视频可视化
+
+- 新增 `scripts/eval/render_E017_anchor_videos.py`，专门渲染 reference object trajectory 上的 anchor marker，不混入 rollout 成败；输出为 `1440x480 @ 50fps`，左 front / 右 top。
+- 已生成 7 个视频到 `results/E017/anchor_visual/`，索引为 `anchor_visual_eval.md`。覆盖两个 GT case：`box023_p2`、`box025_p2`，以及无 GT 但 audit 可疑的 `box021_p2`、`box023_p1`、`box025_p1`、`bucket005_s2_p1`、`bucket005_s2_p2`。
+- `ffprobe` 验证全部视频为 `1440x480 @ 50fps`；帧数分别为 box021 150、box023 272、box025 248、bucket005 296。
+- 观察：`box023_p2` 中 E016 红点在 `+Y`，E014 GT 绿点在 `+X`，E017 蓝点也在 `+X` 但有 y offset；`box025_p2` 中 E017 蓝点与 E014 绿点基本重合，E016 红点同侧但更高。
+
+### 2026-05-19 21:38 E017 方法复查结论
+
+- 按用户澄清后的 E014 语义，E017 auto 不能作为最终 anchor selector；它只是一个 useful audit/debug baseline。原因是 `face_cluster` 从 selected-person palm contact median 取点，仍保留真实手接触的切向偏移和高度，而 E014 需要的是 object-local partner-side proxy support point。
+- 量化复查：若使用 canonical proxy rule `face center + 0.62*half_z`，`box023_p2` 会从 E017 `[0.153,0.089,0.115]` 改为 `[0.153,0,0.109]`，到 E014 GT 的距离约 `0.012m`；`box025_p2` canonical 到 GT 约 `0.009m`。这比当前 E017 更符合 E014 的 proxy pattern。
+- 当前 E017 对无 GT case 还会给出低位/底部 anchor：`box025_p1 z=-0.117m`、`bucket005_s2_p2 z=-0.058m`，明显不符合“上侧 support proxy”语义。
+- 建议下一版使用 `support_proxy_canonical`：GT/template face 优先；无 GT 时用 audit face 只作弱证据；点放在 face center + upper support band，禁止负 z，并在重定向前输出 confidence/gate。
+
+### 2026-05-19 21:52 E018 canonical support proxy 计划
+
+- 用户要求按 `experiment-planning-zh` 开展新实验，并建议先只跑 `box023_p2` / `box025_p2` 两个 GT case，通过后再扩展其他 case；已按该策略创建 E018。
+- 新增计划：`plan/18_E018_canonical_support_proxy_anchor_plan.md`。
+- 新增结果日志骨架：`log/18_E018_canonical_support_proxy_anchor_results.md`。
+- E018 的核心规则：保留 E017 的 face audit 价值，但 point placement 改为 E014 风格 canonical proxy：face center + `0.62*half_z`，禁止沿用 palm median 的切向偏移和低位 z。
+- 已发现当前仓库缺少 skill 要求的 `scripts/convert/snapshot_scenes.sh`，E018 实现会补通用快照脚本，并让 `train_E018.sh` 训练前调用。
+
+### 2026-05-19 22:00 E018 GT gate 启动
+
+- 已实现并编译通过 E018 assets/overrides/train/eval/render 脚本。预处理生成 2 个 GT variant：`E018_box023_p2_canonical_t02`、`E018_box025_p2_canonical_t02`。
+- Anchor 静态 gate：`box023_p2` canonical `[0.1531,0,0.109492]` 到 E014 GT `[0.16,0,0.10]` 距离 `0.0117m`；`box025_p2` canonical `[0,0.3778,0.290904]` 到 E014 GT `[0,0.38,0.30]` 距离 `0.00936m`，均小于 `0.03m`。
+- 4-step smoke 已完成，2/2 config ok、2/2 GT anchor pass；smoke 的效果指标无效，后续会被 full-budget eval 覆盖。
+- 使用本地+远程并行：本地 GPU0 跑 `box023_p2`，远程 `spider-remote` GPU0 跑 `box025_p2`。运行前已将 E018 脚本、override、manifest、contact mask 与生成 scene 同步到远端。
+- subagent 审阅指出 eval/visual 的若干硬风险；已修复：GT 距离从当前点重新计算、诊断优先反映 GT/soft gate、E017 audit marker 改成可选、E018 render 强制要求 `support_proxy_pos`，并重新 py_compile 通过。
+
+### 2026-05-19 22:18 E018 full gate 中途状态
+
+- 本地 `box023_p2` full 已完成：`num_gt_anchor_pass=1`、`num_soft_target_pass=1`、`num_gt_gate_pass=1`。单 case eval 显示 Epos `0.0425m`、Erot `2.27deg`、transport success；paper contact preservation 仅 `32.1%`，但 guard soft target 已过。
+- 远程 `box025_p2` 在 `226/248` step 附近异常退出，未写出 NPZ。检查远端 `df -h` 显示 `/` 100% 满，判定为远端磁盘空间问题而非 E018 算法结果。
+- 已切回本地 GPU0 运行 `E018_box025_p2_canonical_t02` full，避免使用不完整远程结果。
+
+### 2026-05-19 22:40 E018 GT gate 完成
+
+- 本地补跑 `box025_p2` full 完成，并重新执行双 case `eval_E018.py --all`。最终 aggregate：`num_config_ok=2`、`num_gt_anchor_pass=2`、`num_soft_target_pass=2`、`num_gt_gate_pass=2`、`num_paper_spider_success=2`、`num_paper_dynaretarget_success=2`、`num_transport_success=2`、mean Epos `0.0493m`、mean Erot `2.10deg`。
+- 与 E014 t02 对齐：`box023_p2` E018 obj `0.0425/0.0793m` vs E014 `0.0426/0.0800m`；`box025_p2` E018 obj `0.0562/0.0871m` vs E014 `0.0562/0.0868m`。
+- 可视化已生成：comparison 与 anchor-position 各 2 个视频，全部 `1440x480 @ 50fps`，帧数 `box023=272`、`box025=248`。实际观察：`box023_p2` E018 anchor 与 E014 GT 在 `+X` 上侧 proxy 区域重合，E016 red marker 在错误 `+Y`；`box025_p2` E018 与 E014 在 `+Y` 上侧基本重合，E016 同侧但偏高。
+- 已更新 `log/18_E018_canonical_support_proxy_anchor_results.md` 与 `EXPERIMENT_TRACKER.md`。结论：E018 两例 GT gate 通过，可以进入 E018b 10+ case 泛化；但 `box023_p2` paper contact preservation 仍只有 `32.1%`，后续不能把 anchor gate pass 等同于完整 robot-side artifact pass。
+
+### 2026-05-19 22:50 E018b 13-case 计划启动
+
+- 用户要求启动 E018b，直接使用在线 rollout 视频，不再额外离线 replay，并明确使用本地 1 卡 + 远程 2 卡三卡并行。
+- 已按 `experiment-planning-zh` 新建计划 `plan/19_E018b_canonical_support_proxy_13case_plan.md` 和日志骨架 `log/19_E018b_canonical_support_proxy_13case_results.md`。
+- 远程磁盘复查：`spider-remote` 当前 `/` 可用约 `61G`，足够跑 E018b；上轮满盘失败已不再是当前阻塞。
+- E018b face 规则：GT case 使用 E018 验证过的 face；其余 11 个 case 只借用 E017 audit 的 `selected_face`，但 anchor point 统一 canonicalize 为 face center + `0.62*half_z`，不再使用 palm median 的切向 offset 或低/负 z。
+
+### 2026-05-19 22:58 E018b 脚本实现中
+
+- 已新增 `scripts/E018b/generate_e018b_assets.py`：读取 E016 13 cases 与 E017 `anchor_audit.csv`，生成 canonical point、`scene_e018b_jointB_*`、manifest，并按参考帧数贪心分配 `local/remote_gpu0/remote_gpu1`。
+- 已新增 `generate_e018b_overrides.py`、`run_E018b_preprocess.sh`、`train_E018b.sh`、`run_E018b_remote.sh`、`eval_E018b.py`、`index_E018b_online_videos.py`。训练脚本直接把 `run_mjwp.py` 在线视频写入 `results/E018b/online_video/`，不调用离线 replay。
+
+### 2026-05-19 23:06 E018b preprocess + smoke 完成
+
+- `run_E018b_preprocess.sh --force` 已完成：13/13 scene XML 与 13 个 override 已生成；manifest queue 负载为 local `566`、remote_gpu0 `491`、remote_gpu1 `501` reference frames。
+- 4-step smoke 已完成：13/13 `E018b_config_ok`、13/13 `E018b_canonical_anchor_pass`、2/2 `E018b_gt_anchor_pass`。smoke 的 transport/contact 指标只用于 wiring，不作为效果结论。
+- 接下来同步 E018b 脚本、manifest、contact masks、generated scenes 与 overrides 到 `spider-remote`，然后启动远程双卡 full 和本地 full queue。
+
+### 2026-05-19 23:12 E018b 三卡 full 运行中
+
+- 已同步 E018b 到远端，并启动 `tmux E018b_remote`：GPU0 跑 `remote_gpu0` 4 条，GPU1 跑 `remote_gpu1` 4 条；本地 GPU0 跑 `local` 5 条。三端均进入 `opt_steps=32` full 段。
+- 为避免最终 eval 误读 smoke 产物，已删除本地 `results/E018b/E018b_*_canonical_t02.npz` 以及 smoke comparison/summary；后续只接受 full run 重写出的 NPZ。
+
+### 2026-05-19 21:34 E018b full 运行巡检
+
+- 三卡队列均在 full-budget 运行：本地 `bucket005_s2_p1`、远端 GPU0 `box025_p2`、远端 GPU1 `box023_p2` 分别处于 `opt_steps=32` 段；远端 GPU1 已从 `box023_p1` 正常进入 `box023_p2`，在线渲染末尾的 EGL 清理告警未中断队列。
+- 已补强 `train_E018b.sh` 的恢复逻辑：若 `run_mjwp.py` 返回非零但 `trajectory_mjwp.npz` 已落盘，则保留该 rollout 并继续复制结果；`one/single` 模式也尊重 `SKIP_EVAL=1`，便于后续单 case 补跑。
+
+### 2026-05-19 21:38 E018b full 运行巡检
+
+- 当前三路日志持续更新：本地 `bucket005_s2_p1` 约 `118/296`，远端 GPU0 `box025_p2` 约 `102/248`，远端 GPU1 `box023_p2` 约 `82/272`。
+- 根目录 full 结果计数仍为本地 `2 NPZ / 2 mp4`、远端 `2 NPZ / 2 mp4`；当前三条尚未完成落盘。
+
+### 2026-05-19 21:45 E018b full 运行巡检
+
+- 三路 full 继续正常：本地 `bucket005_s2_p1` 约 `176/296`，远端 GPU0 `box025_p2` 约 `148/248`，远端 GPU1 `box023_p2` 约 `128/272`。
+- 训练脚本补丁已 `bash -n` 通过并同步到 `spider-remote`，但不重启当前队列；等待正在运行的进程自然完成。
+
+### 2026-05-19 21:53 E018b 第一批部分完成
+
+- 本地 `E018b_bucket005_s2_p1_canonical_t02` 已完成，在线视频保存到 `results/E018b/online_video/`，final object error `pos=0.0296, quat=0.0659`；本地队列自动进入 `E018b_bucket007_p1_canonical_t02`。
+- 远端 GPU0 `E018b_box025_p2_canonical_t02` 已完成，远端队列自动进入 `E018b_bucket005_s2_p2_canonical_t02`；远端 GPU1 `E018b_box023_p2_canonical_t02` 仍在运行，约 `232/272`。
+- 本地和远端当前各已有 `3` 个 full root NPZ。在线渲染末尾仍出现 EGL destructor warning，但不会阻断已保存的轨迹和视频。
+
+### 2026-05-19 21:57 E018b GT case 完成
+
+- 远端 GPU1 `E018b_box023_p2_canonical_t02` 已完成，final object error `pos=0.0278, quat=0.0349`，并自动进入 `E018b_bucket001_p1_canonical_t02`。
+- 两个 GT anchor case 均已 full-budget 完成：`box025_p2` 在 GPU0 完成，`box023_p2` 在 GPU1 完成；待最终统一同步回本地后运行 `eval_E018b.py --all` 验证 GT gate 和泛化指标。
+
+### 2026-05-19 22:00 E018b 第二批运行中
+
+- 当前运行中：本地 `E018b_bucket007_p1_canonical_t02` 约 `120/242`，远端 GPU0 `E018b_bucket005_s2_p2_canonical_t02` 约 `92/296`，远端 GPU1 `E018b_bucket001_p1_canonical_t02` 约 `50/214`。
+- 三卡队列没有掉进程；已完成 root NPZ 计数为本地 `3`、远端 `4`。
+
+### 2026-05-19 22:07 E018b 第二批后段
+
+- 本地 `E018b_bucket007_p1_canonical_t02` 约 `206/242`，即将进入保存阶段；远端 GPU0 `E018b_bucket005_s2_p2_canonical_t02` 约 `160/296`，远端 GPU1 `E018b_bucket001_p1_canonical_t02` 约 `122/214`。
+- 目前未见 OOM、磁盘满或进程退出异常。
+
+### 2026-05-19 22:10 E018b 本地进入最后一条
+
+- 本地 `E018b_bucket007_p1_canonical_t02` 已完成，final object error `pos=0.0420, quat=0.1003`；本地队列已进入最后一条 `E018b_desk021_p1_canonical_t02`。
+- 当前完成 root NPZ：本地 `4`，远端 `4`。远端 GPU0 `bucket005_s2_p2` 约 `196/296`，GPU1 `bucket001_p1` 约 `156/214`。
+
+### 2026-05-19 22:16 E018b 远端 GPU1 进入最后一条
+
+- 远端 GPU1 `E018b_bucket001_p1_canonical_t02` 已完成，并自动进入最后一条 `E018b_bucket001_p2_canonical_t02`；远端 root NPZ 计数变为 `5`。
+- 当前运行中：本地 `desk021_p1` 约 `96/268`，远端 GPU0 `bucket005_s2_p2` 约 `260/296`，远端 GPU1 `bucket001_p2` 约 `12/244`。
+
+### 2026-05-19 22:20 E018b 远端 GPU0 进入最后一条
+
+- 远端 GPU0 `E018b_bucket005_s2_p2_canonical_t02` 已完成，并自动进入最后一条 `E018b_bucket007_p2_canonical_t02`；远端 root NPZ 计数变为 `6`。
+- 当前剩余三条均为各队列最后 case：本地 `desk021_p1` 约 `148/268`，远端 GPU0 `bucket007_p2` 刚启动，远端 GPU1 `bucket001_p2` 运行中。
+
+### 2026-05-19 22:23 E018b 最后三条运行中
+
+- 剩余三条进度：本地 `E018b_desk021_p1_canonical_t02` 约 `184/268`，远端 GPU0 `E018b_bucket007_p2_canonical_t02` 约 `40/190`，远端 GPU1 `E018b_bucket001_p2_canonical_t02` 约 `82/244`。
+- 当前完成 root NPZ 计数：本地 `4`，远端 `6`；全量还差本地 1 条与远端 2 条。
+
+### 2026-05-19 22:29 E018b 本地队列完成
+
+- 本地队列 5/5 已完成，root NPZ 计数为 `5`，最后一条 `E018b_desk021_p1_canonical_t02` 已落盘并生成在线视频。
+- 远端仍剩两条：GPU0 `E018b_bucket007_p2_canonical_t02` 约 `112/190`，GPU1 `E018b_bucket001_p2_canonical_t02` 约 `156/244`。两条远端各出现一次约 `37s` step spike，随后恢复正常。
+- 注意：本地运行中的 bash 在队列完成后报过一次 `unexpected EOF`，根因是运行中途同步/修改 `train_E018b.sh` 后 bash 继续按旧文件偏移读取；当前脚本 `bash -n` 正常，且 5 个本地产物已完整落盘。远端可能在队列结束后出现同类收尾非零，但不影响已保存的 NPZ/视频。
+
+### 2026-05-19 22:38 E018b full rollout 全部完成
+
+- 远端最后两条 `E018b_bucket007_p2_canonical_t02`、`E018b_bucket001_p2_canonical_t02` 均已完成；远端结果和日志已 rsync 回本地。
+- 本地现在有 `13` 个 full root NPZ 与 `13` 个在线 MP4；结果目录约 `47M`，日志目录约 `244K`。
+- 下一步执行 `eval_E018b.py --all`，然后生成在线 MP4 contact sheets 和视频索引。
+
+### 2026-05-19 22:42 E018b eval + video index 完成
+
+- `eval_E018b.py --all` 完成：13/13 config/canonical anchor/SPIDER/Dyna/transport success，2/2 GT anchor gate pass；mean Epos `0.0545m`、Erot `5.22deg`，strict generalization `1/13`。
+- 初版 fall gate 前失败分层：`contact_preservation_gap=8`、`artifact_failed=2`、`push_or_leg_shortcut=2`、`paper_generalization_pass=1`；后续按用户指出的视频摔倒问题新增 robot fall gate 复核。
+- 在线视频索引已生成：`results/E018b/online_video/online_video_eval.md`，13/13 sheet，全部 `1440x480 @ 50fps`。抽查显示 `box025_p2` 最稳定，`box023_p2` 不再出现箱子飘走；`bucket001_p1`、`box021_p1` 有坐倒/翻倒式姿态，bucket 系列若干 case 有明显穿插/腿脚 artifact。
+- 已更新 `log/19_E018b_canonical_support_proxy_13case_results.md` 与 `EXPERIMENT_TRACKER.md`。
+
+### 2026-05-19 22:49 E018b 摔倒 gate 复核
+
+- 用户指出 `box021_p1/p2`、`bucket001_p1/p2` 视频均有摔倒，不能算成功。复核 contact sheets 确认：四个 case 都出现 pelvis/torso 明显倒地或坐倒。
+- 现有 `E018b_generalization_pass` 已是 false，但 `paper_spider_success` / `paper_dynaretarget_success` 是 object-only 口径，不能代表完整 retarget 成功。
+- 已在 `eval_E018b.py` 增加 `E018b_robot_fall_detected` / `E018b_robot_upright_ok` / `E018b_visual_stability_ok`，规则为 `full_pelvis_z_min_m < 0.45` 或 `first_pelvis_z_lt_45cm_frame >= 0`。该 gate 会把上述 4 个 case 显式归为 `robot_fall_visual_fail`。
+- 已同步更新 `log/19_E018b_canonical_support_proxy_13case_results.md`、`EXPERIMENT_TRACKER.md` 与 online video index：新的诊断分布为 `robot_fall_visual_fail=4`、`contact_preservation_gap=5`、`artifact_failed=2`、`push_or_leg_shortcut=1`、`paper_generalization_pass=1`。

@@ -24,6 +24,9 @@
 | E014 | 2026-05-19 | COLA-B Soft Weld | **kinematic support body + soft weld/equality 位置约束**: 6 条 full 完成；6/6 true-freejoint parity ok、non-COM anchor ok、no direct wrench，4/4 main 过 E013 soft target，2/2 guard stable。best main `t02` obj `0.056/0.087m`、hand `86.7%`、floor `51.4%`、leg `0%` | ✅ 详见 log 14 |
 | E015 | 2026-05-19 | COLA A+B Dynamic Support | **dynamic support body + PD command**: 4 条 full 完成；4/4 dynamic scene/parity/object-last/no-direct-wrench ok，但 0/3 main 过 soft target，0/3 effort reasonable，2/3 main numerical instability。default main obj `0.311/0.418m`、rot `50.3deg`、support target lag `0.127/0.195m`，force/torque 打 clamp；guard stable 但 hand 不过门 | ✅ 详见 log 15 |
 | E016 | 2026-05-19 | Paper Metrics + 13-case Gen | **E014 paper-aligned metrics + 13-case quick 泛化**: 指标对齐 SPIDER/DynaRetarget/OmniRetarget/Holosoma；13/13 config ok、13/13 SPIDER/Dyna object success、13/13 transport success，mean Epos `0.050m`、Erot `4.1deg`、progress `1.001`；但 contact preservation ok `3/13`、deep penetration ok `9/13`、generalization pass `0/13`；corrected front-camera 可视化确认 E016 继承 E014 weld 结构但 anchor 为 mask 派生，失败源为 contact gap/leg shortcut/artifact | ✅ 详见 log 16 |
+| E017 | 2026-05-19 | Anchor Audit + Selection | **E014 GT anchor 对齐 + E016/E017 anchor 归因**: 复查确认 E016/E017 auto anchor 输入是 `selected_person_contact_mask`，不是显式 partner-side；audit 已新增 counterpart-person 弱证据通道，并补齐 7 个 anchor-position videos。`box023_p2` 为明确 E016 face 错、`box025_p2` 为可能高度偏差；6 个 validation quick 中 `box025_p2` auto z-corrected 与 E014 seed 均 pass，`box025_p1/bucket005_s2_p2` 不支持 anchor 主因，`box023_p2` 需 E014 同等 `opt_steps=32` 控制 | ✅ 详见 log 17 |
+| E018 | 2026-05-19 | Canonical Support Proxy | **E014 proxy anchor canonicalization GT gate**: 先跑 `box023_p2/box025_p2` 两个 E014 GT case；canonical rule 为 face center + `0.62*half_z`。2/2 GT anchor dist `<1.2cm`、2/2 config ok、2/2 soft target pass、2/2 SPIDER/Dyna/transport success。object tracking 几乎复现 E014 t02：box023 `0.0425/0.0793m`，box025 `0.0562/0.0871m`；box023 仍有 paper contact-preservation gap `32.1%`，说明 anchor gate 通过但 robot-side artifact 未完全解决 | ✅ 详见 log 18 |
+| E018b | 2026-05-19 | 13-case Generalization | **canonical support proxy 13-case full 泛化 + 在线视频**: 本地 1 卡 + 远程 2 卡跑完 13/13 full，13/13 root NPZ 与 13/13 online MP4。13/13 config/canonical anchor/SPIDER/Dyna/transport success，2/2 GT anchor gate pass；mean Epos `0.054m`、Erot `5.22deg`。复核在线视频后新增 robot fall gate：`box021_p1/p2` 与 `bucket001_p1/p2` 4/13 明确摔倒，upright ok `9/13`，严格 generalization 仅 `1/13`；anchor/object-side 已成立，下一步应转 robot-side stability/contact/artifact control | ✅ 详见 log 19 |
 
 ## Baseline
 
@@ -54,6 +57,9 @@
 | E015 setup | 4-step smoke：4/4 `freejoint_parity_ok`、4/4 `support_dynamic_scene_ok`、4/4 `object_last_ok`、4/4 `no_direct_wrench`、4/4 `pd_metrics_present`；scene/data 独立检查 `nq/nv/nu=49/47/29`，support q/d `36/35`，object q/d `42/41` | E015 工程 wiring 已通过；下一步 setup commit + full，本地跑 default main，远程跑剩余 main/guard |
 | E015 full | 4 个 full 结果：`num_freejoint_parity_ok=4`、`num_support_dynamic_scene_ok=4`、`num_main_soft_target_pass=0`、`num_main_effort_reasonable=0`、`num_numerical_instability=2`、`num_guard_stable=1`；default main obj `0.311/0.418m`、rot `50.3deg`、target gap `0.127/0.195m`、force max `250N` | E015 差于 E014；失败模式是 dynamic support lag + PD saturation + 数值不稳。触发 E015b effort/PD tuning 分析，不跳 E016 |
 | E016 quick | 13 个 quick 泛化结果：`num_config_ok=13`、`num_paper_spider_success=13`、`num_paper_dynaretarget_success=13`、`num_transport_success=13`、`num_contact_preservation_ok=3`、`num_deep_penetration_ok=9`、mean Epos `0.050m`、Erot `4.08deg`、contact preservation `39.6%` | E014 B-only object-side 泛化成立，但完整 retargeting 未通过；主要缺口是 robot-side contact preservation、deep penetration 与 leg/floor artifact |
+| E017 validation + side audit | 6 个 quick 验证：`num_config_ok=6`、`num_paper_spider_success=6`、`num_transport_success=6`、`num_generalization_pass=2`；side audit: auto anchor source side=`selected_person_contact_mask`，selected/partner face same/different/opposed/missing=`8/3/1/1`，GT 与 counterpart dominant face `2/2` 不同 | anchor 归因缩小到：`box025_p2` 为已验证 anchor 高度问题；`box023_p2` 是明确 anchor face 错但还需 full-budget 控制；counterpart mask 只能作无 GT 弱证据，不能覆盖 E014 GT |
+| E018 GT gate | 2 个 full 结果：`num_config_ok=2`、`num_gt_anchor_pass=2`、`num_soft_target_pass=2`、`num_gt_gate_pass=2`、`num_paper_spider_success=2`、`num_paper_dynaretarget_success=2`、`num_transport_success=2`；mean Epos `0.049m`、Erot `2.10deg`；`box023_p2` anchor dist `1.17cm`，`box025_p2` `0.94cm` | canonical support proxy 复现 E014 手工 anchor 语义和 object-side 效果；可以进入 E018b 10+ case 泛化，但需继续分离 robot-side contact/artifact gate |
+| E018b full | 13 个 full 结果：`num_config_ok=13`、`num_canonical_anchor_pass=13`、`num_gt_gate_pass=2/2`、`num_paper_spider_success=13`、`num_paper_dynaretarget_success=13`、`num_transport_success=13`；mean Epos `0.054m`、Erot `5.22deg`、contact preservation ok `5/13`、deep penetration ok `7/13`、robot fall detected `4/13`、visual stability ok `9/13`、strict generalization `1/13` | canonical support proxy 的 anchor/object-side 泛化成立，但 object-only success 不能代表完整成功；完整 retargeting 仍被 robot-side stability、contact preservation、deep penetration、leg/floor artifact 限制。下一步不继续调 anchor，而应做 robot-side stability/contact/artifact control |
 
 ## Plans
 
@@ -73,6 +79,9 @@
 - E014: `workspace/core4d_collab_retarget/plan/14_E014_cola_b_kinematic_weld_plan.md`
 - E015: `workspace/core4d_collab_retarget/plan/15_E015_cola_ab_dynamic_support_pd_plan.md`
 - E016: `workspace/core4d_collab_retarget/plan/16_E016_e014_paper_metrics_generalization_plan.md`
+- E017: `workspace/core4d_collab_retarget/plan/17_E017_anchor_audit_selection_plan.md`
+- E018: `workspace/core4d_collab_retarget/plan/18_E018_canonical_support_proxy_anchor_plan.md`
+- E018b: `workspace/core4d_collab_retarget/plan/19_E018b_canonical_support_proxy_13case_plan.md`
 
 ## Logs
 
@@ -92,6 +101,9 @@
 - E014: `workspace/core4d_collab_retarget/log/14_E014_cola_b_kinematic_weld_results.md`
 - E015: `workspace/core4d_collab_retarget/log/15_E015_cola_ab_dynamic_support_pd_results.md`
 - E016: `workspace/core4d_collab_retarget/log/16_E016_e014_paper_metrics_generalization_results.md`
+- E017: `workspace/core4d_collab_retarget/log/17_E017_anchor_audit_selection_results.md`
+- E018: `workspace/core4d_collab_retarget/log/18_E018_canonical_support_proxy_anchor_results.md`
+- E018b: `workspace/core4d_collab_retarget/log/19_E018b_canonical_support_proxy_13case_results.md`
 
 ## Git
 

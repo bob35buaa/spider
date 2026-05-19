@@ -25,6 +25,10 @@ web_search = "disabled"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
+[profiles.full]
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
 # 交互风格
 personality = "pragmatic"    # "friendly" | "pragmatic" | "none"
 
@@ -51,3 +55,10 @@ trust_level = "trusted"
 [[skills.config]]
 path = ".codex/skills/experiment-planning-zh/SKILL.md"
 enabled = true
+
+
+model_provider = "openai_http"
+[model_providers.openai_http]
+name = "OpenAI HTTP only"
+wire_api = "responses"
+supports_websockets = false
