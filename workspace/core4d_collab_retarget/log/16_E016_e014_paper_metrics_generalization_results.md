@@ -91,7 +91,7 @@ bash workspace/core4d_collab_retarget/scripts/pull_E016_remote_results.sh
 
 ## 可视化
 
-离线 EGL 已渲染 13/13 个 case。2026-05-19 17:20 版本曾使用 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py` 做 qpos-only replay；该入口不适合 E014/E016 的 moving mocap support weld，已废弃。当前 `render_E016_visuals.py` 使用 run_mjwp-style front camera，并在 replay 时恢复 `support_proxy_pos` 到 `support_weld_anchor` mocap body：左侧为 kinematic/reference qpos，右侧为 MJWarp physics output。视频、contact sheet 与指标索引见 `results/E016/visual/visual_eval.md`。
+离线 EGL 已渲染 13/13 个 case。2026-05-19 17:20 版本曾使用 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py` 做 qpos-only replay；该入口不适合 E014/E016 的 moving mocap support weld，已废弃。当前 `render_E016_visuals.py` 使用 run_mjwp-style front camera，并在 replay 时恢复 `support_proxy_pos` 到 `support_weld_anchor` mocap body：左侧为 kinematic/reference qpos，右侧为 MJWarp physics output。视频参数对齐 E014：单侧 `720x480`、拼接输出 `1440x480`、`50fps`，并展开每个控制步的 2 个 sim substep；`box025_p2` 为 248 帧、`box023_p2` 为 272 帧，与 E014 对应视频一致。视频、contact sheet 与指标索引见 `results/E016/visual/visual_eval.md`。
 
 E014 对照配置：
 

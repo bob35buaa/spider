@@ -746,3 +746,9 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已修正 `workspace/core4d_collab_retarget/scripts/eval/render_E016_visuals.py`：直接用 MuJoCo front camera replay `qpos`，ref/sim 标签对齐 `run_mjwp.py`，并把 NPZ 中的 `support_proxy_pos` 写回 mocap anchor；已重刷 13/13 个 E016 视频和 sheet。
 - 已对照 E014 两个基准配置：`box025_p2` 用 `E014_box025_p2_jointB_t02`，anchor `[0,0.38,0.30]`；`box023_p2` 用 `E014_box023_p2_jointB_t02`，anchor `[0.16,0,0.10]`。E016 对应 anchor 分别是 `[0.006,0.378,0.399]` 和 `[0.030,0.157,0.150]`，即继承了 E014 weld 结构/solref/solimp，但没有复用 E014 的手工 anchor。
 - 视觉对比更新：`box025_p2` corrected render 与 E014 t02 接近；`box023_p2` corrected render 明显差于 E014 t02，后段接触和姿态不稳，指向 E016 自动 anchor 泛化策略问题。
+
+## 2026-05-19 18:20 E016 视频参数对齐 E014
+
+- 按用户要求检查 E014 原视频：`E014_box025_p2_jointB_t02.mp4` 为 `1440x480 @ 50fps / 248` 帧，`E014_box023_p2_jointB_t02.mp4` 为 `1440x480 @ 50fps / 272` 帧。
+- 已将 `render_E016_visuals.py` 默认参数改为单侧 `720x480`、输出 `1440x480`、`50fps`，并展开 MJWP 保存的 `(T,2,nq)` sim substeps；reference qpos 使用与 `spider.io.load_data` 一致的 `interp` 上采样到相同帧数。
+- 已重刷全量 13 个 E016 视频；批量 `ffprobe` 验证 13/13 均为 `1440x480 @ 50fps`。其中 `E016_box025_p2` 为 248 帧、`E016_box023_p2` 为 272 帧，与 E014 对照 case 帧数一致。

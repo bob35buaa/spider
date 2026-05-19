@@ -22,6 +22,9 @@ import cv2
 import imageio
 import mujoco
 import numpy as np
+import torch
+
+from spider.interp import interp
 
 
 REPO = Path(__file__).resolve().parents[4]
@@ -35,8 +38,23 @@ BASE = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
 def flatten_mjwp(data: dict[str, np.ndarray], key: str) -> np.ndarray:
     arr = data[key]
     if arr.ndim == 3:
-        return arr[:, -1, :]
+        return arr.reshape(-1, arr.shape[-1])
     return arr
+
+
+def align_ref_qpos(qpos_ref: np.ndarray, target_len: int) -> np.ndarray:
+    if qpos_ref.shape[0] == target_len:
+        return qpos_ref
+    if target_len % qpos_ref.shape[0] == 0:
+        factor = target_len // qpos_ref.shape[0]
+        qpos_t = torch.from_numpy(qpos_ref).to(torch.float32).unsqueeze(0)
+        return interp(qpos_t, factor).squeeze(0).numpy()
+    src_t = np.linspace(0.0, 1.0, qpos_ref.shape[0])
+    dst_t = np.linspace(0.0, 1.0, target_len)
+    out = np.empty((target_len, qpos_ref.shape[1]), dtype=qpos_ref.dtype)
+    for j in range(qpos_ref.shape[1]):
+        out[:, j] = np.interp(dst_t, src_t, qpos_ref[:, j])
+    return out
 
 
 def object_qadr(model: mujoco.MjModel) -> int | None:
@@ -123,8 +141,8 @@ def render_comparison(
 
     kin = np.load(kin_npz)
     phys = dict(np.load(phys_npz))
-    qpos_ref = kin["qpos"]
     qpos_sim = flatten_mjwp(phys, "qpos")
+    qpos_ref = align_ref_qpos(kin["qpos"], qpos_sim.shape[0])
     support_pos = (
         flatten_mjwp(phys, "support_proxy_pos")
         if "support_proxy_pos" in phys
@@ -274,7 +292,7 @@ def write_visual_index(
     lines = [
         "# E016 Visual Evaluation",
         "",
-        "Videos use the run_mjwp-style front-camera layout: reference qpos (left) and MJWarp output (right).",
+        "Videos use the run_mjwp-style front-camera layout at E014-matched 1440x480 / 50fps: reference qpos (left) and MJWarp output (right).",
         "",
         "| Variant | Video | Sheet | Epos m | Erot deg | contact 5cm % | deep pen % | leg % | diagnosis |",
         "|---------|-------|-------|--------|----------|--------------|------------|-------|-----------|",
@@ -308,9 +326,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("variants", nargs="*", help="Variant names. Default: all.")
     parser.add_argument("--force", action="store_true")
-    parser.add_argument("--width", type=int, default=320)
-    parser.add_argument("--height", type=int, default=240)
-    parser.add_argument("--fps", type=int, default=10)
+    parser.add_argument("--width", type=int, default=720)
+    parser.add_argument("--height", type=int, default=480)
+    parser.add_argument("--fps", type=int, default=50)
     args = parser.parse_args()
 
     manifest = read_manifest()
