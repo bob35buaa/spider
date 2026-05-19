@@ -22,6 +22,17 @@ FOOT_REF_STICK_VEL_MPS = 0.05
 FOOT_SKATE_VEL_MPS = 0.05
 DEEP_PENETRATION_THRESHOLD_M = 0.02
 
+# OmniRetarget Table II penetration thresholds (aligned with
+# holosoma/workspace/v1/scripts/eval_paper_metrics.py:37-40)
+PEN_COLLISION_DETECTION_THRESHOLD = 0.1  # margin for broadphase prefilter (m)
+PEN_TOLERANCE = 0.01  # 1cm tolerance per paper
+
+# Pelvis / EEF body names in unitree_g1 MJCF (consistent with
+# workspace/core4d/scripts/eval/eval_E072.py and eval_comprehensive.py)
+PELVIS_BODY_NAME = "pelvis"
+LEFT_EEF_BODY_NAME = "left_rubber_hand"
+RIGHT_EEF_BODY_NAME = "right_rubber_hand"
+
 
 def _as_float_array(rows: list[dict[str, Any]], key: str) -> np.ndarray:
     return np.asarray([float(row[key]) for row in rows], dtype=np.float64)
@@ -286,6 +297,285 @@ def _add_keypoint_proxy_metrics(
     )
 
 
+def _add_body_tracking_metrics(
+    out: dict[str, Any],
+    summary: dict[str, Any],
+    model: mujoco.MjModel,
+    qpos: np.ndarray,
+    qpos_ref: np.ndarray,
+) -> None:
+    """SPIDER Table 4 strict alignment via per-frame FK.
+
+    Adds (case-window mean, full mean optional):
+      paper_spider_joint_err_deg
+      paper_spider_pos_err_cm        (MPKPE over robot bodies, body indices [1 .. nbody-2])
+      paper_spider_ori_err_deg       (orientation Err over same body set)
+      paper_spider_root_pos_err_cm   (pelvis)
+      paper_spider_root_ori_err_deg  (pelvis)
+      paper_spider_eef_pos_err_cm    (mean of L/R rubber hand)
+      paper_spider_eef_ori_err_deg   (mean of L/R rubber hand)
+
+    Object Pos/Ori already covered by _add_object_tracking_metrics — re-exposed
+    here under spider_* names for table alignment.
+    """
+    T = min(len(qpos), len(qpos_ref))
+    start, end = _window_bounds(summary, T)
+
+    data_s = mujoco.MjData(model)
+    data_r = mujoco.MjData(model)
+
+    pelvis_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, PELVIS_BODY_NAME)
+    left_eef_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, LEFT_EEF_BODY_NAME)
+    right_eef_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, RIGHT_EEF_BODY_NAME)
+    if pelvis_id < 0 or left_eef_id < 0 or right_eef_id < 0:
+        out["paper_spider_body_tracking_present"] = False
+        return
+
+    # Robot body set: skip world (0) and object body (last). Object body is the
+    # only body containing the freejoint at the end of qpos (qpos[-7:]).
+    # Use range [1 .. nbody-2] = exclude world + object.
+    robot_body_ids = [b for b in range(1, model.nbody - 1)]
+    if not robot_body_ids:
+        out["paper_spider_body_tracking_present"] = False
+        return
+
+    nq = model.nq
+    q_sim = qpos[:T, :nq] if qpos.shape[1] >= nq else qpos[:T]
+    q_ref = qpos_ref[:T, :nq] if qpos_ref.shape[1] >= nq else qpos_ref[:T]
+
+    mpkpe = np.zeros(T, dtype=np.float64)
+    body_ori = np.zeros(T, dtype=np.float64)
+    root_pos = np.zeros(T, dtype=np.float64)
+    root_ori = np.zeros(T, dtype=np.float64)
+    eef_pos = np.zeros(T, dtype=np.float64)
+    eef_ori = np.zeros(T, dtype=np.float64)
+    joint_err = np.zeros(T, dtype=np.float64)
+
+    for t in range(T):
+        data_s.qpos[:] = q_sim[t]
+        data_r.qpos[:] = q_ref[t]
+        mujoco.mj_kinematics(model, data_s)
+        mujoco.mj_kinematics(model, data_r)
+
+        # Body Pos / Ori Err over robot bodies
+        diffs = data_s.xpos[robot_body_ids] - data_r.xpos[robot_body_ids]
+        mpkpe[t] = float(np.linalg.norm(diffs, axis=1).mean())
+        # Orientation: 2*arccos(|q_sim · q_ref|) per body
+        qs = data_s.xquat[robot_body_ids]
+        qr = data_r.xquat[robot_body_ids]
+        dot = np.abs(np.sum(_quat_normalize(qs) * _quat_normalize(qr), axis=1))
+        dot = np.clip(dot, -1.0, 1.0)
+        body_ori[t] = float((2.0 * np.arccos(dot)).mean())
+
+        # Root (pelvis) Pos / Ori
+        root_pos[t] = float(np.linalg.norm(data_s.xpos[pelvis_id] - data_r.xpos[pelvis_id]))
+        qs_p = _quat_normalize(data_s.xquat[pelvis_id])
+        qr_p = _quat_normalize(data_r.xquat[pelvis_id])
+        root_ori[t] = float(2.0 * np.arccos(np.clip(abs(float(qs_p @ qr_p)), -1.0, 1.0)))
+
+        # EEF (L/R rubber hand) Pos / Ori, mean of both
+        eef_pos_pair = [
+            float(np.linalg.norm(data_s.xpos[i] - data_r.xpos[i]))
+            for i in (left_eef_id, right_eef_id)
+        ]
+        eef_pos[t] = float(np.mean(eef_pos_pair))
+        eef_ori_pair = []
+        for i in (left_eef_id, right_eef_id):
+            qs_e = _quat_normalize(data_s.xquat[i])
+            qr_e = _quat_normalize(data_r.xquat[i])
+            eef_ori_pair.append(
+                float(2.0 * np.arccos(np.clip(abs(float(qs_e @ qr_e)), -1.0, 1.0)))
+            )
+        eef_ori[t] = float(np.mean(eef_ori_pair))
+
+        # Joint Err: robot joints only qpos[7:36] (29 dof)
+        js = q_sim[t, 7:36]
+        jr = q_ref[t, 7:36] if q_ref.shape[1] >= 36 else q_ref[t, 7:]
+        n = min(len(js), len(jr))
+        joint_err[t] = float(np.mean(np.abs(js[:n] - jr[:n])))
+
+    out["paper_spider_body_tracking_present"] = True
+    # Case-window means (primary reporting)
+    out["paper_spider_joint_err_deg"] = float(np.degrees(joint_err[start:end].mean()))
+    out["paper_spider_pos_err_cm"] = float(mpkpe[start:end].mean() * 100.0)
+    out["paper_spider_ori_err_deg"] = float(np.degrees(body_ori[start:end].mean()))
+    out["paper_spider_root_pos_err_cm"] = float(root_pos[start:end].mean() * 100.0)
+    out["paper_spider_root_ori_err_deg"] = float(np.degrees(root_ori[start:end].mean()))
+    out["paper_spider_eef_pos_err_cm"] = float(eef_pos[start:end].mean() * 100.0)
+    out["paper_spider_eef_ori_err_deg"] = float(np.degrees(eef_ori[start:end].mean()))
+    # Re-expose object Pos/Ori under spider naming for table alignment
+    out["paper_spider_obj_pos_err_cm"] = float(out.get("paper_object_Epos_case_m", 0.0) * 100.0)
+    out["paper_spider_obj_ori_err_deg"] = float(out.get("paper_object_Erot_case_deg", 0.0))
+    # Std (case-window) for severity reporting
+    out["paper_spider_joint_err_std_deg"] = float(np.degrees(joint_err[start:end].std()))
+    out["paper_spider_pos_err_std_cm"] = float(mpkpe[start:end].std() * 100.0)
+
+
+def _add_penetration_metrics_mj(
+    out: dict[str, Any],
+    summary: dict[str, Any],
+    model: mujoco.MjModel,
+    qpos: np.ndarray,
+) -> None:
+    """OmniRetarget Table II penetration via mj_geomDistance + prefilter.
+
+    Ported from holosoma/workspace/v1/scripts/eval_paper_metrics.py:92-147
+    with object-name detection from MJCF (looks up the freejoint body, then
+    enumerates its geoms).
+    """
+    T = min(len(qpos), int(summary.get("T", len(qpos))))
+    start, end = _window_bounds(summary, T)
+    nq = model.nq
+    if qpos.shape[1] < nq:
+        out["paper_omniretarget_mj_penetration_present"] = False
+        return
+
+    # Identify object body = body that owns the trailing 7-qpos freejoint.
+    # SPIDER convention places object body last; verify by checking last freejoint.
+    obj_body_id = -1
+    for b in range(model.nbody - 1, 0, -1):
+        # find a freejoint whose qposadr is at nq-7
+        for j in range(model.body_jntnum[b]):
+            jid = model.body_jntadr[b] + j
+            if model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_FREE and model.jnt_qposadr[jid] == nq - 7:
+                obj_body_id = b
+                break
+        if obj_body_id >= 0:
+            break
+    if obj_body_id < 0:
+        out["paper_omniretarget_mj_penetration_present"] = False
+        return
+
+    # Object geoms = all geoms belonging to that body
+    obj_geom_ids = set()
+    for g in range(model.ngeom):
+        if model.geom_bodyid[g] == obj_body_id:
+            obj_geom_ids.add(int(g))
+
+    geom_names = [
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g) or "" for g in range(model.ngeom)
+    ]
+
+    def is_obj(g: int) -> bool:
+        return g in obj_geom_ids
+
+    def is_ground(g: int) -> bool:
+        n = geom_names[g].lower()
+        return "ground" in n or "floor" in n or n == "world"
+
+    data = mujoco.MjData(model)
+    fromto = np.zeros(6, dtype=float)
+    pen_frames = 0
+    max_depth_cm_list: list[float] = []
+
+    # Save margins once
+    saved_margins = model.geom_margin.copy()
+    try:
+        for t in range(T):
+            data.qpos[:nq] = qpos[t, :nq]
+            mujoco.mj_forward(model, data)
+
+            # Broadphase prefilter via expanded margins
+            model.geom_margin[:] = PEN_COLLISION_DETECTION_THRESHOLD
+            mujoco.mj_collision(model, data)
+            candidates: set[tuple[int, int]] = set()
+            for k in range(data.ncon):
+                c = data.contact[k]
+                g1, g2 = int(c.geom1), int(c.geom2)
+                if g1 < 0 or g2 < 0:
+                    continue
+                candidates.add((min(g1, g2), max(g1, g2)))
+            model.geom_margin[:] = saved_margins
+
+            # mj_geomDistance per candidate pair
+            depths = []
+            for g1, g2 in candidates:
+                if model.geom_contype[g1] == 0 and model.geom_conaffinity[g1] == 0:
+                    continue
+                if model.geom_contype[g2] == 0 and model.geom_conaffinity[g2] == 0:
+                    continue
+                # Exclude object-ground pair (object resting on floor is fine)
+                if (is_obj(g1) and is_ground(g2)) or (is_obj(g2) and is_ground(g1)):
+                    continue
+                # Keep only pairs involving object or ground (robot↔object, robot↔ground)
+                if not (is_obj(g1) or is_obj(g2) or is_ground(g1) or is_ground(g2)):
+                    continue
+                fromto[:] = 0.0
+                dist = mujoco.mj_geomDistance(
+                    model, data, g1, g2, PEN_COLLISION_DETECTION_THRESHOLD, fromto
+                )
+                if dist < -PEN_TOLERANCE:
+                    depths.append(-float(dist))
+            if depths:
+                pen_frames += 1
+                max_depth_cm_list.append(float(max(depths)) * 100.0)
+    finally:
+        model.geom_margin[:] = saved_margins
+
+    out["paper_omniretarget_mj_penetration_present"] = True
+    out["paper_omniretarget_mj_penetration_duration_pct"] = float(pen_frames / max(T, 1) * 100.0)
+    out["paper_omniretarget_mj_penetration_max_depth_cm"] = (
+        float(max(max_depth_cm_list)) if max_depth_cm_list else 0.0
+    )
+    out["paper_omniretarget_mj_penetration_mean_depth_cm"] = (
+        float(np.mean(max_depth_cm_list)) if max_depth_cm_list else 0.0
+    )
+    # Case-window restricted version (start..end frames)
+    cw_max = [
+        d for i, d in zip(range(T), [0.0] * T)  # placeholder count
+    ]
+    # Re-compute case-window summary from indices we kept (cheap: re-iterate stored)
+    # We didn't store per-frame depths, so recompute case-window duration directly.
+    # For simplicity, run an indices loop:
+    # (We can't recover case-window stats without re-storing; recompute via single pass below.)
+    # To keep memory low, just record full-trajectory stats; case-window stats follow below.
+
+    # Recompute case-window stats with a short second pass on stored max_depth_list.
+    # Since we tracked only penetrating-frame depths (not their frame index), we need
+    # frame indices too. Add a quick re-run constrained to [start, end).
+    cw_pen = 0
+    cw_depths: list[float] = []
+    model.geom_margin[:] = saved_margins
+    for t in range(start, end):
+        data.qpos[:nq] = qpos[t, :nq]
+        mujoco.mj_forward(model, data)
+        model.geom_margin[:] = PEN_COLLISION_DETECTION_THRESHOLD
+        mujoco.mj_collision(model, data)
+        candidates: set[tuple[int, int]] = set()
+        for k in range(data.ncon):
+            c = data.contact[k]
+            g1, g2 = int(c.geom1), int(c.geom2)
+            if g1 < 0 or g2 < 0:
+                continue
+            candidates.add((min(g1, g2), max(g1, g2)))
+        model.geom_margin[:] = saved_margins
+        depths = []
+        for g1, g2 in candidates:
+            if model.geom_contype[g1] == 0 and model.geom_conaffinity[g1] == 0:
+                continue
+            if model.geom_contype[g2] == 0 and model.geom_conaffinity[g2] == 0:
+                continue
+            if (is_obj(g1) and is_ground(g2)) or (is_obj(g2) and is_ground(g1)):
+                continue
+            if not (is_obj(g1) or is_obj(g2) or is_ground(g1) or is_ground(g2)):
+                continue
+            fromto[:] = 0.0
+            dist = mujoco.mj_geomDistance(
+                model, data, g1, g2, PEN_COLLISION_DETECTION_THRESHOLD, fromto
+            )
+            if dist < -PEN_TOLERANCE:
+                depths.append(-float(dist))
+        if depths:
+            cw_pen += 1
+            cw_depths.append(float(max(depths)) * 100.0)
+    out["paper_omniretarget_mj_penetration_case_duration_pct"] = float(
+        cw_pen / max(end - start, 1) * 100.0
+    )
+    out["paper_omniretarget_mj_penetration_case_max_depth_cm"] = (
+        float(max(cw_depths)) if cw_depths else 0.0
+    )
+
+
 def _add_contact_and_penetration_metrics(
     out: dict[str, Any],
     summary: dict[str, Any],
@@ -423,4 +713,17 @@ def add_paper_metrics(
         person_idx,
         T,
     )
+    # E019 P0 additions: SPIDER Table 4 strict alignment + OmniRetarget Table II
+    # penetration via mj_geomDistance. Both are independent FK passes; wrapped in
+    # try/except so a failure on one variant does not break aggregate.
+    try:
+        _add_body_tracking_metrics(out, summary, model, qpos, qpos_ref)
+    except Exception as exc:  # pragma: no cover - defensive
+        out["paper_spider_body_tracking_present"] = False
+        out["paper_spider_body_tracking_error"] = str(exc)
+    try:
+        _add_penetration_metrics_mj(out, summary, model, qpos)
+    except Exception as exc:  # pragma: no cover - defensive
+        out["paper_omniretarget_mj_penetration_present"] = False
+        out["paper_omniretarget_mj_penetration_error"] = str(exc)
     return out
