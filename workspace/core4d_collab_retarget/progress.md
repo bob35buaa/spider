@@ -1096,3 +1096,72 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已启动本地 full baseline：`RUN_TIMEOUT_SECONDS=1800 RUN_STALL_TIMEOUT_SECONDS=300 SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E022.sh local 0`。
   - 运行中观测：GPU0 正常使用；baseline 进入 272 sim steps full rollout。
 - 下一步：提交/同步 E022 setup，使用远程 2 GPU 跑 `remote_gpu0/remote_gpu1` 队列，同时等待本地 baseline 完成；full 结果齐后统一 eval 并写 E022 log。
+
+### 2026-05-20 E022 full 运行与 E023-E025 计划展开
+
+- E022 setup 已提交并推送：`42d2bd6 exp(core4d_collab_retarget): E022 contact mask setup`。
+- 本地 full baseline 已完成：`E022_box023_p1_baseline_replay.npz` 与 online MP4 已写入 `results/E022/`。eval sanity：
+  - object Epos `0.0436m`，Erot `1.98deg`，transport pass。
+  - no fall，deep penetration `0.0%`。
+  - contact preservation `24.50%`，mask overclaim/mismatch `54.41%`，符合 unpatched baseline control。
+- 远程 2 GPU 已启动并完成第一波：
+  - `E022_box023_p1_raw3_eval_axis` full NPZ/MP4 已回收。
+  - `E022_box023_p1_raw3_spider_axis` full NPZ/MP4 已回收。
+  - `E022_box023_p1_raw3_dilate3_hc1` 正在远程 GPU0 运行；本地已删除该 variant 的旧 4-step smoke NPZ/summary，避免最终 eval 混入 smoke artifact。
+- 当前 3 个 full eval（不含仍在跑的 dilate）显示：
+  - patched mask variants 的 mask semantics pass：overclaim `0.22%` / `0.0%`，mismatch `0.44%` / `0.0%`。
+  - contact 仍低：best `E022_box023_p1_raw3_eval_axis` 为 `25.30%`，未达到 `>=70%`。
+  - object/artifact gates 目前不回退。
+- 已使用 3 个只读 subagents 展开下一组 cause plans：
+  - E023 `retarget_kinematic`: `box025_p1` / `bucket007_p2`，建议 lower-body/object geometry repair 而非 reward sweep。
+  - E024 `algo_stability`: `bucket001_p1/p2`，建议保持 support proxy 不变，扫 stability/root/contact gain。
+  - E025 `algo_contact`: `box023_p2`、`bucket005_s2_p1/p2`、`bucket007_p1`，建议新增训练期 robot/object penetration penalty。
+- 已写入计划文件：
+  - `workspace/core4d_collab_retarget/plan/26_E023_retarget_kinematic_geometry_repair_plan.md`
+  - `workspace/core4d_collab_retarget/plan/27_E024_bucket001_stability_repair_plan.md`
+  - `workspace/core4d_collab_retarget/plan/28_E025_robot_side_contact_collision_repair_plan.md`
+- 已更新 `EXPERIMENT_TRACKER.md`：新增 E023/E024/E025 plan rows、post-E020 plan queue 指标演进、Plans 路径。
+
+### E023 setup + smoke
+
+- 已按 E023 plan 落地 setup 脚本：
+  - `scripts/E023/variants.tsv`
+  - `scripts/E023/generate_e023_assets.py`
+  - `scripts/E023/generate_e023_overrides.py`
+  - `scripts/run_E023_preprocess.sh`
+  - `scripts/train/train_E023.sh`
+  - `scripts/train/train_E023_remote_tmux.sh`
+  - `scripts/run_E023_remote.sh`
+  - `scripts/pull_E023_remote_results.sh`
+  - `scripts/eval/eval_E023.py`
+- E023 asset strategy：从 E018b derived task copy 到 E023 task copy；`legpair_off` 删除 16 个 lower-body/object contact pairs，`lowerbody_proxy_min` shrink 16 个 lower-body collision geoms；不修改 E018b task。
+- 静态检查通过：
+  - `.venv/bin/python -m py_compile` on E023 Python scripts。
+  - `bash -n` on E023 shell scripts。
+  - `git diff --check`。
+- `bash workspace/core4d_collab_retarget/scripts/run_E023_preprocess.sh --force` 成功：
+  - 写入 `results/E023/manifest.tsv` 6 variants。
+  - 生成 6 个 `examples/config/override/core4d_collab_E023_*.yaml`。
+  - `box025_p1/bucket007_p2` baseline、legpair_off、lowerbody_proxy_min 三类 task copy 均可加载，`nq/nv/nu=43/41/29`。
+- `bash workspace/core4d_collab_retarget/scripts/train/train_E023.sh smoke 0` 成功：
+  - 6/6 variants 生成 4-step smoke NPZ。
+  - `results/E023/scene_snapshot/manifest.txt` 已生成。
+  - `eval_E023.py` wiring 正常，aggregate `num_results=6`。
+  - caveat：4-step smoke 的 `full_ref_leg_box_interference_frames_pct` 只覆盖起始几帧，不能用于 E023 结论；full rollout 后才判断 ref geometry repair。
+
+### E022 full 完成与结论
+
+- 远程 E022 最后一个 variant `E022_box023_p1_raw3_dilate3_hc1` 已完成，GPU0/GPU1 controller 均正常结束。
+- 已回收 remote results：`bash workspace/core4d_collab_retarget/scripts/pull_E022_remote_results.sh`。
+- 已确认 4/4 full NPZ 与 4/4 MP4 到位，MP4 均 `272` frames / `5.44s`。
+- 已重新运行 clean eval：`.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E022.py --all`。
+  - aggregate：`num_results=4`、`num_mask_semantics_pass=3`、`num_contact_goal_pass=0`、`num_object_no_regression_pass=4`、`num_artifact_no_regression_pass=4`、`num_E022_success=0`。
+  - best contact：`E022_box023_p1_raw3_eval_axis = 25.30%`。
+  - baseline replay: contact `24.50%`, overclaim/mismatch `54.41%`。
+  - raw3_eval_axis: contact `25.30%`, overclaim `0.22%`, mismatch `0.44%`。
+  - raw3_spider_axis: contact `22.18%`, overclaim/mismatch `0.0%`。
+  - raw3_dilate3_hc1: contact `23.68%`, overclaim/mismatch `0.22%`。
+- 已运行 unified eval postprocess：`eval_unified/` 写出 CSV bundle 和 per-case JSON。
+- 已用 `video-frames` skill 抽取 f115 frames 到 `results/E022/video_frames_skill/`。
+- 已写入 E022 结果日志：`workspace/core4d_collab_retarget/log/21_E022_contact_mask_semantics_repair_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：E022 标记完成，记录“mask 修复真实但不足以闭合 contact；box023_p1 转入 E025”。

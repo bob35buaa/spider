@@ -1,0 +1,7 @@
+# variant	source_variant	case_slug	patch_mode	queue	role	wave	lowerbody_radius	foot_radius	notes
+E023_box025_p1_baseline_replay	E018b_box025_p1_canonical_t02	box025_p1	none	remote_gpu0	general	A	0.0	0.0	E018b replay under E023 plumbing
+E023_bucket007_p2_baseline_replay	E018b_bucket007_p2_canonical_t02	bucket007_p2	none	remote_gpu1	general	A	0.0	0.0	E018b replay under E023 plumbing
+E023_box025_p1_legpair_off	E018b_box025_p1_canonical_t02	box025_p1	legpair_off	remote_gpu0	diagnostic	A	0.0	0.0	remove lower-body object contact pairs; diagnostic only
+E023_bucket007_p2_legpair_off	E018b_bucket007_p2_canonical_t02	bucket007_p2	legpair_off	remote_gpu1	diagnostic	A	0.0	0.0	remove lower-body object contact pairs; diagnostic only
+E023_box025_p1_lowerbody_proxy_min	E018b_box025_p1_canonical_t02	box025_p1	lowerbody_proxy_min	local	general	A	0.005	0.001	shrink lower-body collision proxies; strict candidate
+E023_bucket007_p2_lowerbody_proxy_min	E018b_bucket007_p2_canonical_t02	bucket007_p2	lowerbody_proxy_min	remote_gpu0	general	A	0.005	0.001	shrink lower-body collision proxies; strict candidate

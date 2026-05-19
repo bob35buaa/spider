@@ -30,7 +30,10 @@
 | E019 | 2026-05-20 | Unified Eval Framework | **统一评测框架 P0+P1**: 扩 `paper_metrics.py` 加 SPIDER T4 严格 FK（Joint/MPKPE/Body Ori/Root/EEF）+ OmniRetarget mj_geomDistance penetration + 28cm obj-local contact preservation；新增 `adapters/` + `eval_holosoma_kinematic.py` + `unified_eval.py` CLI + 论文级 `docs/eval_metrics.md` (306行)。重评 E018b 13 case：Joint 5.85±3.44deg、MPKPE 23.1±22.8cm、Obj Pos 5.45±1.63cm。Tab.5 跨方法对比 (N=2, box025_p1/p2)：spider physical smoothness `37418` < kin `41846` rad/s²（物理 CEM 比 SOCP kin 更平滑）。28cm contact preservation 在 CORE4D 大物体上退化为 trivial 100%（已 docs caveat）。**P2 未做**：FPS per-case 全面改造（spider 真实 30Hz 但 paper_metrics 用 FPS=50 常量，smoothness 高估 2.78倍）— 详见 log 20a §8 | ✅ 详见 log 20a，⚠️ FPS P2 待办 |
 | E020 | 2026-05-20 | Failure Attribution Audit | **E018b 13-case 失败归因审计**: 按 E076 分层证据扩展为 S1-S6 protocol，生成 13/13 root-cause CSV、13/13 attribution panel、13/13 keyframe triplet 与 scene snapshot。归因分布：`algo_stability=4`、`algo_contact=4`、`retarget_kinematic=2`、`contact_mask=1`、`raw_data=1`、`pass=1`；下一步明确为 E021 mask/ref 修复、E022 stability/leg collision、E023 contact closure、E024 multi-agent/data filter | ✅ 详见 log 20 |
 | E021 | 2026-05-20 | RL Export | **Holosoma RL export 计划**: 已有 `plan/22_E021_holosoma_rl_export_plan.md`，与 post-E020 优化无关；优化实验编号从 E022 开始 | 📝 仅计划 |
-| E022 | 2026-05-20 | Contact Mask Repair | **post-E020 首个优化计划**: 用户指定忽略 `desk021_p1` 与 `box021_*` 后，按 cause 分线。E022 只处理 `contact_mask` case `box023_p1`，复用 E018b derived task/canonical anchor，比较 raw 3cm per-EEF mask、axis 与 dilation/hold-contact variant，目标 contact `22.5% -> >=70%` 且 mask overclaim `<20%` | 📝 计划见 `plan/25_E022_contact_mask_semantics_repair_plan.md` |
+| E022 | 2026-05-20 | Contact Mask Repair | **box023_p1 mask semantics 负结果**: 4/4 full 完成。patched variants 将 mask overclaim/mismatch 从 `54.41%` 降到 `0-0.44%`，object/no-fall/deep-pen gates 不回退；但 best contact 仅 `25.30%`，未达 `>=70%`。结论：mask bug 真实但不足以闭合 contact，`box023_p1` 转入 E025 robot-side contact closure | ✅ 详见 log 21 |
+| E023 | 2026-05-20 | Retarget Geometry Repair | **retarget_kinematic case setup+smoke**: 只处理 `box025_p1` 与 `bucket007_p2`，不做 reward sweep；已实现 6 个 task-copy variants（baseline、legpair_off、lowerbody_proxy_min）和 train/eval/remote 脚本，4-step smoke 6/6 通过；full 目标为 ref leg/object interference `~66% -> <15%` 且 canonical support proxy 不漂移 | 🔧 setup+smoke，计划见 `plan/26_E023_retarget_kinematic_geometry_repair_plan.md` |
+| E024 | 2026-05-20 | Stability Repair | **bucket001 stability 计划**: 用户指定忽略 `box021_*` 后，stability scope 只剩 `bucket001_p1/p2`；保持 object-side support proxy 不变，扫 `stability_penalty`、root-local tracking、较低 contact gain，目标 no-fall、pelvis min `>=0.45m` 且 object transport 不回退 | 📝 计划见 `plan/27_E024_bucket001_stability_repair_plan.md` |
+| E025 | 2026-05-20 | Contact + Collision Repair | **algo_contact case 计划**: 处理 `box023_p2`、`bucket005_s2_p1/p2`、`bucket007_p1`；先 contact closure，bucket 类需新增训练期 robot/object penetration penalty，因为现有 deep penetration 只有 eval 指标 | 📝 计划见 `plan/28_E025_robot_side_contact_collision_repair_plan.md` |
 
 ## Baseline
 
@@ -67,6 +70,8 @@
 | E019 P0 + P1 | **SPIDER T4 严格 FK 首发** (E018b 13 case): Joint 5.85±3.44deg、MPKPE 23.13±22.77cm、Body Ori 23.49±22.46deg、Root Pos 22.90±24.70cm、EEF Pos 20.29±25.29cm、Obj Pos 5.45±1.63cm、Obj Ori 5.22±3.07deg。**OmniRetarget mj_pen**: 13/13 case duration ≈0%、max depth ≈0cm（mj_geomDistance + prefilter 严格实现，与 csv-based deep_pen 30% 的差异已 docs 说明）。**Tab.5 N=2 (box025_p1/p2)**: spider sim vs kin ref obj 6.40/3.53 cm/deg；spider smoothness `37418` vs kin `41846` rad/s² (-10.6%)，relative smoothness `0.642` vs `1.00`（物理 CEM 平滑性优于 SOCP kin）；mj_pen 双方 0/0；28cm contact preservation 双方 trivial 100%（CORE4D 大物体退化） | E019 P0/P1 完成；Claims 7/8 通过（FPS per-case P2 未做，spider smoothness 数字按论文公式约高估 2.78倍）。下一步：报告 v1 落实 + E020 归因 + E019 P2 FPS 改造 |
 | E020 audit | 13 个 case 均完成 S1-S6：root causes=`algo_stability:4, algo_contact:4, retarget_kinematic:2, contact_mask:1, raw_data:1, pass:1`；13/13 attribution panels；S3 显示当前 processed `contact` 字段相对 raw 3cm mask 是系统性 all-on overclaim；S2 标出 `box025_p1/bucket007_p2` ref leg/object interference 高 | E018b 后续应拆线推进：E021 修 mask/ref geometry，E022 修 fall/stability，E023 修 contact/collision artifact，E024 判断 partner-heavy case 是否需 multi-agent 或数据过滤 |
 | post-E020 scope | 用户指定 `desk021_p1` 与 `box021_p1/p2` 暂不优化，`box025_p2` 已 pass；剩余 9 case 分为 `contact_mask=1`、`retarget_kinematic=2`、`algo_stability=2`、`algo_contact=4`。E021 已占用 RL export，所以优化编号从 E022 开始 | 总览计划写入 `plan/24_post_E020_optimization_overview_plan.md`；首个 E022 计划写入 `plan/25_E022_contact_mask_semantics_repair_plan.md` |
+| post-E020 plan queue | E023/E024/E025 计划已按 subagent 只读审计细化：E023 lower-body geometry repair，E024 bucket001 stability sweep，E025 contact closure + explicit penetration penalty | E022 full 正在收尾；E023-E025 先有 claims、variants、脚本/eval/远程路径和成功标准，后续按 Plan -> Implement -> Train -> Evaluate -> Log 执行 |
+| E022 full | 4/4 full variants 完成；mask semantics pass `3/4`（baseline control intentionally fails），object no-regression `4/4`，artifact no-regression `4/4`，contact goal `0/4`；best contact `25.30%` | 修 mask 不能单独解决 `box023_p1` contact preservation；不重复 mask sweep，后续并入 E025 contact-control 分线 |
 
 ## Plans
 
@@ -94,6 +99,9 @@
 - E021: `workspace/core4d_collab_retarget/plan/22_E021_holosoma_rl_export_plan.md`（非本轮优化）
 - Post-E020 optimization overview: `workspace/core4d_collab_retarget/plan/24_post_E020_optimization_overview_plan.md`
 - E022: `workspace/core4d_collab_retarget/plan/25_E022_contact_mask_semantics_repair_plan.md`
+- E023: `workspace/core4d_collab_retarget/plan/26_E023_retarget_kinematic_geometry_repair_plan.md`
+- E024: `workspace/core4d_collab_retarget/plan/27_E024_bucket001_stability_repair_plan.md`
+- E025: `workspace/core4d_collab_retarget/plan/28_E025_robot_side_contact_collision_repair_plan.md`
 - 后续 (后台计划): 技术报告 `plan/23_*.md`、总索引 `plan/AFTER_E018_INDEX.md`
 
 ## Logs
@@ -119,6 +127,7 @@
 - E018b: `workspace/core4d_collab_retarget/log/19_E018b_canonical_support_proxy_13case_results.md`
 - E019: `workspace/core4d_collab_retarget/log/20a_E019_unified_eval_framework_results.md`
 - E020: `workspace/core4d_collab_retarget/log/20_E020_failure_attribution_audit_results.md`
+- E022: `workspace/core4d_collab_retarget/log/21_E022_contact_mask_semantics_repair_results.md`
 
 ## Git
 
