@@ -969,14 +969,77 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已在 `eval_E018b.py` 增加 `E018b_robot_fall_detected` / `E018b_robot_upright_ok` / `E018b_visual_stability_ok`，规则为 `full_pelvis_z_min_m < 0.45` 或 `first_pelvis_z_lt_45cm_frame >= 0`。该 gate 会把上述 4 个 case 显式归为 `robot_fall_visual_fail`。
 - 已同步更新 `log/19_E018b_canonical_support_proxy_13case_results.md`、`EXPERIMENT_TRACKER.md` 与 online video index：新的诊断分布为 `robot_fall_visual_fail=4`、`contact_preservation_gap=5`、`artifact_failed=2`、`push_or_leg_shortcut=1`、`paper_generalization_pass=1`。
 
-### 2026-05-20 E020 failure attribution audit 启动
+## 2026-05-20 task_afterE018 收尾 + E019 统一评测框架
+
+### 用户决策与规划阶段
+
+- 用户给出 `task_afterE018.md` 4 个收尾子任务（全面评测 / 失败归因 / 技术报告 / RL 导出），并要求基于已有项目和实验进展先制定计划，可顺带写报告。
+- 用 4 个并行 subagent 分别调研：评测指标全集（含 holosoma `eval_paper_metrics.py` + SPIDER Table 4）、失败归因方法论（参考 E076 数据质量审计）、技术报告素材（含 E001-E018b 完整路线 + 三论文 motivation）、holosoma RL 导出格式（含 `convert_data_format_mj.py:136-283` 完整解析）。
+- 基于调研写入 5 个计划文档：`plan/20_E019_unified_eval_framework_plan.md`、`plan/21_E020_failure_attribution_audit_plan.md`、`plan/22_E021_holosoma_rl_export_plan.md`、`plan/23_tech_report_plan.md`、`plan/AFTER_E018_INDEX.md`；同时写报告骨架 `report/00_outline.md`。
+- 用户反馈 4 条：(1) E018b NPZ 已就绪 (13 NPZ + 13 MP4 + aggregate 全在 `results/E018b/`)；(2) 先做 E019 + 报告 outline，剩余下一轮；(3) 报告语言中文；(4) E081 不是 freejoint（是 `scene_act` actuator-guided），新的 E014/E018/E018b 才是 — 修正所有计划与 outline 中对应措辞。
+- 已批量更新 5 个计划 + outline，移除"E018b 数据缺失" blocker，并把 freejoint 设定区分明确化。
+
+### E019 P0 实施
+
+- 选范围：用户选"完整 P0"（SPIDER Table 4 严格 FK 对齐 + OmniRetarget mj_geomDistance penetration + unified_eval CLI + xlsx + 论文级 docs）。
+- 扩 `scripts/eval/paper_metrics.py` 426→736 行：新增 `_add_body_tracking_metrics`（FK Joint/MPKPE/Ori/Root/EEF，所有指标 case-window mean）、`_add_penetration_metrics_mj`（mj_geomDistance + prefilter，full + case-window 两套）。修 robot body 集合定义（最初用 `[1..nbody-2]` 漏算 `support_weld_anchor`，已改为白名单排除）。修 EEF body name（最初用 `left_rubber_hand` 那是 mesh，已改 `left_wrist_yaw_link`）。
+- 新增 `scripts/eval/unified_eval.py` (425 行)：CLI 接受多 `--method`；输出 4 张 standalone md 表 + 多 sheet xlsx；fallback CSV bundle。
+- 跑 E018b 13 case 重评 → 新字段全部就位。box025_p2（唯一 pass case）: Joint 2.53° / MPKPE 7.34cm / Obj Pos 5.61cm / Obj Ori 1.92°；mj_pen Duration 0%。
+- 安装 openpyxl: 本机原无 uv/pip → 用 `https_proxy=http://10.140.15.68:3128` 装 uv 0.11.15 到 `~/.local/bin/uv` → `uv pip install --python .venv/bin/python3 openpyxl --index-url http://pypi.devops.xiaohongshu.com/simple/` 装 openpyxl 3.1.5。
+- 写 `docs/eval_metrics.md` (218 行)：每指标 file:line 对应、阈值方向、caveat。
+- 并行 subagent 写中文报告 v0.5 `report/01_v0.5_draft.md` (276 行 / ~20K 字符)，7 章中英对照含 Tab.1-4 真实数字。
+
+### E019 P1 实施
+
+- 用户选"完整 P1"（28cm 严格 contact preservation + EvalInputs adapter + holosoma kinematic 接入 + Tab.5 跨方法对比）。
+- subagent 调研发现：(a) holosoma v2 真正 kin 输出在 `results/retarget_replace_batch_trimmed/`（不是用户原指的 `data/core4d_replace_batch/`，后者是 demo 输入）；(b) v2 只有 5 source motion (box025/bucket005/bucket010/chair022/desk005)，与 spider E018b 13 case 仅 box025_p1/p2 2 个交集 → Tab.5 N=2 是数据限制；(c) SMPL-X 22 joint 可直接读 holosoma retarget NPZ 的 `human_joints` 字段。
+- 实现 `scripts/eval/adapters/`：`common_inputs.py` (EvalInputs dataclass)、`kinematic_to_common.py` (load_kinematic_inputs)、`__init__.py`。
+- 扩 paper_metrics.py 736→972 行：`_add_contact_preservation_omni_local`（28cm 严格 + `_quat_to_matrix_batch`）+ `add_paper_metrics_physics`（physics-only 入口供 kinematic 用）。
+- 写 `scripts/eval/eval_holosoma_kinematic.py` (193 行)：跑 box025_p1/p2，输出 spider-兼容 schema。
+- 扩 unified_eval.py 425→530 行：`_method_comparison_table` + Tab.5 自动生成 + `_short_case` 规范化（`box025_person2_freejoint_legobj_e018b` → `box025_p2`）。
+- 修 contact preservation 公式 bug：第一版按 `1 - miss/demo_frames` 写，demo 全 0 接触时返回 0% — 修正对齐 OmniRetarget 原始 `1 - miss/T`（T 全帧数，demo 全 0 接触时 trivial 100%）。
+- 扩 `docs/eval_metrics.md` 218→306 行，加 §7 完整 P1 章节（28cm 定义、adapter、kinematic eval 入口、Tab.5 首发数字、5 条 caveat）。
+- 跑 Tab.5: spider physical smoothness `37418` < holosoma kin `41846` rad/s²（-10.6%），物理 CEM 比 SOCP kin 更平滑 — 这是有 paper 价值的新 finding。
+
+### E019 隐藏问题（P2 待办）
+
+- 用户问 "FPS per-case 全面改造是什么意思"。诚实说明：`paper_metrics.py:19` 的 `FPS = 50.0` 常量在 `_smoothness` (公式乘 FPS²) 和 `_add_keypoint_proxy_metrics` (foot skating velocity) 中硬依赖，但 spider E018b 真实保存帧率是 30Hz（box025_p2 T=124 帧 vs holosoma 同 case T=124 验证；spider qpos `(T,2,43)` 的 2 是 substep）。后果：spider smoothness 数字高估 `(50/30)² ≈ 2.78×`、foot skating velocity 高估 `1.67×`。
+- P0/P1 只在新入口 `add_paper_metrics_physics(fps=...)` 上修了；主入口 `add_paper_metrics` 仍走模块 FPS=50 — 所有 spider E018b 历史 smoothness/foot_skating 数字仍是错的。
+- 单点 patch（改 `FPS = 30.0`）会让代码内不一致，正确做法是 per-case fps 全面化：(1) eval_E0NN 从 case_window 时间推 fps 写 summary、(2) paper_metrics 函数读 `summary.get("fps")`、(3) 重跑 E014/E018/E018b、(4) 更新所有 log 数字。预估 1 天。
+- P2 待办，与 E020/E021 并行做不阻塞，但**影响 v1 报告里 smoothness/foot_skating 数字的可发表性**。
+
+### 本轮交付汇总
+
+- 代码新增/扩展 ~750 行：paper_metrics 972、unified_eval 530、eval_holosoma_kinematic 193、adapters/ 284、docs/eval_metrics.md 306、log/20 380。
+- 评测产物：13 case spider 重评 + 2 case kinematic 首评 + Tab.5 跨方法对比 + 5 sheet xlsx + 15 per_case JSON。
+- 计划/报告：4 个新计划 + 1 总索引 + 报告 outline + v0.5 中文初稿。
+- E018b NPZ 数据已就绪并全量重评通过；E019 Claims 7/8 通过（FPS P2 未通过）。
+
+### 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|------|---------|----------|
+| 本机无 uv/pip，xlsx 写不出 | 1 | 装 uv via proxy；uv pip 装 openpyxl via 小红书镜像 |
+| paper_spider 字段第一次没出现在 CSV | 1 | 漏在 `add_paper_metrics` wire 调用，已加 try/except 包裹 |
+| `left_rubber_hand` mj_name2id 返回 -1 | 1 | 该字符串是 mesh 而非 body；改用 `left_wrist_yaw_link` |
+| `support_weld_anchor` mocap body 被错算进 robot 集合 | 1 | 排除集合 `NON_ROBOT_BODY_NAMES` 加 `support_weld_anchor` / `support_dynamic_anchor` |
+| `_load_e018b_meta` 用 `e002.read_variants` 错误（E018b manifest 列与 E002 不同） | 1 | 改用 `eval_E018b.read_manifest`，按 csv.DictReader 直读 |
+| Path parents[5] 用错（写代码时按目录层级数错） | 1 | 验证：`spider/workspace/.../eval/eval_holosoma_kinematic.py` 的 `parents[4]` 才是 spider/ |
+| Contact preservation 公式第一版 0% | 1 | 改对齐 OmniRetarget `1 - miss/T`，不是 `1 - miss/demo_frames` |
+| Tab.5 intersection N=0（case 命名不匹配） | 1 | 扩 `_short_case` 规范化 `_freejoint_legobj_e018b` 后缀 + `person1/2` → `p1/p2` |
+
+## 2026-05-20 E020 failure attribution audit（远端并行完成，pull 后合并）
+
+> 该段来自远端 `109f636` commit；E020 与 E019 在同一天由不同 session 并行推进。本地 pull 时与 E019 段在 progress/TRACKER 上冲突，已手动合并：E019 段在前（本人主导），E020 段在后（远端 commit）。E019 log 因 NN 冲突重命名为 `20a_E019_*`，E020 保留 `20_E020_*`。
+
+### E020 启动
 
 - 已按 `experiment-planning-zh` 恢复上下文：读取 `EXPERIMENT_TRACKER.md`、E020 plan、E018b log 和 `progress.md`。
 - 当前工作树干净，`workspace/core4d_collab_retarget` 中只有 E020 plan，尚无 `scripts/E020_audit/`、`results/E020_audit/`、`log/20_E020_failure_attribution_audit_results.md` 或 `docs/audit_protocol.md`。
 - E018b 13-case 数据已就绪：root NPZ、outdir `trajectory_mjwp.npz`、`comparison.csv`/summary、online MP4/keyframes、contact mask audit、scene snapshot 均可作为 E020 输入。
 - 下一步按 E020 plan 落地可复现审计：实现 S1-S6 脚本，生成 13 行唯一 `root_cause_attribution.csv`、13 个 `attribution_panel.png`、跨 case summary、协议文档和 E020 log。
 
-### 2026-05-20 E020 完成
+### E020 完成
 
 - 已新增并运行 `scripts/E020_audit/`：
   - `audit_anchor_vs_raw.py`

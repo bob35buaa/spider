@@ -16,22 +16,34 @@ import mujoco
 import numpy as np
 
 
-FPS = 50.0
+FPS = 50.0  # legacy default; new entrypoints accept per-case fps
 FOOT_STANCE_Z_M = 0.04
 FOOT_REF_STICK_VEL_MPS = 0.05
 FOOT_SKATE_VEL_MPS = 0.05
 DEEP_PENETRATION_THRESHOLD_M = 0.02
+
+# OmniRetarget Table II contact preservation thresholds
+# (eval_paper_metrics.py:40)
+CONTACT_PRESERVATION_LOCAL_RADIUS_M = 0.28  # 28cm in object local frame
+# SMPL-X wrist indices for hand contact (eval_paper_metrics.py:59-60)
+SMPLX_L_WRIST_IDX = 20
+SMPLX_R_WRIST_IDX = 21
+SMPLX_L_FOOT_IDX = 10
+SMPLX_R_FOOT_IDX = 11
 
 # OmniRetarget Table II penetration thresholds (aligned with
 # holosoma/workspace/v1/scripts/eval_paper_metrics.py:37-40)
 PEN_COLLISION_DETECTION_THRESHOLD = 0.1  # margin for broadphase prefilter (m)
 PEN_TOLERANCE = 0.01  # 1cm tolerance per paper
 
-# Pelvis / EEF body names in unitree_g1 MJCF (consistent with
-# workspace/core4d/scripts/eval/eval_E072.py and eval_comprehensive.py)
+# Pelvis / EEF body names in unitree_g1 MJCF.
+# E018b scene_e018b_jointB_*.xml uses *_wrist_yaw_link as the last wrist body
+# (rubber_hand is only a mesh, not a body).
 PELVIS_BODY_NAME = "pelvis"
-LEFT_EEF_BODY_NAME = "left_rubber_hand"
-RIGHT_EEF_BODY_NAME = "right_rubber_hand"
+LEFT_EEF_BODY_NAME = "left_wrist_yaw_link"
+RIGHT_EEF_BODY_NAME = "right_wrist_yaw_link"
+# Non-robot bodies to exclude from MPKPE/orient set.
+NON_ROBOT_BODY_NAMES = ("object", "support_weld_anchor", "support_dynamic_anchor")
 
 
 def _as_float_array(rows: list[dict[str, Any]], key: str) -> np.ndarray:
@@ -331,10 +343,14 @@ def _add_body_tracking_metrics(
         out["paper_spider_body_tracking_present"] = False
         return
 
-    # Robot body set: skip world (0) and object body (last). Object body is the
-    # only body containing the freejoint at the end of qpos (qpos[-7:]).
-    # Use range [1 .. nbody-2] = exclude world + object.
-    robot_body_ids = [b for b in range(1, model.nbody - 1)]
+    # Robot body set: all bodies except world (0), object body, and any mocap
+    # support anchor (E014/E018b add support_weld_anchor at the end).
+    non_robot = set()
+    for nm in NON_ROBOT_BODY_NAMES:
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, nm)
+        if bid >= 0:
+            non_robot.add(bid)
+    robot_body_ids = [b for b in range(1, model.nbody) if b not in non_robot]
     if not robot_body_ids:
         out["paper_spider_body_tracking_present"] = False
         return
@@ -682,6 +698,215 @@ def _add_contact_and_penetration_metrics(
     )
 
 
+def _add_contact_preservation_omni_local(
+    out: dict[str, Any],
+    summary: dict[str, Any],
+    model: mujoco.MjModel,
+    qpos: np.ndarray,
+    human_joints: np.ndarray | None,
+    fps: float,
+) -> None:
+    """OmniRetarget Table II strict contact preservation (28cm obj-local).
+
+    Ported from holosoma/workspace/v1/scripts/eval_paper_metrics.py:242-308.
+    Detects demo contact when SMPL-X wrist is within ``CONTACT_PRESERVATION_LOCAL_RADIUS_M``
+    of the demo object in object-local frame; preservation counts frames where
+    the *sim* humanoid wrist (FK from qpos) is also within radius in sim object
+    local frame.
+
+    Requires ``human_joints`` ``(T, 22, 3)``; without it, sets
+    ``paper_omniretarget_contact_preservation_local_present = False`` and falls
+    back to the mask-gated 5cm proxy already in `_add_contact_and_penetration_metrics`.
+    """
+    if human_joints is None or human_joints.ndim != 3 or human_joints.shape[1] < 22:
+        out["paper_omniretarget_contact_preservation_local_present"] = False
+        return
+    T = min(len(qpos), len(human_joints), int(summary.get("T", len(qpos))))
+    start, end = _window_bounds(summary, T)
+
+    # Identify object body (last freejoint, qposadr at nq-7)
+    obj_body_id = -1
+    for b in range(model.nbody - 1, 0, -1):
+        for j in range(model.body_jntnum[b]):
+            jid = int(model.body_jntadr[b] + j)
+            if (
+                int(model.jnt_type[jid]) == int(mujoco.mjtJoint.mjJNT_FREE)
+                and int(model.jnt_qposadr[jid]) == model.nq - 7
+            ):
+                obj_body_id = b
+                break
+        if obj_body_id >= 0:
+            break
+    if obj_body_id < 0:
+        out["paper_omniretarget_contact_preservation_local_present"] = False
+        return
+
+    # Find robot wrist body ids (G1 unitree: left/right_wrist_yaw_link)
+    l_wrist_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "left_wrist_yaw_link")
+    r_wrist_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "right_wrist_yaw_link")
+    if l_wrist_bid < 0 or r_wrist_bid < 0:
+        out["paper_omniretarget_contact_preservation_local_present"] = False
+        return
+
+    # FK loop to get sim wrist + sim object pose
+    data = mujoco.MjData(model)
+    sim_obj_pos = np.zeros((T, 3))
+    sim_obj_mat = np.zeros((T, 3, 3))
+    sim_l_wrist = np.zeros((T, 3))
+    sim_r_wrist = np.zeros((T, 3))
+    for t in range(T):
+        data.qpos[:] = qpos[t, : model.nq]
+        mujoco.mj_kinematics(model, data)
+        sim_obj_pos[t] = data.xpos[obj_body_id]
+        sim_obj_mat[t] = data.xmat[obj_body_id].reshape(3, 3)
+        sim_l_wrist[t] = data.xpos[l_wrist_bid]
+        sim_r_wrist[t] = data.xpos[r_wrist_bid]
+
+    # Demo wrist in world (Z-up SMPL-X)
+    demo_l_wrist = human_joints[:T, SMPLX_L_WRIST_IDX, :].astype(np.float64)
+    demo_r_wrist = human_joints[:T, SMPLX_R_WRIST_IDX, :].astype(np.float64)
+    # Demo object pose: use the SIM object pose from qpos (kinematic retarget
+    # produced both demo human + retarget object — we assume the qpos object is
+    # already aligned with demo at this frame; this is true for holosoma kin).
+    demo_obj_pos = qpos[:T, -7:-4].astype(np.float64)
+    demo_obj_quat = qpos[:T, -4:].astype(np.float64)  # wxyz
+    demo_obj_mat = _quat_to_matrix_batch(demo_obj_quat)
+
+    # Transform demo wrist into demo object local frame
+    demo_l_local = np.einsum("tij,tj->ti", demo_obj_mat.transpose(0, 2, 1), demo_l_wrist - demo_obj_pos)
+    demo_r_local = np.einsum("tij,tj->ti", demo_obj_mat.transpose(0, 2, 1), demo_r_wrist - demo_obj_pos)
+    sim_l_local = np.einsum("tij,tj->ti", sim_obj_mat.transpose(0, 2, 1), sim_l_wrist - sim_obj_pos)
+    sim_r_local = np.einsum("tij,tj->ti", sim_obj_mat.transpose(0, 2, 1), sim_r_wrist - sim_obj_pos)
+
+    radius = CONTACT_PRESERVATION_LOCAL_RADIUS_M
+    demo_l_contact = np.linalg.norm(demo_l_local, axis=1) < radius
+    demo_r_contact = np.linalg.norm(demo_r_local, axis=1) < radius
+    sim_l_contact = np.linalg.norm(sim_l_local, axis=1) < radius
+    sim_r_contact = np.linalg.norm(sim_r_local, axis=1) < radius
+
+    out["paper_omniretarget_contact_preservation_local_present"] = True
+    out["paper_omniretarget_contact_preservation_local_radius_m"] = float(radius)
+    # OmniRetarget definition (eval_paper_metrics.py:298-303):
+    #   miss_t = any(demo_contact & ~sim_contact)  per-frame
+    #   preservation = 1 - miss_frames / T   (T = all frames, not just demo)
+    # When demo has 0 contact frames, miss stays 0 → preservation = 1.0
+    # (trivially perfect). This is the paper's convention.
+    for tag, sl in (("full", slice(0, T)), ("case", slice(start, end))):
+        seg_T = max(end - start, 1) if tag == "case" else T
+        miss_l = demo_l_contact[sl] & (~sim_l_contact[sl])
+        miss_r = demo_r_contact[sl] & (~sim_r_contact[sl])
+        miss_frames = int((miss_l | miss_r).sum())
+        demo_frames = int((demo_l_contact[sl] | demo_r_contact[sl]).sum())
+        pct = float((1.0 - miss_frames / seg_T) * 100.0)
+        out[f"paper_omniretarget_contact_preservation_local_{tag}_pct"] = pct
+        out[f"paper_omniretarget_contact_preservation_local_{tag}_demo_frames"] = demo_frames
+        out[f"paper_omniretarget_contact_preservation_local_{tag}_miss_frames"] = miss_frames
+    out["paper_omniretarget_contact_preservation_local_ok"] = bool(
+        out.get("paper_omniretarget_contact_preservation_local_case_pct", 0.0) >= 70.0
+    )
+
+
+def _quat_to_matrix_batch(quat_wxyz: np.ndarray) -> np.ndarray:
+    """Batched wxyz -> rotation matrix (T, 3, 3)."""
+    q = quat_wxyz / np.clip(np.linalg.norm(quat_wxyz, axis=1, keepdims=True), 1e-8, None)
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    mat = np.zeros((len(q), 3, 3), dtype=np.float64)
+    mat[:, 0, 0] = 1 - 2 * (y * y + z * z)
+    mat[:, 0, 1] = 2 * (x * y - z * w)
+    mat[:, 0, 2] = 2 * (x * z + y * w)
+    mat[:, 1, 0] = 2 * (x * y + z * w)
+    mat[:, 1, 1] = 1 - 2 * (x * x + z * z)
+    mat[:, 1, 2] = 2 * (y * z - x * w)
+    mat[:, 2, 0] = 2 * (x * z - y * w)
+    mat[:, 2, 1] = 2 * (y * z + x * w)
+    mat[:, 2, 2] = 1 - 2 * (x * x + y * y)
+    return mat
+
+
+def add_paper_metrics_physics(
+    *,
+    model: mujoco.MjModel,
+    qpos: np.ndarray,
+    fps: float,
+    human_joints: np.ndarray | None = None,
+    case: str = "unknown",
+    case_window: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    """Physics-only paper metrics for sources without a sim/ref split.
+
+    Used by ``eval_holosoma_kinematic.py`` (E019 P1). Computes:
+      * OmniRetarget mj_geomDistance penetration (no FPS dep)
+      * OmniRetarget 28cm obj-local contact preservation (needs human_joints)
+      * Smoothness (uses ``fps`` for q̈)
+      * Object Pos / Ori relative to itself (degenerate but present for schema)
+
+    For physical (sim/ref) data, use ``add_paper_metrics`` instead — it covers
+    everything here plus SPIDER Table 4 alignment.
+    """
+    T = int(qpos.shape[0])
+    if case_window is None:
+        case_window = (0, T)
+    start, end = case_window
+    summary = {
+        "variant": case,
+        "case": case,
+        "T": T,
+        "case_window_start_frame": max(0, int(start)),
+        "case_window_end_frame": max(0, min(int(end) - 1, T - 1)),
+        "fps": fps,
+    }
+    out: dict[str, Any] = {
+        "paper_metrics_version": "2026-05-20-P1",
+        "paper_metrics_sources": "SPIDER,DynaRetarget,OmniRetarget,holosoma_v2",
+        "paper_metrics_mode": "physics_only",
+        "fps": fps,
+        "case_window_start_frame": summary["case_window_start_frame"],
+        "case_window_end_frame": summary["case_window_end_frame"],
+        "T": T,
+        "case": case,
+    }
+
+    # Smoothness — use per-case fps instead of module FPS
+    if T > 2:
+        robot_q = qpos[:T, 7:36].astype(np.float64)
+        qdd = (robot_q[2:] - 2.0 * robot_q[1:-1] + robot_q[:-2]) * (fps * fps)
+        out["paper_dynaretarget_smoothness"] = float(np.abs(qdd).sum())
+    else:
+        out["paper_dynaretarget_smoothness"] = 0.0
+    out["paper_dynaretarget_ref_smoothness"] = out["paper_dynaretarget_smoothness"]
+    out["paper_dynaretarget_relative_smoothness"] = 1.0
+
+    # Object self-Pos/Ori (degenerate for kin self-eval)
+    obj_pos = qpos[:T, -7:-4].astype(np.float64)
+    obj_quat = qpos[:T, -4:].astype(np.float64)
+    out["paper_object_Epos_full_m"] = 0.0
+    out["paper_object_Epos_case_m"] = 0.0
+    out["paper_object_Epos_case_max_m"] = 0.0
+    out["paper_object_Erot_case_rad"] = 0.0
+    out["paper_object_Erot_case_deg"] = 0.0
+    out["paper_object_Erot_case_max_deg"] = 0.0
+    out["paper_spider_obj_pos_err_cm"] = 0.0
+    out["paper_spider_obj_ori_err_deg"] = 0.0
+
+    # mj_geomDistance penetration (full + case-window)
+    try:
+        _add_penetration_metrics_mj(out, summary, model, qpos)
+    except Exception as exc:  # pragma: no cover
+        out["paper_omniretarget_mj_penetration_present"] = False
+        out["paper_omniretarget_mj_penetration_error"] = str(exc)
+
+    # 28cm local-frame contact preservation
+    try:
+        _add_contact_preservation_omni_local(
+            out, summary, model, qpos, human_joints, fps
+        )
+    except Exception as exc:  # pragma: no cover
+        out["paper_omniretarget_contact_preservation_local_present"] = False
+        out["paper_omniretarget_contact_preservation_local_error"] = str(exc)
+
+    return out
+
+
 def add_paper_metrics(
     summary: dict[str, Any],
     *,
@@ -726,4 +951,22 @@ def add_paper_metrics(
     except Exception as exc:  # pragma: no cover - defensive
         out["paper_omniretarget_mj_penetration_present"] = False
         out["paper_omniretarget_mj_penetration_error"] = str(exc)
+    # E019 P1: OmniRetarget 28cm obj-local contact preservation.
+    # ``human_joints`` is opt-in via ``summary["human_joints"]`` (np.ndarray)
+    # or ``summary["human_joints_npz"]`` (path). When absent the helper marks
+    # the field absent and falls back silently.
+    try:
+        human_joints = summary.get("human_joints")
+        if human_joints is None and summary.get("human_joints_npz"):
+            arr = np.load(str(summary["human_joints_npz"]), allow_pickle=True)
+            key = summary.get("human_joints_key", "human_joints")
+            if key in arr.files:
+                human_joints = np.asarray(arr[key], dtype=np.float64)
+        fps = float(summary.get("fps", FPS))
+        _add_contact_preservation_omni_local(
+            out, summary, model, qpos, human_joints, fps
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        out["paper_omniretarget_contact_preservation_local_present"] = False
+        out["paper_omniretarget_contact_preservation_local_error"] = str(exc)
     return out
