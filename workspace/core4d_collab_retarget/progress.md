@@ -968,3 +968,29 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 现有 `E018b_generalization_pass` 已是 false，但 `paper_spider_success` / `paper_dynaretarget_success` 是 object-only 口径，不能代表完整 retarget 成功。
 - 已在 `eval_E018b.py` 增加 `E018b_robot_fall_detected` / `E018b_robot_upright_ok` / `E018b_visual_stability_ok`，规则为 `full_pelvis_z_min_m < 0.45` 或 `first_pelvis_z_lt_45cm_frame >= 0`。该 gate 会把上述 4 个 case 显式归为 `robot_fall_visual_fail`。
 - 已同步更新 `log/19_E018b_canonical_support_proxy_13case_results.md`、`EXPERIMENT_TRACKER.md` 与 online video index：新的诊断分布为 `robot_fall_visual_fail=4`、`contact_preservation_gap=5`、`artifact_failed=2`、`push_or_leg_shortcut=1`、`paper_generalization_pass=1`。
+
+### 2026-05-20 E020 failure attribution audit 启动
+
+- 已按 `experiment-planning-zh` 恢复上下文：读取 `EXPERIMENT_TRACKER.md`、E020 plan、E018b log 和 `progress.md`。
+- 当前工作树干净，`workspace/core4d_collab_retarget` 中只有 E020 plan，尚无 `scripts/E020_audit/`、`results/E020_audit/`、`log/20_E020_failure_attribution_audit_results.md` 或 `docs/audit_protocol.md`。
+- E018b 13-case 数据已就绪：root NPZ、outdir `trajectory_mjwp.npz`、`comparison.csv`/summary、online MP4/keyframes、contact mask audit、scene snapshot 均可作为 E020 输入。
+- 下一步按 E020 plan 落地可复现审计：实现 S1-S6 脚本，生成 13 行唯一 `root_cause_attribution.csv`、13 个 `attribution_panel.png`、跨 case summary、协议文档和 E020 log。
+
+### 2026-05-20 E020 完成
+
+- 已新增并运行 `scripts/E020_audit/`：
+  - `audit_anchor_vs_raw.py`
+  - `audit_ref_physics.py`
+  - `audit_mask_vs_raw.py`
+  - `overlay_sim_ref_curves.py`
+  - `decide_root_cause.py`
+  - `render_attribution_keyframes.py`
+  - `plot_attribution_panel.py`
+  - `run_all.py`
+- 全量命令已跑通：`.venv/bin/python workspace/core4d_collab_retarget/scripts/E020_audit/run_all.py`。
+- 产物完整性：`anchor_vs_raw.csv`、`ref_physics.csv`、`mask_vs_raw.csv`、`sim_ref_overlay.csv`、`root_cause_attribution.csv`、`panel_index.csv`、`keyframe_index.csv` 均为 13 行；13/13 case 各有 6 张诊断图、`keyframe_triplet.jpg` 和 `attribution_panel.png`。
+- Root cause 分布：`algo_stability=4`、`algo_contact=4`、`retarget_kinematic=2`、`contact_mask=1`、`raw_data=1`、`pass=1`。
+- 已生成 `results/E020_audit/scene_snapshot/manifest.txt`，覆盖 E018b 13 个 derived task 的 scene XML / task metadata / trajectory snapshot。
+- 已新增协议文档：`workspace/core4d_collab_retarget/docs/audit_protocol.md`。
+- 已新增结果日志：`workspace/core4d_collab_retarget/log/20_E020_failure_attribution_audit_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：新增 E020 overview、关键指标演进、Plan/Log 路径。

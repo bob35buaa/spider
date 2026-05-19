@@ -1,0 +1,14 @@
+S1_anchor_vs_raw_pass,anchor_face,case,evidence,partner_anchor_dist_m,partner_contact_points,raw_partner_top_face,raw_partner_top_face_frac,raw_selected_top_face,raw_selected_top_face_frac,selected_anchor_dist_m,selected_contact_points,variant
+False,+x,box021_p1,"partner_dist=0.520m, partner_face=-x(70%), anchor_face=+x",0.5202724043855009,20000,-x,0.69805,+x,0.54875,0.15471797122638392,20000,E018b_box021_p1_canonical_t02
+False,-x,box021_p2,"partner_dist=0.370m, partner_face=+x(55%), anchor_face=-x",0.3703210865288546,20000,+x,0.54875,-x,0.69805,0.39068983186978945,20000,E018b_box021_p2_canonical_t02
+False,+y,box023_p1,"partner_dist=0.080m, partner_face=+x(36%), anchor_face=+y",0.08031830257533643,20000,+x,0.36495,+y,0.9231266846361186,0.3130892278502355,9275,E018b_box023_p1_canonical_t02
+False,+x,box023_p2,"partner_dist=0.349m, partner_face=+y(92%), anchor_face=+x",0.3489415837275164,9275,+y,0.9231266846361186,+x,0.36495,0.18005920798058908,20000,E018b_box023_p2_canonical_t02
+False,-x,box025_p1,"partner_dist=0.478m, partner_face=+x(39%), anchor_face=-x",0.47816556084025447,20000,+x,0.3947,-x,0.6679,0.7604955445232254,20000,E018b_box025_p1_canonical_t02
+False,+y,box025_p2,"partner_dist=0.725m, partner_face=-x(67%), anchor_face=+y",0.7254979218855319,20000,-x,0.6679,+x,0.3947,0.16907532583182514,20000,E018b_box025_p2_canonical_t02
+True,+y,bucket001_p1,"partner_dist=0.091m, partner_face=+y(100%), anchor_face=+y",0.09137687991510755,20000,+y,0.9999,+y,0.99955,0.09000574130270239,20000,E018b_bucket001_p1_canonical_t02
+True,+y,bucket001_p2,"partner_dist=0.090m, partner_face=+y(100%), anchor_face=+y",0.09000574130270239,20000,+y,0.99955,+y,0.9999,0.09137687991510755,20000,E018b_bucket001_p2_canonical_t02
+False,+x,bucket005_s2_p1,"partner_dist=0.285m, partner_face=+x(40%), anchor_face=+x",0.28516306800424257,20000,+x,0.4016,+x,0.55285,0.1979327755189911,20000,E018b_bucket005_s2_p1_canonical_t02
+False,+x,bucket005_s2_p2,"partner_dist=0.198m, partner_face=+x(55%), anchor_face=+x",0.1979327755189911,20000,+x,0.55285,+x,0.4016,0.28516306800424257,20000,E018b_bucket005_s2_p2_canonical_t02
+False,+y,bucket007_p1,"partner_dist=0.411m, partner_face=+y(100%), anchor_face=+y",0.41133199145741284,20000,+y,0.9999,+y,0.9994,0.08905316891103363,20000,E018b_bucket007_p1_canonical_t02
+True,+y,bucket007_p2,"partner_dist=0.089m, partner_face=+y(100%), anchor_face=+y",0.08905316891103363,20000,+y,0.9994,+y,0.9999,0.41133199145741284,20000,E018b_bucket007_p2_canonical_t02
+False,+y,desk021_p1,"partner_dist=0.239m, partner_face=-x(54%), anchor_face=+y",0.23910102197997107,20000,-x,0.53915,+x,0.5688,0.2396787575040046,20000,E018b_desk021_p1_canonical_t02
