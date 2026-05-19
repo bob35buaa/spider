@@ -14,5 +14,6 @@ SESSION="${SESSION:-E016}"
 
 ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && git fetch origin && git checkout exp/core4d-collab-retarget && git pull --ff-only"
 ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && tmux kill-session -t '$SESSION' 2>/dev/null || true"
+ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && mkdir -p logs/core4d_collab_retarget/E016 workspace/core4d_collab_retarget/results/E016"
 ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && tmux new-session -d -s '$SESSION' 'bash workspace/core4d_collab_retarget/scripts/train/train_E016_remote_tmux.sh 2>&1 | tee logs/core4d_collab_retarget/E016/remote_tmux.log'"
 echo "Started remote tmux session $SESSION on $REMOTE_HOST"
