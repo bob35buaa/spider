@@ -29,6 +29,8 @@
 | E018b | 2026-05-19 | 13-case Generalization | **canonical support proxy 13-case full 泛化 + 在线视频**: 本地 1 卡 + 远程 2 卡跑完 13/13 full，13/13 root NPZ 与 13/13 online MP4。13/13 config/canonical anchor/SPIDER/Dyna/transport success，2/2 GT anchor gate pass；mean Epos `0.054m`、Erot `5.22deg`。复核在线视频后新增 robot fall gate：`box021_p1/p2` 与 `bucket001_p1/p2` 4/13 明确摔倒，upright ok `9/13`，严格 generalization 仅 `1/13`；anchor/object-side 已成立，下一步应转 robot-side stability/contact/artifact control | ✅ 详见 log 19 |
 | E019 | 2026-05-20 | Unified Eval Framework | **统一评测框架 P0+P1**: 扩 `paper_metrics.py` 加 SPIDER T4 严格 FK（Joint/MPKPE/Body Ori/Root/EEF）+ OmniRetarget mj_geomDistance penetration + 28cm obj-local contact preservation；新增 `adapters/` + `eval_holosoma_kinematic.py` + `unified_eval.py` CLI + 论文级 `docs/eval_metrics.md` (306行)。重评 E018b 13 case：Joint 5.85±3.44deg、MPKPE 23.1±22.8cm、Obj Pos 5.45±1.63cm。Tab.5 跨方法对比 (N=2, box025_p1/p2)：spider physical smoothness `37418` < kin `41846` rad/s²（物理 CEM 比 SOCP kin 更平滑）。28cm contact preservation 在 CORE4D 大物体上退化为 trivial 100%（已 docs caveat）。**P2 未做**：FPS per-case 全面改造（spider 真实 30Hz 但 paper_metrics 用 FPS=50 常量，smoothness 高估 2.78倍）— 详见 log 20a §8 | ✅ 详见 log 20a，⚠️ FPS P2 待办 |
 | E020 | 2026-05-20 | Failure Attribution Audit | **E018b 13-case 失败归因审计**: 按 E076 分层证据扩展为 S1-S6 protocol，生成 13/13 root-cause CSV、13/13 attribution panel、13/13 keyframe triplet 与 scene snapshot。归因分布：`algo_stability=4`、`algo_contact=4`、`retarget_kinematic=2`、`contact_mask=1`、`raw_data=1`、`pass=1`；下一步明确为 E021 mask/ref 修复、E022 stability/leg collision、E023 contact closure、E024 multi-agent/data filter | ✅ 详见 log 20 |
+| E021 | 2026-05-20 | RL Export | **Holosoma RL export 计划**: 已有 `plan/22_E021_holosoma_rl_export_plan.md`，与 post-E020 优化无关；优化实验编号从 E022 开始 | 📝 仅计划 |
+| E022 | 2026-05-20 | Contact Mask Repair | **post-E020 首个优化计划**: 用户指定忽略 `desk021_p1` 与 `box021_*` 后，按 cause 分线。E022 只处理 `contact_mask` case `box023_p1`，复用 E018b derived task/canonical anchor，比较 raw 3cm per-EEF mask、axis 与 dilation/hold-contact variant，目标 contact `22.5% -> >=70%` 且 mask overclaim `<20%` | 📝 计划见 `plan/25_E022_contact_mask_semantics_repair_plan.md` |
 
 ## Baseline
 
@@ -64,6 +66,7 @@
 | E018b full | 13 个 full 结果：`num_config_ok=13`、`num_canonical_anchor_pass=13`、`num_gt_gate_pass=2/2`、`num_paper_spider_success=13`、`num_paper_dynaretarget_success=13`、`num_transport_success=13`；mean Epos `0.054m`、Erot `5.22deg`、contact preservation ok `5/13`、deep penetration ok `7/13`、robot fall detected `4/13`、visual stability ok `9/13`、strict generalization `1/13` | canonical support proxy 的 anchor/object-side 泛化成立，但 object-only success 不能代表完整成功；完整 retargeting 仍被 robot-side stability、contact preservation、deep penetration、leg/floor artifact 限制。下一步不继续调 anchor，而应做 robot-side stability/contact/artifact control |
 | E019 P0 + P1 | **SPIDER T4 严格 FK 首发** (E018b 13 case): Joint 5.85±3.44deg、MPKPE 23.13±22.77cm、Body Ori 23.49±22.46deg、Root Pos 22.90±24.70cm、EEF Pos 20.29±25.29cm、Obj Pos 5.45±1.63cm、Obj Ori 5.22±3.07deg。**OmniRetarget mj_pen**: 13/13 case duration ≈0%、max depth ≈0cm（mj_geomDistance + prefilter 严格实现，与 csv-based deep_pen 30% 的差异已 docs 说明）。**Tab.5 N=2 (box025_p1/p2)**: spider sim vs kin ref obj 6.40/3.53 cm/deg；spider smoothness `37418` vs kin `41846` rad/s² (-10.6%)，relative smoothness `0.642` vs `1.00`（物理 CEM 平滑性优于 SOCP kin）；mj_pen 双方 0/0；28cm contact preservation 双方 trivial 100%（CORE4D 大物体退化） | E019 P0/P1 完成；Claims 7/8 通过（FPS per-case P2 未做，spider smoothness 数字按论文公式约高估 2.78倍）。下一步：报告 v1 落实 + E020 归因 + E019 P2 FPS 改造 |
 | E020 audit | 13 个 case 均完成 S1-S6：root causes=`algo_stability:4, algo_contact:4, retarget_kinematic:2, contact_mask:1, raw_data:1, pass:1`；13/13 attribution panels；S3 显示当前 processed `contact` 字段相对 raw 3cm mask 是系统性 all-on overclaim；S2 标出 `box025_p1/bucket007_p2` ref leg/object interference 高 | E018b 后续应拆线推进：E021 修 mask/ref geometry，E022 修 fall/stability，E023 修 contact/collision artifact，E024 判断 partner-heavy case 是否需 multi-agent 或数据过滤 |
+| post-E020 scope | 用户指定 `desk021_p1` 与 `box021_p1/p2` 暂不优化，`box025_p2` 已 pass；剩余 9 case 分为 `contact_mask=1`、`retarget_kinematic=2`、`algo_stability=2`、`algo_contact=4`。E021 已占用 RL export，所以优化编号从 E022 开始 | 总览计划写入 `plan/24_post_E020_optimization_overview_plan.md`；首个 E022 计划写入 `plan/25_E022_contact_mask_semantics_repair_plan.md` |
 
 ## Plans
 
@@ -88,7 +91,10 @@
 - E018b: `workspace/core4d_collab_retarget/plan/19_E018b_canonical_support_proxy_13case_plan.md`
 - E019: `workspace/core4d_collab_retarget/plan/20_E019_unified_eval_framework_plan.md`
 - E020: `workspace/core4d_collab_retarget/plan/21_E020_failure_attribution_audit_plan.md`
-- 后续 (后台计划): E021 `plan/22_*.md`、技术报告 `plan/23_*.md`、总索引 `plan/AFTER_E018_INDEX.md`
+- E021: `workspace/core4d_collab_retarget/plan/22_E021_holosoma_rl_export_plan.md`（非本轮优化）
+- Post-E020 optimization overview: `workspace/core4d_collab_retarget/plan/24_post_E020_optimization_overview_plan.md`
+- E022: `workspace/core4d_collab_retarget/plan/25_E022_contact_mask_semantics_repair_plan.md`
+- 后续 (后台计划): 技术报告 `plan/23_*.md`、总索引 `plan/AFTER_E018_INDEX.md`
 
 ## Logs
 

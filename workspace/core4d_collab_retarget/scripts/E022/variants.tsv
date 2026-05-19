@@ -1,0 +1,5 @@
+# variant	mask_mode	mask_axis	queue	role	wave	hold_contact_rew_scale	hold_contact_sigma	hold_contact_start_eval_time	hold_contact_end_eval_time	hold_contact_require_ref_contact	contact_hdmi_gain	contact_hdmi_sigma	notes
+E022_box023_p1_baseline_replay	baseline	spider	local	baseline	A	0.0	0.05	0.46	3.44	true	5.0	0.3	E018b replay: copied task/contact/mask, no semantic repair
+E022_box023_p1_raw3_eval_axis	raw	eval	remote_gpu0	mask_axis	A	0.0	0.05	0.46	3.44	true	5.0	0.3	Patch ref contact from eval_contact_mask_3cm and force eval axis
+E022_box023_p1_raw3_spider_axis	raw	spider	remote_gpu1	mask_axis	A	0.0	0.05	0.46	3.44	true	5.0	0.3	Patch ref contact from spider_contact_mask_3cm and force spider axis
+E022_box023_p1_raw3_dilate3_hc1	dilate3	eval	remote_gpu0	mask_dilation	B	1.0	0.05	0.46	3.44	true	5.0	0.3	Eval-axis raw mask with +/-3 frame dilation and mild hold-contact reward

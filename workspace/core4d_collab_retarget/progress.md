@@ -1057,3 +1057,42 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已新增协议文档：`workspace/core4d_collab_retarget/docs/audit_protocol.md`。
 - 已新增结果日志：`workspace/core4d_collab_retarget/log/20_E020_failure_attribution_audit_results.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：新增 E020 overview、关键指标演进、Plan/Log 路径。
+
+## 2026-05-20 Post-E020 优化规划（E022 起）
+
+- 已按 `experiment-planning-zh` 恢复上下文：读取 `EXPERIMENT_TRACKER.md`、`progress.md`、E020 log、E019 unified eval log、E021 Holosoma RL export plan、remote execution 指南。
+- 已确认工作树启动时干净，且 `plan/22_E021_holosoma_rl_export_plan.md` 与优化无关；后续优化实验从 `E022` 编号。
+- 已使用 subagent 做只读拆分：
+  - failure grouping subagent 复核排除 `desk021_p1`、`box021_p1/p2`、`box025_p2` 后剩余 9 case，分组为 `algo_contact=4`、`algo_stability=2`、`retarget_kinematic=2`、`contact_mask=1`。
+  - pipeline subagent 复核后续应复用 E018b pipeline：derived task、canonical support proxy、train/eval/remote 脚本结构；E022+ 若写入 `results/E0NN` 需要复制/参数化 evaluator，不能直接硬用 E018b `RESULTS`。
+- 已写入总览计划：`workspace/core4d_collab_retarget/plan/24_post_E020_optimization_overview_plan.md`。
+- 已写入 E022 计划：`workspace/core4d_collab_retarget/plan/25_E022_contact_mask_semantics_repair_plan.md`。
+- E022 范围：只处理 `box023_p1` contact-mask root cause；目标 contact `22.49% -> >=70%`、mask overclaim `54.4% -> <20%`，且 object transport/no-fall/deep-penetration gate 不回退。
+- 已更新 `EXPERIMENT_TRACKER.md`：新增 E021 占位说明、E022 plan 行、post-E020 scope 指标演进和 Plans 路径。
+
+### E022 实施草稿
+
+- 已新增 E022 脚本骨架：
+  - `scripts/E022/variants.tsv`
+  - `scripts/E022/generate_e022_masks.py`
+  - `scripts/E022/generate_e022_overrides.py`
+  - `scripts/run_E022_preprocess.sh`
+  - `scripts/train/train_E022.sh`
+  - `scripts/train/train_E022_remote_tmux.sh`
+  - `scripts/run_E022_remote.sh`
+  - `scripts/pull_E022_remote_results.sh`
+  - `scripts/eval/eval_E022.py`
+- 关键实现决策：E022 不修改 E018b 原始 task，而是复制为 `box023_person1_freejoint_legobj_e022_*` variant-specific task，并 patch task copy 的 `trajectory_kinematic.npz::contact[:, :2]`。这样 E022 eval 的 mask overclaim/mismatch 能真实反映 processed ref contact 是否从 all-on 修正。
+- 已同步修正 E022 plan，记录 variant-specific task copy、ref contact patch、`train_E022_remote_tmux.sh` 等实际实现文件。
+- chmod、py_compile、bash syntax、`git diff --check` 已通过。
+- `bash workspace/core4d_collab_retarget/scripts/run_E022_preprocess.sh --force` 成功：
+  - 写入 `results/E022/manifest.tsv` 4 variants。
+  - 生成 4 个 `examples/config/override/core4d_collab_E022_*.yaml`。
+  - patched variants 的 ref-contact active any 从 baseline 100% 降到约 `45.6/46.3/48.5%`，与 E020 raw 3cm 口径一致。
+- `bash workspace/core4d_collab_retarget/scripts/train/train_E022.sh smoke 0` 成功：
+  - 4/4 variants 生成 smoke NPZ。
+  - `results/E022/scene_snapshot/manifest.txt` 已生成。
+  - E022 eval wiring 正常；smoke aggregate `num_results=4`、`num_mask_semantics_pass=3`、`num_artifact_no_regression_pass=4`。4-step smoke 的 contact/object 成败不作为实验结论。
+- 已启动本地 full baseline：`RUN_TIMEOUT_SECONDS=1800 RUN_STALL_TIMEOUT_SECONDS=300 SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E022.sh local 0`。
+  - 运行中观测：GPU0 正常使用；baseline 进入 272 sim steps full rollout。
+- 下一步：提交/同步 E022 setup，使用远程 2 GPU 跑 `remote_gpu0/remote_gpu1` 队列，同时等待本地 baseline 完成；full 结果齐后统一 eval 并写 E022 log。
