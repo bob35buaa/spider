@@ -739,3 +739,10 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 根据用户要求补齐可视化结果，新增复现脚本 `workspace/core4d_collab_retarget/scripts/eval/render_E016_visuals.py`，封装 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py`，从 E016 manifest 自动解析 scene/kin/phys 路径。
 - 已用离线 EGL 渲染 13/13 个 side-by-side comparison mp4，并用 ffmpeg 生成 13 张 contact sheet；索引文件为 `workspace/core4d_collab_retarget/results/E016/visual/visual_eval.md`。
 - 可视化结论与量化一致：object tracking / transport 在全量 case 上成立，但 robot-side 接触保持、腿/身体 shortcut 和 deep penetration 是主要失败源；已更新 E016 结果日志中的可视化章节。
+
+## 2026-05-19 18:05 E016 可视化口径修正
+
+- 用户指出上一版离线可视化不对。已确认原因：`workspace/hdmi_reproduce/scripts/render_trajectory_video.py` 是 qpos-only replay，不会恢复 E014/E016 moving mocap support weld 的 `support_weld_anchor`，因此不适合作为 E016 证据。
+- 已修正 `workspace/core4d_collab_retarget/scripts/eval/render_E016_visuals.py`：直接用 MuJoCo front camera replay `qpos`，ref/sim 标签对齐 `run_mjwp.py`，并把 NPZ 中的 `support_proxy_pos` 写回 mocap anchor；已重刷 13/13 个 E016 视频和 sheet。
+- 已对照 E014 两个基准配置：`box025_p2` 用 `E014_box025_p2_jointB_t02`，anchor `[0,0.38,0.30]`；`box023_p2` 用 `E014_box023_p2_jointB_t02`，anchor `[0.16,0,0.10]`。E016 对应 anchor 分别是 `[0.006,0.378,0.399]` 和 `[0.030,0.157,0.150]`，即继承了 E014 weld 结构/solref/solimp，但没有复用 E014 的手工 anchor。
+- 视觉对比更新：`box025_p2` corrected render 与 E014 t02 接近；`box023_p2` corrected render 明显差于 E014 t02，后段接触和姿态不稳，指向 E016 自动 anchor 泛化策略问题。

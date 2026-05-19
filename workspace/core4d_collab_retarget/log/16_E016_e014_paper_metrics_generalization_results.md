@@ -91,11 +91,19 @@ bash workspace/core4d_collab_retarget/scripts/pull_E016_remote_results.sh
 
 ## 可视化
 
-离线 EGL 已渲染 13/13 个 case，使用 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py` 生成 side-by-side comparison：左侧为 kinematic/reference qpos，右侧为 MJWarp physics output。视频、contact sheet 与指标索引见 `results/E016/visual/visual_eval.md`。
+离线 EGL 已渲染 13/13 个 case。2026-05-19 17:20 版本曾使用 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py` 做 qpos-only replay；该入口不适合 E014/E016 的 moving mocap support weld，已废弃。当前 `render_E016_visuals.py` 使用 run_mjwp-style front camera，并在 replay 时恢复 `support_proxy_pos` 到 `support_weld_anchor` mocap body：左侧为 kinematic/reference qpos，右侧为 MJWarp physics output。视频、contact sheet 与指标索引见 `results/E016/visual/visual_eval.md`。
+
+E014 对照配置：
+
+- `box025_p2`: E014 基准是 `E014_box025_p2_jointB_t02`，support point `[0.0, 0.38, 0.30]`，solref `0.02`，solimp `0.9/0.95/0.001`，无 hold-contact。
+- `box023_p2`: E014 基准是 `E014_box023_p2_jointB_t02`，support point `[0.16, 0.0, 0.10]`，solref `0.02`，solimp `0.9/0.95/0.001`，无 hold-contact。
+
+E016 并不是逐字复用上述两个 hand-picked anchor；它只继承 E014 的 B-only weld 结构与 `solref/solimp/gravity` 口径，anchor 改为从 contact mask 派生：`box025_p2=[0.006, 0.378, 0.399]`，`box023_p2=[0.030, 0.157, 0.150]`，方法为 `mask_active_ref_palm_centroid_surface_clamp`。
 
 全量可视化确认：object 轨迹在多数 case 中能跟住 reference，因此 SPIDER/Dyna object success 与 transport success 不是假阳性；失败集中在 robot-side 接触形态。代表性观察如下：
 
-- `E016_box025_p2`: object 跟随参考箱体运动较好，后段姿态没有大旋转；但手端相对参考接触位置偏离，符合 contact preservation 不过门。
+- `E016_box025_p2`: corrected render 与 E014 `t02` 视觉形态接近，object 跟随参考箱体运动较好，后段姿态没有大旋转；但手端相对参考接触位置仍有偏离，符合 contact preservation 不过门。
+- `E016_box023_p2`: corrected render 明显差于 E014 `t02` guard；E014 可视化稳定站立/搬运，E016 自动 anchor 后段出现接触偏离和姿态不稳，说明该 case 的失败不是 E014 weld 结构本身，而是 anchor 泛化策略没有复现 E014 的手工支撑点。
 - `E016_box021_p1`: 后段机器人明显下探，箱体附近存在推挤/腿部干涉风险，符合 `leg=37.9%` 与 deep penetration `77.2%`。
 - `E016_bucket005_s2_p2`: 桶的全局轨迹接近参考，但机器人身体与桶贴合过深，符合 contact preservation 高但 deep penetration `62.6%` 的 artifact 诊断。
 
