@@ -628,3 +628,58 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - Guard `box023_m2_kp500` 稳定，obj `0.097/0.239m`、pelvis min `0.682m`、force `50/154N`，但 hand contact `47.3% < 61.7%`，不通过 guard soft target。
 - 已生成 `workspace/core4d_collab_retarget/results/E015/keyframes/E015_visual_montage.jpg` 和 `results/E015/visual_eval.md`；视觉结论与 numeric 一致：default main 大旋转，m1/kp1000 后段渲染失效，guard 稳但接触弱。
 - 已写入 E015 结果日志：`workspace/core4d_collab_retarget/log/15_E015_cola_ab_dynamic_support_pd_results.md`，并更新 `EXPERIMENT_TRACKER.md`。结论：E015 差于 E014，按规则触发 E015b effort/PD tuning 分析，不跳 E016。
+
+## 2026-05-19 13:35 E016 指标与泛化验证启动
+
+- 已按用户要求重新回顾 E001-E015 路线：E014 B-only 是当前 work candidate，E015 dynamic support 失败在 lag/PD saturation/数值不稳。
+- 已读取 SPIDER / DynaRetarget / OmniRetarget 本地论文文本与 holosoma v2 eval 代码，确定新增指标：object `E_pos/E_rot`、SPIDER/Dyna success、relative smoothness、penetration duration/depth、foot skating、contact preservation、carry progress 与 object xy/z/final error。
+- 已写入 E016 计划：`workspace/core4d_collab_retarget/plan/16_E016_e014_paper_metrics_generalization_plan.md`。
+
+## 2026-05-19 13:45 E016 实现与 preprocess
+
+- 已新增 reusable paper-aligned metrics helper：`workspace/core4d_collab_retarget/scripts/eval/paper_metrics.py`，并接入 `eval_E014.py`。
+- 已新增 E016 脚本组：variants、asset/override 生成、preprocess、train、remote/pull、`eval_E016.py`。
+- 静态检查通过：E014/E016 eval、paper metrics、E016 asset/override generator 的 `py_compile`，以及 E016 shell 脚本 `bash -n`。
+- `run_E016_preprocess.sh --force` 已成功生成 13 个 `{source}_freejoint_legobj_e016` 派生 task、13 个 `scene_e016_jointB_*` soft-weld scene、13 个 Hydra overrides 和 `results/E016/manifest.tsv`。
+- 首次 preprocess 发现部分旧 case 没有 `task_info.json`；已把该文件改为可选复制，使用默认 ref_dt 继续。
+
+## 2026-05-19 14:05 E016 继续执行
+
+- 已重新读取 tracker、E016 plan、E014/E015 结果脉络和 progress，确认当前路线：E014 B-only 是 work candidate；E015 dynamic support 因 target lag / PD saturation / numerical instability 不继续作为候选。
+- 下一步先修评测口径：E014 aggregate 需要纳入 `paper_*` 成功计数；OmniRetarget-style penetration proxy 需要新增深穿透阈值，避免把浅层手-物接触交叠直接等同为严重穿透。
+
+## 2026-05-19 14:12 E016 评测/训练脚本修正
+
+- `paper_metrics.py` 新增 `2cm` deep-penetration 阈值字段：保留原始 negative-SDF duration，同时增加 deep duration / hand-deep / leg-deep / deep-penetration-ok，用于区分浅手部接触交叠和严重穿透。
+- `eval_E014.py` aggregate 已加入 paper-aligned 成功计数和均值；`eval_E016.py` 的 artifact gate 改为使用 deep-penetration duration。
+- 修复 `train_E016.sh quick/remote_gpu*`：额外 Hydra 参数现在走 `RUN_EXTRA_ARGS`，不会再被误当成 variant；smoke 完成后也会自动跑 E016 eval。
+
+## 2026-05-19 14:18 E014 paper metrics 复评
+
+- 静态检查通过：`paper_metrics.py`、`eval_E014.py`、`eval_E016.py` 的 `py_compile`，E016 shell 脚本 `bash -n`。
+- 已重新运行 `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E014.py --all`。新增 aggregate：`num_paper_spider_success=6/6`、`num_paper_dynaretarget_success=6/6`、`num_transport_success=6/6`、`num_deep_penetration_ok=6/6`、`num_contact_preservation_ok=4/6`。
+- E014 paper 均值：case-window object `Epos=0.05598m`、`Erot=2.16deg`、contact preservation 5cm mean `69.49%`、deep penetration duration mean `1.0%`。该结果支持 E014 作为 paper-aligned work candidate 进入 E016 泛化验证。
+
+## 2026-05-19 14:25 E016 smoke 边界修复
+
+- `bash workspace/core4d_collab_retarget/scripts/train/train_E016.sh smoke 0` 已完成 13/13 个 4-step rollout 并产出 NPZ，覆盖 box / bucket / desk 的 13 个派生 task。
+- 自动 eval 在 smoke 阶段触发 foot-skating 边界条件：4-step 片段没有 stance velocity 样本时，`np.concatenate([])` 抛 `ValueError`。
+- 已修复 `paper_metrics.py`：当 stance velocity 全空时返回空 `float64` 数组，foot-skating max velocity 记为 `0.0`。下一步直接重跑 `eval_E016.py --all`，不重复 smoke rollout。
+
+## 2026-05-19 14:30 E016 smoke eval 完成
+
+- 已重新运行 `eval_E016.py --all`，13/13 smoke 结果全部评估成功，`num_config_ok=13/13`、`num_paper_spider_success=13/13`、`num_paper_dynaretarget_success=13/13`。
+- 该结果只说明 wiring 和 paper 字段完整；因为 smoke 只有 4 sim steps，transport 指标不可作为效果结论：aggregate 中 `num_transport_success=1/13`、`num_generalization_pass=0/13` 是预期的短片段偏差。
+- 下一步启动 13 case quick 泛化，使用完整 case-window 但低 CEM 预算：`E016_QUICK_NUM_SAMPLES=128`、`E016_QUICK_MAX_ITERS=4`。
+
+## 2026-05-19 14:35 E016 远程并行切换
+
+- 用户明确允许使用 `spider-remote` 并行跑实验；已读取 `.codex/skills/experiment-planning-zh/remote-execution.md`，远程路径为 `/home/xiayb/pHRI_workspace/spider`，2 张 RTX 6000 Ada。
+- 本地 quick 串行已跑完 `E016_box021_p1` full-size NPZ，并开始 `E016_box021_p2`；为避免和远程队列重复，已停止本地 `train_E016.sh quick` 及其 `run_mjwp.py` 子进程。
+- 下一步只提交/推送 E016 相关代码与配置，远程运行 `run_E016_preprocess.sh` 后并行执行 `remote_gpu0` / `remote_gpu1` 队列；本地可独立跑 `local` 队列两个 case。
+
+## 2026-05-19 14:42 E016 远程脚本加固
+
+- 已检查远端：`spider-remote` 当前在 `exp/core4d-collab-retarget`，代码落后本地，但 E079/E080 contact masks 存在，可支持远端 preprocess。
+- `train_E016_remote_tmux.sh` 改为远端启动时执行 `run_E016_preprocess.sh --force`，避免 git 跟踪的 scene XML 快照与生成目录半成品冲突。
+- `train_E016.sh` 新增 `local_quick` 模式，用本地 GPU 只跑 manifest 中 `queue=local` 的 2 个 case，并复用 quick 的 `num_samples/max_num_iterations/save_video/viewer` 配置。

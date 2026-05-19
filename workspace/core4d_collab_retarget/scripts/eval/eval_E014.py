@@ -19,6 +19,7 @@ if str(SCRIPT_EVAL) not in sys.path:
     sys.path.insert(0, str(SCRIPT_EVAL))
 
 import eval_E002 as e002  # noqa: E402
+import paper_metrics  # noqa: E402
 
 
 BASE = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
@@ -270,6 +271,20 @@ def evaluate_variant(
     npz_path = RESULTS / f"{variant}.npz"
     qpos_ref, _ctrl_ref, cfg = e002.load_ref(str(meta["override"]), str(meta["case"]))
     _add_motion_and_support_metrics(summary, meta, npz_path, qpos_ref)
+    model, _scene_used = e002.load_scene_model(str(meta["case"]))
+    data_npz = np.load(npz_path, allow_pickle=True)
+    qpos = e002.e072.flatten_time_major(data_npz["qpos"])
+    summary.update(
+        paper_metrics.add_paper_metrics(
+            summary,
+            repo=REPO,
+            results_dir=RESULTS,
+            model=model,
+            qpos=qpos,
+            qpos_ref=qpos_ref,
+            person_idx=int(meta["person_idx"]),
+        )
+    )
 
     summary["E014_wave"] = meta["wave"]
     summary["E014_queue"] = meta["queue"]
@@ -479,6 +494,58 @@ def main() -> None:
             bool(r["E014_push_vs_carry_ok"]) for r in main_rows
         ),
         "num_guard_stable": sum(bool(r["E014_guard_stable"]) for r in guard_rows),
+        "num_paper_spider_success": sum(
+            bool(r.get("paper_spider_object_success", False)) for r in summaries
+        ),
+        "num_paper_dynaretarget_success": sum(
+            bool(r.get("paper_dynaretarget_object_success", False)) for r in summaries
+        ),
+        "num_transport_success": sum(
+            bool(r.get("paper_transport_success", False)) for r in summaries
+        ),
+        "num_contact_preservation_ok": sum(
+            bool(r.get("paper_omniretarget_contact_preservation_ok", False))
+            for r in summaries
+        ),
+        "num_deep_penetration_ok": sum(
+            bool(
+                r.get(
+                    "paper_omniretarget_robot_object_deep_penetration_ok", False
+                )
+            )
+            for r in summaries
+        ),
+        "mean_paper_Epos_case_m": float(
+            np.mean([float(r["paper_object_Epos_case_m"]) for r in summaries])
+        ),
+        "mean_paper_Erot_case_deg": float(
+            np.mean([float(r["paper_object_Erot_case_deg"]) for r in summaries])
+        ),
+        "mean_contact_preservation_5cm_pct": float(
+            np.mean(
+                [
+                    float(
+                        r.get(
+                            "paper_omniretarget_contact_preservation_5cm_pct", 0.0
+                        )
+                    )
+                    for r in summaries
+                ]
+            )
+        ),
+        "mean_deep_penetration_duration_pct": float(
+            np.mean(
+                [
+                    float(
+                        r.get(
+                            "paper_omniretarget_robot_object_deep_penetration_duration_pct",
+                            0.0,
+                        )
+                    )
+                    for r in summaries
+                ]
+            )
+        ),
         "diagnostic_classes": {
             name: sum(r.get("E014_diagnostic_class") == name for r in summaries)
             for name in sorted({str(r.get("E014_diagnostic_class")) for r in summaries})
