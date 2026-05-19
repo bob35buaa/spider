@@ -733,3 +733,9 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 均值：object Epos `0.04985m`、Erot `4.08deg`、carry progress ratio `1.001`、contact preservation 5cm `39.62%`、deep penetration duration `21.77%`。
 - 诊断分布：`contact_preservation_gap=10`、`push_or_leg_shortcut=2`、`artifact_failed=1`。E014-B object-side 泛化成立，但完整 retargeting 泛化未过 OmniRetarget-style robot-side artifact gate。
 - 已生成 3 个代表性离线可视化：`E016_box025_p2`、`E016_box021_p1`、`E016_bucket005_s2_p2`；已写入 E016 结果日志并更新 `EXPERIMENT_TRACKER.md`。
+
+## 2026-05-19 17:20 E016 全量可视化补齐
+
+- 根据用户要求补齐可视化结果，新增复现脚本 `workspace/core4d_collab_retarget/scripts/eval/render_E016_visuals.py`，封装 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py`，从 E016 manifest 自动解析 scene/kin/phys 路径。
+- 已用离线 EGL 渲染 13/13 个 side-by-side comparison mp4，并用 ffmpeg 生成 13 张 contact sheet；索引文件为 `workspace/core4d_collab_retarget/results/E016/visual/visual_eval.md`。
+- 可视化结论与量化一致：object tracking / transport 在全量 case 上成立，但 robot-side 接触保持、腿/身体 shortcut 和 deep penetration 是主要失败源；已更新 E016 结果日志中的可视化章节。

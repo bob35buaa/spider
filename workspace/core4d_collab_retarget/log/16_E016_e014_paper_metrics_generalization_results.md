@@ -4,7 +4,7 @@
 
 ## 状态
 
-E016 已完成：论文对齐指标、E014 复评、13 个 CORE4D case 派生资产、smoke wiring、3 卡并行 quick 泛化验证、13-case 总评和 3 个代表性离线可视化。
+E016 已完成：论文对齐指标、E014 复评、13 个 CORE4D case 派生资产、smoke wiring、3 卡并行 quick 泛化验证、13-case 总评和全量 13-case 离线可视化。
 
 结论：E014 B-only 结构在 13/13 case 上保持 true-freejoint/config parity，并且 13/13 同时通过 SPIDER/DynaRetarget object success 与 transport success。这说明 kinematic support + soft weld 的 object 侧泛化成立。但 OmniRetarget-style robot-side 质量没有过门：contact preservation 仅 3/13，deep penetration ok 9/13，完整 generalization gate 0/13。失败主因不是 object tracking，而是 robot contact preservation、leg/floor shortcut 和局部 penetration artifact。
 
@@ -26,6 +26,7 @@ VARIANTS_FILE=workspace/core4d_collab_retarget/results/E016/manifest_local_extra
   bash workspace/core4d_collab_retarget/scripts/train/train_E016.sh quick 0
 bash workspace/core4d_collab_retarget/scripts/pull_E016_remote_results.sh
 .venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E016.py --all
+.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/render_E016_visuals.py --force
 ```
 
 3 卡分配：远端 GPU0/GPU1 跑 8 个非本地结果；本地 GPU 先跑 `box023_p2/box025_p2`，再接手 `bucket005_s2_p2/bucket007_p2/desk021_p1`。远端在目标 8 个结果完成后已停止，避免重复跑本地接手 case。
@@ -39,6 +40,8 @@ bash workspace/core4d_collab_retarget/scripts/pull_E016_remote_results.sh
 | Comparison | `workspace/core4d_collab_retarget/results/E016/comparison.csv` |
 | Aggregate | `workspace/core4d_collab_retarget/results/E016/aggregate_summary.json` |
 | Manifest | `workspace/core4d_collab_retarget/results/E016/manifest.tsv` |
+| Visual renderer | `workspace/core4d_collab_retarget/scripts/eval/render_E016_visuals.py` |
+| Visual index | `workspace/core4d_collab_retarget/results/E016/visual/visual_eval.md` |
 | Visual videos | `workspace/core4d_collab_retarget/results/E016/visual/*_comparison.mp4` |
 | Visual sheets | `workspace/core4d_collab_retarget/results/E016/visual/*_frames/sheet.jpg` |
 
@@ -88,7 +91,9 @@ bash workspace/core4d_collab_retarget/scripts/pull_E016_remote_results.sh
 
 ## 可视化
 
-离线 EGL 渲染了 3 个代表 case，使用 side-by-side kinematic/reference 与 physics output comparison：
+离线 EGL 已渲染 13/13 个 case，使用 `workspace/hdmi_reproduce/scripts/render_trajectory_video.py` 生成 side-by-side comparison：左侧为 kinematic/reference qpos，右侧为 MJWarp physics output。视频、contact sheet 与指标索引见 `results/E016/visual/visual_eval.md`。
+
+全量可视化确认：object 轨迹在多数 case 中能跟住 reference，因此 SPIDER/Dyna object success 与 transport success 不是假阳性；失败集中在 robot-side 接触形态。代表性观察如下：
 
 - `E016_box025_p2`: object 跟随参考箱体运动较好，后段姿态没有大旋转；但手端相对参考接触位置偏离，符合 contact preservation 不过门。
 - `E016_box021_p1`: 后段机器人明显下探，箱体附近存在推挤/腿部干涉风险，符合 `leg=37.9%` 与 deep penetration `77.2%`。
