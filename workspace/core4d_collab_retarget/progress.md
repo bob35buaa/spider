@@ -683,3 +683,53 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已检查远端：`spider-remote` 当前在 `exp/core4d-collab-retarget`，代码落后本地，但 E079/E080 contact masks 存在，可支持远端 preprocess。
 - `train_E016_remote_tmux.sh` 改为远端启动时执行 `run_E016_preprocess.sh --force`，避免 git 跟踪的 scene XML 快照与生成目录半成品冲突。
 - `train_E016.sh` 新增 `local_quick` 模式，用本地 GPU 只跑 manifest 中 `queue=local` 的 2 个 case，并复用 quick 的 `num_samples/max_num_iterations/save_video/viewer` 配置。
+
+## 2026-05-19 14:48 E016 代码同步
+
+- 已提交并推送 E016 paper metrics + 13 case 泛化脚本与 scene XML 快照：`d14f883 exp(core4d_collab_retarget): add E016 paper metrics generalization`。
+- 又补充提交远程 launcher 日志目录加固：`5bc2642 exp(core4d_collab_retarget): harden E016 remote launch`。
+- 远程可通过 `run_E016_remote.sh` 拉到最新 `5bc2642` 并启动 tmux；本地计划同时运行 `train_E016.sh local_quick 0` 覆盖 `queue=local` 两个 case。
+
+## 2026-05-19 15:02 E016 远端数据缺失
+
+- 远端首次 `E016` tmux 很快退出，`remote_tmux.log` 显示 preprocess 在 `box021_person1/0/trajectory_kinematic.npz` 缺失处失败。
+- 判断：远端已有 E079/E080 contact masks，但不是所有 13 个 source task 的 `scene.xml + 0/trajectory_kinematic.npz` 都存在；这些数据不走 git，需要显式同步。
+- 下一步用 `rsync` 将 13 个 source task 目录从本地同步到 `/home/xiayb/pHRI_workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/`，再重启远端 E016。
+
+## 2026-05-19 15:05 E016 并行运行中
+
+- 已用 `rsync` 同步 13 个 source task 到远端；第一次 while+ssh 同步只处理了首个 task，已改为 `mapfile` 数组后重跑，13 个 task 均完成同步。
+- 已重启远端 `E016` tmux；远端 preprocess 已通过并开始两卡 quick：GPU0 从 `E016_box021_p1` 开始，GPU1 从 `E016_box021_p2` 开始。
+- 本地 `local_quick` 已完成 `E016_box023_p2` full-size quick（final object tracking pos `0.0264m`），当前运行 `E016_box025_p2`。
+
+## 2026-05-19 15:08 E016 local quick 完成
+
+- 本地 `local_quick` 两个 case 已完成：`E016_box023_p2`、`E016_box025_p2`，NPZ 分别约 `1.4MB` / `1.2MB`。
+- 本地 2-case eval aggregate：`num_config_ok=2/2`、`num_paper_spider_success=2/2`、`num_paper_dynaretarget_success=2/2`、`num_transport_success=2/2`、`num_deep_penetration_ok=2/2`、`num_contact_preservation_ok=0/2`、`num_generalization_pass=0/2`。
+- 本地诊断均为 `contact_preservation_gap`，说明 E014-B 结构和 object tracking 在这两例成立，但 quick CEM/robot-side 接触没有复现 contact mask。
+
+## 2026-05-19 15:12 E016 三卡并行重分配
+
+- E016 总计 13 个 case；已完成/本地负责 `box023_p2`、`box025_p2` 两个 local case，远端已完成 `box021_p1`、`box021_p2`。
+- 根据用户提醒，本地 1 卡不应空闲。已生成 `results/E016/manifest_local_extra.tsv`，本地继续接手远端队列后半段 3 个 case：`E016_bucket005_s2_p2`、`E016_bucket007_p2`、`E016_desk021_p1`。
+- 当前并行分配：本地 GPU0 跑 `E016_bucket005_s2_p2`；远端 GPU0 跑 `E016_box023_p1`；远端 GPU1 跑 `E016_bucket001_p1`。后续需在远端完成非本地接手的 8 个结果后停止远端，避免重复跑本地接手的 3 个 case。
+
+## 2026-05-19 15:16 E016 远端所需结果完成
+
+- 本地 extra 已完成 `E016_bucket005_s2_p2` 与 `E016_bucket007_p2`，当前本地最后跑 `E016_desk021_p1`。
+- 远端已完成 8 个需远端负责的结果：`box021_p1`、`box021_p2`、`box023_p1`、`box025_p1`、`bucket001_p1`、`bucket001_p2`、`bucket005_s2_p1`、`bucket007_p1`。
+- 已停止远端 `E016` tmux，防止继续重复跑本地接手的 `bucket005_s2_p2` / `bucket007_p2` / `desk021_p1`。待本地最后一个完成后回收远端结果并统一评估 13 case。
+
+## 2026-05-19 15:19 E016 本地 extra 完成
+
+- 本地 extra 三个 case 已完成：`bucket005_s2_p2`、`bucket007_p2`、`desk021_p1`。
+- 本地 extra 3-case eval：`num_config_ok=3/3`、`num_paper_spider_success=3/3`、`num_paper_dynaretarget_success=3/3`、`num_transport_success=3/3`、`num_contact_preservation_ok=1/3`、`num_deep_penetration_ok=2/3`、`num_generalization_pass=0/3`。
+- 诊断：`contact_preservation_gap=2`、`artifact_failed=1`。下一步拉回远端 8 个结果并做 13-case aggregate。
+
+## 2026-05-19 16:40 E016 完成
+
+- 已回收远端 8 个结果，本地 E016 目录中 13 个 NPZ 均为 full-size quick 文件（约 `740K-1.5M`），无 smoke 占位。
+- 13-case `eval_E016.py --all` 完成：`num_config_ok=13/13`、`num_paper_spider_success=13/13`、`num_paper_dynaretarget_success=13/13`、`num_transport_success=13/13`、`num_contact_preservation_ok=3/13`、`num_deep_penetration_ok=9/13`、`num_generalization_pass=0/13`。
+- 均值：object Epos `0.04985m`、Erot `4.08deg`、carry progress ratio `1.001`、contact preservation 5cm `39.62%`、deep penetration duration `21.77%`。
+- 诊断分布：`contact_preservation_gap=10`、`push_or_leg_shortcut=2`、`artifact_failed=1`。E014-B object-side 泛化成立，但完整 retargeting 泛化未过 OmniRetarget-style robot-side artifact gate。
+- 已生成 3 个代表性离线可视化：`E016_box025_p2`、`E016_box021_p1`、`E016_bucket005_s2_p2`；已写入 E016 结果日志并更新 `EXPERIMENT_TRACKER.md`。

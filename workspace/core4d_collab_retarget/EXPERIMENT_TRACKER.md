@@ -23,6 +23,7 @@
 | E013 | 2026-05-19 | Object Oracle | **true-freejoint object oracle**: 2 条 full 完成；2/2 oracle config ok，main obj `0.011/0.038m`、xy `1.000`、rot `2.0deg`，guard obj `0.017/0.064m` 且 stable。E013 证明 true-freejoint oracle 不限制 E081 级 object target，E014 soft target 已生成 | ✅ 详见 log 13 |
 | E014 | 2026-05-19 | COLA-B Soft Weld | **kinematic support body + soft weld/equality 位置约束**: 6 条 full 完成；6/6 true-freejoint parity ok、non-COM anchor ok、no direct wrench，4/4 main 过 E013 soft target，2/2 guard stable。best main `t02` obj `0.056/0.087m`、hand `86.7%`、floor `51.4%`、leg `0%` | ✅ 详见 log 14 |
 | E015 | 2026-05-19 | COLA A+B Dynamic Support | **dynamic support body + PD command**: 4 条 full 完成；4/4 dynamic scene/parity/object-last/no-direct-wrench ok，但 0/3 main 过 soft target，0/3 effort reasonable，2/3 main numerical instability。default main obj `0.311/0.418m`、rot `50.3deg`、support target lag `0.127/0.195m`，force/torque 打 clamp；guard stable 但 hand 不过门 | ✅ 详见 log 15 |
+| E016 | 2026-05-19 | Paper Metrics + 13-case Gen | **E014 paper-aligned metrics + 13-case quick 泛化**: 指标对齐 SPIDER/DynaRetarget/OmniRetarget/Holosoma；13/13 config ok、13/13 SPIDER/Dyna object success、13/13 transport success，mean Epos `0.050m`、Erot `4.1deg`、progress `1.001`；但 contact preservation ok `3/13`、deep penetration ok `9/13`、generalization pass `0/13`，诊断为 contact gap/leg shortcut/artifact | ✅ 详见 log 16 |
 
 ## Baseline
 
@@ -52,6 +53,7 @@
 | E014 full | 6 个 full 结果：`num_freejoint_parity_ok=6`、`num_anchor_not_com_oracle=6`、`num_no_direct_wrench=6`、`num_main_soft_target_pass=4`、`num_guard_stable=2`；main obj `0.056-0.082 / 0.085-0.142m`、hand `85.5-90.8%`、floor `49.7-51.4%`、leg `0%`、xy `0.995-0.999`、rot `1.6-2.2deg` | COLA-B 位置约束成立；E014b 不触发。下一步进入 E015 dynamic support + PD 或 pipeline 对接验证，而不是 E016 回退 |
 | E015 setup | 4-step smoke：4/4 `freejoint_parity_ok`、4/4 `support_dynamic_scene_ok`、4/4 `object_last_ok`、4/4 `no_direct_wrench`、4/4 `pd_metrics_present`；scene/data 独立检查 `nq/nv/nu=49/47/29`，support q/d `36/35`，object q/d `42/41` | E015 工程 wiring 已通过；下一步 setup commit + full，本地跑 default main，远程跑剩余 main/guard |
 | E015 full | 4 个 full 结果：`num_freejoint_parity_ok=4`、`num_support_dynamic_scene_ok=4`、`num_main_soft_target_pass=0`、`num_main_effort_reasonable=0`、`num_numerical_instability=2`、`num_guard_stable=1`；default main obj `0.311/0.418m`、rot `50.3deg`、target gap `0.127/0.195m`、force max `250N` | E015 差于 E014；失败模式是 dynamic support lag + PD saturation + 数值不稳。触发 E015b effort/PD tuning 分析，不跳 E016 |
+| E016 quick | 13 个 quick 泛化结果：`num_config_ok=13`、`num_paper_spider_success=13`、`num_paper_dynaretarget_success=13`、`num_transport_success=13`、`num_contact_preservation_ok=3`、`num_deep_penetration_ok=9`、mean Epos `0.050m`、Erot `4.08deg`、contact preservation `39.6%` | E014 B-only object-side 泛化成立，但完整 retargeting 未通过；主要缺口是 robot-side contact preservation、deep penetration 与 leg/floor artifact |
 
 ## Plans
 
@@ -70,6 +72,7 @@
 - E013: `workspace/core4d_collab_retarget/plan/13_E013_true_freejoint_object_oracle_plan.md`
 - E014: `workspace/core4d_collab_retarget/plan/14_E014_cola_b_kinematic_weld_plan.md`
 - E015: `workspace/core4d_collab_retarget/plan/15_E015_cola_ab_dynamic_support_pd_plan.md`
+- E016: `workspace/core4d_collab_retarget/plan/16_E016_e014_paper_metrics_generalization_plan.md`
 
 ## Logs
 
@@ -88,6 +91,7 @@
 - E013: `workspace/core4d_collab_retarget/log/13_E013_true_freejoint_object_oracle_results.md`
 - E014: `workspace/core4d_collab_retarget/log/14_E014_cola_b_kinematic_weld_results.md`
 - E015: `workspace/core4d_collab_retarget/log/15_E015_cola_ab_dynamic_support_pd_results.md`
+- E016: `workspace/core4d_collab_retarget/log/16_E016_e014_paper_metrics_generalization_results.md`
 
 ## Git
 
