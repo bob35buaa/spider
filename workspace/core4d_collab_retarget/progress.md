@@ -1603,3 +1603,21 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已创建 E027 详细计划：`workspace/core4d_collab_retarget/plan/32_E027_contact_timing_data_quality_plan.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：新增 E027 plan 行，并把 plan 31/32 加入 Plans 列表。
 - E027 第一阶段定位为离线 audit：先实现 `scripts/E027/audit_case_data_quality.py`、`diagnose_contact_timing.py`、`select_full_variants.py`、`scripts/eval/eval_E027.py`；不改核心 reward，不占 GPU。只有 full candidates `>=3` 时才启用本地 1 卡 + 远程 2 卡。
+
+### E027 离线 audit 完成
+
+- 已实现并提交 E027 离线脚本：
+  - `workspace/core4d_collab_retarget/scripts/E027/e027_common.py`
+  - `workspace/core4d_collab_retarget/scripts/E027/audit_case_data_quality.py`
+  - `workspace/core4d_collab_retarget/scripts/E027/diagnose_contact_timing.py`
+  - `workspace/core4d_collab_retarget/scripts/E027/select_full_variants.py`
+  - `workspace/core4d_collab_retarget/scripts/eval/eval_E027.py`
+- 已运行 E027 离线命令，结果写入 `workspace/core4d_collab_retarget/results/E027/`。
+- 结果摘要：
+  - `case_quality_audit.csv` 覆盖 `13/13`；
+  - quality labels：`usable_algorithmic_failure=6`、`usable_with_caveat=4`、`retarget_questionable=2`、`discard_from_success_denominator=1`；
+  - `desk021_p1` 是唯一 `discard_from_success_denominator`；
+  - timing panels 覆盖 `box023_p1`, `box023_p2`, `box025_p1`, `bucket007_p2`；
+  - E027 full candidates 为 `0`，因为 phase-shift expected gain 全为 `0pp`。
+- 初版 timing script 曾误用 `sim_total_contact_count` 导致 overlap 虚高；已修为 `sim_min_hand_sdf_m/ref_min_hand_sdf_m <= 0.05m` 的 5cm SDF 口径并重跑。
+- 已写入 `workspace/core4d_collab_retarget/log/27_E027_contact_timing_data_quality_results.md` 并更新 `EXPERIMENT_TRACKER.md`。

@@ -1,0 +1,12 @@
+{
+  "num_cases": 13,
+  "labels": {
+    "discard_from_success_denominator": 1,
+    "retarget_questionable": 2,
+    "usable_algorithmic_failure": 6,
+    "usable_with_caveat": 4
+  },
+  "discard_from_success_denominator": [
+    "desk021_p1"
+  ]
+}

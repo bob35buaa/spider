@@ -1,0 +1,28 @@
+{
+  "num_quality_rows": 13,
+  "quality_coverage_ok": true,
+  "label_counts": {
+    "usable_algorithmic_failure": 6,
+    "usable_with_caveat": 4,
+    "retarget_questionable": 2,
+    "discard_from_success_denominator": 1
+  },
+  "discard_from_p0": [
+    "box021_p1",
+    "box021_p2",
+    "bucket001_p1",
+    "desk021_p1"
+  ],
+  "discard_from_success_denominator": [
+    "desk021_p1"
+  ],
+  "num_timing_panels": 4,
+  "timing_cases": [
+    "box023_p1",
+    "box023_p2",
+    "box025_p1",
+    "bucket007_p2"
+  ],
+  "num_full_candidates": 0,
+  "full_candidates": []
+}
