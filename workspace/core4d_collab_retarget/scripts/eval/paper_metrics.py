@@ -9,6 +9,7 @@ source prefix in the name where useful.
 from __future__ import annotations
 
 import csv
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,11 @@ import mujoco
 import numpy as np
 
 
-FPS = 50.0  # legacy default; new entrypoints accept per-case fps
+# CORE4D processed data is 30Hz. spider E018b NPZ verified: time delta
+# 1/60s × 2 substeps = 1/30s base. holosoma v2 kinematic NPZ fps=30 explicit.
+# If a future dataset has different fps, set summary["fps"] before calling
+# add_paper_metrics — the entry warns when summary["fps"] != FPS.
+FPS = 30.0
 FOOT_STANCE_Z_M = 0.04
 FOOT_REF_STICK_VEL_MPS = 0.05
 FOOT_SKATE_VEL_MPS = 0.05
@@ -922,9 +927,21 @@ def add_paper_metrics(
     T = min(len(qpos), len(qpos_ref), int(summary["T"]))
     qpos = qpos[:T]
     qpos_ref = qpos_ref[:T]
+    # Guardrail: if caller declared a per-case fps that disagrees with the
+    # module FPS, smoothness (FPS²) and foot skating (FPS) numbers in this
+    # invocation are wrong. Warn loudly instead of silently degrading.
+    declared_fps = summary.get("fps")
+    if declared_fps is not None and abs(float(declared_fps) - FPS) > 1e-3:
+        warnings.warn(
+            f"paper_metrics: summary['fps']={declared_fps} but module FPS={FPS}; "
+            f"smoothness/foot_skating will be computed at {FPS}Hz. "
+            f"Either set summary['fps'] to {FPS} or extend per-case plumbing.",
+            stacklevel=2,
+        )
     out: dict[str, Any] = {
-        "paper_metrics_version": "2026-05-19",
+        "paper_metrics_version": "2026-05-20-P2",
         "paper_metrics_sources": "SPIDER,DynaRetarget,OmniRetarget,holosoma_v2",
+        "paper_metrics_fps": FPS,
     }
     _add_object_tracking_metrics(out, summary, qpos, qpos_ref)
     _add_smoothness_metrics(out, qpos, qpos_ref)

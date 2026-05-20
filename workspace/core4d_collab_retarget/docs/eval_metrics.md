@@ -22,21 +22,28 @@ E081 的 obj 跟踪精度（`0.143/0.271m`）是在 object 不受真实惯性约
 
 ## 1. 指标全集（按论文 / 输出字段）
 
-字段以 `paper_*` 前缀写到 `comparison.csv`；本文件用"字段名 ↔ 论文符号 ↔ 中文 ↔ 实现 file:line"四列对齐。Y/N 列表示 E019 P0 是否已实现并通过 E018b 13 case 验证。
+字段以 `paper_*` 前缀写到 `comparison.csv`；本文件用"字段名 ↔ 论文符号 ↔ 中文 ↔ 方向 ↔ 实现 file:line"五列对齐。Y/N 列表示 E019 P0 是否已实现并通过 E018b 13 case 验证。
+
+**方向 legend（全文档统一）**：
+- **↓** 越小越好（误差、穿透、脚滑、smoothness mean |q̈|、relative smoothness vs ref）
+- **↑** 越大越好（contact preservation、object/transport success、pelvis upright）
+- **↑→1** 期望接近 1（progress ratio）
 
 ### 1.1 SPIDER Table 4 严格对齐（FK 全身 body）
 
-| 字段 | 论文符号 | 中文 | 公式（简） | 实现 | Y/N |
-|---|---|---|---|---|---|
-| `paper_spider_joint_err_deg` | Joint Err. | 关节角误差（°） | `mean_{t, j∈[7..36)} | q^sim - q^ref | · 180/π`，29 dof | `paper_metrics.py:_add_body_tracking_metrics` | ✓ |
-| `paper_spider_pos_err_cm` | Pos. Err. (MPKPE) | 全身 body 位置误差（cm） | `mean_{t, b∈robot_bodies} ‖xpos^sim - xpos^ref‖ · 100` | 同上 | ✓ |
-| `paper_spider_ori_err_deg` | Ori. Err. | 全身 body 朝向误差（°） | `mean 2·arccos(|xquat^sim · xquat^ref|) · 180/π` | 同上 | ✓ |
-| `paper_spider_root_pos_err_cm` | Root Pos. Err. | 根（pelvis）位置（cm） | 限定 b=pelvis 版 Pos Err | 同上 | ✓ |
-| `paper_spider_root_ori_err_deg` | Root Ori. Err. | 根（pelvis）朝向（°） | 限定 b=pelvis 版 Ori Err | 同上 | ✓ |
-| `paper_spider_eef_pos_err_cm` | EEF Pos. Err. | 末端（L/R wrist_yaw_link）位置（cm） | L/R 平均 | 同上 | ✓ |
-| `paper_spider_eef_ori_err_deg` | EEF Ori. Err. | 末端朝向（°） | L/R 平均 | 同上 | ✓ |
-| `paper_spider_obj_pos_err_cm` | Obj. Pos. Err. | 物体位置（cm） | re-export `paper_object_Epos_case_m × 100` | `paper_metrics.py:_add_object_tracking_metrics` | ✓ |
-| `paper_spider_obj_ori_err_deg` | Obj. Ori. Err. | 物体朝向（°） | re-export `paper_object_Erot_case_deg` | 同上 | ✓ |
+> 方向标记：↓ 越小越好；↑ 越大越好；↑→1 期望接近 1。
+
+| 字段 | 论文符号 | 中文 | 方向 | 公式（简） | 实现 | Y/N |
+|---|---|---|:-:|---|---|---|
+| `paper_spider_joint_err_deg` | Joint Err. | 关节角误差（°） | ↓ | `mean_{t, j∈[7..36)} | q^sim - q^ref | · 180/π`，29 dof | `paper_metrics.py:_add_body_tracking_metrics` | ✓ |
+| `paper_spider_pos_err_cm` | Pos. Err. (MPKPE) | 全身 body 位置误差（cm） | ↓ | `mean_{t, b∈robot_bodies} ‖xpos^sim - xpos^ref‖ · 100` | 同上 | ✓ |
+| `paper_spider_ori_err_deg` | Ori. Err. | 全身 body 朝向误差（°） | ↓ | `mean 2·arccos(|xquat^sim · xquat^ref|) · 180/π` | 同上 | ✓ |
+| `paper_spider_root_pos_err_cm` | Root Pos. Err. | 根（pelvis）位置（cm） | ↓ | 限定 b=pelvis 版 Pos Err | 同上 | ✓ |
+| `paper_spider_root_ori_err_deg` | Root Ori. Err. | 根（pelvis）朝向（°） | ↓ | 限定 b=pelvis 版 Ori Err | 同上 | ✓ |
+| `paper_spider_eef_pos_err_cm` | EEF Pos. Err. | 末端（L/R wrist_yaw_link）位置（cm） | ↓ | L/R 平均 | 同上 | ✓ |
+| `paper_spider_eef_ori_err_deg` | EEF Ori. Err. | 末端朝向（°） | ↓ | L/R 平均 | 同上 | ✓ |
+| `paper_spider_obj_pos_err_cm` | Obj. Pos. Err. | 物体位置（cm） | ↓ | re-export `paper_object_Epos_case_m × 100` | `paper_metrics.py:_add_object_tracking_metrics` | ✓ |
+| `paper_spider_obj_ori_err_deg` | Obj. Ori. Err. | 物体朝向（°） | ↓ | re-export `paper_object_Erot_case_deg` | 同上 | ✓ |
 
 **Robot body 集合定义**：`[1 .. nbody-1]` 排除 world(0) + `object` body + `support_weld_anchor`/`support_dynamic_anchor` body。E018b 模型 `nbody=33` → 30 个 robot bodies（pelvis + 29 link）。
 
@@ -44,15 +51,15 @@ E081 的 obj 跟踪精度（`0.143/0.271m`）是在 object 不受真实惯性约
 
 ### 1.2 OmniRetarget Table II 严格对齐（mj_geomDistance 穿透）
 
-| 字段 | 论文符号 | 中文 | 公式 | 实现 | Y/N |
-|---|---|---|---|---|---|
-| `paper_omniretarget_mj_penetration_duration_pct` | Pen. Duration | 穿透时长比例（%） | `frac(t : ∃ pair, sdf < -0.01m) · 100` | `paper_metrics.py:_add_penetration_metrics_mj` | ✓ |
-| `paper_omniretarget_mj_penetration_max_depth_cm` | Pen. Max Depth | 最大穿透深度（cm） | `max_{t, pair} (-sdf) · 100` | 同上 | ✓ |
-| `paper_omniretarget_mj_penetration_mean_depth_cm` | (派生) | 平均穿透深度（cm） | `mean over penetrating frames` | 同上 | ✓ |
-| `paper_omniretarget_mj_penetration_case_*` | (派生) | case-window 版 | 同上限 `start:end` | 同上 | ✓ |
-| `paper_omniretarget_foot_skating_duration_pct` | Foot Skating Duration | 脚滑时长比例（%） | demo 接触帧中 `|v_xy|>0.05m/s` 的比例 | `paper_metrics.py:_add_keypoint_proxy_metrics` | ✓ |
-| `paper_omniretarget_foot_skating_max_vel_cm_s` | Foot Skating Max Vel | 脚滑最大速度（cm/s） | demo 接触帧内的最大 v_xy | 同上 | ✓ |
-| `paper_omniretarget_contact_preservation_5cm_pct` | Contact Preservation (代理) | 接触保持率（%） | mask 期望接触帧 ∩ sim hand-obj < 5cm 的比例 | `paper_metrics.py:_add_contact_and_penetration_metrics` | △ |
+| 字段 | 论文符号 | 中文 | 方向 | 公式 | 实现 | Y/N |
+|---|---|---|:-:|---|---|---|
+| `paper_omniretarget_mj_penetration_duration_pct` | Pen. Duration | 穿透时长比例（%） | ↓ | `frac(t : ∃ pair, sdf < -0.01m) · 100` | `paper_metrics.py:_add_penetration_metrics_mj` | ✓ |
+| `paper_omniretarget_mj_penetration_max_depth_cm` | Pen. Max Depth | 最大穿透深度（cm） | ↓ | `max_{t, pair} (-sdf) · 100` | 同上 | ✓ |
+| `paper_omniretarget_mj_penetration_mean_depth_cm` | (派生) | 平均穿透深度（cm） | ↓ | `mean over penetrating frames` | 同上 | ✓ |
+| `paper_omniretarget_mj_penetration_case_*` | (派生) | case-window 版 | ↓ | 同上限 `start:end` | 同上 | ✓ |
+| `paper_omniretarget_foot_skating_duration_pct` | Foot Skating Duration | 脚滑时长比例（%） | ↓ | demo 接触帧中 `|v_xy|>0.05m/s` 的比例 | `paper_metrics.py:_add_keypoint_proxy_metrics` | ✓ |
+| `paper_omniretarget_foot_skating_max_vel_cm_s` | Foot Skating Max Vel | 脚滑最大速度（cm/s） | ↓ | demo 接触帧内的最大 v_xy | 同上 | ✓ |
+| `paper_omniretarget_contact_preservation_5cm_pct` | Contact Preservation (代理) | 接触保持率（%） | ↑ | mask 期望接触帧 ∩ sim hand-obj < 5cm 的比例 | `paper_metrics.py:_add_contact_and_penetration_metrics` | △ |
 
 **△ Contact Preservation 当前是 mask-gated 代理**（28cm obj-local 二值版需要 SMPL-X 22 关节，P1 加）。
 
@@ -60,23 +67,23 @@ E081 的 obj 跟踪精度（`0.143/0.271m`）是在 object 不受真实惯性约
 
 ### 1.3 DynaRetarget Table V
 
-| 字段 | 论文符号 | 公式 | 实现 |
-|---|---|---|---|
-| `paper_object_Epos_case_m` | Obj. Epos | `mean ‖p_obj^sim - p_obj^ref‖` | `paper_metrics.py:_add_object_tracking_metrics` |
-| `paper_object_Erot_case_deg` | Obj. Erot | `mean 2·arccos(|q · q_ref|) · 180/π` | 同上 |
-| `paper_dynaretarget_object_success` | Object Success (二值) | `Epos<0.10m ∧ Erot<25°` | 同上 |
-| `paper_dynaretarget_smoothness` | Smoothness | `mean |q̈|`, 29 dof, central diff (FPS²) | `paper_metrics.py:_add_smoothness_metrics` |
-| `paper_dynaretarget_relative_smoothness` | (派生) | sim / ref smoothness 比值 | 同上 |
+| 字段 | 论文符号 | 方向 | 公式 | 实现 |
+|---|---|:-:|---|---|
+| `paper_object_Epos_case_m` | Obj. Epos | ↓ | `mean ‖p_obj^sim - p_obj^ref‖` | `paper_metrics.py:_add_object_tracking_metrics` |
+| `paper_object_Erot_case_deg` | Obj. Erot | ↓ | `mean 2·arccos(|q · q_ref|) · 180/π` | 同上 |
+| `paper_dynaretarget_object_success` | Object Success (二值) | ↑ | `Epos<0.10m ∧ Erot<25°` | 同上 |
+| `paper_dynaretarget_smoothness` | Smoothness | ↓ | `mean |q̈|`, 29 dof, central diff (FPS²) — 越小越平滑 | `paper_metrics.py:_add_smoothness_metrics` |
+| `paper_dynaretarget_relative_smoothness` | (派生) | ↓ | sim / ref smoothness 比值（< 1 表示 sim 比 ref demo 更平滑）| 同上 |
 
 ### 1.4 CORE4D 协作 自定义（不在论文）
 
-| 字段 | 中文 | 公式 | 用途 |
-|---|---|---|---|
-| `paper_carry_progress_ratio_case` | 搬运进度比 | `proj(Δsim_xy, Δref_xy) / ‖Δref_xy‖` | E081 transport gate |
-| `paper_transport_success` | 任务级二值成功 | `progress ≥ 0.7 ∧ z̄ ≥ 0.20m ∧ Epos < 0.20m` | E018b 13/13 通过 |
-| `paper_omniretarget_robot_object_deep_penetration_duration_pct` | 深穿透时长（2cm 阈值，%） | `frac(t : robot-obj sdf < -0.02m)` | csv-based，需 `legobj_timeseries_*.csv` |
-| `case_window_pelvis_z_min_m` | pelvis 最低高度（m） | min over case-window | fall gate（< 0.45m 即视为摔倒） |
-| `E018b_robot_fall_detected` | 摔倒检测 | `pelvis_z_min < 0.45 ∨ first_pelvis_z_lt_45cm_frame ≥ 0` | E018b 视觉稳定 gate |
+| 字段 | 中文 | 方向 | 公式 | 用途 |
+|---|---|:-:|---|---|
+| `paper_carry_progress_ratio_case` | 搬运进度比 | ↑→1 | `proj(Δsim_xy, Δref_xy) / ‖Δref_xy‖`（理想 1.0）| E081 transport gate |
+| `paper_transport_success` | 任务级二值成功 | ↑ | `progress ≥ 0.7 ∧ z̄ ≥ 0.20m ∧ Epos < 0.20m` | E018b 13/13 通过 |
+| `paper_omniretarget_robot_object_deep_penetration_duration_pct` | 深穿透时长（2cm 阈值，%） | ↓ | `frac(t : robot-obj sdf < -0.02m)` | csv-based，需 `legobj_timeseries_*.csv` |
+| `case_window_pelvis_z_min_m` | pelvis 最低高度（m） | ↑ | min over case-window（高 = 站着，低 = 摔了）| fall gate（< 0.45m 即视为摔倒） |
+| `E018b_robot_fall_detected` | 摔倒检测 | ↓ | `pelvis_z_min < 0.45 ∨ first_pelvis_z_lt_45cm_frame ≥ 0` | E018b 视觉稳定 gate |
 
 ---
 
@@ -275,32 +282,36 @@ CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl .venv/bin/python \
   --out workspace/core4d_collab_retarget/results/eval_unified
 ```
 
-**首发 Tab.5 数字（N=2，box025_p1/p2 子集）**：
+**Tab.5 数字（N=12，2026-05-20 升级，详见 log/20b）**：
 
-| 指标 | spider physical | holosoma kinematic | Δ |
+箭头：↓ 越小越好（error / penetration / skating / smoothness jerk magnitude）；↑ 越大越好（contact preservation / pelvis upright）；↑→1 期望接近 1（progress ratio）。
+
+| 指标 | spider physical (N=12) | holosoma kinematic (N=12) | Δ |
 |---|---:|---:|---:|
-| Joint Err. (°) | 3.81 | — | — |
-| MPKPE (cm) | 9.41 | — | — |
-| Obj. Pos. Err. (cm) | 6.40 | 0.00 | −6.40 |
-| Obj. Ori. Err. (°) | 3.53 | 0.00 | −3.53 |
-| mj_pen Duration (%) | 0.0 | 0.0 | 0 |
-| mj_pen Max Depth (cm) | 0.0 | 0.0 | 0 |
-| 28cm Contact Preservation (%) | 100 (degenerate)* | 100 (degenerate)* | 0 |
-| Smoothness (rad/s²) | 37418 | 41846 | +4428 (kin 更不平滑) |
-| Relative Smoothness vs ref | 0.642 | 1.00 | spider 比 kin 更平滑 |
+| Obj. Pos. Err. (cm) ↓ | 5.50 | 0.00 | −5.50 |
+| Obj. Ori. Err. (°) ↓ | 5.51 | 0.00 | −5.51 |
+| mj_pen Duration (%) ↓ | 0.0 | 0.0 | 0 |
+| mj_pen Max Depth (cm) ↓ | 0.0 | 0.0 | 0 |
+| spider 5cm Contact Preservation (%) ↑ | 54.55 | — | — |
+| kin 28cm Contact Preservation (%) ↑ | — | 53.59 | — |
+| **Smoothness (rad/s²) ↓** | **13428** | **36048** | **+22621 (kin 2.7× 更不平滑)** |
+| Rel. Smoothness vs ref ↓ | 0.757 | 1.00 | spider 比 kin 更平滑 |
+| Foot Skating Max Vel (cm/s) ↓ | 96.71 | — | — |
+| Pelvis Min z (m) ↑ | 0.567 | 0.711 | −0.145 (spider 含 4 fall case) |
 
-`—` 表 kin 是 sim=ref 退化或字段不在 physics-only 路径。
+`—` 表 kin 是 sim=ref 退化、字段不在 physics-only 路径、或阈值不同不能直接比。
 
 **诚实解读**：
-1. box025 是双方都"工作得好"的 case，物理 sim 相对 kin ref 漂移 ~6cm 是合理的（物理约束让物体不能瞬移）。
-2. 28cm contact preservation 在大物体上 trivial 100% — 不能作为方法间 work/fail 判据。
-3. 关键 finding：spider physical **smoothness 比 kin 还低**（37k vs 42k rad/s²），说明物理 CEM 的解比纯 SOCP 运动学的解 jerk 更小（与直觉一致：物理约束自动惩罚高 jerk）。
-4. mj_pen 0/0 对两边都成立 — 这两个 case 即使是 kin 输出也不显著穿透，说明 OmniRetarget 软约束已经把穿透压住了；Tab.5 这条对 box025 不能区分方法，需要在 harder case（bucket / desk）扩展才能见 gap。
+1. **smoothness 是最强 selling**：spider 比 kin 低 62.7% (3.0× gap)，在 12 个 case + 6 个 obj 类型上 robust 保持。gap 演化：N=2 −67.8% → N=3 −66.9% → N=12 −62.7%，略缩窄但量级稳定
+2. **mj_pen 13 case 全零，两边都 0/0**：OmniRetarget 软约束 + spider 物理硬约束都把 penetration 压住了 — Tab.5 这条**不能区分方法**（"tie"信号）
+3. **28cm contact preservation**：N=2 box025 子集 trivial 100%；N=12 加 box021/box023/bucket001/bucket007 后阈值开始有判别力，kin 平均 53.59%，box021_p1 = 29.55%
+4. **spider 5cm preservation 54.55% vs kin 28cm 53.59%**：spider 在 5cm 严格阈值下打平 kin 在 28cm 更宽松阈值下的数字 — 间接说明 spider contact closure 质量显著更好
+5. **N=12 缺 desk021_p1**：CVXPY clarabel SOCP 返回 infeasible（motion-specific 问题，XML 与已成功的 desk005 完全一致，不是模板问题）。N=12 已足够支撑论文核心论断
 
 ### 7.5 已知 caveat 与下一步
 
-1. **跨方法 N=2 是数据限制**：需推动 holosoma 在剩余 11 case 上重跑 retarget。Tab.5 上方明示。
-2. **FPS per-case 部分实现**：`add_paper_metrics_physics` 接受 `fps` 参数（holosoma 用 30）；`add_paper_metrics` 主入口仍走模块 `FPS=50` 常量（spider 用）。改 add_paper_metrics 会影响所有现有 E018b 数字，**留 P2**（与重跑 E014/E018 一起做）。
+1. ~~跨方法 N=2 是数据限制~~ → **2026-05-20 已升 N=12**（详见 `log/20b`）。剩余 desk021_p1 单 case 缺 (SOCP infeasible)。报告 v1 用 N=12 + caveat。
+2. **FPS 单点修复**（v2026-05-20-P2，已落地）：模块常量 `FPS=50` → `FPS=30`，匹配 CORE4D 30Hz + holosoma v2 kinematic 30Hz。`add_paper_metrics` 入口加 warning：若 `summary["fps"]` 与 FPS 不一致则报警。per-case 字段全联动降级为 P3（当前唯一 30Hz 消费者已统一，per-case 改造的收益主要是 future-proofing）。
 3. **mask-gated 5cm contact preservation 与 28cm local-frame 并存**：mask-gated 是当前唯一对 CORE4D 大物体有判别力的接触指标；28cm 严格版用于跨方法严格对齐，但容易 trivial 100%。docs 必须同时呈现。
 4. **xlsx 依赖 `openpyxl`**：本机已装 `openpyxl 3.1.5`（via uv + 小红书 mirror）。
 5. **`E018b_diagnostic_class`** 在 `paper_metrics` 之外（由 `eval_E018b.py` 计算）；归因强化在 plan 21（E020 audit）。

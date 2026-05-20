@@ -46,40 +46,46 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 SPIDER_T4_COLS = [
-    ("paper_spider_joint_err_deg", "Joint Err. (°)"),
-    ("paper_spider_pos_err_cm", "Pos. Err. (cm) [MPKPE]"),
-    ("paper_spider_ori_err_deg", "Ori. Err. (°)"),
-    ("paper_spider_root_pos_err_cm", "Root Pos. Err. (cm)"),
-    ("paper_spider_root_ori_err_deg", "Root Ori. Err. (°)"),
-    ("paper_spider_eef_pos_err_cm", "EEF Pos. Err. (cm)"),
-    ("paper_spider_eef_ori_err_deg", "EEF Ori. Err. (°)"),
-    ("paper_spider_obj_pos_err_cm", "Obj. Pos. Err. (cm)"),
-    ("paper_spider_obj_ori_err_deg", "Obj. Ori. Err. (°)"),
+    # All err metrics are lower-is-better (↓)
+    ("paper_spider_joint_err_deg", "Joint Err. (°) ↓"),
+    ("paper_spider_pos_err_cm", "Pos. Err. (cm) [MPKPE] ↓"),
+    ("paper_spider_ori_err_deg", "Ori. Err. (°) ↓"),
+    ("paper_spider_root_pos_err_cm", "Root Pos. Err. (cm) ↓"),
+    ("paper_spider_root_ori_err_deg", "Root Ori. Err. (°) ↓"),
+    ("paper_spider_eef_pos_err_cm", "EEF Pos. Err. (cm) ↓"),
+    ("paper_spider_eef_ori_err_deg", "EEF Ori. Err. (°) ↓"),
+    ("paper_spider_obj_pos_err_cm", "Obj. Pos. Err. (cm) ↓"),
+    ("paper_spider_obj_ori_err_deg", "Obj. Ori. Err. (°) ↓"),
 ]
 
 OMNIRETARGET_T2_COLS = [
-    ("paper_omniretarget_mj_penetration_duration_pct", "Pen. Duration (%)"),
-    ("paper_omniretarget_mj_penetration_max_depth_cm", "Pen. Max Depth (cm)"),
-    ("paper_omniretarget_foot_skating_duration_pct", "Foot Skating Duration (%)"),
-    ("paper_omniretarget_foot_skating_max_vel_cm_s", "Foot Skating Max Vel (cm/s)"),
-    ("paper_omniretarget_contact_preservation_5cm_pct", "Contact Preservation 5cm (%)"),
+    # Penetration / skating: lower = better (↓); contact preservation: higher (↑)
+    ("paper_omniretarget_mj_penetration_duration_pct", "Pen. Duration (%) ↓"),
+    ("paper_omniretarget_mj_penetration_max_depth_cm", "Pen. Max Depth (cm) ↓"),
+    ("paper_omniretarget_foot_skating_duration_pct", "Foot Skating Duration (%) ↓"),
+    ("paper_omniretarget_foot_skating_max_vel_cm_s", "Foot Skating Max Vel (cm/s) ↓"),
+    ("paper_omniretarget_contact_preservation_5cm_pct", "Contact Preservation 5cm (%) ↑"),
 ]
 
 DYNARETARGET_T5_COLS = [
-    ("paper_object_Epos_case_m", "Obj. Epos (m)"),
-    ("paper_object_Erot_case_deg", "Obj. Erot (°)"),
-    ("paper_dynaretarget_object_success", "Object Success"),
-    ("paper_dynaretarget_smoothness", "Smoothness (rad/s²)"),
-    ("paper_dynaretarget_relative_smoothness", "Rel. Smoothness vs Ref"),
+    # Errors / smoothness (mean |q̈|) lower-better; success rate higher-better;
+    # relative smoothness lower-better (sim more平滑 vs ref).
+    ("paper_object_Epos_case_m", "Obj. Epos (m) ↓"),
+    ("paper_object_Erot_case_deg", "Obj. Erot (°) ↓"),
+    ("paper_dynaretarget_object_success", "Object Success ↑"),
+    ("paper_dynaretarget_smoothness", "Smoothness (rad/s²) ↓"),
+    ("paper_dynaretarget_relative_smoothness", "Rel. Smoothness vs Ref ↓"),
 ]
 
 CORE4D_COLS = [
-    ("case_window_pelvis_z_min_m", "Pelvis Min z (m)"),
-    ("E018b_robot_fall_detected", "Robot Fall"),
-    ("paper_carry_progress_ratio_case", "Carry Progress Ratio"),
-    ("paper_transport_success", "Transport Success"),
-    ("paper_omniretarget_robot_object_deep_penetration_duration_pct", "Deep Pen. Duration (%)"),
-    ("case_window_ref_leg_box_interference_frames_pct", "Leg Intf (ref) (%)"),
+    # Pelvis min z: higher = upright (↑); robot fall count: ↓; success / progress ratio: ↑;
+    # penetration / leg interference: ↓.
+    ("case_window_pelvis_z_min_m", "Pelvis Min z (m) ↑"),
+    ("E018b_robot_fall_detected", "Robot Fall ↓"),
+    ("paper_carry_progress_ratio_case", "Carry Progress Ratio ↑→1"),
+    ("paper_transport_success", "Transport Success ↑"),
+    ("paper_omniretarget_robot_object_deep_penetration_duration_pct", "Deep Pen. Duration (%) ↓"),
+    ("case_window_ref_leg_box_interference_frames_pct", "Leg Intf (ref) (%) ↓"),
 ]
 
 
@@ -478,7 +484,9 @@ def main() -> int:
             "本表对比 **同一组 case** 上各方法的 paper-aligned 指标 mean，按指标分组。"
         )
         tab5.append(
-            "**注意**：当前只有 spider physical (E018b 13 case) 与 holosoma v2 kinematic (box025_p1/p2 2 case) 共有 N=2。"
+            "**说明**：N（交集）= 各方法 case 集合交集 size，自动由 unified_eval 计算。"
+            "spider physical 当前 13 case；holosoma v2 kinematic 当前 12 case "
+            "(desk021_p1 SOCP infeasible，详见 log/20b)；交集 N=12。"
         )
         tab5.append("")
         tab5.append(

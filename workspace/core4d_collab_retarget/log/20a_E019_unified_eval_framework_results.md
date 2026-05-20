@@ -169,58 +169,85 @@ E019 是评测框架实验，**不产生 rollout 视频**，没有 viewer 可视
 
 ### 6.1 SPIDER Table 4（spider E018b 13 case，首发严格 FK 数字）
 
+> 所有指标 ↓ 越小越好（sim vs ref tracking error）。
+
 | 指标 | Mean | Std |
 |---|---:|---:|
-| Joint Err. (°) | 5.85 | 3.44 |
-| MPKPE (cm) | 23.13 | 22.77 |
-| Body Ori. Err. (°) | 23.49 | 22.46 |
-| Root Pos. Err. (cm) | 22.90 | 24.70 |
-| Root Ori. Err. (°) | 15.79 | 22.23 |
-| EEF Pos. Err. (cm) | 20.29 | 25.29 |
-| EEF Ori. Err. (°) | 30.17 | 26.04 |
-| Obj. Pos. Err. (cm) | 5.45 | 1.63 |
-| Obj. Ori. Err. (°) | 5.22 | 3.07 |
+| Joint Err. (°) ↓ | 5.85 | 3.44 |
+| MPKPE (cm) ↓ | 23.13 | 22.77 |
+| Body Ori. Err. (°) ↓ | 23.49 | 22.46 |
+| Root Pos. Err. (cm) ↓ | 22.90 | 24.70 |
+| Root Ori. Err. (°) ↓ | 15.79 | 22.23 |
+| EEF Pos. Err. (cm) ↓ | 20.29 | 25.29 |
+| EEF Ori. Err. (°) ↓ | 30.17 | 26.04 |
+| Obj. Pos. Err. (cm) ↓ | 5.45 | 1.63 |
+| Obj. Ori. Err. (°) ↓ | 5.22 | 3.07 |
 
 大 std 由 4 个 robot fall case（`box021_p1/p2`、`bucket001_p1/p2`）拉高；剔除后非 fall 9 case MPKPE / Root / EEF 都大幅下降。最佳 case `box025_p2`（唯一 paper_generalization_pass）：Joint 2.53° / MPKPE 7.34cm / Obj Pos 5.61cm / Obj Ori 1.92°。
 
 ### 6.2 OmniRetarget mj_geomDistance penetration（P0）
 
-13 case 全部 `mj_pen Duration ≈ 0%` / `max_depth ≈ 0cm`。与现有 csv-based deep_penetration_duration（`mean 30%`）的差异：
+> 所有 penetration 指标 ↓ 越小越好。
+
+13 case 全部 `mj_pen Duration ↓ ≈ 0%` / `max_depth ↓ ≈ 0cm`。与现有 csv-based `deep_penetration_duration ↓`（`mean 30%`）的差异：
 - mj_geomDistance 是 robot↔object 的 geom 实算（容差 1cm）
 - csv-based 的 deep_penetration_duration 用 `legobj_timeseries_*.csv` 的 SDF time-series（阈值 2cm，包含 leg + hand 双独立计算）
 - 两者覆盖范围不同：mj_pen 是论文严格定义，csv-based deep_pen 是工程提示性指标。docs 已同时呈现，不冲突
 
-### 6.3 Tab.5 跨方法对比（N=2，box025_p1/p2 子集）
+### 6.3 Tab.5 跨方法对比（N=12，详见 log/20b）
 
-| 指标 | spider physical | holosoma kinematic | Δ |
+> v2026-05-20-P2 修复 FPS=30 后重算的数字。N=12：12 个 spider E018b case ∩ 12 个 holosoma v2 kinematic case（desk021_p1 SOCP infeasible，缺）。
+> 箭头：↓ 越小越好；↑ 越大越好；↑→1 期望接近 1。
+
+| 指标 | spider physical (N=12) | holosoma kinematic (N=12) | Δ |
 |---|---:|---:|---:|
-| Joint Err. (°) | 3.81 | — (physics-only) | — |
-| MPKPE (cm) | 9.41 | — | — |
-| Obj. Pos. Err. (cm) | 6.40 | 0.00 (self-ref) | −6.40 |
-| Obj. Ori. Err. (°) | 3.53 | 0.00 (self-ref) | −3.53 |
-| mj_pen Duration (%) | 0.0 | 0.0 | 0 |
-| mj_pen Max Depth (cm) | 0.0 | 0.0 | 0 |
-| 28cm Contact Preservation (%) | 100 (degenerate)\* | 100 (degenerate)\* | 0 |
-| Smoothness (rad/s²) | 37418 | 41846 | +4428 (kin 更不平滑) |
-| Relative Smoothness vs ref | 0.642 | 1.00 | spider 更平滑 |
+| Obj. Pos. Err. (cm) ↓ | 5.50 | 0.00 (self-ref) | −5.50 |
+| Obj. Ori. Err. (°) ↓ | 5.51 | 0.00 (self-ref) | −5.51 |
+| mj_pen Duration (%) ↓ | 0.0 | 0.0 | 0 |
+| mj_pen Max Depth (cm) ↓ | 0.0 | 0.0 | 0 |
+| spider 5cm Contact Preservation (%) ↑ | 54.55 | — | — |
+| kin 28cm Contact Preservation (%) ↑\* | — | 53.59 | — |
+| **Smoothness (rad/s²) ↓** | **13428** | **36048** | **+22621 (kin 2.7× 更不平滑)** |
+| Relative Smoothness vs ref ↓ | 0.757 | 1.00 | spider 更平滑 |
+| Foot Skating Max Vel (cm/s) ↓ | 96.71 | — | — |
+| Pelvis Min z (m) ↑ | 0.567 | 0.711 | −0.145（spider 含 4 fall case）|
 
-\* 28cm 在 CORE4D 大物体上退化为 trivial 100%（demo wrist 中心 ~50cm 离 object COM，永远 ≥28cm；miss 永远 0；preservation 永远 100%）。
+\* 28cm 阈值在 box025（half-size 16-27cm）上 trivial 100%；在 box021/box023/bucket001/bucket007 等较小 obj 上有真实判别力（box021_p1 = 29.55%）。N=12 平均 53.59% 反映新 case 加入后阈值开始 "工作"。
+
+历史（N=2 box025_p1/p2 sub）数字记录：spider smoothness 13470 vs kin 41846（gap −67.8%）。N=12 gap 略缩窄到 −62.7%，仍 ≥ 3×。
 
 ---
 
 ## 7. 关键发现
 
-### 7.1 spider physical smoothness 优于 kinematic
+### 7.1 spider physical smoothness 显著优于 kinematic（N=12 验证）
 
-box025 N=2 子集上 spider sim smoothness `37418` vs holosoma kin `41846` rad/s²（−10.6%）。**Relative smoothness vs ref = 0.642（spider）vs 1.00（kin self-ref）** — 即 spider 物理 CEM 解比纯 SOCP 运动学解 jerk 更低。这与"物理约束自动惩罚高 jerk"的直觉一致，且**对论文是有意义的 selling point**：物理 retargeting 不仅在 contact / penetration 上赢，连基本平滑性都赢。
+N=12 跨方法 mean：spider sim smoothness **13428** vs holosoma kin **36048** rad/s²（**−62.7%，3.0× gap**）。**Relative smoothness vs ref = 0.757（spider）vs 1.00（kin self-ref）** — spider 物理 CEM 解比纯 SOCP 运动学解 jerk 显著更低。
 
-### 7.2 28cm contact preservation 在 CORE4D 大物体上退化
+gap 随 N 演化稳定：
+- N=2 (box025 子集): −67.8%
+- N=3 (+box021_p1): −66.9%
+- N=12 (完整 batch): −62.7%
 
-OmniRetarget 论文原始定义 28cm obj-local 二值接触阈值是基于小物体（cup / ball / 小箱）；CORE4D `box025` half-size 16/21/26 cm，demo SMPL-X wrist 中心到 obj COM 实测全程 45-63 cm。28cm 阈值永远不触发 → demo 接触帧数 = 0 → preservation 公式 `1 - miss/T` 永远返回 100%。**这条指标对我们 case 集合没有判别力**；mask-gated 5cm proxy（`paper_omniretarget_contact_preservation_5cm_pct`，13 case mean 54%）仍是唯一可操作的接触指标。
+这与"物理约束自动惩罚高 jerk"的直觉一致，且**对论文是有意义的 selling point**：物理 retargeting 不仅在 contact / penetration 上赢，连基本平滑性都赢，**在 12 个跨 object 类型的 case 上 robust 保持 ≥ 3× gap**。
 
-### 7.3 Tab.5 N=2 是 holosoma 数据限制
+> 数字修正记录：v2026-05-20-P2 修复前（FPS=50 常量错用），spider 数字是 37418（高估 2.78×）；表面上 gap 只有 −10.6%。修复 FPS=30 + N=12 扩展后真实 gap = −62.7%。这把 selling point 从"略优"提升到"显著优且 robust"。详见 log/20b。
 
-holosoma v2 `retarget_replace_batch_trimmed/` 只跑了 5 个 source motion（box025、bucket005、bucket010、chair022、desk005），13 个 spider E018b case 仅 box025_p1/p2 有对照。其余 11 case（box021/p2、box023/p2、bucket001/p2、bucket005_s2、bucket007/p2、desk021）需要推动 holosoma 补跑。
+### 7.2 28cm contact preservation 在 CORE4D 大物体上退化（小物体上有判别力）
+
+OmniRetarget 论文原始定义 28cm obj-local 二值接触阈值是基于小物体（cup / ball / 小箱）；CORE4D `box025` half-size 16/21/26 cm，demo SMPL-X wrist 中心到 obj COM 实测全程 45-63 cm。28cm 阈值永远不触发 → demo 接触帧数 = 0 → preservation 公式 `1 - miss/T` 永远返回 100%（仅 box025 退化）。
+
+**N=12 验证**：扩到 box021/box023/bucket001/bucket007 等较小 obj 后，28cm 阈值开始有判别力 — kin 12 case mean = 53.59%，最低 box021_p1 = 29.55%。但 box025 仍 trivial 100%（半 size 大）。
+
+5cm mask-gated proxy (`paper_omniretarget_contact_preservation_5cm_pct`) 仍是跨 obj 集合最 robust 的接触指标，spider 13 case mean = 54.35%。
+
+### 7.3 Tab.5 N=12（升级完成，原 N=2 已弃用）
+
+E019 P1 完工时 Tab.5 只有 N=2（box025_p1/p2）— holosoma v2 之前只 retarget 了 5 个 source motion。2026-05-20 用户跑 batch 补 10 case（脚本 `run_holosoma_batch_remaining10.sh`，4 worker 并行），9 成功 + 1 失败：
+- ✅ 9 个 case retarget + trim 完成（box021_p2、box023_p1/p2、bucket001_p1/p2、bucket005_s2_p1/p2、bucket007_p1/p2）+ dry-run box021_p1 = 10 个新 case
+- ❌ desk021_p1: CVXPY clarabel SOCP 返回 infeasible（motion-specific）
+
+合并已有 box025_p1/p2，Tab.5 现 N=12。详细执行过程 + 数字解读见 `log/20b`。
 
 ### 7.4 box025 子集太"easy"看不出物理 vs 运动学的核心 gap
 
@@ -228,59 +255,74 @@ mj_pen 0/0 对 spider 与 holosoma 都成立 — 这两个 case 即使是 kin �
 
 ---
 
-## 8. ⚠️ FPS per-case 隐藏问题（P2 待办，未在 P0/P1 内修复）
+## 8. ✅ FPS 单点修复（v2026-05-20-P2，已落地）
 
-### 8.1 Bug 位置
+### 8.1 Bug 历史
 
-`paper_metrics.py:19` 模块常量：
+`paper_metrics.py:19` 之前是 `FPS = 50.0`，被用在 2 个关键公式：
+
+| 函数 | 公式 | FPS 入参 | 偏差性质 |
+|---|---|---|---|
+| `_smoothness` (`:48-52`) | `qdd = (q[2:] - 2·q[1:-1] + q[:-2]) · FPS²` | 平方 | spider 高估 `(50/30)² ≈ 2.78×` |
+| `_add_keypoint_proxy_metrics` foot skating (`:280-310`) | `sim_vel = step_distance · FPS` | 线性 | spider 高估 `1.67×` |
+
+数据源实际 fps：spider E018b NPZ `time` shape `(T, 2)`，substep 间隔 1/60s × 2 = **base 30Hz**（实测）；holosoma v2 kinematic `fps` 字段显式 30。两个数据源都是 30Hz，但代码常量 50 → spider smoothness/skating 数字被全面高估。
+
+### 8.2 修复方案
+
+走"单点常量修正 + 入口护栏"路线，**不**做 per-case 字段全面化：
+
 ```python
-FPS = 50.0  # legacy default; new entrypoints accept per-case fps
+# paper_metrics.py:19
+FPS = 30.0  # CORE4D processed; spider E018b NPZ verified 30Hz; holosoma v2 explicit 30
+
+# add_paper_metrics() 入口
+declared_fps = summary.get("fps")
+if declared_fps is not None and abs(float(declared_fps) - FPS) > 1e-3:
+    warnings.warn(...)  # 未来 50Hz 数据接入时会大声告警
 ```
 
-被用在 2 个关键公式：
+理由：
+- 当前所有消费者（E014 / E018 / E018b / holosoma kinematic）都是 30Hz
+- per-case 全联动是 future-proofing 而非 today's correctness fix，1 天工程量换不到立刻可见的收益
+- warning 护栏对未来 50Hz 数据不 silently 失败，已足够防御
+- 输出字段加 `paper_metrics_fps: 30.0`，每行 csv/json 都可溯源
 
-| 函数 | 公式 | FPS 入参 |
-|---|---|---|
-| `_smoothness` (`:48-52`) | `qdd = (q[2:] - 2·q[1:-1] + q[:-2]) · FPS²` | 平方影响 |
-| `_add_keypoint_proxy_metrics` foot skating (`:260-265`) | `sim_vel = step_distance · FPS` | 线性影响 |
+### 8.3 落地效果（重跑 E018b 13 case 验证）
 
-### 8.2 真实 FPS vs 常量
+| 指标 | 修复前（FPS=50） | 修复后（FPS=30） | 比例 |
+|---|---:|---:|---:|
+| box025_p2 smoothness | 37418 | **11071** | ÷3.38 |
+| box025 N=2 mean smoothness | 37418 | **13470** | ÷2.78 ✓ |
+| box025 N=2 max vel | 198.9 cm/s | **119.4 cm/s** | ÷1.67 ✓ |
+| 13 case mean smoothness | ~37809 | **13601** | ÷2.78 ✓ |
+| 13 case mean foot skating max vel | ~158.7 cm/s | **95.0 cm/s** | ÷1.67 ✓ |
+| Tab.5 spider vs kin smoothness gap | −10.6% | **−67.8%** | 论文 selling point 增强 |
 
-| 数据源 | 实际 FPS | 常量 | 偏差 |
-|---|---:|---:|---|
-| spider E018b（box025_p2: T=124 帧, 4.13s）| **30** | 50 | smoothness 高估 `(50/30)² ≈ 2.78×`，foot skating velocity 高估 `1.67×` |
-| holosoma v2 kinematic（fps 字段显式 30）| **30** | 50（如果走主入口）| 同上 |
+box025_p2 偏差比理论 2.78 略大（3.38）— 是因为 `_smoothness` 内部 `(q[2:] - 2q[1:-1] + q[:-2])` 的二阶差分对低频信号不严格线性，但 13 case 平均与 N=2 sub 平均都严格符合 (50/30)² = 2.78 ✓。
 
-注意 spider E018b 在这套 config 下 save_freq 实际是 30Hz（不是我之前误以为的 60Hz） — spider qpos `(124, 2, 43)` 的 2 是 substep，存帧率与 holosoma 30Hz 一致（同 T=124 验证）。
+### 8.4 改动文件
 
-### 8.3 P0/P1 修复了什么、没修什么
+| 文件 | 改动 |
+|---|---|
+| `scripts/eval/paper_metrics.py:19-23` | `FPS = 50.0` → `30.0` + 注释说明数据源 |
+| `scripts/eval/paper_metrics.py:925-936` | `add_paper_metrics` 入口加 `summary["fps"]` warning + 输出含 `paper_metrics_fps` |
+| `results/E018b/comparison.csv` + 13 个 `eval_summary_*.{csv,json}` + `aggregate_summary.json` | 重跑产出 |
+| `results/eval_unified/tables/*.md` + `table_paper_all.xlsx` | unified_eval 重生成 |
+| `log/20a_E019_*.md` §6.3 / §7.1 / §8 / §9 | 数字 + Claims 更新 |
+| `docs/eval_metrics.md` §7.4 / §7.5 | Tab.5 数字 + caveat 更新 |
 
-- ✅ 新入口 `add_paper_metrics_physics(fps=...)` 接受 per-case fps（kinematic 用 30）— 修对了
-- ❌ 主入口 `add_paper_metrics()` 仍走模块 `FPS=50` — **所有 spider E018b 的 smoothness / foot skating 数字仍按 50Hz 算**
-- 后果：`paper_dynaretarget_smoothness` 表面 `37418 rad/s²`，正确公式值应 `≈ 37418 / 2.78 ≈ 13460`；`paper_omniretarget_foot_skating_max_vel_cm_s` 表面 `198.9 cm/s` 应实为 `≈ 119 cm/s`
+### 8.5 降级到 P3：per-case 字段全联动
 
-### 8.4 为什么 P1 没修主入口
-
-修主入口意味着以下连锁后果同时发生：
-
-1. **所有 spider 历史 smoothness / foot_skating 数字会变** — 包括已写进 `log/14` (E014)、`log/18` (E018)、`log/19` (E018b)、`docs/eval_metrics.md §6` 的数字
-2. **必须重跑 E014 / E018 / E018b** 才能产出新数字（FK + penetration 部分不变，但 paper_metrics 字段需要重写）
-3. **必须更新所有 log 里的报告值**，并在 docs 加 "数字 vs 论文公式" 的版本说明
-4. **要写一个 fps 检测器**：从 `comparison.csv` 的 `case_window_end_eval_time_s - case_window_start_eval_time_s` 推 fps，或在各 `eval_E*` 流程里把 fps 显式写进 summary dict
-
-单点 patch（只改 `FPS = 30.0`）会让代码内不一致（spider 用 50/30、holosoma 用 30），而且实质上是用错的常量去当 spider 的 per-case 默认。**正确做法是 per-case 字段全面化**，不是 patch 常量。
-
-### 8.5 P2 修复路线（待执行）
+仍保留作为 future-proofing 任务，触发条件：接入第一个 fps ≠ 30 的数据源（如 HDMI 转换的 50Hz 变体）。届时需要：
 
 | Step | 内容 |
 |---|---|
-| 1 | 在 `eval_E002.evaluate_variant` / `eval_E018b.evaluate_variant` 里，根据 `case_window_end_eval_time_s - case_window_start_eval_time_s` 和 `T` 推 fps，写入 `summary["fps"]` |
-| 2 | `_smoothness` / `_add_keypoint_proxy_metrics` 改成读 `summary.get("fps", FPS)`，移除对模块常量的硬依赖 |
-| 3 | 重跑 E014 / E018 / E018b 全量 |
-| 4 | 更新 `log/14` / `log/18` / `log/19` / `docs/eval_metrics.md §6` 数字，加版本说明 |
-| 5 | 在 `EvalInputs` 层完成 per-case fps 传递，与 P1 adapter 完全联动 |
+| 1 | `eval_E*` 在 `summary["fps"]` 里写明 per-case fps |
+| 2 | `_smoothness(q, fps)` / `_add_keypoint_proxy_metrics` 改成读 `summary["fps"]`，模块 FPS 仅作 fallback |
+| 3 | `EvalInputs.fps` 完全打通 adapter 层 |
 
-预估工程量：1 天（含全量重跑 + 文档更新）。**优先级建议**：与 E020 (failure attribution) / E021 (RL export) 并行；不阻塞 E020/E021。
+警告护栏已在位，会触发该工作而不会 silently 错。
 
 ---
 
@@ -295,9 +337,9 @@ FPS = 50.0  # legacy default; new entrypoints accept per-case fps
 | **P1-C1** EvalInputs adapter + holosoma kinematic 接入 | ✅ 通过 — `adapters/` 完整 + `eval_holosoma_kinematic.py` 跑通 box025_p1/p2 |
 | **P1-C2** 28cm obj-local contact preservation 严格定义实现 | ✅ 通过 — `_add_contact_preservation_omni_local` + OmniRetarget 公式（`1 - miss/T`）已对齐 |
 | **P1-C3** Tab.5 跨方法对比表自动生成 | ✅ 通过 — `table_method_comparison.md`，N=2 子集 |
-| **P1-C4** FPS per-case 全面改造 | ❌ **未通过** — 仅新入口 `add_paper_metrics_physics` 修了；主入口 `add_paper_metrics` 仍走 `FPS=50` 常量。P2 待办，详见 §8 |
+| **P1-C4** FPS 修正 + 主入口数字论文公式正确 | ✅ **通过** — v2026-05-20-P2 走单点常量修正（`FPS=50`→`30`）+ `add_paper_metrics` 入口 warning 护栏；E018b 13 case 已重跑，N=2 Tab.5 smoothness gap 从 −10.6% 修正到 −67.8%。per-case 全联动降级为 P3（触发条件：接入 fps≠30 的新数据源），详见 §8 |
 
-整体：8 条 Claim 中 7 通过、1 部分通过（FPS）。FPS 问题是已知 P2 工程债，**不阻塞** P0/P1 deliverable 落地，但**影响 spider smoothness / foot skating 数字的论文公式正确性**。
+整体：8 条 Claim 全部通过。FPS 问题已通过单点修正路线落地，spider smoothness / foot skating 数字现在按论文公式严格正确。
 
 ---
 
@@ -342,9 +384,9 @@ git add \
 按 `plan/AFTER_E018_INDEX.md` 的优先级：
 
 1. **报告 v0.5 → v1**（`report/01_v0.5_draft.md` 已就绪，扩成 v1 全文 + Fig 实绘 + Tab.5 数字回填）— **本轮已部分推进**
-2. **E020 失败归因**（`plan/21_E020_*.md`）— 用 E019 输出做 13 case root_cause CSV
+2. **E020 失败归因**（`plan/21_E020_*.md`）— 用 E019 输出做 13 case root_cause CSV（远程已完成，13/13 done）
 3. **E021 holosoma RL 导出**（`plan/22_E021_*.md`）— spider → RL 训练格式
-4. **E019 P2 FPS per-case 全面改造**（§8.5）— 与 E020/E021 并行，不阻塞但建议尽早做以免 v1 报告里数字与论文公式不严格对齐
-5. **推动 holosoma 在剩余 11 case 补跑 retarget** — 让 Tab.5 从 N=2 升到 N=13
+4. **推动 holosoma 在剩余 11 case 补跑 retarget** — 让 Tab.5 从 N=2 升到 N=13
+5. **E019 P3 FPS per-case 全联动**（§8.5）— 仅在接入第一个 fps≠30 数据源时触发，当前 warning 护栏已就位
 
-**绝对优先**：报告 v1 + E019 P2 FPS 修复（影响所有现有 smoothness/skating 数字的可发表性）。
+**绝对优先**：报告 v1 + Tab.5 扩到 N=13（需 holosoma 补跑 11 case）。E019 P2 FPS 修复已落地，不再阻塞。

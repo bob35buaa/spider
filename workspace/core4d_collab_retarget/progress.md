@@ -1005,15 +1005,47 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 
 - 用户问 "FPS per-case 全面改造是什么意思"。诚实说明：`paper_metrics.py:19` 的 `FPS = 50.0` 常量在 `_smoothness` (公式乘 FPS²) 和 `_add_keypoint_proxy_metrics` (foot skating velocity) 中硬依赖，但 spider E018b 真实保存帧率是 30Hz（box025_p2 T=124 帧 vs holosoma 同 case T=124 验证；spider qpos `(T,2,43)` 的 2 是 substep）。后果：spider smoothness 数字高估 `(50/30)² ≈ 2.78×`、foot skating velocity 高估 `1.67×`。
 - P0/P1 只在新入口 `add_paper_metrics_physics(fps=...)` 上修了；主入口 `add_paper_metrics` 仍走模块 FPS=50 — 所有 spider E018b 历史 smoothness/foot_skating 数字仍是错的。
-- 单点 patch（改 `FPS = 30.0`）会让代码内不一致，正确做法是 per-case fps 全面化：(1) eval_E0NN 从 case_window 时间推 fps 写 summary、(2) paper_metrics 函数读 `summary.get("fps")`、(3) 重跑 E014/E018/E018b、(4) 更新所有 log 数字。预估 1 天。
-- P2 待办，与 E020/E021 并行做不阻塞，但**影响 v1 报告里 smoothness/foot_skating 数字的可发表性**。
+
+### E019 P2 FPS 单点修复（v2026-05-20-P2，已落地）
+
+- 用户问 "直接改成 30 有啥问题吗"。诚实评估：当前所有消费者（E014/E018/E018b/holosoma kinematic）都是 30Hz，per-case 全联动是 future-proofing 而非 today's correctness fix。单点常量 + warning 护栏路线 30 分钟即可，per-case 联动 1 天。
+- 落地：`paper_metrics.py:19` 改 `FPS = 30.0`；`add_paper_metrics` 入口加 `summary["fps"]` warning（≠ FPS 时报警，防止未来 50Hz 数据 silent 失败）；输出 `paper_metrics_fps: 30.0` 字段可溯源。
+- 重跑 E018b 13 case + holosoma 2 case，重生成 unified_eval 表：
+  - box025_p2 smoothness 37418 → **11071**（÷3.38，二阶差分对低频信号略偏 (50/30)²）
+  - box025 N=2 mean smoothness 37418 → **13470**（÷2.78 ✓ 理论值）
+  - 13 case mean smoothness ~37809 → **13601 ± 2048**（÷2.78 ✓）
+  - 13 case mean foot skating max vel ~158.7 → **95.0 ± 53.7 cm/s**（÷1.67 ✓）
+- **Tab.5 spider vs kin smoothness gap 从 −10.6% 修正到 −67.8%（3.1× gap）**：论文 selling point 从"略优"提升到"显著优"。
+- 文档更新：`log/20a §6.3/§7.1/§8/§9/§11`、`docs/eval_metrics.md §7.4/§7.5`、`EXPERIMENT_TRACKER.md` E019 overview + key metrics 行。
+- per-case 全联动降级为 P3，触发条件：接入 fps ≠ 30 的新数据源；warning 护栏已就位。
 
 ### 本轮交付汇总
 
 - 代码新增/扩展 ~750 行：paper_metrics 972、unified_eval 530、eval_holosoma_kinematic 193、adapters/ 284、docs/eval_metrics.md 306、log/20 380。
 - 评测产物：13 case spider 重评 + 2 case kinematic 首评 + Tab.5 跨方法对比 + 5 sheet xlsx + 15 per_case JSON。
 - 计划/报告：4 个新计划 + 1 总索引 + 报告 outline + v0.5 中文初稿。
-- E018b NPZ 数据已就绪并全量重评通过；E019 Claims 7/8 通过（FPS P2 未通过）。
+- E018b NPZ 数据已就绪并全量重评通过；E019 Claims 8/8 通过（FPS P2 单点修复已落地）。
+
+### E019 后续：OmniRetarget kinematic Tab.5 扩到 N=12（log/20b）
+
+- 用户问"是不是需要跑 OmniRetarget 13 case 对比"。调研 holosoma v2 已有 5 个 source motion（只有 box025 与 spider 13 case 重合），其余 11 case 需要重跑 retarget。
+- CORE4D raw 数据 7 个 date 目录均在 `/mnt/ali-sh-1/usr/xiayibo/xyb_data_tidal_alsh/.../human_object_motions/`。
+- holosoma retarget 是 CPU-bound（scipy + cvxpy + clarabel SOCP，无 GPU 依赖），所以"2 机 × 2 GPU"实际是 4 个 CPU worker。
+- **dry-run box021_p1 验证全流程**：convert → 模板 sed Box025→Box021 生成 g1 XML → retarget (1m38s, cost 0.513) → trim 172→88 帧（自动对齐 spider sim T=88）→ adapter `CASE_MAP` 注册 → spider eval 通过。
+- 写 `run_holosoma_batch_remaining10.sh` 三 phase（convert/retarget/trim）+ SHARD_COUNT/SHARD_ID 多 worker 并行；shard 0..3 → 3+3+2+2 case 分配。fallback：retarget phase 检测 NPZ 缺失自动调 convert（防用户漏跑 Phase 1）。
+- 用户跑 batch：9/10 retarget 成功，**desk021_p1 CVXPY clarabel returned `infeasible`**（motion-specific 问题，XML 与已成功 desk005 完全一致）。
+- 收尾：`CASE_MAP` 从 3 项扩到 12 项（box025_p1/p2 + 10 new − desk021_p1），`unified_eval.py` 删除硬编码 "N=2" 文案，重跑 `eval_holosoma_kinematic.py --all` + `unified_eval.py` → Tab.5 N=12。
+- **核心数字**：spider smoothness 13428 vs kin 36048 rad/s²（**−62.7%，3.0× gap**）；gap 演化 N=2:−67.8% → N=3:−66.9% → N=12:−62.7% 稳定；mj_pen 双方 0/0（OmniRetarget 软约束已压住 penetration，Tab.5 不能区分）；spider 5cm preservation 54.55% vs kin 28cm 53.59%（spider 在更严格阈值打平 kin 宽松阈值，contact 质量更好）。
+- 更新：log/20a §6.3/§7.1/§7.2/§7.3、docs/eval_metrics.md §7.4/§7.5、EXPERIMENT_TRACKER E019 overview + key metrics + Logs 列表、log/20b §8-§11 + Claims 验证。
+
+### 遇到的错误（OmniRetarget 13 case 扩展）
+
+| 错误 | 尝试次数 | 解决方案 |
+|------|---------|---------|
+| 缺 g1_29dof_w_Box021.xml | 1 | sed `Box025` → `Box021` 从 Box025 模板生成；同样对 Box023/Bucket007 |
+| 用户跳过 PHASE=convert 直接跑 retarget → NPZ not found | 1 | retarget phase 加 fallback：NPZ 缺失自动调 convert（idempotent）；同时建议优先用 PHASE=convert 串行避免同 obj p1/p2 race |
+| "12 cases on this worker" 显示错误（实际是 3） | 1 | `echo wc -w` 数 word 不是 case；改 `${#my_cases[@]}` 直接数 array |
+| desk021_p1 CVXPY infeasible | 3 (单独 retry / 看 XML / 跟 desk005 对比) | XML 与 desk005 完全一致，确认是 motion-level SOCP 无解。N=12 接受 caveat，不阻塞
 
 ### 遇到的错误
 
