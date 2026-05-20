@@ -1,0 +1,26 @@
+Warp 1.12.1 initialized:
+   CUDA Toolkit 12.9, Driver 13.0
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 5090" (31 GiB, sm_120, mempool enabled)
+   Kernel cache:
+     /home/ubuntu/.cache/warp/1.12.1
+Wrote /home/ubuntu/Workspace/spider/workspace/core4d_collab_retarget/results/E028/comparison.csv
+{
+  "best_target_deep_penetration_pct": 0.6711409395973155,
+  "best_target_variant_by_deep_penetration": "E028_bucket007_p1_barrier_quad_m02",
+  "mean_target_deep_pen_improvement_pp": 34.899328859060404,
+  "num_E028_strict_success": 0,
+  "num_guard_results": 1,
+  "num_guard_strict_success": 0,
+  "num_results": 2,
+  "num_target_E028_strict_success": 0,
+  "num_target_no_fall_pass": 0,
+  "num_target_object_no_regression_pass": 1,
+  "num_target_penetration_guard_pass": 1,
+  "num_target_results": 1,
+  "variants": [
+    "E028_bucket007_p1_barrier_quad_m02",
+    "E028_box025_p2_guard_barrier_m02"
+  ]
+}

@@ -1675,3 +1675,36 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `E028_box025_p2_guard_barrier_m02`: contact `0.00%`, deep pen `0.00%`, obj `5.68cm`, fall `false`, strict `false`。
 - 初步判断：barrier 能压 penetration，但第一版 scale/margin 过硬，明显牺牲 contact；guard 也回退，必须在 log 中按 tradeoff failure 记录。
 - 远程首轮 `bucket005_s2_p2_barrier_quad_m02` 与 `bucket005_s2_p1_contact_gate_m02` 已完成并切到第二轮；当前远程第二轮为 `bucket001_p2_contact_gate_m02` 和 `bucket007_p1_scorecap_m01`。
+
+### E028 full 完成与初步结论
+
+- 2026-05-21 05:26 CST：已确认远程无残留 E028 训练进程，6 个预期 NPZ 都是 full 体量：
+  - `E028_bucket007_p1_barrier_quad_m02`
+  - `E028_bucket005_s2_p2_barrier_quad_m02`
+  - `E028_bucket005_s2_p1_contact_gate_m02`
+  - `E028_bucket001_p2_contact_gate_m02`
+  - `E028_bucket007_p1_scorecap_m01`
+  - `E028_box025_p2_guard_barrier_m02`
+- 远程主 worktree 因 E026 dirty/untracked 文件无法直接 switch；E028 改用 `/home/xiayb/pHRI_workspace/spider_e028_20260521_041811` 独立 worktree。远程 GPU0 的 `E028_bucket001_p2_contact_gate_m02` 曾在 `224/244` stall，已删除本地 smoke 小 NPZ 后改由本地单条重跑完成。
+- 已重跑全量评估：`.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E028.py --all`，刷新 `results/E028/comparison.csv`、`baseline_delta.csv`、`aggregate_summary.json`。
+- 结果摘要：
+  - `num_results=6`，`num_E028_strict_success=0`，guard strict `0/1`。
+  - 按 4 个 target case 取 case-best deep penetration：mean improvement `16.53pp`，低于 E028 claim 的 `>=25pp`。
+  - case-best deep/max penetration pass `2/4`：`bucket007_p1` 和 `bucket001_p2`。
+  - 但 `bucket007_p1` contact 从 `84.13%` 降到 `1.11%` 且 fall；`bucket001_p2` contact 从 `77.53%` 降到 `2.81%`。这两个不是真实 surface-contact success。
+  - `bucket005_s2_p1/p2` 仍高 contact 高穿透：deep penetration `92.89%` / `88.18%`，说明 contact gate / barrier 没挡住 bucket 内部 shortcut。
+  - `box025_p2` guard object/penetration 保持，但 contact 从 `86.93%` 降到 `0%`，按 C4 判定为 guard 回退。
+- 视频关键帧观察：
+  - `bucket007_p1_barrier` 和 `bucket001_p2_contact_gate` 的 no-penetration 主要来自远离物体或姿态失效，而不是稳定表面抓取。
+  - `bucket005_s2_p1/p2` 仍可见手臂/手部跟随 bucket 内部运动，和高 penetration 指标一致。
+  - `box025_p2` guard 中 robot 与 box 基本不建立有效接触。
+- 已写入正式结果日志：`workspace/core4d_collab_retarget/log/28_E028_hard_no_penetration_surface_feasibility_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：
+  - E028 总览状态从 plan 改为完成的负结果；
+  - 关键指标演进新增 E028 full；
+  - Logs 新增 log 28；
+  - 当前实验分支更新为 `exp/core4d-collab-retarget-e028-hard-penetration`。
+- 准备 E028 结果提交：
+  - force-add 了可复核轻量 artifacts：summary CSV/JSON、eval summaries、plots、keyframes、scene XML snapshots 和 E028 小日志；
+  - 未加入 full NPZ、online MP4、outdir、timeseries/contact_masks 等大 artifacts，它们仍保留在本地 `results/E028/`；
+  - `manifest.tsv` 已重新生成，确认 7 行均为 107 列，保留尾部空列语义。

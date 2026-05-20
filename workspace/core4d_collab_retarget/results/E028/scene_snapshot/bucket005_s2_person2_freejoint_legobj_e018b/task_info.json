@@ -1,0 +1,23 @@
+{
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket005_s2_person1/scene.xml",
+  "source_qpos": "workspace/core4d/results/E079/holosoma_bucket005_s2_person2/trimmed/20231002-004-person2-bucket005_with_obj_original.npz",
+  "task": "bucket005_s2_person2",
+  "data_id": "0",
+  "date": "20231002",
+  "seq": "004",
+  "person": "person2",
+  "object_name": "bucket005",
+  "object_model_rel": "bucket/bucket005_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    0.06669526547193527,
+    0.8652502298355103,
+    0.2131509780883789
+  ],
+  "object_initial_quat": [
+    0.5160148739814758,
+    0.5154022574424744,
+    0.4865954518318176,
+    0.4809512197971344
+  ]
+}

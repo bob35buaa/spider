@@ -1,0 +1,22 @@
+{
+  "best_target_deep_penetration_pct": 0.0,
+  "best_target_variant_by_deep_penetration": "E028_bucket001_p2_contact_gate_m02",
+  "mean_target_deep_pen_improvement_pp": 6.779173332882704,
+  "num_E028_strict_success": 0,
+  "num_guard_results": 1,
+  "num_guard_strict_success": 0,
+  "num_results": 6,
+  "num_target_E028_strict_success": 0,
+  "num_target_no_fall_pass": 4,
+  "num_target_object_no_regression_pass": 5,
+  "num_target_penetration_guard_pass": 2,
+  "num_target_results": 5,
+  "variants": [
+    "E028_bucket007_p1_barrier_quad_m02",
+    "E028_bucket005_s2_p2_barrier_quad_m02",
+    "E028_bucket005_s2_p1_contact_gate_m02",
+    "E028_bucket001_p2_contact_gate_m02",
+    "E028_bucket007_p1_scorecap_m01",
+    "E028_box025_p2_guard_barrier_m02"
+  ]
+}

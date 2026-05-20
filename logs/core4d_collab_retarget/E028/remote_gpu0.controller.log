@@ -1,0 +1,7 @@
+[04:18:15] === E028 scene snapshot tasks=bucket005_s2_person2_freejoint_legobj_e018b bucket001_person2_freejoint_legobj_e018b ===
+Wrote workspace/core4d_collab_retarget/results/E028/scene_snapshot/manifest.txt
+[04:18:16] === E028_bucket005_s2_p2_barrier_quad_m02 task=bucket005_s2_person2_freejoint_legobj_e018b override=core4d_collab_E028_bucket005_s2_p2_barrier_quad_m02 GPU=0 ===
+[04:42:48] === E028_bucket005_s2_p2_barrier_quad_m02 done ===
+[04:42:48] === E028_bucket001_p2_contact_gate_m02 task=bucket001_person2_freejoint_legobj_e018b override=core4d_collab_E028_bucket001_p2_contact_gate_m02 GPU=0 ===
+[05:06:48] ERROR E028_bucket001_p2_contact_gate_m02 stalled: no log update for 300s
+[05:06:58] WARN E028_bucket001_p2_contact_gate_m02 failed; continuing E028 queue

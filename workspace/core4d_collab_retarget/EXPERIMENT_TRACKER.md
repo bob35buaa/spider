@@ -36,7 +36,7 @@
 | E025 | 2026-05-20 | Contact + Collision Repair | **contact + collision 负结果/机制验证**: 8/8 full 完成，object no-regression `8/8`，no-fall `7/8`，contact closure pass `6/8`，但 penetration guard 仅 `1/8`、strict success `0/8`。`box023_p1/p2` high contact reward 未闭合 strict contact；bucket s4 penalty 有方向性改善但 deep pen 仍 `35.57-64.53%+` | ✅ 详见 log 24；阶段总结见 log 25 |
 | E026 | 2026-05-20/21 | Full Eval | **OmniRetarget + Spider dynamics 13case 完整评估**: 重跑 Holosoma/OmniRetarget kinematic 得到 `12/13`（`desk021_p1` SOCP infeasible），补齐 E081 full rerun `13/13` 并接入 paper metrics。P0 9case：E081 full rerun obj `21.27cm`、ori `19.04deg`、5cm contact `42.17%`、deep pen `16.25%`、strict proxy `4/9`；E018b/E022-E025 best obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`。P1 13case：E081 full rerun obj `27.10cm`、ori `15.53deg`、5cm contact `36.23%`、deep pen `12.39%`、fall `4`、strict proxy `4/13`；best dynamic obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13`。28cm contact threshold 溯源为 Holosoma v1 `CONTACT_RADIUS=0.28` 并完成阈值 sweep；视觉/指标一致 | ✅ 详见 log 26 |
 | E027 | 2026-05-21 | Data / Timing Audit | **Contact timing + data/retarget quality diagnosis**: 离线聚合 E020/E026/Holosoma/E018b 证据，13/13 case 输出 quality labels。结果：`usable_algorithmic_failure=6`、`usable_with_caveat=4`、`retarget_questionable=2`、`discard_from_success_denominator=1`（`desk021_p1`）。4 个 low-contact timing panel 显示 phase shift 预期收益 `0pp`，不启动 E027 full rollout；后续转 E028 hard no-penetration 与 E030 retarget/geometry/control | ✅ 详见 log 27 |
-| E028 | 2026-05-21 | Hard Penetration | **Hard no-penetration / surface feasibility 计划**: 针对 `bucket005_s2_p1/p2`, `bucket007_p1`, `bucket001_p2` 的 high-contact penetration shortcut，从 E025 soft penalty 升级为 barrier / score cap / contact gate / staged contact；`box025_p2` 做 strict pass guard。本实验需要核心代码改动，已切到 `exp/core4d-collab-retarget-e028-hard-penetration` | 📝 计划：`plan/33_E028_hard_no_penetration_surface_feasibility_plan.md` |
+| E028 | 2026-05-21 | Hard Penetration | **Hard no-penetration / surface feasibility 负结果**: 6/6 full variants 完成。case-best deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，strict `0/4`；case-best mean deep improvement `16.53pp`，低于 `>=25pp` 目标。`bucket007_p1`/`bucket001_p2` 压低穿透但 contact collapse，`bucket005_s2_p1/p2` 仍高 contact 高穿透，`box025_p2` guard contact 退到 `0%` | ✅ 详见 log 28 |
 
 ## Baseline
 
@@ -82,6 +82,7 @@
 | E022-E025 stage | E022 修 mask semantics 但 contact 仍低；E023 lower-body geometry 有局部改善但未过 gate；E024 p2 stability 可修、p1 不可由同类 sweep 修；E025 object-side 保持但 contact/collision strict success 仍 0 | post-E020 优化阶段已完成排雷：object-side support proxy 不是主瓶颈；后续优先 timing diagnosis、hard no-penetration、lower-body geometry/control、bucket001 p1 stability |
 | E026 full eval | P0 9case：OmniRetarget kin `9/9`、28cm contact `57.29%`；E081 full rerun `9/9`、obj `21.27cm`、ori `19.04deg`、5cm contact `42.17%`、deep pen `16.25%`、fall `1`、strict proxy `4/9`；E018b/E022-E025 best `9/9`、obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`。P1 13case：OmniRetarget `12/13`、28cm contact `53.59%`；E081 full rerun `13/13`、obj `27.10cm`、ori `15.53deg`、5cm contact `36.23%`、deep pen `12.39%`、fall `4`、strict proxy `4/13`; best dynamic obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13` | E026 完成 full evaluation 账本：28cm 是继承口径需 caveat；E081 baseline 已按 paper metrics 补齐可比列但不是 best dynamic；后续应继续 robot-side hard constraints/timing/geometry，而非普通 reward sweep |
 | E027 offline audit | 13case quality labels：usable_algorithmic_failure `6`、usable_with_caveat `4`、retarget_questionable `2`、discard_from_success_denominator `1`；timing panels `4/4` priority cases；full candidates `0` | `desk021_p1` 从主 success denominator 弃用但保留 P1 caveat；`box025_p1/bucket007_p2` 转 E030 retarget geometry；`box023_p1/p2` 不做 phase-shift sweep，转 surface/geometry/control 诊断；bucket penetration cases 转 E028 |
+| E028 full | 6/6 full variants；variant aggregate strict `0/6`、guard strict `0/1`、target variant mean deep improvement `6.78pp`。按 4case case-best：deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，contact>=70 on best-deep `2/4`，strict `0/4`，mean deep improvement `16.53pp` | 第一版 hard barrier/contact gate 只能在部分 case 通过“远离物体/切断接触”压低穿透；不能形成 surface contact。下一步需要 object-specific surface target 或 CEM candidate rejection/projection，不能继续加 barrier scale |
 
 ## Plans
 
@@ -149,8 +150,9 @@
 - E022-E025 stage summary: `workspace/core4d_collab_retarget/log/25_E022_E025_optimization_stage_summary.md`
 - E026: `workspace/core4d_collab_retarget/log/26_E026_full_eval_results.md`
 - E027: `workspace/core4d_collab_retarget/log/27_E027_contact_timing_data_quality_results.md`
+- E028: `workspace/core4d_collab_retarget/log/28_E028_hard_no_penetration_surface_feasibility_results.md`
 
 ## Git
 
 - Baseline merge: `feat/dual-robot-retarget -> main` 已 fast-forward 到 `ae8b342`。
-- 当前实验分支：`exp/core4d-collab-retarget`。
+- 当前实验分支：`exp/core4d-collab-retarget-e028-hard-penetration`。
