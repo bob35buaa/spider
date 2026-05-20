@@ -1,0 +1,9 @@
+# variant	source_variant	case_slug	queue	role	wave	stability_penalty_scale	stability_penalty_threshold	local_frame_root_sigma	contact_hdmi_gain	contact_hdmi_sigma	notes
+E024_bucket001_p1_baseline_replay	E018b_bucket001_p1_canonical_t02	bucket001_p1	remote_gpu0	baseline	A	0.0	0.55	0.5	5.0	0.3	E018b replay under E024 plumbing
+E024_bucket001_p2_baseline_replay	E018b_bucket001_p2_canonical_t02	bucket001_p2	remote_gpu1	baseline	A	0.0	0.55	0.5	5.0	0.3	E018b replay under E024 plumbing
+E024_bucket001_p1_stab_s1_t055	E018b_bucket001_p1_canonical_t02	bucket001_p1	remote_gpu0	diagnostic	A	1.0	0.55	0.5	5.0	0.3	height penalty isolate
+E024_bucket001_p2_stab_s1_t055	E018b_bucket001_p2_canonical_t02	bucket001_p2	remote_gpu1	diagnostic	A	1.0	0.55	0.5	5.0	0.3	height penalty isolate
+E024_bucket001_p1_root03_gain3_stab_t065	E018b_bucket001_p1_canonical_t02	bucket001_p1	local	general	A	1.0	0.65	0.3	3.0	0.3	main stability candidate
+E024_bucket001_p2_root03_gain3_stab_t065	E018b_bucket001_p2_canonical_t02	bucket001_p2	remote_gpu0	general	A	1.0	0.65	0.3	3.0	0.3	main stability candidate
+E024_bucket001_p1_root025_gain2_stab_t065	E018b_bucket001_p1_canonical_t02	bucket001_p1	remote_gpu1	general	A	1.0	0.65	0.25	2.0	0.3	stronger stability fallback
+E024_bucket001_p2_root025_gain2_stab_t065	E018b_bucket001_p2_canonical_t02	bucket001_p2	remote_gpu1	general	A	1.0	0.65	0.25	2.0	0.3	stronger stability fallback

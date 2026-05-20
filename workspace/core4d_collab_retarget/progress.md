@@ -1183,3 +1183,27 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已用 `video-frames` skill 抽取 representative frames 到 `results/E023/video_frames_skill/`。
 - 已写入 E023 结果日志：`workspace/core4d_collab_retarget/log/22_E023_retarget_kinematic_geometry_repair_results.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：E023 标记完成，记录 lower-body geometry patch 负结果。
+
+### E024 setup + smoke
+
+- 已按 E024 plan 落地 bucket001 stability setup：
+  - `scripts/E024/variants.tsv`
+  - `scripts/E024/generate_e024_overrides.py`
+  - `scripts/run_E024_preprocess.sh`
+  - `scripts/train/train_E024.sh`
+  - `scripts/train/train_E024_remote_tmux.sh`
+  - `scripts/run_E024_remote.sh`
+  - `scripts/pull_E024_remote_results.sh`
+  - `scripts/eval/eval_E024.py`
+- E024 只复用 E018b bucket001 derived tasks，不复制/修改 scene XML；support proxy fields 与 E018b rows 保持一致，override 只改 `stability_penalty_scale/threshold`、`local_frame_root_sigma`、`contact_hdmi_gain/sigma`。
+- 静态检查通过：
+  - `.venv/bin/python -m py_compile` on E024 generator/eval。
+  - `bash -n` on E024 shell scripts。
+  - `git diff --check`。
+- `bash workspace/core4d_collab_retarget/scripts/run_E024_preprocess.sh` 成功：
+  - 写入 `results/E024/manifest.tsv` 8 variants。
+  - 生成 8 个 `examples/config/override/core4d_collab_E024_*.yaml`。
+- `bash workspace/core4d_collab_retarget/scripts/train/train_E024.sh smoke 0` 成功：
+  - 8/8 variants 生成 4-step smoke NPZ。
+  - `results/E024/scene_snapshot/manifest.txt` 已生成。
+  - `eval_E024.py` wiring 正常，aggregate `num_results=8`。4-step smoke 指标不作为实验结论。
