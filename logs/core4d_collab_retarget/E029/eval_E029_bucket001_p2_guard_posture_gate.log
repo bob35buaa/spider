@@ -1,0 +1,23 @@
+Warp 1.12.1 initialized:
+   CUDA Toolkit 12.9, Driver 13.0
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 5090" (31 GiB, sm_120, mempool enabled)
+   Kernel cache:
+     /home/ubuntu/.cache/warp/1.12.1
+Wrote /home/ubuntu/Workspace/spider/workspace/core4d_collab_retarget/results/E029/comparison.csv
+{
+  "best_target_contact5_pct": 0.0,
+  "best_target_pelvis_min_m": -999.0,
+  "num_E029_success": 0,
+  "num_guard_pass": 0,
+  "num_guard_results": 1,
+  "num_results": 1,
+  "num_target_p1_strict_target": 0,
+  "num_target_results": 0,
+  "num_target_stability_pass": 0,
+  "num_target_useful_signal": 0,
+  "variants": [
+    "E029_bucket001_p2_guard_posture_gate"
+  ]
+}

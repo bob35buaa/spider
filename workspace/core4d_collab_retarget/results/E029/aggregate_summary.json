@@ -1,0 +1,22 @@
+{
+  "best_target_contact5_pct": 0.0,
+  "best_target_pelvis_min_m": 0.5838091373443604,
+  "best_target_variant_by_contact": "E029_bucket001_p1_upright_barrier_t055",
+  "best_target_variant_by_pelvis": "E029_bucket001_p1_upright_barrier_t055",
+  "num_E029_success": 1,
+  "num_guard_pass": 1,
+  "num_guard_results": 2,
+  "num_results": 6,
+  "num_target_p1_strict_target": 0,
+  "num_target_results": 4,
+  "num_target_stability_pass": 4,
+  "num_target_useful_signal": 0,
+  "variants": [
+    "E029_bucket001_p1_upright_barrier_t055",
+    "E029_bucket001_p1_posture_gate_t055",
+    "E029_bucket001_p1_scorecap_t045",
+    "E029_bucket001_p1_tilt_gate_t055",
+    "E029_bucket001_p2_guard_posture_gate",
+    "E029_box025_p2_guard_posture_gate"
+  ]
+}

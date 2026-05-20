@@ -37,7 +37,7 @@
 | E026 | 2026-05-20/21 | Full Eval | **OmniRetarget + Spider dynamics 13case 完整评估**: 重跑 Holosoma/OmniRetarget kinematic 得到 `12/13`（`desk021_p1` SOCP infeasible），补齐 E081 full rerun `13/13` 并接入 paper metrics。P0 9case：E081 full rerun obj `21.27cm`、ori `19.04deg`、5cm contact `42.17%`、deep pen `16.25%`、strict proxy `4/9`；E018b/E022-E025 best obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`。P1 13case：E081 full rerun obj `27.10cm`、ori `15.53deg`、5cm contact `36.23%`、deep pen `12.39%`、fall `4`、strict proxy `4/13`；best dynamic obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13`。28cm contact threshold 溯源为 Holosoma v1 `CONTACT_RADIUS=0.28` 并完成阈值 sweep；视觉/指标一致 | ✅ 详见 log 26 |
 | E027 | 2026-05-21 | Data / Timing Audit | **Contact timing + data/retarget quality diagnosis**: 离线聚合 E020/E026/Holosoma/E018b 证据，13/13 case 输出 quality labels。结果：`usable_algorithmic_failure=6`、`usable_with_caveat=4`、`retarget_questionable=2`、`discard_from_success_denominator=1`（`desk021_p1`）。4 个 low-contact timing panel 显示 phase shift 预期收益 `0pp`，不启动 E027 full rollout；后续转 E028 hard no-penetration 与 E030 retarget/geometry/control | ✅ 详见 log 27 |
 | E028 | 2026-05-21 | Hard Penetration | **Hard no-penetration / surface feasibility 负结果**: 6/6 full variants 完成。case-best deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，strict `0/4`；case-best mean deep improvement `16.53pp`，低于 `>=25pp` 目标。`bucket007_p1`/`bucket001_p2` 压低穿透但 contact collapse，`bucket005_s2_p1/p2` 仍高 contact 高穿透，`box025_p2` guard contact 退到 `0%` | ✅ 详见 log 28 |
-| E029 | 2026-05-21 | Stability / Control | **Bucket001 stability / posture-valid contact 计划**: 针对 `bucket001_p1` 的 persistent fall/contact `0%`，在 E024 fallback 基础上新增默认关闭的 upright barrier、fall score cap、root tilt、foot support、posture-valid contact gate；`bucket001_p2` 和 `box025_p2` 做 guard | 📝 计划：`plan/34_E029_bucket001_stability_control_plan.md` |
+| E029 | 2026-05-21 | Stability / Control | **Bucket001 stability / posture-valid contact 局部正结果/接触负结果**: 6/6 full variants 完成。`bucket001_p1` 4/4 stability pass，pelvis min 从 E024 `0.156m` 提到 `0.527-0.584m`，但 contact 仍 `0%`，useful `0/4`、strict `0/4`；`bucket001_p2` guard 高 contact `99.44%` 但 deep pen `63.64%`/max `9.00cm`，guard fail；`box025_p2` guard pass。远端 p2 在 `162/244` stall，由本地 fallback 完成 | ✅ 详见 log 29 |
 
 ## Baseline
 
@@ -84,6 +84,7 @@
 | E026 full eval | P0 9case：OmniRetarget kin `9/9`、28cm contact `57.29%`；E081 full rerun `9/9`、obj `21.27cm`、ori `19.04deg`、5cm contact `42.17%`、deep pen `16.25%`、fall `1`、strict proxy `4/9`；E018b/E022-E025 best `9/9`、obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`。P1 13case：OmniRetarget `12/13`、28cm contact `53.59%`；E081 full rerun `13/13`、obj `27.10cm`、ori `15.53deg`、5cm contact `36.23%`、deep pen `12.39%`、fall `4`、strict proxy `4/13`; best dynamic obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13` | E026 完成 full evaluation 账本：28cm 是继承口径需 caveat；E081 baseline 已按 paper metrics 补齐可比列但不是 best dynamic；后续应继续 robot-side hard constraints/timing/geometry，而非普通 reward sweep |
 | E027 offline audit | 13case quality labels：usable_algorithmic_failure `6`、usable_with_caveat `4`、retarget_questionable `2`、discard_from_success_denominator `1`；timing panels `4/4` priority cases；full candidates `0` | `desk021_p1` 从主 success denominator 弃用但保留 P1 caveat；`box025_p1/bucket007_p2` 转 E030 retarget geometry；`box023_p1/p2` 不做 phase-shift sweep，转 surface/geometry/control 诊断；bucket penetration cases 转 E028 |
 | E028 full | 6/6 full variants；variant aggregate strict `0/6`、guard strict `0/1`、target variant mean deep improvement `6.78pp`。按 4case case-best：deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，contact>=70 on best-deep `2/4`，strict `0/4`，mean deep improvement `16.53pp` | 第一版 hard barrier/contact gate 只能在部分 case 通过“远离物体/切断接触”压低穿透；不能形成 surface contact。下一步需要 object-specific surface target 或 CEM candidate rejection/projection，不能继续加 barrier scale |
+| E029 full | 6/6 full variants；p1 target `4/4` no-fall/stability pass，best pelvis `0.584m`，但 p1 contact `0%`、useful `0/4`、strict `0/4`；guards `1/2` pass，`box025_p2` pass，`bucket001_p2` contact `99.44%` 但 deep pen `63.64%` fail | hard posture feasibility 能修 `bucket001_p1` fall，但不能闭合接触；p1 停止普通 stability reward sweep，转 reachability/support timing/control audit。bucket surface contact 仍需 surface target 或 CEM rejection/projection |
 
 ## Plans
 
@@ -153,6 +154,7 @@
 - E026: `workspace/core4d_collab_retarget/log/26_E026_full_eval_results.md`
 - E027: `workspace/core4d_collab_retarget/log/27_E027_contact_timing_data_quality_results.md`
 - E028: `workspace/core4d_collab_retarget/log/28_E028_hard_no_penetration_surface_feasibility_results.md`
+- E029: `workspace/core4d_collab_retarget/log/29_E029_bucket001_stability_control_results.md`
 
 ## Git
 

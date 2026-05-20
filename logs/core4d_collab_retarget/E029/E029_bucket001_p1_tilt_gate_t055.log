@@ -1,0 +1,82 @@
+Warp 1.12.1 initialized:
+   CUDA Toolkit 12.9, Driver 13.0
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX 6000 Ada Generation" (47 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/xiayb/.cache/warp/1.12.1
+2026-05-21 06:09:30.408 | INFO     | spider.config:process_config:887 - Hand approach: 2 bodies, obj half_ext=[0.1101, 0.1891, 0.2531]
+2026-05-21 06:09:30.408 | WARNING  | spider.config:process_config:934 - task_info.json not found at /home/xiayb/pHRI_workspace/spider_e029_20260521_055150/example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket001_person1_freejoint_legobj_e018b/0/../task_info.json, using default values
+Module mujoco_warp._src.smooth 26bbc02 load on device 'cuda:0' took 2.50 ms  (cached)
+Module mujoco_warp._src.collision_driver 88f7770 load on device 'cuda:0' took 0.41 ms  (cached)
+Module _nxn_broadphase__locals__kernel_c763f4cb c763f4c load on device 'cuda:0' took 0.38 ms  (cached)
+Module _primitive_narrowphase__locals__primitive_narrowphase_5d9db29e 5d9db29 load on device 'cuda:0' took 0.75 ms  (cached)
+Module mujoco_warp._src.constraint c567367 load on device 'cuda:0' took 1.62 ms  (cached)
+Module mujoco_warp._src.forward 16fbac8 load on device 'cuda:0' took 0.79 ms  (cached)
+Module mujoco_warp._src.passive 8bfe11c load on device 'cuda:0' took 0.62 ms  (cached)
+Module mujoco_warp._src.forward 8f5355c load on device 'cuda:0' took 0.80 ms  (cached)
+Module mujoco_warp._src.support dd3f924 load on device 'cuda:0' took 0.28 ms  (cached)
+Module _solve_LD_sparse_fused__locals__kernel_0b3d31a5 b99aa07 load on device 'cuda:0' took 0.36 ms  (cached)
+Module mujoco_warp._src.solver b116efb load on device 'cuda:0' took 1.04 ms  (cached)
+Module solve_init_jaref__locals__kernel_529ad835 529ad83 load on device 'cuda:0' took 0.27 ms  (cached)
+Module mul_m_sparse__locals___mul_m_sparse_aa423e43 aa423e4 load on device 'cuda:0' took 0.31 ms  (cached)
+Module update_constraint_efc__locals__kernel_81015163 8101516 load on device 'cuda:0' took 0.27 ms  (cached)
+Module update_constraint_gauss_cost__locals__kernel_22a6a314 22a6a31 load on device 'cuda:0' took 0.28 ms  (cached)
+Module update_gradient_cholesky_blocked__locals__kernel_475d8c4a 33bb335 load on device 'cuda:0' took 156.21 ms  (cached)
+Module linesearch_jv_fused__locals__kernel_4c5ab643 4c5ab64 load on device 'cuda:0' took 0.31 ms  (cached)
+Module linesearch_iterative__locals__kernel_ccedd3c5 18f27f8 load on device 'cuda:0' took 0.39 ms  (cached)
+Module update_constraint_efc__locals__kernel_25737258 2573725 load on device 'cuda:0' took 0.31 ms  (cached)
+Module mujoco_warp._src.sensor 18a78e5 load on device 'cuda:0' took 1.63 ms  (cached)
+Module mujoco_warp._src.derivative 7ba27fe load on device 'cuda:0' took 0.38 ms  (cached)
+2026-05-21 06:09:31.533 | INFO     | spider.simulators.mjwp:_load_support_proxy:1979 - support proxy: ref_pos=(264, 3), point_local=[0.0, 0.1891, 0.156922], dt=0.0166667, kp=0.0, xy_vel_scale=1.0, max_xy_speed=0.0, height_tau=0.0
+2026-05-21 06:09:31.757 | INFO     | __main__:main:792 - E034 approach_mask: 56.8% frames active (threshold=0.30m)
+2026-05-21 06:09:31.761 | INFO     | __main__:main:813 - E035 precomputed body FK: xpos=(264, 33, 3), xquat=(264, 33, 4)
+2026-05-21 06:09:31.761 | INFO     | __main__:main:867 - E078 core4d_3cm per-EEF mask: source=workspace/core4d_collab_retarget/results/E029/contact_masks/E029_bucket001_p1_tilt_gate_t055/raw_contact_mask_3cm.npz key=eval_contact_mask_3cm person_idx=0 len 179→264 active L/R=57.2%/0.0%
+2026-05-21 06:09:31.788 | INFO     | __main__:main:939 - E040 dynamic target: shape=(264, 2, 3), uses_eef_offset=True
+2026-05-21 06:09:31.799 | INFO     | __main__:_save_config_yaml:178 - Saved config to workspace/core4d_collab_retarget/results/E029/E029_bucket001_p1_tilt_gate_t055_outdir/config.yaml
+2026-05-21 06:09:31.799 | INFO     | spider.viewers:setup_viewer:129 - viewer is disabled, launch dummy viewer
+Realtime rate: 2.56, plan time: 0.0130s, sim_steps: 2/214, opt_steps: 0Realtime rate: 3.61, plan time: 0.0092s, sim_steps: 4/214, opt_steps: 0Realtime rate: 3.75, plan time: 0.0089s, sim_steps: 6/214, opt_steps: 0Realtime rate: 3.95, plan time: 0.0084s, sim_steps: 8/214, opt_steps: 0Realtime rate: 3.76, plan time: 0.0089s, sim_steps: 10/214, opt_steps: 0Realtime rate: 3.30, plan time: 0.0101s, sim_steps: 12/214, opt_steps: 0Realtime rate: 0.00, plan time: 10.5073s, sim_steps: 14/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2570s, sim_steps: 16/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2827s, sim_steps: 18/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2382s, sim_steps: 20/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2383s, sim_steps: 22/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.3926s, sim_steps: 24/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1119s, sim_steps: 26/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2638s, sim_steps: 28/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.3432s, sim_steps: 30/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.3582s, sim_steps: 32/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2262s, sim_steps: 34/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9626s, sim_steps: 36/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9213s, sim_steps: 38/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9271s, sim_steps: 40/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9650s, sim_steps: 42/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9197s, sim_steps: 44/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9248s, sim_steps: 46/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9707s, sim_steps: 48/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9942s, sim_steps: 50/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9559s, sim_steps: 52/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9321s, sim_steps: 54/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9466s, sim_steps: 56/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9331s, sim_steps: 58/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1733s, sim_steps: 60/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9560s, sim_steps: 62/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9172s, sim_steps: 64/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9359s, sim_steps: 66/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8339s, sim_steps: 68/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8749s, sim_steps: 70/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9206s, sim_steps: 72/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9638s, sim_steps: 74/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9701s, sim_steps: 76/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0064s, sim_steps: 78/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9999s, sim_steps: 80/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0399s, sim_steps: 82/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0187s, sim_steps: 84/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9816s, sim_steps: 86/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9695s, sim_steps: 88/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0222s, sim_steps: 90/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1723s, sim_steps: 92/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0011s, sim_steps: 94/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0717s, sim_steps: 96/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9933s, sim_steps: 98/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0434s, sim_steps: 100/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0234s, sim_steps: 102/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0403s, sim_steps: 104/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0365s, sim_steps: 106/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0588s, sim_steps: 108/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1892s, sim_steps: 110/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1665s, sim_steps: 112/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1862s, sim_steps: 114/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1371s, sim_steps: 116/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0657s, sim_steps: 118/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0343s, sim_steps: 120/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9787s, sim_steps: 122/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9928s, sim_steps: 124/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9366s, sim_steps: 126/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9696s, sim_steps: 128/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.2079s, sim_steps: 130/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0367s, sim_steps: 132/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0198s, sim_steps: 134/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0351s, sim_steps: 136/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9985s, sim_steps: 138/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0303s, sim_steps: 140/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0245s, sim_steps: 142/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0454s, sim_steps: 144/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0303s, sim_steps: 146/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0068s, sim_steps: 148/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0425s, sim_steps: 150/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0233s, sim_steps: 152/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0188s, sim_steps: 154/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9904s, sim_steps: 156/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9900s, sim_steps: 158/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9824s, sim_steps: 160/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.1887s, sim_steps: 162/214, opt_steps: 32Realtime rate: 0.00, plan time: 23.1554s, sim_steps: 164/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9479s, sim_steps: 166/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9522s, sim_steps: 168/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9736s, sim_steps: 170/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9095s, sim_steps: 172/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8765s, sim_steps: 174/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8982s, sim_steps: 176/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9049s, sim_steps: 178/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9077s, sim_steps: 180/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9199s, sim_steps: 182/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.9415s, sim_steps: 184/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8947s, sim_steps: 186/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8677s, sim_steps: 188/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8543s, sim_steps: 190/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8282s, sim_steps: 192/214, opt_steps: 32Realtime rate: 0.00, plan time: 10.0458s, sim_steps: 194/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8216s, sim_steps: 196/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8000s, sim_steps: 198/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8130s, sim_steps: 200/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8319s, sim_steps: 202/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.8304s, sim_steps: 204/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.7900s, sim_steps: 206/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.7764s, sim_steps: 208/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.7953s, sim_steps: 210/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.7522s, sim_steps: 212/214, opt_steps: 32Realtime rate: 0.00, plan time: 9.7572s, sim_steps: 214/214, opt_steps: 32Total time: 1023.8344s
+2026-05-21 06:26:35.924 | WARNING  | __main__:_aggregate_info_list:120 - Skipping info key 'improvement' because shapes vary across ticks: ['()', '(32,)'] (all input arrays must have the same shape)
+2026-05-21 06:26:35.926 | INFO     | __main__:main:1440 - Saved info to workspace/core4d_collab_retarget/results/E029/E029_bucket001_p1_tilt_gate_t055_outdir/trajectory_mjwp.npz
+2026-05-21 06:26:36.427 | INFO     | __main__:main:1456 - Saved video to workspace/core4d_collab_retarget/results/E029/online_video/E029_bucket001_p1_tilt_gate_t055.mp4
+2026-05-21 06:26:36.428 | INFO     | __main__:main:1466 - Final object tracking error: pos=0.0237, quat=0.0377
+Exception ignored in: <function Renderer.__del__ at 0x7ba4f73d2480>
+Traceback (most recent call last):
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/mujoco/rendering/classic/renderer.py", line 339, in __del__
+    self.close()
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/mujoco/rendering/classic/renderer.py", line 325, in close
+    self._gl_context.free()
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/mujoco/egl/__init__.py", line 131, in free
+    EGL.eglMakeCurrent(EGL_DISPLAY, EGL.EGL_NO_SURFACE,
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/OpenGL/error.py", line 230, in glCheckError
+    raise self._errorClass(
+OpenGL.raw.EGL._errors.EGLError: EGLError(
+	err = EGL_NOT_INITIALIZED,
+	baseOperation = eglMakeCurrent,
+	cArguments = (
+		<OpenGL._opaque.EGLDisplay_pointer object at 0x7ba267192e50>,
+		<OpenGL._opaque.EGLSurface_pointer object at 0x7ba4f737e850>,
+		<OpenGL._opaque.EGLSurface_pointer object at 0x7ba4f737e850>,
+		<OpenGL._opaque.EGLContext_pointer object at 0x7ba4f737e4d0>,
+	),
+	result = 0
+)
+Exception ignored in: <function GLContext.__del__ at 0x7ba4f73d1da0>
+Traceback (most recent call last):
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/mujoco/egl/__init__.py", line 138, in __del__
+    self.free()
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/mujoco/egl/__init__.py", line 131, in free
+    EGL.eglMakeCurrent(EGL_DISPLAY, EGL.EGL_NO_SURFACE,
+  File "/home/xiayb/pHRI_workspace/spider_e029_20260521_055150/.venv/lib/python3.12/site-packages/OpenGL/error.py", line 230, in glCheckError
+    raise self._errorClass(
+OpenGL.raw.EGL._errors.EGLError: EGLError(
+	err = EGL_NOT_INITIALIZED,
+	baseOperation = eglMakeCurrent,
+	cArguments = (
+		<OpenGL._opaque.EGLDisplay_pointer object at 0x7ba267192e50>,
+		<OpenGL._opaque.EGLSurface_pointer object at 0x7ba4f737e850>,
+		<OpenGL._opaque.EGLSurface_pointer object at 0x7ba4f737e850>,
+		<OpenGL._opaque.EGLContext_pointer object at 0x7ba4f737e4d0>,
+	),
+	result = 0
+)

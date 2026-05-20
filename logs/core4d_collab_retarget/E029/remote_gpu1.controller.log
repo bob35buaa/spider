@@ -1,0 +1,7 @@
+[05:51:54] === E029 scene snapshot tasks=bucket001_person1_freejoint_legobj_e018b bucket001_person2_freejoint_legobj_e018b ===
+Wrote workspace/core4d_collab_retarget/results/E029/scene_snapshot/manifest.txt
+[05:51:55] === E029_bucket001_p1_scorecap_t045 task=bucket001_person1_freejoint_legobj_e018b override=core4d_collab_E029_bucket001_p1_scorecap_t045 GPU=1 ===
+[06:09:26] === E029_bucket001_p1_scorecap_t045 done ===
+[06:09:26] === E029_bucket001_p2_guard_posture_gate task=bucket001_person2_freejoint_legobj_e018b override=core4d_collab_E029_bucket001_p2_guard_posture_gate GPU=1 ===
+[06:31:26] ERROR E029_bucket001_p2_guard_posture_gate stalled: no log update for 300s
+[06:31:36] WARN E029_bucket001_p2_guard_posture_gate failed; continuing E029 queue

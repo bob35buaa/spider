@@ -1762,3 +1762,50 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `RUN_TIMEOUT_SECONDS=600 RUN_STALL_TIMEOUT_SECONDS=180 bash workspace/core4d_collab_retarget/scripts/train/train_E029.sh smoke 0`
   - 6/6 variants 完成，foot support site resolution 显示 `2 sites resolved`；
   - smoke aggregate：`num_results=6`、`num_target_stability_pass=4`、`num_target_useful_signal=0`，只验证 wiring，不作为 E029 full 结论。
+
+### E029 full 启动前状态
+
+- 已提交 E029 核心实现：`fb6d1cd feat(core4d_collab): add E029 posture stability controls`。
+- 已推送远端分支：`origin/exp/core4d-collab-retarget-e029-stability-control`，准备启动本地 1 卡 + 远程 2 卡全量评测。
+- 用户补充的数据原则已对齐 E027/E030：CORE4D raw mocap 与 OmniRetarget/Holosoma 前置 kinematic reference 可能叠加误差；case 弃用必须依赖 raw motion、annotation、kinematic feasibility、SPIDER-independent visual audit 等多类独立证据，不能把单次 reward/control 失败反向解释为数据差。
+- 本地已启动 E029 full local 队列：`E029_bucket001_p1_upright_barrier_t055`、`E029_box025_p2_guard_posture_gate`。
+- 远端主 worktree 因 E026 dirty/untracked 文件无法 `git switch`；已沿用 E028 的安全策略，创建独立 worktree `/home/xiayb/pHRI_workspace/spider_e029_20260521_055150`，并启动 tmux session `E029`：
+  - GPU0: `E029_bucket001_p1_posture_gate_t055` -> `E029_bucket001_p1_tilt_gate_t055`
+  - GPU1: `E029_bucket001_p1_scorecap_t045` -> `E029_bucket001_p2_guard_posture_gate`
+
+### E029 full 运行中
+
+- 本地第一条 `E029_bucket001_p1_upright_barrier_t055` 已完成 full rollout，NPZ 已从 smoke 约 24KB 覆盖为 full 约 1.08MB。
+- 本地已切到 `E029_box025_p2_guard_posture_gate`。
+- 远端 GPU0/GPU1 第一批已完成并写出 full NPZ（约 1.1MB）：
+  - `E029_bucket001_p1_posture_gate_t055`
+  - `E029_bucket001_p1_scorecap_t045`
+- 远端已切到第二批：
+  - GPU0 `E029_bucket001_p1_tilt_gate_t055`
+  - GPU1 `E029_bucket001_p2_guard_posture_gate`
+- 本地 full 队列已完成：
+  - `E029_bucket001_p1_upright_barrier_t055` full NPZ 约 1.08MB；
+  - `E029_box025_p2_guard_posture_gate` full NPZ 约 1.25MB；
+  - 本地两条临时 eval：`num_E029_success=1`、`num_guard_pass=1/1`、p1 `stability_pass=1` 但 `contact5=0%`，所以 p1 仍没有 useful signal。
+- 远端 GPU0 已完成第二批 `E029_bucket001_p1_tilt_gate_t055` 并写出 full NPZ（约 1.1MB）。
+- 远端 GPU1 的 `E029_bucket001_p2_guard_posture_gate` 在 `162/244` 后出现长步，进程仍持续占 CPU/GPU；为避免 300s mtime watchdog 误杀，已触碰一次该日志 mtime（不改内容）。
+- 本地 GPU 空闲后已抢跑 `E029_bucket001_p2_guard_posture_gate` 单条 fallback，使用 `RUN_STALL_TIMEOUT_SECONDS=900`；pull 脚本不带 `--delete`，如果远端 p2 最终失败，本地 fallback 结果仍可保留。
+
+### E029 full 完成
+
+- 远端 GPU1 p2 guard 最终被 watchdog 判定 stall：`[06:31:26] ERROR ... stalled: no log update for 300s`；远端 tmux 结束为 GPU0 status `0`、GPU1 status `1`。
+- 本地 fallback 成功完成 `E029_bucket001_p2_guard_posture_gate`，full NPZ 约 1.23MB；本地越过远端卡住的 `162/244` 并完成到 `244/244`。
+- 远端回收采用带 exclude 的 rsync，避免远端失败 p2 artifacts 覆盖本地 fallback；远端三条成功结果已拉回。
+- 已重跑全量评估：`.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E029.py --all`。
+- E029 结果摘要：
+  - `num_results=6`；
+  - p1 target `4/4` stability pass，pelvis min `0.527-0.584m`，相对 E024 p1 baseline `+0.372m` 到 `+0.428m`；
+  - p1 contact `0%`，`num_target_useful_signal=0`，`num_target_p1_strict_target=0`；
+  - `bucket001_p2` guard contact `99.44%`，但 deep pen `63.64%`、max pen `9.00cm`，guard fail；
+  - `box025_p2` guard pass，contact `96.73%`、deep pen `5.78%`、object `5.63cm`。
+- 关键帧人工观察：
+  - p1 posture mechanisms 防止明显 fall，但 robot 与 bucket 分离，object 仍随 support proxy 运动，手未建立接触；
+  - p2 guard 是高 contact 高 penetration，视觉上身体/手臂斜撑进入 bucket 区域；
+  - box025 guard 与 ref 对齐较好，未出现 contact collapse。
+- 已写入正式结果日志：`workspace/core4d_collab_retarget/log/29_E029_bucket001_stability_control_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：E029 总览、关键指标演进、Logs 路径。

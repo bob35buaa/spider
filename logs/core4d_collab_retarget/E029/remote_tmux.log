@@ -1,0 +1,4 @@
+[05:51:54] E029 remote start: GPU0=remote_gpu0 GPU1=remote_gpu1
+[05:51:54] launched remote queues: PID0=485019 PID1=485020
+[06:26:57] remote_gpu0 status=0
+[06:31:36] remote_gpu1 status=1
