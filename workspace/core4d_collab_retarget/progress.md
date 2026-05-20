@@ -1708,3 +1708,21 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - force-add 了可复核轻量 artifacts：summary CSV/JSON、eval summaries、plots、keyframes、scene XML snapshots 和 E028 小日志；
   - 未加入 full NPZ、online MP4、outdir、timeseries/contact_masks 等大 artifacts，它们仍保留在本地 `results/E028/`；
   - `manifest.tsv` 已重新生成，确认 7 行均为 107 列，保留尾部空列语义。
+- 已提交 E028 结果 commit：`3b2c7f1 log(core4d_collab): record E028 hard penetration results`。
+
+### E029 计划启动
+
+- 根据 post-E026 总计划与 E028 负结果，下一条进入 E029：`bucket001_p1` stability / posture-valid contact control。
+- 已从 E028 结果分支切出新分支：`exp/core4d-collab-retarget-e029-stability-control`。
+- 已读取 E024 plan/log、E029 roadmap、远程执行指南，并让 subagent Confucius 做只读 E029 审计。
+- Confucius 审计结论：
+  - E024 现有 `stability_penalty_scale` 只是线性 pelvis-height penalty，已证明对 `bucket001_p1` 不够；
+  - 训练期缺少 upright/root terminal、foot support、posture-valid contact gate；
+  - p1 主线应继承 `E024_bucket001_p1_root025_gain2_stab_t065` 的 root/stability 设置，而不是从 E018b 裸 baseline 开始；
+  - p2 guard 应避免复用 E028 hard hand-SDF gate，因为该机制把 p2 contact 从 `77.53%` 压到 `2.81%`。
+- 已创建并修正计划：`workspace/core4d_collab_retarget/plan/34_E029_bucket001_stability_control_plan.md`。
+  - 主目标：`bucket001_p1` 至少 4 个 full variants；
+  - guards：`bucket001_p2`、`box025_p2`；
+  - 新增默认关闭 knobs：upright barrier、upright score cap、root tilt penalty、foot support、posture contact gate；
+  - 若 p1 4 个机制 variants 仍 pelvis `<0.25m` 或 contact `0%`，停止 reward sweep，转 reference/support timing 或 lower-body control infeasible audit。
+- 已更新 `EXPERIMENT_TRACKER.md`：新增 E029 plan 行、Plans 路径，并将当前分支改为 `exp/core4d-collab-retarget-e029-stability-control`。
