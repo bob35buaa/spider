@@ -1264,3 +1264,35 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 但 deep penetration `64.65%`，max penetration `8.31cm`，artifact guard fail。
   - 结论：p2 stability 可以被 root03/gain3 修住，但接触是穿透式接触；需要 E025 collision penalty。
 - 已启动本地 `E024_bucket001_p2_root025_gain2_stab_t065` full，作为 planned fallback 检查降低 contact gain / 更紧 root sigma 是否能减少 p2 penetration artifact；当前运行中。
+- E025 setup 已提交并推送：`7a150b5 exp(core4d_collab_retarget): E025 contact collision setup`。
+- 远程 SSH 一次 `echo ok` 成功，但随后 `run_E025_remote.sh` 第一条 ssh 又 reset：`kex_exchange_identification: read: Connection reset by peer`。避免连续重试；稍后再探测并启动 E025 remote full。
+- 使用单次 SSH 命令减少握手次数后，E025 remote 已成功启动到 tmux：`E025_STARTED`。远端已 fast-forward 到 `7a150b5` 并完成 `run_E025_preprocess.sh`。后续低频监控 tmux / pull results。
+
+### 2026-05-20 continuation checkpoint
+
+- 已按 `experiment-planning-zh` 恢复 tracker/plan/log/progress 上下文，当前仍处于 E024 收尾 + E025 full 启动阶段。
+- 远程 E025 一次监控命令超时：`ssh: connect to host 10.100.71.70 port 58122: Connection timed out`。这只影响监控，不视为 E025 失败；后续低频重试或直接在完成窗口拉取。
+- 本地 `E024_bucket001_p2_root025_gain2_stab_t065` full 仍在运行，log 已到 `sim_steps: 226/244`，等待完成后评估并写 E024 结果日志。
+
+### E024 full 完成与结论
+
+- `E024_bucket001_p2_root025_gain2_stab_t065` full 已完成，随后对 5 个关键 full variants 运行：
+  - `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E024.py E024_bucket001_p1_root03_gain3_stab_t065 E024_bucket001_p1_root025_gain2_stab_t065 E024_bucket001_p1_stab_s1_t055 E024_bucket001_p2_root03_gain3_stab_t065 E024_bucket001_p2_root025_gain2_stab_t065`
+- Aggregate：`num_results=5`、`num_E024_success=0`、`num_stability_pass=2`、`num_pelvis_target_pass=2`、`num_object_no_regression_pass=5`、`num_artifact_guard_pass=3`、`num_contact_guard_pass=2`。
+- p1 三个 variants 均失败：
+  - `root03_gain3`: pelvis min `0.1343m`，fall true，contact `0.0%`。
+  - `root025_gain2`: pelvis min `0.1556m`，fall true，contact `0.0%`。
+  - `stab_s1_t055`: pelvis min `0.0657m`，fall true，contact `0.0%`。
+- p2 两个 variants 修复 stability 但未修复 artifact：
+  - `root03_gain3`: pelvis min `0.7128m`，contact `88.76%`，deep pen `64.65%`，max pen `8.31cm`。
+  - `root025_gain2`: pelvis min `0.7257m`，contact `92.70%`，deep pen `59.60%`，max pen `8.08cm`。
+- 已补抽 p2 fallback frame：`workspace/core4d_collab_retarget/results/E024/video_frames_skill/E024_bucket001_p2_root025_gain2_stab_t065_t0448.jpg`。
+- 已写 E024 结果日志：`workspace/core4d_collab_retarget/log/23_E024_bucket001_stability_repair_results.md`，并更新 `EXPERIMENT_TRACKER.md`。
+- E024 结论：object-side support proxy 无回退，但 E024 strict success 为 0；p1 转后续更强 stability/control，p2 转 E025 collision penalty。
+
+### E025 full 启动
+
+- 本地已启动 `E025_box023_p1_hc2_gain8_sigma20_ori_nf` full：
+  - `RUN_TIMEOUT_SECONDS=1800 RUN_STALL_TIMEOUT_SECONDS=300 SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E025.sh one 0 E025_box023_p1_hc2_gain8_sigma20_ori_nf`
+  - 运行 log：`logs/core4d_collab_retarget/E025/E025_box023_p1_hc2_gain8_sigma20_ori_nf.log`
+  - 当前已进入 rollout，等待完成后评估。

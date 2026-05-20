@@ -32,7 +32,7 @@
 | E021 | 2026-05-20 | RL Export | **Holosoma RL export 计划**: 已有 `plan/22_E021_holosoma_rl_export_plan.md`，与 post-E020 优化无关；优化实验编号从 E022 开始 | 📝 仅计划 |
 | E022 | 2026-05-20 | Contact Mask Repair | **box023_p1 mask semantics 负结果**: 4/4 full 完成。patched variants 将 mask overclaim/mismatch 从 `54.41%` 降到 `0-0.44%`，object/no-fall/deep-pen gates 不回退；但 best contact 仅 `25.30%`，未达 `>=70%`。结论：mask bug 真实但不足以闭合 contact，`box023_p1` 转入 E025 robot-side contact closure | ✅ 详见 log 21 |
 | E023 | 2026-05-20 | Retarget Geometry Repair | **retarget_kinematic lower-body geometry 负结果**: 6/6 full 完成。object no-regression `6/6`，但 ref repair `0/6`、success `0/6`。`lowerbody_proxy_min` 降低部分 ref interference（box025 `66.5% -> 25.4%`，bucket007 `66.3% -> 45.3%`）但未达 `<15%`；`legpair_off` 不是有效解，会引入 penetration/leg artifact | ✅ 详见 log 22 |
-| E024 | 2026-05-20 | Stability Repair | **bucket001 stability setup+smoke**: 用户指定忽略 `box021_*` 后，stability scope 只剩 `bucket001_p1/p2`；已实现 8 个 override variants（baseline、height penalty isolate、root/contact-gain stability candidates）和 train/eval/remote 脚本，4-step smoke 8/8 通过；full 目标 no-fall、pelvis min `>=0.45m` 且 object transport 不回退 | 🔧 setup+smoke，计划见 `plan/27_E024_bucket001_stability_repair_plan.md` |
+| E024 | 2026-05-20 | Stability Repair | **bucket001 stability 负结果/局部正结果**: 5 个关键 full variants 完成。p1 三个 variants 全部 fall，contact `0%`；p2 两个 variants no-fall 且 contact `88.76-92.70%`，但 deep penetration 仍 `59.60-64.65%`、max pen `8cm+`。object no-regression `5/5`，`num_E024_success=0` | ✅ 详见 log 23；p1 转后续 stability/control，p2 转 E025 collision penalty |
 | E025 | 2026-05-20 | Contact + Collision Repair | **contact + collision setup+smoke**: Post-E022 将 `box023_p1` 并入 low-contact closure；E020 `algo_contact` 保持 `box023_p2`、`bucket005_s2_p1/p2`、`bucket007_p1`。已新增默认关闭的训练期 robot/object 与 leg/object penetration penalty knobs，并实现 8 个 override variants、train/eval/remote 脚本；4-step smoke 8/8 通过 | 🔧 setup+smoke，计划见 `plan/28_E025_robot_side_contact_collision_repair_plan.md` |
 
 ## Baseline
@@ -73,6 +73,7 @@
 | post-E020 plan queue | E023/E024/E025 计划已按 subagent 只读审计细化：E023 lower-body geometry repair，E024 bucket001 stability sweep，E025 contact closure + explicit penetration penalty | E022 full 正在收尾；E023-E025 先有 claims、variants、脚本/eval/远程路径和成功标准，后续按 Plan -> Implement -> Train -> Evaluate -> Log 执行 |
 | E022 full | 4/4 full variants 完成；mask semantics pass `3/4`（baseline control intentionally fails），object no-regression `4/4`，artifact no-regression `4/4`，contact goal `0/4`；best contact `25.30%` | 修 mask 不能单独解决 `box023_p1` contact preservation；不重复 mask sweep，后续并入 E025 contact-control 分线 |
 | E023 full | 6/6 full variants 完成；object no-regression `6/6`，artifact guard `2/6`，contact goal `1/6`，ref geometry repair `0/6`；best ref interference `25.40%` | lower-body proxy shrink 有帮助但不足；删除 leg/object pairs 会变成 artifact shortcut，后续需要更真实 collision geometry 或 E025 penetration penalty |
+| E024 full | 5 个关键 full variants 完成；object no-regression `5/5`，stability pass `2/5`，pelvis target pass `2/5`，artifact guard `3/5`，contact guard `2/5`，success `0/5`；p1 best pelvis only `0.1556m`，p2 best pelvis `0.7257m` 但 deep pen `59.60%` | p1 不是同类 stability/contact-gain 参数可解；p2 stability 可修但接触质量失败，转 E025 explicit collision penalty |
 | E025 setup+smoke | 8 个 variants 生成并 4-step smoke 8/8 跑通；`robot_object_penalty_scale` / `leg_object_penalty_scale` 默认 `0.0`，仅 E025 override 打开；配置解析确认 hand penalty 2 geoms、leg guard 16 geoms | 新 reward path graph/runtime 已通过 smoke；full 指标尚未开始，smoke 不作为 contact/penetration 结论 |
 
 ## Plans
@@ -131,6 +132,7 @@
 - E020: `workspace/core4d_collab_retarget/log/20_E020_failure_attribution_audit_results.md`
 - E022: `workspace/core4d_collab_retarget/log/21_E022_contact_mask_semantics_repair_results.md`
 - E023: `workspace/core4d_collab_retarget/log/22_E023_retarget_kinematic_geometry_repair_results.md`
+- E024: `workspace/core4d_collab_retarget/log/23_E024_bucket001_stability_repair_results.md`
 
 ## Git
 
