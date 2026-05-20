@@ -113,6 +113,59 @@ def _read_rows(path: Path, *, kind: str | None = None) -> list[dict[str, Any]]:
     return rows
 
 
+def _object_body_id(model: mujoco.MjModel) -> int:
+    """Return the MuJoCo body id used for the carried object.
+
+    Most collab-retarget scenes name this body ``object``. Older helpers also
+    assumed a trailing freejoint; E081 instead uses 3 slide + 3 hinge joints, so
+    object detection must be based on the MJCF body when available.
+    """
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+    if bid >= 0:
+        return int(bid)
+
+    nq = model.nq
+    for b in range(model.nbody - 1, 0, -1):
+        for j in range(model.body_jntnum[b]):
+            jid = int(model.body_jntadr[b] + j)
+            if (
+                int(model.jnt_type[jid]) == int(mujoco.mjtJoint.mjJNT_FREE)
+                and int(model.jnt_qposadr[jid]) == nq - 7
+            ):
+                return int(b)
+
+    for geom_name in ("object_collision", "object_visual"):
+        gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+        if gid >= 0:
+            return int(model.geom_bodyid[gid])
+    return -1
+
+
+def _object_pose_batch(
+    model: mujoco.MjModel,
+    qpos: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return object body position and wxyz quaternion for each frame."""
+    T = len(qpos)
+    bid = _object_body_id(model)
+    if bid >= 0 and qpos.shape[1] >= model.nq:
+        data = mujoco.MjData(model)
+        pos = np.zeros((T, 3), dtype=np.float64)
+        quat = np.zeros((T, 4), dtype=np.float64)
+        for t in range(T):
+            data.qpos[:] = qpos[t, : model.nq]
+            mujoco.mj_kinematics(model, data)
+            pos[t] = data.xpos[bid]
+            quat[t] = data.xquat[bid]
+        return pos, quat
+
+    if qpos.shape[1] >= 7:
+        return qpos[:, -7:-4].astype(np.float64), qpos[:, -4:].astype(np.float64)
+    raise ValueError(
+        f"Cannot infer object pose: qpos has {qpos.shape[1]} columns, model.nq={model.nq}"
+    )
+
+
 def _resize_bool_mask(mask: np.ndarray, target_len: int) -> np.ndarray:
     mask = mask.astype(bool)
     if len(mask) == target_len:
@@ -153,15 +206,14 @@ def _load_contact_mask(
 def _add_object_tracking_metrics(
     out: dict[str, Any],
     summary: dict[str, Any],
+    model: mujoco.MjModel,
     qpos: np.ndarray,
     qpos_ref: np.ndarray,
 ) -> None:
     T = min(len(qpos), len(qpos_ref))
     start, end = _window_bounds(summary, T)
-    obj = qpos[:T, -7:-4].astype(np.float64)
-    ref = qpos_ref[:T, -7:-4].astype(np.float64)
-    quat = qpos[:T, -4:].astype(np.float64)
-    quat_ref = qpos_ref[:T, -4:].astype(np.float64)
+    obj, quat = _object_pose_batch(model, qpos[:T])
+    ref, quat_ref = _object_pose_batch(model, qpos_ref[:T])
 
     pos_err = np.linalg.norm(obj - ref, axis=1)
     xy_err = np.linalg.norm(obj[:, :2] - ref[:, :2], axis=1)
@@ -451,18 +503,7 @@ def _add_penetration_metrics_mj(
         out["paper_omniretarget_mj_penetration_present"] = False
         return
 
-    # Identify object body = body that owns the trailing 7-qpos freejoint.
-    # SPIDER convention places object body last; verify by checking last freejoint.
-    obj_body_id = -1
-    for b in range(model.nbody - 1, 0, -1):
-        # find a freejoint whose qposadr is at nq-7
-        for j in range(model.body_jntnum[b]):
-            jid = model.body_jntadr[b] + j
-            if model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_FREE and model.jnt_qposadr[jid] == nq - 7:
-                obj_body_id = b
-                break
-        if obj_body_id >= 0:
-            break
+    obj_body_id = _object_body_id(model)
     if obj_body_id < 0:
         out["paper_omniretarget_mj_penetration_present"] = False
         return
@@ -729,19 +770,7 @@ def _add_contact_preservation_omni_local(
     T = min(len(qpos), len(human_joints), int(summary.get("T", len(qpos))))
     start, end = _window_bounds(summary, T)
 
-    # Identify object body (last freejoint, qposadr at nq-7)
-    obj_body_id = -1
-    for b in range(model.nbody - 1, 0, -1):
-        for j in range(model.body_jntnum[b]):
-            jid = int(model.body_jntadr[b] + j)
-            if (
-                int(model.jnt_type[jid]) == int(mujoco.mjtJoint.mjJNT_FREE)
-                and int(model.jnt_qposadr[jid]) == model.nq - 7
-            ):
-                obj_body_id = b
-                break
-        if obj_body_id >= 0:
-            break
+    obj_body_id = _object_body_id(model)
     if obj_body_id < 0:
         out["paper_omniretarget_contact_preservation_local_present"] = False
         return
@@ -770,11 +799,9 @@ def _add_contact_preservation_omni_local(
     # Demo wrist in world (Z-up SMPL-X)
     demo_l_wrist = human_joints[:T, SMPLX_L_WRIST_IDX, :].astype(np.float64)
     demo_r_wrist = human_joints[:T, SMPLX_R_WRIST_IDX, :].astype(np.float64)
-    # Demo object pose: use the SIM object pose from qpos (kinematic retarget
-    # produced both demo human + retarget object — we assume the qpos object is
-    # already aligned with demo at this frame; this is true for holosoma kin).
-    demo_obj_pos = qpos[:T, -7:-4].astype(np.float64)
-    demo_obj_quat = qpos[:T, -4:].astype(np.float64)  # wxyz
+    # Demo object pose: use FK rather than assuming a trailing freejoint, since
+    # E081 uses 3 slide + 3 hinge object joints.
+    demo_obj_pos, demo_obj_quat = _object_pose_batch(model, qpos[:T])
     demo_obj_mat = _quat_to_matrix_batch(demo_obj_quat)
 
     # Transform demo wrist into demo object local frame
@@ -861,7 +888,7 @@ def add_paper_metrics_physics(
         "fps": fps,
     }
     out: dict[str, Any] = {
-        "paper_metrics_version": "2026-05-20-P1",
+        "paper_metrics_version": "2026-05-21-P3",
         "paper_metrics_sources": "SPIDER,DynaRetarget,OmniRetarget,holosoma_v2",
         "paper_metrics_mode": "physics_only",
         "fps": fps,
@@ -939,11 +966,11 @@ def add_paper_metrics(
             stacklevel=2,
         )
     out: dict[str, Any] = {
-        "paper_metrics_version": "2026-05-20-P2",
+        "paper_metrics_version": "2026-05-21-P3",
         "paper_metrics_sources": "SPIDER,DynaRetarget,OmniRetarget,holosoma_v2",
         "paper_metrics_fps": FPS,
     }
-    _add_object_tracking_metrics(out, summary, qpos, qpos_ref)
+    _add_object_tracking_metrics(out, summary, model, qpos, qpos_ref)
     _add_smoothness_metrics(out, qpos, qpos_ref)
     _add_keypoint_proxy_metrics(out, summary, model, qpos, qpos_ref)
     _add_contact_and_penetration_metrics(

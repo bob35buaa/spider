@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,14 +17,26 @@ REPO = Path(__file__).resolve().parents[4]
 EVAL_DIR = REPO / "workspace/core4d/scripts/eval"
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
+COLLAB_EVAL_DIR = REPO / "workspace/core4d_collab_retarget/scripts/eval"
+if str(COLLAB_EVAL_DIR) not in sys.path:
+    sys.path.insert(0, str(COLLAB_EVAL_DIR))
 
 import eval_E078 as e078  # noqa: E402
 import eval_E079 as e079  # noqa: E402
 import eval_E072 as e072  # noqa: E402
+import paper_metrics  # noqa: E402
 
 
-RESULTS = REPO / "workspace/core4d/results/E081"
-VARIANTS_FILE = REPO / "workspace/core4d/scripts/E081/variants.tsv"
+def repo_path_from_env(name: str, default: Path) -> Path:
+    raw = os.environ.get(name)
+    path = Path(raw) if raw else default
+    return path if path.is_absolute() else REPO / path
+
+
+RESULTS = repo_path_from_env("RESULTS", REPO / "workspace/core4d/results/E081")
+VARIANTS_FILE = repo_path_from_env(
+    "VARIANTS_FILE", REPO / "workspace/core4d/scripts/E081/variants.tsv"
+)
 FPS = 50.0
 
 LEG_FOOT_GEOMS = [
@@ -72,6 +85,7 @@ def read_variants() -> dict[str, dict[str, str]]:
                 "case": row["derived_task"],
                 "source_task": row["source_task"],
                 "override": f"core4d_{row['variant']}",
+                "person_idx": row["person_idx"],
                 "split": row["split"],
                 "role": row["role"],
             }
@@ -296,6 +310,27 @@ def leg_object_metrics(summary: dict[str, object]) -> dict[str, object]:
     return out
 
 
+def add_e081_paper_metrics(summary: dict[str, object]) -> dict[str, object]:
+    variant = str(summary["variant"])
+    case = str(summary["case"])
+    override = str(summary["override"])
+    person_idx = int(summary.get("person_idx", 0))
+
+    model, _scene_used = e078.load_scene_model(case)
+    data_npz = np.load(RESULTS / f"{variant}.npz", allow_pickle=True)
+    qpos = e072.flatten_time_major(data_npz["qpos"])
+    qpos_ref, _ctrl_ref = e078.load_ref(override, case)
+    return paper_metrics.add_paper_metrics(
+        summary,
+        repo=REPO,
+        results_dir=RESULTS,
+        model=model,
+        qpos=qpos,
+        qpos_ref=qpos_ref,
+        person_idx=person_idx,
+    )
+
+
 def write_variant_summary(summary: dict[str, object]) -> None:
     variant = str(summary["variant"])
     summary_json = RESULTS / f"eval_summary_{variant}.json"
@@ -333,6 +368,8 @@ def main() -> None:
         summary["split"] = variants[variant]["split"]
         summary["role"] = variants[variant]["role"]
         summary["source_task"] = variants[variant]["source_task"]
+        summary["person_idx"] = int(variants[variant]["person_idx"])
+        summary.update(add_e081_paper_metrics(summary))
         summary["E081_success_numeric"] = bool(
             summary["post2_pelvis_z_min_m"] >= 0.55
             and summary["post2_sim_contact_frames_pct"] >= 50.0

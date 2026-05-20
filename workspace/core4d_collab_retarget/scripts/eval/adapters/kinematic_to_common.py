@@ -30,18 +30,25 @@ import mujoco
 from .common_inputs import EvalInputs
 
 
+HOLOSOMA_ROOTS = [
+    Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma"),
+    Path("/home/ubuntu/Workspace/holosoma"),
+]
+
 HOLOSOMA_RESULT_DIRS = [
-    Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/workspace/v2/"
-         "results/retarget_replace_batch_trimmed"),
-    Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/workspace/v2/"
-         "results/retarget_replace_batch_extra_trimmed"),
+    root / "workspace/v2/results/retarget_replace_batch_trimmed"
+    for root in HOLOSOMA_ROOTS
+] + [
+    root / "workspace/v2/results/retarget_replace_batch_extra_trimmed"
+    for root in HOLOSOMA_ROOTS
 ]
 HOLOSOMA_RESULT_DIR = HOLOSOMA_RESULT_DIRS[0]  # backward-compat single dir
 HOLOSOMA_DEMO_DIRS = [
-    Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/workspace/v2/"
-         "data/core4d_replace_batch"),
-    Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/workspace/v2/"
-         "data/core4d_replace_batch_extra"),
+    root / "workspace/v2/data/core4d_replace_batch"
+    for root in HOLOSOMA_ROOTS
+] + [
+    root / "workspace/v2/data/core4d_replace_batch_extra"
+    for root in HOLOSOMA_ROOTS
 ]
 HOLOSOMA_DEMO_DIR = HOLOSOMA_DEMO_DIRS[0]
 

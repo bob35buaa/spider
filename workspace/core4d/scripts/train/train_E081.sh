@@ -44,11 +44,12 @@ snapshot_split() {
 extract_keyframes() {
   local variant=$1
   local video=$2
+  [ "${SKIP_KEYFRAMES:-0}" = "1" ] && return 0
   [ -f "$video" ] || return 0
   command -v ffmpeg >/dev/null 2>&1 || return 0
   mkdir -p "$RESULTS/keyframes/$variant"
   for f in 50 75 100 115 120 125 145 160 180 204; do
-    ffmpeg -y -loglevel error -i "$video" \
+    timeout "${KEYFRAME_TIMEOUT_SECONDS:-30}" ffmpeg -nostdin -y -loglevel error -i "$video" \
       -vf "select=eq(n\\,$f)" -frames:v 1 -vsync 0 \
       "$RESULTS/keyframes/$variant/f${f}.jpg" || true
   done

@@ -1,5 +1,50 @@
 # E001 Progress — 2026-05-17
 
+## 2026-05-20 E026 full eval 启动
+
+- 已读取 `task_full_eval.md`、`EXPERIMENT_TRACKER.md`、最新 E025 plan、E022-E025 阶段总结和 progress，按 `experiment-planning-zh` 恢复上下文。
+- 已确认 E026 明确交付：OmniRetarget kinematic、E081 baseline、E018b、E022-E025 best-by-case；输出 P0 9case 与 P1 13case；完成 kinematic 数据源/28cm 阈值核查和视觉-指标一致性检查。
+- 只读核查结论：
+  - E081 当前只有 `box025_p2` / `box023_p2` 两个 case，且未接入 E019 `paper_metrics` schema；13case full baseline 仍是 coverage 缺口。
+  - OmniRetarget / holosoma adapter 映射 12/13（缺 `desk021_p1` SOCP infeasible），但本机实际 holosoma 数据在 `/home/ubuntu/Workspace/holosoma`，当前 adapter 需要补本机 fallback。
+- 已新增 E026 计划：`workspace/core4d_collab_retarget/plan/29_E026_full_eval_plan.md`。
+
+### E026 当前待办
+
+- [ ] 给 holosoma adapter 加 `/home/ubuntu/Workspace/holosoma` fallback，并重跑 `eval_holosoma_kinematic.py --all`。
+- [ ] 新增 `eval_E026_full_eval.py`，生成 P0/P1 summary、coverage、best selector、28cm threshold sweep、visual audit。
+- [ ] 写入 `log/26_E026_full_eval_results.md`。
+- [ ] 更新 `EXPERIMENT_TRACKER.md`。
+
+## 2026-05-20 E026 holosoma eval 恢复
+
+- 已修改 `scripts/eval/adapters/kinematic_to_common.py`：`HOLOSOMA_RESULT_DIRS` / `HOLOSOMA_DEMO_DIRS` 同时查 `/mnt/ali-sh-1/.../holosoma` 和 `/home/ubuntu/Workspace/holosoma`。
+- 已重跑：
+  `CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl .venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_holosoma_kinematic.py --all`
+- 结果：`results/holosoma_v2_kinematic/` 重新生成，`num_results=12`、`mean_paper_omniretarget_contact_preservation_local_case_pct=53.592745165598906`，缺 `desk021_p1`（SOCP infeasible）。
+
+## 2026-05-20 E026 汇总脚本与 E081 full rerun 启动
+
+- 已新增并运行 `scripts/eval/eval_E026_full_eval.py --all`，生成：
+  - `results/E026_full_eval/summary_9case.md`
+  - `results/E026_full_eval/summary_13case.md`
+  - `results/E026_full_eval/best_dynamic_selection.csv`
+  - `results/E026_full_eval/omni_threshold_sweep.{csv,md}`
+  - `results/E026_full_eval/visual_metric_audit.md`
+  - `results/E026_full_eval/coverage.json`
+- 初版 E026 汇总显示：P0 9case 上 OmniRetarget 9/9，E018b 9/9，E022-E025 best 9/9；P1 13case 上 OmniRetarget 12/13（缺 `desk021_p1`），E018b/best 13/13。E081 legacy 仍 2/13。
+- 已为 E081 full baseline 补可执行 rerun：
+  - `scripts/E026/e081_full_variants.tsv`：13 个 E081-style leg-object variants
+  - `scripts/run_E026_e081_preprocess.sh`
+  - `scripts/train/train_E026_e081_full.sh`
+  - `scripts/run_E026_e081_remote.sh`
+  - `scripts/pull_E026_e081_remote_results.sh`
+  - `workspace/core4d/scripts/eval/eval_E081.py` 支持 `VARIANTS_FILE` / `RESULTS` env，不覆盖原 E081。
+- 已完成 E081 full preprocess：13 个 `*_legobj_e026_e081` 派生 task 和 13 个 `core4d_E026_E081_*` override 已生成。
+- 已启动长 CEM：
+  - 本地 GPU0：`train_E026_e081_full.sh local 0`
+  - 远程 `spider-remote` tmux `E026_E081`：`remote_gpu0` / `remote_gpu1`
+
 ## 当前状态
 
 E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM 已完成。结论：当前 E081-style 单机器人 reward/control 在真 freejoint object 下失败，且 guard 也失败；E003 physics-feasibility sweep 已开始实施，用于区分物理参数不可行与 reward/optimizer 不足。新工作区实验编号从 `E001` 开始；`workspace/core4d` E081 是 baseline，不作为本工作区的 E082。
@@ -1498,3 +1543,43 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - E024：新增 `与基线对比：站稳了吗，代价是什么`，对 `bucket001_p1/p2` 分别比较 E018b baseline；同时把 E024 主结果表中的 p2 contact 改为真正的 5cm contact 口径 `79.78%/77.53%`，避免之前 `88.76%/92.70%` 的非 5cm contact 口径误导。
   - E025：新增 `与基线对比：contact 提升了吗，穿透下降了吗`，按低接触 case 与高接触穿透 case 分表比较；明确 `box023_p2` contact 提升但 fall/penetration 变坏，`bucket007_p1` scale 4 deep penetration 明显下降但仍未过线。
   - Stage summary：新增 `阶段基线对比总表`，集中列出 E022-E025 的关键 baseline/result/Δ/方向/阶段判断。
+
+### E026 全量评估执行中
+
+- 2026-05-20 23:05 CST：E081 全量重跑继续执行。
+- 本地 GPU0 正在跑 `E026_E081_box023_p1_legobj`，日志推进到约 `sim_steps 248/272`，仿真仍正常前进。
+- 远端 GPU1 已完成 `E026_E081_box021_p2_legobj` 轨迹写出，仍在 `train_E081.sh single` 后处理/评估链路中。
+- 远端 GPU0 已写出 `E026_E081_box021_p1_legobj.npz`，但单条评估因 `RESULTS` 为相对路径导致 `npz_path.relative_to(REPO)` 抛错；已将 `workspace/core4d/scripts/eval/eval_E081.py` 改为把 `RESULTS`/`VARIANTS_FILE` 解析为 repo 内绝对路径，并同步到 `spider-remote`。
+- 已在远端新开 `E026_E081_gpu0_resume` tmux，恢复 GPU0 剩余四个 case：`box023_p2`、`bucket001_p1`、`bucket005_s2_p2`、`desk021_p1`。
+- 2026-05-20 23:10 CST：本地 `box023_p1` 完成并通过单条 eval，开始本地第二条 `box025_p2`。
+- 远端 GPU1 在 `box021_p2` 写出 npz/mp4 后卡在后台 `ffmpeg` keyframe 抽帧（进程 `T` stopped）；已给 `workspace/core4d/scripts/train/train_E081.sh` 的 keyframe 提取增加 `ffmpeg -nostdin` 和 `KEYFRAME_TIMEOUT_SECONDS` 超时保护，并同步到远端。
+- 已终止旧 GPU1 后处理链路，并新开 `E026_E081_gpu1_resume` tmux 跑剩余三条：`box025_p1`、`bucket001_p2`、`bucket007_p2`。远端 GPU0/GPU1 resume 均已开始正常推进。
+- 2026-05-20 23:15 CST 健康检查：本地 `box025_p2` 约 `168/248`，远端 GPU0 `box023_p2` 约 `146/272`，远端 GPU1 `box025_p1` 约 `76/248`；远端 stopped 进程清零。
+- 2026-05-20 23:20 CST：本地 `box025_p2` 已完成并写出 npz/单条 eval；由于运行中修改 `train_E081.sh`，旧 shell 读到变更片段后退出，未继续本地剩余两条。已用修补后的脚本新开本地恢复链路，继续跑 `bucket005_s2_p1`、`bucket007_p1`，结束后会对本地四条统一 eval。
+- 2026-05-20 23:25 CST：远端 GPU0 `box023_p2` 已写出 npz，但该 resume 链路同样启动早于 keyframe `-nostdin` 修复，卡在旧 `ffmpeg` 抽帧。已终止旧 GPU0 resume，并新开 `E026_E081_gpu0_resume2` 继续剩余三条：`bucket001_p1`、`bucket005_s2_p2`、`desk021_p1`。
+- 2026-05-20 23:29 CST：远端 GPU1 已完成 `box025_p1` 并成功切到 `bucket001_p2`，说明 keyframe `-nostdin`/timeout 修复对新启动链路生效。当前已知 npz：本地 2 个（`box023_p1`, `box025_p2`），远端 4 个（`box021_p1`, `box021_p2`, `box023_p2`, `box025_p1`）。
+- 2026-05-20 23:32 CST 健康检查：本地 `bucket005_s2_p1` 约 `206/296`，远端 GPU0 `bucket001_p1` 约 `102/214`，远端 GPU1 `bucket001_p2` 约 `64/244`；无 stopped 后处理进程。
+- 2026-05-20 23:39 CST：本地 `bucket005_s2_p1` 完成并切到最后一条 `bucket007_p1`（约 `28/242`）。远端短暂 SSH timeout 后恢复，GPU0 `bucket001_p1` 约 `190/214`，GPU1 `bucket001_p2` 约 `152/244`。
+- 2026-05-20 23:42 CST：远端 GPU0 `bucket001_p1` 完成并切到 `bucket005_s2_p2`；当前远端 npz 5 个。本地最后一条 `bucket007_p1` 约 `88/242`，远端 GPU1 `bucket001_p2` 约 `200/244`。
+- 2026-05-20 23:47 CST：远端 GPU1 `bucket001_p2` 已完成并切到最后一条 `bucket007_p2`（约 `22/190`），远端 npz 6 个。本地 `bucket007_p1` 约 `156/242`，远端 GPU0 `bucket005_s2_p2` 约 `88/296`。
+- 2026-05-20 23:51 CST 健康检查：本地最后一条 `bucket007_p1` 约 `224/242`；远端 GPU0 `bucket005_s2_p2` 约 `144/296`，远端 GPU1 `bucket007_p2` 约 `78/190`；无 stopped 后处理进程。
+- 2026-05-20 23:52 CST：本地 4 条全部完成并完成本地统一 eval：`num_main_case_window_success=3/4`，`num_main_legobj_strict_proxy_success=2/4`。本地 npz：`box023_p1`、`box025_p2`、`bucket005_s2_p1`、`bucket007_p1`。远端仍在跑 GPU0 `bucket005_s2_p2` 与 GPU1 `bucket007_p2`。
+- 2026-05-20 23:55 CST：远端 GPU0 `bucket005_s2_p2` 约 `204/296`，远端 GPU1 `bucket007_p2` 约 `134/190`；远端 npz 6 个，未发现 stopped 后处理。
+- 2026-05-21 00:00 CST：远端 GPU1 已写出 `bucket007_p2`，远端 npz 7 个。远端 GPU0 `bucket005_s2_p2` 约 `266/296`，之后还剩 `desk021_p1`。
+- 2026-05-21 00:02 CST：远端 GPU0 已写出 `bucket005_s2_p2`，远端 npz 8 个，并已切到最后一条 `desk021_p1`（约 `12/268`）。
+- 2026-05-21 00:06 CST：最后一条 `desk021_p1` 约 `64/268`，远端 npz 仍 8 个；运行正常。
+- 2026-05-21 00:10 CST：最后一条 `desk021_p1` 约 `114/268`，未发现 stopped 后处理。
+- 2026-05-21 00:14 CST：最后一条 `desk021_p1` 约 `178/268`，远端 npz 仍 8 个；运行正常。
+- 2026-05-21 00:18 CST：最后一条 `desk021_p1` 约 `232/268`，中途一次 SSH reset 后恢复；训练仍在推进。
+- 2026-05-21 00:22 CST：远端最后一条 `desk021_p1` 完成并写出第 9 个远端 npz；pull 后本地 `workspace/core4d_collab_retarget/results/E026_E081_full/comparison.csv` 已重建为 `13/13`，aggregate 为 case-window success `8/13`、strict proxy `4/13`。
+- 2026-05-21 00:25 CST：已重跑 `eval_E026_full_eval.py --all`，刷新 P0/P1、coverage、best dynamic selection、threshold sweep、visual audit；已写 `log/26_E026_full_eval_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+
+### E026 E081 paper metrics 修正
+
+- 2026-05-21：用户指出 `spider_E081_full_rerun` 大量指标为空会导致对比无意义。原因确认：原始 E081 full rerun 只走 `eval_E081.py` 的 E081 专用指标，没有接入 E019 `paper_metrics.add_paper_metrics`。
+- 已新增补丁计划：`workspace/core4d_collab_retarget/plan/30_E026_e081_paper_metrics_patch_plan.md`。目标是在 E081 legacy 指标基础上追加 paper-aligned metrics，再重跑 E026 总汇总。
+- 2026-05-21 01:58 CST：已修改 `workspace/core4d/scripts/eval/eval_E081.py`，保留 `person_idx`，在写出 legacy timeseries 与 leg-object timeseries 后调用 `paper_metrics.add_paper_metrics(...)`。`py_compile` 通过。
+- 2026-05-21 02:06 CST：发现 E081 object 布局不是 trailing freejoint，而是 `object_pos_x/y/z + object_rot_y/x/z` 6DoF joint；已修 `workspace/core4d_collab_retarget/scripts/eval/paper_metrics.py`，改为通过 MuJoCo FK object body 计算 object pose，并让 MJ penetration object 检测支持 E081 6DoF 布局。FK 对照 `replay_metrics` 的 object position 差为 `0.0`。
+- 已重跑 E081 full rerun eval：`results/E026_E081_full/comparison.csv` 仍为 `13/13`，且 `paper_metrics_version=2026-05-21-P3`、object pos/object ori/contact 5cm/deep pen/MJ pen/smoothness/SPIDER joint 均为 `13/13`。aggregate 仍为 case-window success `8/13`、strict proxy `4/13`。
+- 已重跑 `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E026_full_eval.py --all`，刷新 `summary_9case.md`、`summary_13case.md`、`method_case_metrics.csv`、coverage/index/threshold/audit。`spider_E081_full_rerun` schema 现在为 `paper_metrics`。
+- 已更新 `log/26_E026_full_eval_results.md` 与 `EXPERIMENT_TRACKER.md`，相关 caveat 已改为 “paper metrics 已补齐，strict 仍是 E081 proxy”。

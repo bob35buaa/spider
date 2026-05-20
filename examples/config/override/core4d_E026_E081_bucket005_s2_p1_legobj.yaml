@@ -1,0 +1,17 @@
+# @package _global_
+# Auto-generated for E081 leg/foot-object collision validation.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: bucket005_s2_person1_legobj_e026_e081
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E026_E081_full/contact_masks/bucket005_s2_person1/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 0
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [1.0, 0.0, 0.0]
+hold_contact_rew_scale: 0.0
+# E081 keeps the E079/E080 main validation rule: no box023-specific hold window.
+hold_contact_start_eval_time: 0.0
+hold_contact_end_eval_time: 0.0
