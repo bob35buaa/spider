@@ -1431,3 +1431,13 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - shrink 范围为同一组 16 个 lower-body/foot geoms：hip/thigh/shin/linkage + `lf0-lf3`/`rf0-rf3`，非 foot radius `0.005`，foot radius `0.001`；
   - 不改 hand/object geoms、support proxy、object qpos、contact mask 或 true-freejoint/object-action 配置；
   - case-level 副作用：`box025_p1 lowerbody_proxy_min` 降低 ref interference 且无 object/fall 回退，但仍不达标；`bucket007_p2 lowerbody_proxy_min` 有 geometry 改善但 contact/penetration 无收益；`legpair_off` 对两个 case 都不是可接受修复，尤其 `box025_p1` 引入 robot-object deep pen `32.02%` 和 sim leg artifact。
+
+### E023 geometry patch 说明白话重写
+
+- 用户反馈 E023 说明仍偏难懂；已重写 `Geometry patch 范围与副作用` 小节。
+- 新版本按更直观的顺序组织：
+  - 先解释问题：物体能跟住，但参考动作里的腿部碰撞体经常和物体重叠，像腿/脚碰撞外壳太粗或腿-物体碰撞规则不合适；
+  - 再解释三个版本：baseline 不改、`legpair_off` 关碰撞 pair 只做诊断、`lowerbody_proxy_min` 缩小腿/脚碰撞外壳才是真正修复候选；
+  - 明确回答：两个 case 都各自有一个 shrink variant，但 6 个 variants 里只有 2 个真的 shrink；
+  - 分 case 写结果：`box025_p1` 明显改善但不达标，`bucket007_p2` 改善有限且 contact/penetration 略差；
+  - 强调 `legpair_off` 是反例，不是修复，因为它可能通过穿透换来表面 contact 数字。

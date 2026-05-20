@@ -39,33 +39,30 @@
 
 ## Geometry patch 范围与副作用
 
-E023 修的是 E020 `retarget_kinematic` 分线暴露出的 ref-side lower-body/object geometry 问题。`box025_p1` 和 `bucket007_p2` 在 E018b object-side support proxy 已稳定的前提下，kinematic reference 本身就有很高的腿/物体干涉：full ref leg/object interference 分别为 `66.53%` 和 `66.32%`。因此 E023 没有继续做 reward sweep，而是复制 E018b derived task 后只 patch copied task 的 `scene*.xml`，用来判断干涉是否来自 lower-body collision proxy / lower-body-object contact pair 建模。
+先用通俗语言说：E023 要查的是“参考动作本身是不是有问题”。在 `box025_p1` 和 `bucket007_p2` 里，物体已经能跟得比较稳，但人的腿部碰撞体和物体经常重叠，像是机器人的大腿/小腿/脚的碰撞外壳太粗，或者腿和物体的碰撞规则不合适。E023 不是继续调 reward，而是复制一份任务，在复制出来的 XML 里动腿部碰撞设置，看能不能把这种腿-物体重叠降下来。
 
-E023 一共对两个 target case 各生成 3 个 variants；不是每个 variant 都 shrink：
+E023 对每个 case 都做了 3 个版本：
 
-| Case | Variant | Patch mode | 是否 shrink lower-body geometry | 作用 |
-|---|---|---|---|---|
-| `box025_p1` | `baseline_replay` | `none` | 否 | E023 plumbing/control |
-| `box025_p1` | `legpair_off` | `legpair_off` | 否 | 删除 lower-body/object contact pairs，仅诊断 |
-| `box025_p1` | `lowerbody_proxy_min` | `lowerbody_proxy_min` | 是 | strict candidate |
-| `bucket007_p2` | `baseline_replay` | `none` | 否 | E023 plumbing/control |
-| `bucket007_p2` | `legpair_off` | `legpair_off` | 否 | 删除 lower-body/object contact pairs，仅诊断 |
-| `bucket007_p2` | `lowerbody_proxy_min` | `lowerbody_proxy_min` | 是 | strict candidate |
+| 版本 | 做了什么 | 能不能算真正修复 |
+|---|---|---|
+| `baseline_replay` | 什么都不改，只重跑一遍作为对照 | 不能，只是 baseline |
+| `legpair_off` | 直接关掉腿/脚和物体之间的 16 个碰撞 pair | 不能，只是诊断；因为它可能让腿直接穿过物体 |
+| `lowerbody_proxy_min` | 把腿/脚的碰撞外壳缩小 | 是本轮真正想验证的修复候选 |
 
-具体实现上，`lowerbody_proxy_min` 对两个 case 的 copied task 都 shrink 同一组 `16` 个 lower-body/foot collision geoms，而不是只 shrink 每个 case 的 top offending geoms。被 shrink 的 geoms 是：`left_hip_collision`、`right_hip_collision`、`left_thigh_collision`、`right_thigh_collision`、`left_shin_collision`、`right_shin_collision`、`left_linkage_brace_collision`、`right_linkage_brace_collision`、`lf0-lf3`、`rf0-rf3`。其中非 foot lower-body geom 的 `size[0]` 设为 `0.005`，foot sphere/proxy 的 `size[0]` 设为 `0.001`。patch 后用 MuJoCo 加载 XML 校验模型维度仍为 `nq=43/nv=41/nu=29`，同时不修改 hand geoms、object geoms、object qpos、support proxy anchor、contact masks 或 true-freejoint/object-action 配置。
+所以，“每个 case 都缩小了吗”的答案是：两个 case 都各自有一个 `lowerbody_proxy_min` 版本做了缩小；但 6 个总 variants 里只有 2 个真的 shrink。`baseline_replay` 没改，`legpair_off` 只是关碰撞 pair，也没有缩小几何。
 
-`legpair_off` 是另一条诊断分支：它不 shrink geometry，而是删除同一组 `16` 个 lower-body geom 与 object 的 contact pairs，例如 thigh/shin/linkage/foot 对 object 的 pair。这个分支只能判断“接触 pair 是否参与 artifact”，不能作为最终修复，因为它可能直接绕开真实碰撞约束。
+缩小的内容也很固定：对 `box025_p1` 和 `bucket007_p2` 都缩同一组 16 个腿部/脚部碰撞体，包括左右 hip、thigh、shin、linkage brace，以及左右脚的 `lf0-lf3`、`rf0-rf3`。腿部主体半径缩到 `0.005`，脚部 proxy 缩到 `0.001`。没有改手、物体、object support proxy、object 初始姿态、contact mask，也没有打开 direct object control。
 
-副作用分 case 看：
+结果可以这样理解：
 
-| Case | Patch | Ref geometry 变化 | Contact / penetration 变化 | Object / fall 变化 | 判断 |
-|---|---|---|---|---|---|
-| `box025_p1` | `lowerbody_proxy_min` | full ref intf `66.53% -> 25.40%`，case-window `73.03% -> 32.02%` | contact `59.64% -> 63.57%`；deep pen `6.74% -> 7.30%` 小幅变差；max pen `4.03cm -> 2.24cm` 变好 | Epos `0.0705m -> 0.0704m`，Erot `5.00deg -> 5.05deg`，no fall，object no-regression pass | 有效降低 ref interference，且没有明显 object/fall 回退；但仍未达 `<15%` / contact `>=70%` |
-| `bucket007_p2` | `lowerbody_proxy_min` | full ref intf `66.32% -> 45.26%`，case-window `57.89% -> 31.58%` | contact `29.03% -> 27.96%` 小幅变差；deep pen `21.71% -> 21.71%` 不变；max pen `6.54cm -> 6.82cm` 变差 | Epos `0.0483m -> 0.0445m`，Erot `4.08deg -> 3.46deg`，no fall，object no-regression pass | case-window geometry 有改善，但 full ref interference 仍高，contact/penetration 没有收益 |
-| `box025_p1` | `legpair_off` | full/case ref intf 不变，仍 `66.53%/73.03%` | contact `59.64% -> 72.86%` 表面过线；但 robot-object deep pen `6.74% -> 32.02%`，case-window sim leg intf `12.92% -> 45.51%` | object 稳定，no fall | 明显副作用，说明删除 pair 是绕开约束，不是修复 |
-| `bucket007_p2` | `legpair_off` | full/case ref intf 不变，仍 `66.32%/57.89%` | contact `29.03% -> 15.05%` 变差；robot-object deep pen `21.71% -> 19.74%` 小幅改善但仍 max pen `6.55cm`；sim leg intf `5.26% -> 14.47%` 变差 | object 稳定，no fall | 对 contact 有负面影响，也不是可接受修复 |
+| Case | 真正 shrink 后发生了什么 | 有没有明显代价 |
+|---|---|---|
+| `box025_p1` | 腿/物体重叠明显下降：`66.53% -> 25.40%`，说明“腿部碰撞外壳太粗”确实是问题的一部分 | 没有明显 object/fall 回退；object 仍稳定，没摔倒。contact 略升 `59.64% -> 63.57%`，但 deep penetration 小幅变差 `6.74% -> 7.30%`，整体仍没达标 |
+| `bucket007_p2` | 也有改善，但不够：full window `66.32% -> 45.26%`，case window `57.89% -> 31.58%` | object 仍稳定，没摔倒；但 contact 小幅变差 `29.03% -> 27.96%`，max penetration `6.54cm -> 6.82cm`，所以 shrink 对这个 case 没带来实际收益 |
 
-因此，“每个 case 都缩小了吗”的准确答案是：E023 的两个目标 case 都各自有一个 `lowerbody_proxy_min` shrink variant，并且该 variant 对两个 case 都 shrink 了同一组 16 个 lower-body/foot geoms；但 baseline 与 `legpair_off` variants 没有 shrink。带来的损失不是 object-side support proxy 或 fall 回退，6/6 object no-regression pass、6/6 no fall；主要损失/不足在于 shrink 后 geometry interference 仍未降到 `<15%`，`bucket007_p2` contact/penetration 还略有变差，而 `legpair_off` 会引入明显 penetration/sim leg artifact。
+`legpair_off` 的结果更像反例：它把腿/脚和物体的碰撞关系关掉，看起来有时会让 contact 数字变好，但这是不可靠的。比如 `box025_p1_legpair_off` contact 到了 `72.86%`，但 robot-object deep penetration 也升到 `32.02%`，说明它不是解决了接触，而是让身体更容易穿进去。因此 E023 不把 `legpair_off` 当成可接受方案。
+
+最终结论：E023 证明 lower-body geometry 确实是根因之一，尤其对 `box025_p1` 很明显；但简单把腿/脚碰撞体统一缩小还不够，两个 case 都没有达到 `<15%` 的 geometry repair 目标。它没有破坏 object tracking，也没有引入 fall；主要问题是修得不够细，`bucket007_p2` 还出现 contact/penetration 小幅变差。后续应该做更细的 per-geom collision 建模或训练期 penetration penalty，而不是简单关碰撞 pair。
 
 ## 量化结果
 
