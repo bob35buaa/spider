@@ -9,6 +9,21 @@ from typing import Any
 import e027_common as C
 
 
+CANDIDATE_FIELDS = [
+    "variant",
+    "case",
+    "base_variant",
+    "quality_label",
+    "proposed_change",
+    "recommended_shift_frames",
+    "expected_contact_gain_pp",
+    "dominant_miss_class",
+    "priority",
+    "requires_core_change",
+    "evidence_rationale",
+]
+
+
 def select_candidates(limit: int) -> list[dict[str, Any]]:
     timing = C.read_rows(C.TIMING / "timing_summary.csv")
     quality = C.index_by_case(C.load_quality_rows())
@@ -48,7 +63,12 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=6)
     args = ap.parse_args()
     candidates = select_candidates(args.limit)
-    C.write_rows(C.RESULTS / "full_variant_candidates.tsv", candidates, delimiter="\t")
+    tsv = C.RESULTS / "full_variant_candidates.tsv"
+    if candidates:
+        C.write_rows(tsv, candidates, delimiter="\t")
+    else:
+        tsv.parent.mkdir(parents=True, exist_ok=True)
+        tsv.write_text("\t".join(CANDIDATE_FIELDS) + "\n", encoding="utf-8")
     C.write_json(
         C.RESULTS / "full_variant_candidates.json",
         {"num_candidates": len(candidates), "candidates": candidates},
