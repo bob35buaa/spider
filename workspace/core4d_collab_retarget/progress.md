@@ -1809,3 +1809,22 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - box025 guard 与 ref 对齐较好，未出现 contact collapse。
 - 已写入正式结果日志：`workspace/core4d_collab_retarget/log/29_E029_bucket001_stability_control_results.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：E029 总览、关键指标演进、Logs 路径。
+
+### E030 启动
+
+- 时间：2026-05-21 06:54:19 CST。
+- 已从 E029 结果分支切出新分支：`exp/core4d-collab-retarget-e030-geometry-surface-control`。
+- 按 `plan/31_post_E026_next_stage_optimization_plan.md` 和 E027/E028/E029 结论，下一步进入 E030：lower-body geometry / surface-control repair。
+- E030 初步范围：
+  - 主目标：`box025_p1`、`bucket007_p2`，因为 E027 标记为 `retarget_questionable` 且 ref leg/object interference 约 `66%`；
+  - 诊断目标：`box023_p1/p2`，E027 timing shift best 为 `0`，主因更像 wrong-side / surface / geometry-control；
+  - bucket surface/control guard：`bucket001_p1/p2` 与 `bucket005_s2_p1`，避免 E028/E029 的 high-contact penetration 或 stability-only 失败被误判为数据差。
+- 已读取远程执行规范：独立 full variants `>=3` 时使用本地 1 卡 + `spider-remote` 2 卡并行，远程通过 tmux 队列执行并回收结果。
+- 已启动两个只读 explorer：
+  - 数据证据审计：梳理 E027/E028/E029 对 E030 case/标准/停止条件的约束；
+  - 代码接入点审计：梳理 E023/E028/E029 scripts、`spider/config.py`、`spider/simulators/mjwp.py` 可复用机制与风险。
+- 两个 explorer 均已返回：
+  - 数据审计确认 E030 主目标应为 `box025_p1` / `bucket007_p2`，`box023_p1/p2` 做 surface/side-control 诊断，`box025_p2` 与 `bucket005_s2_p1` 做 guard；
+  - 代码审计建议 E030 第一版 0 核心改动，复用已有默认关闭 knobs 和 E023/E028/E029 脚本结构。
+- 已创建 E030 计划文件：`workspace/core4d_collab_retarget/plan/35_E030_lower_body_geometry_surface_control_plan.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：新增 E030 plan 行、关键指标计划行、Plans 路径，并将当前分支改为 `exp/core4d-collab-retarget-e030-geometry-surface-control`。
