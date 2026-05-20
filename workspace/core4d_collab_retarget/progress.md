@@ -1165,3 +1165,21 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已用 `video-frames` skill 抽取 f115 frames 到 `results/E022/video_frames_skill/`。
 - 已写入 E022 结果日志：`workspace/core4d_collab_retarget/log/21_E022_contact_mask_semantics_repair_results.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：E022 标记完成，记录“mask 修复真实但不足以闭合 contact；box023_p1 转入 E025”。
+
+### E023 full 完成与结论
+
+- E023 setup/E022 log 已提交并推送：`5228971 exp(core4d_collab_retarget): E022 results and E023 setup`。
+- 已启动 E023 full：
+  - 本地：`E023_box025_p1_lowerbody_proxy_min`。
+  - 远程 tmux `E023`：GPU0 跑 `box025_p1_baseline_replay`、`box025_p1_legpair_off`、`bucket007_p2_lowerbody_proxy_min`；GPU1 跑 `bucket007_p2_baseline_replay`、`bucket007_p2_legpair_off`。
+- E023 full 已全部完成并回收：6/6 NPZ、6/6 MP4。
+- 已运行 `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E023.py --all`：
+  - aggregate：`num_results=6`、`num_ref_geometry_repair_pass=0`、`num_contact_goal_pass=1`、`num_object_no_regression_pass=6`、`num_artifact_guard_pass=2`、`num_E023_success=0`。
+  - best ref interference：`E023_box025_p1_lowerbody_proxy_min = 25.40%`，仍未达 `<15%`。
+  - `box025_p1_lowerbody_proxy_min`: ref intf `25.40%`, contact `63.57%`, deep pen `7.30%`, object pass。
+  - `bucket007_p2_lowerbody_proxy_min`: ref intf `45.26%`, contact `27.96%`, deep pen `21.71%`, object pass。
+  - `box025_p1_legpair_off`: contact `72.86%` but deep pen `32.02%` and sim leg intf `45.51%`，不作为有效解。
+- 已运行 unified eval postprocess：`results/E023/eval_unified/`。
+- 已用 `video-frames` skill 抽取 representative frames 到 `results/E023/video_frames_skill/`。
+- 已写入 E023 结果日志：`workspace/core4d_collab_retarget/log/22_E023_retarget_kinematic_geometry_repair_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：E023 标记完成，记录 lower-body geometry patch 负结果。

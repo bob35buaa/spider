@@ -31,7 +31,7 @@
 | E020 | 2026-05-20 | Failure Attribution Audit | **E018b 13-case 失败归因审计**: 按 E076 分层证据扩展为 S1-S6 protocol，生成 13/13 root-cause CSV、13/13 attribution panel、13/13 keyframe triplet 与 scene snapshot。归因分布：`algo_stability=4`、`algo_contact=4`、`retarget_kinematic=2`、`contact_mask=1`、`raw_data=1`、`pass=1`；下一步明确为 E021 mask/ref 修复、E022 stability/leg collision、E023 contact closure、E024 multi-agent/data filter | ✅ 详见 log 20 |
 | E021 | 2026-05-20 | RL Export | **Holosoma RL export 计划**: 已有 `plan/22_E021_holosoma_rl_export_plan.md`，与 post-E020 优化无关；优化实验编号从 E022 开始 | 📝 仅计划 |
 | E022 | 2026-05-20 | Contact Mask Repair | **box023_p1 mask semantics 负结果**: 4/4 full 完成。patched variants 将 mask overclaim/mismatch 从 `54.41%` 降到 `0-0.44%`，object/no-fall/deep-pen gates 不回退；但 best contact 仅 `25.30%`，未达 `>=70%`。结论：mask bug 真实但不足以闭合 contact，`box023_p1` 转入 E025 robot-side contact closure | ✅ 详见 log 21 |
-| E023 | 2026-05-20 | Retarget Geometry Repair | **retarget_kinematic case setup+smoke**: 只处理 `box025_p1` 与 `bucket007_p2`，不做 reward sweep；已实现 6 个 task-copy variants（baseline、legpair_off、lowerbody_proxy_min）和 train/eval/remote 脚本，4-step smoke 6/6 通过；full 目标为 ref leg/object interference `~66% -> <15%` 且 canonical support proxy 不漂移 | 🔧 setup+smoke，计划见 `plan/26_E023_retarget_kinematic_geometry_repair_plan.md` |
+| E023 | 2026-05-20 | Retarget Geometry Repair | **retarget_kinematic lower-body geometry 负结果**: 6/6 full 完成。object no-regression `6/6`，但 ref repair `0/6`、success `0/6`。`lowerbody_proxy_min` 降低部分 ref interference（box025 `66.5% -> 25.4%`，bucket007 `66.3% -> 45.3%`）但未达 `<15%`；`legpair_off` 不是有效解，会引入 penetration/leg artifact | ✅ 详见 log 22 |
 | E024 | 2026-05-20 | Stability Repair | **bucket001 stability 计划**: 用户指定忽略 `box021_*` 后，stability scope 只剩 `bucket001_p1/p2`；保持 object-side support proxy 不变，扫 `stability_penalty`、root-local tracking、较低 contact gain，目标 no-fall、pelvis min `>=0.45m` 且 object transport 不回退 | 📝 计划见 `plan/27_E024_bucket001_stability_repair_plan.md` |
 | E025 | 2026-05-20 | Contact + Collision Repair | **algo_contact case 计划**: 处理 `box023_p2`、`bucket005_s2_p1/p2`、`bucket007_p1`；先 contact closure，bucket 类需新增训练期 robot/object penetration penalty，因为现有 deep penetration 只有 eval 指标 | 📝 计划见 `plan/28_E025_robot_side_contact_collision_repair_plan.md` |
 
@@ -72,6 +72,7 @@
 | post-E020 scope | 用户指定 `desk021_p1` 与 `box021_p1/p2` 暂不优化，`box025_p2` 已 pass；剩余 9 case 分为 `contact_mask=1`、`retarget_kinematic=2`、`algo_stability=2`、`algo_contact=4`。E021 已占用 RL export，所以优化编号从 E022 开始 | 总览计划写入 `plan/24_post_E020_optimization_overview_plan.md`；首个 E022 计划写入 `plan/25_E022_contact_mask_semantics_repair_plan.md` |
 | post-E020 plan queue | E023/E024/E025 计划已按 subagent 只读审计细化：E023 lower-body geometry repair，E024 bucket001 stability sweep，E025 contact closure + explicit penetration penalty | E022 full 正在收尾；E023-E025 先有 claims、variants、脚本/eval/远程路径和成功标准，后续按 Plan -> Implement -> Train -> Evaluate -> Log 执行 |
 | E022 full | 4/4 full variants 完成；mask semantics pass `3/4`（baseline control intentionally fails），object no-regression `4/4`，artifact no-regression `4/4`，contact goal `0/4`；best contact `25.30%` | 修 mask 不能单独解决 `box023_p1` contact preservation；不重复 mask sweep，后续并入 E025 contact-control 分线 |
+| E023 full | 6/6 full variants 完成；object no-regression `6/6`，artifact guard `2/6`，contact goal `1/6`，ref geometry repair `0/6`；best ref interference `25.40%` | lower-body proxy shrink 有帮助但不足；删除 leg/object pairs 会变成 artifact shortcut，后续需要更真实 collision geometry 或 E025 penetration penalty |
 
 ## Plans
 
@@ -128,6 +129,7 @@
 - E019: `workspace/core4d_collab_retarget/log/20a_E019_unified_eval_framework_results.md`
 - E020: `workspace/core4d_collab_retarget/log/20_E020_failure_attribution_audit_results.md`
 - E022: `workspace/core4d_collab_retarget/log/21_E022_contact_mask_semantics_repair_results.md`
+- E023: `workspace/core4d_collab_retarget/log/22_E023_retarget_kinematic_geometry_repair_results.md`
 
 ## Git
 
