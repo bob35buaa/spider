@@ -1583,3 +1583,14 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已重跑 E081 full rerun eval：`results/E026_E081_full/comparison.csv` 仍为 `13/13`，且 `paper_metrics_version=2026-05-21-P3`、object pos/object ori/contact 5cm/deep pen/MJ pen/smoothness/SPIDER joint 均为 `13/13`。aggregate 仍为 case-window success `8/13`、strict proxy `4/13`。
 - 已重跑 `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E026_full_eval.py --all`，刷新 `summary_9case.md`、`summary_13case.md`、`method_case_metrics.csv`、coverage/index/threshold/audit。`spider_E081_full_rerun` schema 现在为 `paper_metrics`。
 - 已更新 `log/26_E026_full_eval_results.md` 与 `EXPERIMENT_TRACKER.md`，相关 caveat 已改为 “paper metrics 已补齐，strict 仍是 E081 proxy”。
+
+### Post-E026 下阶段优化计划
+
+- 已读取 `experiment-planning-zh` 技能说明、E026 full eval log、tracker、E022-E025 阶段总结、E026 P0/P1 summary、best dynamic selection 和 visual metric audit。
+- 核心判断：E026 后不应继续普通 reward sweep；下一阶段应拆成 contact timing、hard no-penetration/surface feasibility、bucket001 stability、lower-body geometry/control、最终 full eval assembly 五条线。
+- 已写入总计划：`workspace/core4d_collab_retarget/plan/31_post_E026_next_stage_optimization_plan.md`。
+- 该计划只定义 E027-E031 的路线、claims、成功标准、候选文件和停止条件；尚未开始代码修改或新实验执行。
+- 按用户补充意见，已把 E027 从单纯 contact timing diagnosis 升级为 `Contact Timing + Data / Retarget Quality Diagnosis`：
+  - E027 先对 13case 做 raw CORE4D motion、object/contact annotation、OmniRetarget/Holosoma kinematic reference、SPIDER-independent visual audit 四类证据检查；
+  - 新增 case 标签：`usable_algorithmic_failure`、`usable_with_caveat`、`retarget_questionable`、`raw_data_questionable`、`discard_from_success_denominator`；
+  - 明确弃用协议：不能凭单个失败指标丢 case，必须至少两类独立证据指向数据或前置 retarget 不可靠，并且 P1 full table 仍保留 caveat。
