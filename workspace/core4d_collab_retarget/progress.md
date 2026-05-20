@@ -1296,3 +1296,37 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `RUN_TIMEOUT_SECONDS=1800 RUN_STALL_TIMEOUT_SECONDS=300 SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E025.sh one 0 E025_box023_p1_hc2_gain8_sigma20_ori_nf`
   - 运行 log：`logs/core4d_collab_retarget/E025/E025_box023_p1_hc2_gain8_sigma20_ori_nf.log`
   - 当前已进入 rollout，等待完成后评估。
+- E024 结果提交并推送：`382ed19 exp(core4d_collab_retarget): E024 stability results`。
+- E025 remote monitor：
+  - tmux `E025` 存活；远程 checkout 仍是启动时的 `7a150b5`，对 E025 代码无影响。
+  - GPU0 `E025_box023_p2_hc2_gain8_sigma20_ori_nf` 已到 `sim_steps: 92/272`。
+  - GPU1 单次 tail 遇到 `kex_exchange_identification: read: Connection reset by peer`，先低频重试。
+- 本地 `E025_box023_p1_hc2_gain8_sigma20_ori_nf` 已到约 `sim_steps: 52/272`。
+- 后续监控：
+  - 本地 E025 `box023_p1` 继续稳定推进，已到约 `sim_steps: 130/272`。
+  - 远程 `workspace/core4d_collab_retarget/results/E025` 暂无 full `E025_*.npz`，说明 remote jobs 仍未完成或尚未 flush。
+  - 远程 controller probe 仍会偶发 reset；继续低频检查，避免密集 SSH。
+
+### E025 local box023_p1 full 完成
+
+- 本地 `E025_box023_p1_hc2_gain8_sigma20_ori_nf` 已完成并评估：
+  - 5cm contact preservation `28.51%`，`E025_contact_closure_pass=false`。
+  - paper contact preservation pct `50.60%`，case-window sim contact `69.86%`，说明有近接触但未达到 strict 5cm preservation gate。
+  - deep penetration `4.11%`，max pen `3.37cm`，penetration guard pass。
+  - object pass：Epos `0.0429m`，Erot `2.33deg`。
+  - no-fall pass：full pelvis min `0.6425m`。
+- 已抽取 E025 `box023_p1` frames：
+  - `workspace/core4d_collab_retarget/results/E025/video_frames_skill/E025_box023_p1_hc2_gain8_sigma20_ori_nf_t0240.jpg`
+  - `workspace/core4d_collab_retarget/results/E025/video_frames_skill/E025_box023_p1_hc2_gain8_sigma20_ori_nf_t0340.jpg`
+- 远程仍有两个 active E025 `run_mjwp.py` processes：
+  - `E025_box023_p2_hc2_gain8_sigma20_ori_nf`
+  - `E025_bucket005_s2_p2_penalty_lite_hc1`
+- 当前不启动本地 duplicate remote-queue variant，避免之后 pull remote result 时覆盖或混淆同名 variant；继续低频监控 remote。
+
+### E025 remote stall 处理
+
+- 远程两个 active E025 进程的 log mtime 均已超过 `1600s` 未更新：
+  - `E025_box023_p2_hc2_gain8_sigma20_ori_nf.log` age `1687s`
+  - `E025_bucket005_s2_p2_penalty_lite_hc1.log` age `1681s`
+- 判定为 remote rollout stall，不再等待原 tmux 队列自然恢复。
+- 已修改 `workspace/core4d_collab_retarget/scripts/run_E025_remote.sh`：remote tmux 默认带 `RUN_TIMEOUT_SECONDS=2400`、`RUN_STALL_TIMEOUT_SECONDS=300`，避免后续 stale process 无限阻塞。
