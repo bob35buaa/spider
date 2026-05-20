@@ -37,6 +37,36 @@
 - [x] Unified eval：`eval_unified/` CSV/JSON bundle 已生成。
 - [x] Visual artifacts：box025 videos `248` frames / `4.96s`；bucket007 videos `190` frames / `3.80s`；`video-frames` skill 已抽取代表帧。
 
+## Geometry patch 范围与副作用
+
+E023 修的是 E020 `retarget_kinematic` 分线暴露出的 ref-side lower-body/object geometry 问题。`box025_p1` 和 `bucket007_p2` 在 E018b object-side support proxy 已稳定的前提下，kinematic reference 本身就有很高的腿/物体干涉：full ref leg/object interference 分别为 `66.53%` 和 `66.32%`。因此 E023 没有继续做 reward sweep，而是复制 E018b derived task 后只 patch copied task 的 `scene*.xml`，用来判断干涉是否来自 lower-body collision proxy / lower-body-object contact pair 建模。
+
+E023 一共对两个 target case 各生成 3 个 variants；不是每个 variant 都 shrink：
+
+| Case | Variant | Patch mode | 是否 shrink lower-body geometry | 作用 |
+|---|---|---|---|---|
+| `box025_p1` | `baseline_replay` | `none` | 否 | E023 plumbing/control |
+| `box025_p1` | `legpair_off` | `legpair_off` | 否 | 删除 lower-body/object contact pairs，仅诊断 |
+| `box025_p1` | `lowerbody_proxy_min` | `lowerbody_proxy_min` | 是 | strict candidate |
+| `bucket007_p2` | `baseline_replay` | `none` | 否 | E023 plumbing/control |
+| `bucket007_p2` | `legpair_off` | `legpair_off` | 否 | 删除 lower-body/object contact pairs，仅诊断 |
+| `bucket007_p2` | `lowerbody_proxy_min` | `lowerbody_proxy_min` | 是 | strict candidate |
+
+具体实现上，`lowerbody_proxy_min` 对两个 case 的 copied task 都 shrink 同一组 `16` 个 lower-body/foot collision geoms，而不是只 shrink 每个 case 的 top offending geoms。被 shrink 的 geoms 是：`left_hip_collision`、`right_hip_collision`、`left_thigh_collision`、`right_thigh_collision`、`left_shin_collision`、`right_shin_collision`、`left_linkage_brace_collision`、`right_linkage_brace_collision`、`lf0-lf3`、`rf0-rf3`。其中非 foot lower-body geom 的 `size[0]` 设为 `0.005`，foot sphere/proxy 的 `size[0]` 设为 `0.001`。patch 后用 MuJoCo 加载 XML 校验模型维度仍为 `nq=43/nv=41/nu=29`，同时不修改 hand geoms、object geoms、object qpos、support proxy anchor、contact masks 或 true-freejoint/object-action 配置。
+
+`legpair_off` 是另一条诊断分支：它不 shrink geometry，而是删除同一组 `16` 个 lower-body geom 与 object 的 contact pairs，例如 thigh/shin/linkage/foot 对 object 的 pair。这个分支只能判断“接触 pair 是否参与 artifact”，不能作为最终修复，因为它可能直接绕开真实碰撞约束。
+
+副作用分 case 看：
+
+| Case | Patch | Ref geometry 变化 | Contact / penetration 变化 | Object / fall 变化 | 判断 |
+|---|---|---|---|---|---|
+| `box025_p1` | `lowerbody_proxy_min` | full ref intf `66.53% -> 25.40%`，case-window `73.03% -> 32.02%` | contact `59.64% -> 63.57%`；deep pen `6.74% -> 7.30%` 小幅变差；max pen `4.03cm -> 2.24cm` 变好 | Epos `0.0705m -> 0.0704m`，Erot `5.00deg -> 5.05deg`，no fall，object no-regression pass | 有效降低 ref interference，且没有明显 object/fall 回退；但仍未达 `<15%` / contact `>=70%` |
+| `bucket007_p2` | `lowerbody_proxy_min` | full ref intf `66.32% -> 45.26%`，case-window `57.89% -> 31.58%` | contact `29.03% -> 27.96%` 小幅变差；deep pen `21.71% -> 21.71%` 不变；max pen `6.54cm -> 6.82cm` 变差 | Epos `0.0483m -> 0.0445m`，Erot `4.08deg -> 3.46deg`，no fall，object no-regression pass | case-window geometry 有改善，但 full ref interference 仍高，contact/penetration 没有收益 |
+| `box025_p1` | `legpair_off` | full/case ref intf 不变，仍 `66.53%/73.03%` | contact `59.64% -> 72.86%` 表面过线；但 robot-object deep pen `6.74% -> 32.02%`，case-window sim leg intf `12.92% -> 45.51%` | object 稳定，no fall | 明显副作用，说明删除 pair 是绕开约束，不是修复 |
+| `bucket007_p2` | `legpair_off` | full/case ref intf 不变，仍 `66.32%/57.89%` | contact `29.03% -> 15.05%` 变差；robot-object deep pen `21.71% -> 19.74%` 小幅改善但仍 max pen `6.55cm`；sim leg intf `5.26% -> 14.47%` 变差 | object 稳定，no fall | 对 contact 有负面影响，也不是可接受修复 |
+
+因此，“每个 case 都缩小了吗”的准确答案是：E023 的两个目标 case 都各自有一个 `lowerbody_proxy_min` shrink variant，并且该 variant 对两个 case 都 shrink 了同一组 16 个 lower-body/foot geoms；但 baseline 与 `legpair_off` variants 没有 shrink。带来的损失不是 object-side support proxy 或 fall 回退，6/6 object no-regression pass、6/6 no fall；主要损失/不足在于 shrink 后 geometry interference 仍未降到 `<15%`，`bucket007_p2` contact/penetration 还略有变差，而 `legpair_off` 会引入明显 penetration/sim leg artifact。
+
 ## 量化结果
 
 | Variant | Patch | Full ref leg intf | Case ref leg intf | Sim leg intf | Contact 5cm | Deep pen | Max pen | Epos | Erot | Fall | E023 success |

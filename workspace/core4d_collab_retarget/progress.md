@@ -1421,3 +1421,13 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 影响：reward/eval 会在大量无 raw contact 证据的帧也要求接触，形成 `54.41%` overclaim/mismatch，污染 E020 `contact_mask` 归因；
   - 修正：E022 只 patch copied task，将 raw 3cm mask resize 后写回 `contact[:, :2]`，同步 Hydra override 的 runtime mask path/person/time-axis，并在 `eval_E022.py` 中加入 overclaim/mismatch gate；
   - 结论：patched variants 把 mask overclaim/mismatch 降到 `0-0.44%`，证明 mask semantics bug 已修复，但 contact preservation 仍只有 best `25.30%`，说明该 bug 不是充分根因。
+
+### E023 geometry patch 说明补写
+
+- 按用户要求复核 `log/22_E023_retarget_kinematic_geometry_repair_results.md`，原 log 有主结果表，但对 lower-body geometry 如何 shrink、每个 case 是否 shrink、是否引入副作用解释不足。
+- 已在 E023 log 中新增 `Geometry patch 范围与副作用` 小节，明确记录：
+  - E023 两个目标 case 是 `box025_p1` 和 `bucket007_p2`，各有 `baseline_replay`、`legpair_off`、`lowerbody_proxy_min` 三个 variants；
+  - 只有两个 `lowerbody_proxy_min` variants shrink geometry；baseline 不变，`legpair_off` 只删除 16 个 lower-body/object contact pairs，不 shrink；
+  - shrink 范围为同一组 16 个 lower-body/foot geoms：hip/thigh/shin/linkage + `lf0-lf3`/`rf0-rf3`，非 foot radius `0.005`，foot radius `0.001`；
+  - 不改 hand/object geoms、support proxy、object qpos、contact mask 或 true-freejoint/object-action 配置；
+  - case-level 副作用：`box025_p1 lowerbody_proxy_min` 降低 ref interference 且无 object/fall 回退，但仍不达标；`bucket007_p2 lowerbody_proxy_min` 有 geometry 改善但 contact/penetration 无收益；`legpair_off` 对两个 case 都不是可接受修复，尤其 `box025_p1` 引入 robot-object deep pen `32.02%` 和 sim leg artifact。
