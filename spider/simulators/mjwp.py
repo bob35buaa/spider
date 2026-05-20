@@ -1069,8 +1069,24 @@ def get_reward(
 
     robot_object_penalty = torch.zeros(N, device=config.device)
     leg_object_penalty = torch.zeros(N, device=config.device)
+    robot_object_barrier_penalty = torch.zeros(N, device=config.device)
+    robot_object_score_cap_penalty = torch.zeros(N, device=config.device)
+    robot_object_min_sdf = torch.full(
+        (N,), float("nan"), device=config.device, dtype=qpos_rew.dtype
+    )
+    leg_object_min_sdf = torch.full(
+        (N,), float("nan"), device=config.device, dtype=qpos_rew.dtype
+    )
     if (
-        (config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids)
+        (
+            (
+                config.robot_object_penalty_scale > 0.0
+                or config.robot_object_barrier_scale > 0.0
+                or config.robot_object_score_cap_scale > 0.0
+                or config.contact_penetration_gate_enabled
+            )
+            and config.robot_object_penalty_geom_ids
+        )
         or (config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids)
     ) and config.hand_approach_obj_half_extents:
         object_geom_id = mujoco.mj_name2id(
@@ -1127,20 +1143,66 @@ def get_reward(
                 sdf_geom = sdf_points.min(dim=2).values - radii.view(1, -1)
                 return sdf_geom.min(dim=1).values
 
-            if config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids:
+            if config.robot_object_penalty_geom_ids and (
+                config.robot_object_penalty_scale > 0.0
+                or config.robot_object_barrier_scale > 0.0
+                or config.robot_object_score_cap_scale > 0.0
+                or config.contact_penetration_gate_enabled
+            ):
                 robot_sdf = geom_box_sdf_min(config.robot_object_penalty_geom_ids)
+                robot_object_min_sdf = robot_sdf
+            if config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids:
                 deep_limit = (
                     config.robot_object_penalty_margin_m
                     - config.robot_object_penalty_deep_threshold_m
                 )
-                robot_hinge = torch.clamp(deep_limit - robot_sdf, min=0.0)
+                robot_hinge = torch.clamp(deep_limit - robot_object_min_sdf, min=0.0)
                 robot_object_penalty = -config.robot_object_penalty_scale * robot_hinge
+            if config.robot_object_barrier_scale > 0.0 and config.robot_object_penalty_geom_ids:
+                barrier_hinge = torch.clamp(
+                    config.robot_object_barrier_margin_m - robot_object_min_sdf,
+                    min=0.0,
+                )
+                if config.robot_object_barrier_normalize_by_margin:
+                    denom = max(float(config.robot_object_barrier_margin_m), 1e-6)
+                    barrier_hinge = barrier_hinge / denom
+                barrier_power = max(float(config.robot_object_barrier_power), 1.0)
+                robot_object_barrier_penalty = (
+                    -config.robot_object_barrier_scale
+                    * torch.pow(barrier_hinge, barrier_power)
+                )
+            if config.robot_object_score_cap_scale > 0.0 and config.robot_object_penalty_geom_ids:
+                cap_violation = (
+                    robot_object_min_sdf < config.robot_object_score_cap_threshold_m
+                ).to(qpos_rew.dtype)
+                robot_object_score_cap_penalty = (
+                    -config.robot_object_score_cap_scale * cap_violation
+                )
             if config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids:
                 leg_sdf = geom_box_sdf_min(config.leg_object_penalty_geom_ids)
+                leg_object_min_sdf = leg_sdf
                 leg_hinge = torch.clamp(
                     config.leg_object_penalty_margin_m - leg_sdf, min=0.0
                 )
                 leg_object_penalty = -config.leg_object_penalty_scale * leg_hinge
+
+    contact_penetration_gate = torch.ones(N, device=config.device, dtype=qpos_rew.dtype)
+    if config.contact_penetration_gate_enabled:
+        contact_penetration_gate = (
+            robot_object_min_sdf >= config.contact_penetration_gate_margin_m
+        ).to(qpos_rew.dtype)
+        contact_hdmi_rew = contact_hdmi_rew * contact_penetration_gate
+        if config.contact_penetration_gate_hold_contact:
+            hold_contact_rew = hold_contact_rew * contact_penetration_gate
+
+    staged_contact_gate = torch.ones(N, device=config.device, dtype=qpos_rew.dtype)
+    if config.penetration_staged_contact_enabled:
+        time_arr = wp.to_torch(env.data_wp.time).to(device=config.device, dtype=qpos_rew.dtype)
+        staged_contact_gate = (
+            time_arr >= config.penetration_staged_contact_start_time_s
+        ).to(qpos_rew.dtype)
+        contact_hdmi_rew = contact_hdmi_rew * staged_contact_gate
+        hold_contact_rew = hold_contact_rew * staged_contact_gate
 
     reward = (
         qpos_rew
@@ -1156,6 +1218,8 @@ def get_reward(
         + hold_contact_rew
         + robot_object_penalty
         + leg_object_penalty
+        + robot_object_barrier_penalty
+        + robot_object_score_cap_penalty
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -1181,6 +1245,12 @@ def get_reward(
         "hold_contact_rew": hold_contact_rew,
         "robot_object_penalty": robot_object_penalty,
         "leg_object_penalty": leg_object_penalty,
+        "robot_object_barrier_penalty": robot_object_barrier_penalty,
+        "robot_object_score_cap_penalty": robot_object_score_cap_penalty,
+        "robot_object_min_sdf": robot_object_min_sdf,
+        "leg_object_min_sdf": leg_object_min_sdf,
+        "contact_penetration_gate": contact_penetration_gate,
+        "staged_contact_gate": staged_contact_gate,
     }
     return reward, info
 

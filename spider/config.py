@@ -254,6 +254,19 @@ class Config:
     leg_object_penalty_margin_m: float = 0.02
     leg_object_penalty_geom_names: list[str] = field(default_factory=list)
     leg_object_penalty_geom_ids: list[int] = field(default_factory=list)
+    # E028: harder no-penetration controls. These are disabled by default and
+    # reuse the E025 robot/object SDF geoms.
+    robot_object_barrier_scale: float = 0.0
+    robot_object_barrier_margin_m: float = 0.02
+    robot_object_barrier_power: float = 2.0
+    robot_object_barrier_normalize_by_margin: bool = True
+    robot_object_score_cap_scale: float = 0.0
+    robot_object_score_cap_threshold_m: float = -0.01
+    contact_penetration_gate_enabled: bool = False
+    contact_penetration_gate_margin_m: float = 0.0
+    contact_penetration_gate_hold_contact: bool = True
+    penetration_staged_contact_enabled: bool = False
+    penetration_staged_contact_start_time_s: float = 1.2
     # E035: local-frame body tracking (HDMI-style)
     use_local_frame_reward: bool = False
     local_frame_upper_ids: list[int] = field(
@@ -848,12 +861,19 @@ def process_config(config: Config):
         )
 
     # Resolve hand_approach_body_ids and object half-extents for E025/E039
+    robot_object_sdf_active = (
+        config.robot_object_penalty_scale > 0.0
+        or config.robot_object_barrier_scale > 0.0
+        or config.robot_object_score_cap_scale > 0.0
+        or config.contact_penetration_gate_enabled
+    )
+    leg_object_sdf_active = config.leg_object_penalty_scale > 0.0
     if (
         config.hand_approach_rew_scale > 0.0
         or config.contact_mask_rew_scale > 0.0
         or config.contact_hdmi_gain > 0.0
-        or config.robot_object_penalty_scale > 0.0
-        or config.leg_object_penalty_scale > 0.0
+        or robot_object_sdf_active
+        or leg_object_sdf_active
     ) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
@@ -891,7 +911,7 @@ def process_config(config: Config):
         )
 
     if config.simulator == "mjwp":
-        if config.robot_object_penalty_scale > 0.0:
+        if robot_object_sdf_active:
             geom_ids = []
             for name in config.robot_object_penalty_geom_names:
                 gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
@@ -905,7 +925,7 @@ def process_config(config: Config):
             loguru.logger.info(
                 "Robot/object penalty: {} geoms resolved.", len(geom_ids)
             )
-        if config.leg_object_penalty_scale > 0.0:
+        if leg_object_sdf_active:
             geom_ids = []
             for name in config.leg_object_penalty_geom_names:
                 gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)

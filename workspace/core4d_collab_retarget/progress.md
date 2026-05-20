@@ -1630,3 +1630,33 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - E028 目标 cases：`bucket005_s2_p1`, `bucket005_s2_p2`, `bucket007_p1`, `bucket001_p2`；`box025_p2` 做 guard。
 - E028 机制边界：只从 E025 soft penetration penalty 升级为 barrier / score cap / contact gate / staged contact；第一版不做 mesh-level surface projection。
 - 已更新 `EXPERIMENT_TRACKER.md`，新增 E028 plan 行与 plan 路径。
+
+### E028 核心 knobs 实现中
+
+- 已在 `spider/config.py` 增加默认关闭的 E028 参数：
+  - `robot_object_barrier_*`
+  - `robot_object_score_cap_*`
+  - `contact_penetration_gate_*`
+  - `penetration_staged_contact_*`
+- 已在 `spider/simulators/mjwp.py` 复用 E025 的 runtime box SDF，新增：
+  - squared/normalized robot-object barrier penalty；
+  - min-SDF score-cap 近似；
+  - contact/hold-contact penetration gate；
+  - staged contact gate；
+  - info 输出 `robot_object_min_sdf`, `leg_object_min_sdf`, `contact_penetration_gate`, `staged_contact_gate`。
+- 这些新增路径默认关闭；旧 E025 soft penalty 逻辑未删除。
+- 已新增 E028 脚本与 generated overrides：
+  - `workspace/core4d_collab_retarget/scripts/E028/variants.tsv`
+  - `workspace/core4d_collab_retarget/scripts/E028/generate_e028_overrides.py`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E028.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E028_remote_tmux.sh`
+  - `workspace/core4d_collab_retarget/scripts/run_E028_preprocess.sh`
+  - `workspace/core4d_collab_retarget/scripts/run_E028_remote.sh`
+  - `workspace/core4d_collab_retarget/scripts/pull_E028_remote_results.sh`
+  - `workspace/core4d_collab_retarget/scripts/eval/eval_E028.py`
+- 已运行：
+  - `.venv/bin/python -m py_compile spider/config.py spider/simulators/mjwp.py workspace/core4d_collab_retarget/scripts/E028/generate_e028_overrides.py workspace/core4d_collab_retarget/scripts/eval/eval_E028.py`
+  - `bash -n` 检查 E028 shell wrappers；
+  - `bash workspace/core4d_collab_retarget/scripts/run_E028_preprocess.sh`
+  - `RUN_TIMEOUT_SECONDS=600 RUN_STALL_TIMEOUT_SECONDS=180 bash workspace/core4d_collab_retarget/scripts/train/train_E028.sh smoke 0`
+- Smoke 结果：6/6 variants 完成 4-step rollout 并能进入 `eval_E028.py`；该 smoke 仅验证 wiring，不作为 E028 实验结论。

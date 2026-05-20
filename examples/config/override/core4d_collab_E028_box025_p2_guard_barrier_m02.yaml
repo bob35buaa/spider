@@ -1,0 +1,81 @@
+# @package _global_
+# Auto-generated for E028 hard no-penetration / surface feasibility.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: box025_person2_freejoint_legobj_e018b
+scene_name: scene_e018b_jointB_box025_p2_canonical_t02
+contact_guidance: false
+object_pd_override: false
+object_kinematic_override: false
+object_action_dims: 0
+object_actuator_ids: []
+object_actuator_names: []
+
+partner_force_scale: 0.0
+partner_force_spring_kp: 0.0
+partner_force_spring_kd: -1.0
+partner_force_spring_kp_rot: 0.0
+partner_force_spring_kd_rot: -1.0
+partner_force_ref_dt: -1.0
+partner_force_point_local: []
+partner_force_points_local: []
+partner_force_force_clamp: 0.0
+partner_force_torque_clamp: 0.0
+
+support_proxy_enabled: true
+support_proxy_mode: mocap_pad
+support_proxy_mocap_body_name: support_weld_anchor
+support_proxy_mocap_quat_mode: object_ref
+support_proxy_point_local: [0, 0.3778, 0.290904]
+support_proxy_gravity_scale: 0.5
+support_proxy_connector_kp: 0.0
+support_proxy_connector_kd: 0.0
+support_proxy_xy_velocity_scale: 1.0
+support_proxy_max_xy_speed: 0.0
+support_proxy_height_tau: 0.0
+support_proxy_ref_dt: -1.0
+support_proxy_force_clamp: 0.0
+support_proxy_torque_clamp: 0.0
+
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E028/contact_masks/E028_box025_p2_guard_barrier_m02/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_gain: 0.0
+contact_hdmi_sigma: 0.30
+contact_hdmi_ori_weight: 0.0
+contact_hdmi_ori_mode: multiply
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [0.0, 1.0, 0.0]
+
+hold_contact_rew_scale: 0.0
+hold_contact_sigma: 0.05
+hold_contact_start_eval_time: 0.64
+hold_contact_end_eval_time: 4.08
+hold_contact_require_ref_contact: true
+
+robot_object_penalty_geom_names: ["lh", "rh"]
+robot_object_penalty_scale: 0.0
+robot_object_penalty_margin_m: 0.0
+robot_object_penalty_deep_threshold_m: 0.02
+leg_object_penalty_scale: 0.0
+leg_object_penalty_margin_m: 0.02
+leg_object_penalty_geom_names: []
+
+robot_object_barrier_scale: 8.0
+robot_object_barrier_margin_m: 0.02
+robot_object_barrier_power: 2.0
+robot_object_barrier_normalize_by_margin: true
+robot_object_score_cap_scale: 0.0
+robot_object_score_cap_threshold_m: -0.01
+contact_penetration_gate_enabled: false
+contact_penetration_gate_margin_m: 0.0
+contact_penetration_gate_hold_contact: true
+penetration_staged_contact_enabled: false
+penetration_staged_contact_start_time_s: 1.2
+
+stability_penalty_scale: 0.0
+stability_penalty_threshold: 0.55
+local_frame_root_sigma: 0.5
