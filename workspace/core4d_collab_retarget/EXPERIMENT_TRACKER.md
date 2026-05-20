@@ -35,6 +35,7 @@
 | E024 | 2026-05-20 | Stability Repair | **bucket001 stability 负结果/局部正结果**: 5 个关键 full variants 完成。p1 三个 variants 全部 fall，contact `0%`；p2 两个 variants no-fall 且 contact `88.76-92.70%`，但 deep penetration 仍 `59.60-64.65%`、max pen `8cm+`。object no-regression `5/5`，`num_E024_success=0` | ✅ 详见 log 23；p1 转后续 stability/control，p2 转 E025 collision penalty |
 | E025 | 2026-05-20 | Contact + Collision Repair | **contact + collision 负结果/机制验证**: 8/8 full 完成，object no-regression `8/8`，no-fall `7/8`，contact closure pass `6/8`，但 penetration guard 仅 `1/8`、strict success `0/8`。`box023_p1/p2` high contact reward 未闭合 strict contact；bucket s4 penalty 有方向性改善但 deep pen 仍 `35.57-64.53%+` | ✅ 详见 log 24；阶段总结见 log 25 |
 | E026 | 2026-05-20/21 | Full Eval | **OmniRetarget + Spider dynamics 13case 完整评估**: 重跑 Holosoma/OmniRetarget kinematic 得到 `12/13`（`desk021_p1` SOCP infeasible），补齐 E081 full rerun `13/13` 并接入 paper metrics。P0 9case：E081 full rerun obj `21.27cm`、ori `19.04deg`、5cm contact `42.17%`、deep pen `16.25%`、strict proxy `4/9`；E018b/E022-E025 best obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`。P1 13case：E081 full rerun obj `27.10cm`、ori `15.53deg`、5cm contact `36.23%`、deep pen `12.39%`、fall `4`、strict proxy `4/13`；best dynamic obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13`。28cm contact threshold 溯源为 Holosoma v1 `CONTACT_RADIUS=0.28` 并完成阈值 sweep；视觉/指标一致 | ✅ 详见 log 26 |
+| E027 | 2026-05-21 | Data / Timing Audit | **Contact timing + data/retarget quality diagnosis 计划**: 先对 13case 聚合 E020/E026/Holosoma/E018b 证据，输出 quality labels 与弃用/caveat 决策；再对 low-contact 且未弃用 case 做 timing panel，生成最多 6 个 full variant candidates。第一阶段为离线 audit，不改 reward、不占 GPU | 📝 计划：`plan/32_E027_contact_timing_data_quality_plan.md` |
 
 ## Baseline
 
@@ -111,6 +112,8 @@
 - E025: `workspace/core4d_collab_retarget/plan/28_E025_robot_side_contact_collision_repair_plan.md`
 - E026: `workspace/core4d_collab_retarget/plan/29_E026_full_eval_plan.md`
 - E026 E081 paper metrics patch: `workspace/core4d_collab_retarget/plan/30_E026_e081_paper_metrics_patch_plan.md`
+- Post-E026 next stage: `workspace/core4d_collab_retarget/plan/31_post_E026_next_stage_optimization_plan.md`
+- E027: `workspace/core4d_collab_retarget/plan/32_E027_contact_timing_data_quality_plan.md`
 - 后续 (后台计划): 技术报告 `plan/23_*.md`、总索引 `plan/AFTER_E018_INDEX.md`
 
 ## Logs

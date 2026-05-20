@@ -1594,3 +1594,12 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - E027 先对 13case 做 raw CORE4D motion、object/contact annotation、OmniRetarget/Holosoma kinematic reference、SPIDER-independent visual audit 四类证据检查；
   - 新增 case 标签：`usable_algorithmic_failure`、`usable_with_caveat`、`retarget_questionable`、`raw_data_questionable`、`discard_from_success_denominator`；
   - 明确弃用协议：不能凭单个失败指标丢 case，必须至少两类独立证据指向数据或前置 retarget 不可靠，并且 P1 full table 仍保留 caveat。
+
+### E027 计划启动
+
+- 已按用户要求开始 E027，遵循 `experiment-planning-zh` 的先 plan 后执行规则。
+- 已读取 E020 audit plan/log、E020 audit 结果目录、E026 log、远程执行指南和 E027 总计划。
+- 已提交 post-E026 总计划 commit：`a96ac2e plan(core4d_collab): define post-E026 optimization stage`。
+- 已创建 E027 详细计划：`workspace/core4d_collab_retarget/plan/32_E027_contact_timing_data_quality_plan.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：新增 E027 plan 行，并把 plan 31/32 加入 Plans 列表。
+- E027 第一阶段定位为离线 audit：先实现 `scripts/E027/audit_case_data_quality.py`、`diagnose_contact_timing.py`、`select_full_variants.py`、`scripts/eval/eval_E027.py`；不改核心 reward，不占 GPU。只有 full candidates `>=3` 时才启用本地 1 卡 + 远程 2 卡。
