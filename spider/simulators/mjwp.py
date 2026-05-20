@@ -1204,6 +1204,120 @@ def get_reward(
         contact_hdmi_rew = contact_hdmi_rew * staged_contact_gate
         hold_contact_rew = hold_contact_rew * staged_contact_gate
 
+    upright_barrier_penalty = torch.zeros(N, device=config.device)
+    upright_score_cap_penalty = torch.zeros(N, device=config.device)
+    root_tilt_penalty = torch.zeros(N, device=config.device)
+    foot_support_penalty = torch.zeros(N, device=config.device)
+    posture_contact_gate = torch.ones(N, device=config.device, dtype=qpos_rew.dtype)
+    posture_pelvis_z = torch.full(
+        (N,), float("nan"), device=config.device, dtype=qpos_rew.dtype
+    )
+    root_upright_dot = torch.full(
+        (N,), float("nan"), device=config.device, dtype=qpos_rew.dtype
+    )
+    foot_support_ok = torch.full(
+        (N,), float("nan"), device=config.device, dtype=qpos_rew.dtype
+    )
+    posture_active = (
+        config.upright_barrier_scale > 0.0
+        or config.upright_score_cap_scale > 0.0
+        or config.root_tilt_penalty_scale > 0.0
+        or config.foot_support_penalty_scale > 0.0
+        or config.posture_contact_gate_enabled
+    )
+    if posture_active:
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        pelvis_z = xpos_sim[:, 1, 2]
+        posture_pelvis_z = pelvis_z
+
+        if config.upright_barrier_scale > 0.0:
+            upright_hinge = torch.clamp(
+                config.upright_barrier_threshold_m - pelvis_z,
+                min=0.0,
+            )
+            denom = max(float(config.upright_barrier_margin_m), 1e-6)
+            upright_hinge = upright_hinge / denom
+            upright_power = max(float(config.upright_barrier_power), 1.0)
+            upright_barrier_penalty = (
+                -config.upright_barrier_scale
+                * torch.pow(upright_hinge, upright_power)
+            )
+
+        if config.upright_score_cap_scale > 0.0:
+            cap_violation = (
+                pelvis_z < config.upright_score_cap_threshold_m
+            ).to(qpos_rew.dtype)
+            upright_score_cap_penalty = -config.upright_score_cap_scale * cap_violation
+
+        need_root_tilt = (
+            config.root_tilt_penalty_scale > 0.0
+            or config.posture_contact_gate_enabled
+        )
+        if need_root_tilt:
+            xquat_sim = wp.to_torch(env.data_wp.xquat)
+            root_quat = xquat_sim[:, 1]
+            local_z = torch.tensor(
+                [0.0, 0.0, 1.0], device=config.device, dtype=root_quat.dtype
+            )
+            root_up = _lf_quat_apply(root_quat, local_z.unsqueeze(0).expand(N, -1))
+            root_upright_dot = root_up[:, 2].clamp(min=-1.0, max=1.0)
+            if config.root_tilt_penalty_scale > 0.0:
+                max_tilt_cos = float(
+                    np.cos(np.deg2rad(config.root_tilt_penalty_max_deg))
+                )
+                tilt_hinge = torch.clamp(max_tilt_cos - root_upright_dot, min=0.0)
+                denom = max(1.0 - max_tilt_cos, 1e-6)
+                tilt_hinge = tilt_hinge / denom
+                tilt_power = max(float(config.root_tilt_penalty_power), 1.0)
+                root_tilt_penalty = (
+                    -config.root_tilt_penalty_scale
+                    * torch.pow(tilt_hinge, tilt_power)
+                )
+
+        if (
+            config.foot_support_penalty_scale > 0.0
+            or (
+                config.posture_contact_gate_enabled
+                and config.posture_contact_gate_require_foot_support
+            )
+        ) and config.foot_support_site_ids:
+            site_xpos = wp.to_torch(env.data_wp.site_xpos)
+            foot_z = site_xpos[:, config.foot_support_site_ids, 2]
+            min_foot_z = foot_z.min(dim=1).values
+            foot_support_ok = (min_foot_z <= config.foot_support_max_z_m).to(
+                qpos_rew.dtype
+            )
+            if config.foot_support_penalty_scale > 0.0:
+                airborne = 1.0 - foot_support_ok
+                low_pelvis = (
+                    pelvis_z < config.foot_support_low_pelvis_threshold_m
+                ).to(qpos_rew.dtype)
+                foot_support_penalty = (
+                    -config.foot_support_penalty_scale
+                    * airborne
+                    * (1.0 + low_pelvis)
+                )
+
+        if config.posture_contact_gate_enabled:
+            posture_contact_gate = (
+                pelvis_z >= config.posture_contact_gate_pelvis_z_m
+            ).to(qpos_rew.dtype)
+            max_tilt_cos = float(
+                np.cos(np.deg2rad(config.posture_contact_gate_max_root_tilt_deg))
+            )
+            if need_root_tilt:
+                posture_contact_gate = posture_contact_gate * (
+                    root_upright_dot >= max_tilt_cos
+                ).to(qpos_rew.dtype)
+            if (
+                config.posture_contact_gate_require_foot_support
+                and config.foot_support_site_ids
+            ):
+                posture_contact_gate = posture_contact_gate * foot_support_ok
+            contact_hdmi_rew = contact_hdmi_rew * posture_contact_gate
+            if config.posture_contact_gate_hold_contact:
+                hold_contact_rew = hold_contact_rew * posture_contact_gate
+
     reward = (
         qpos_rew
         + qvel_rew
@@ -1220,6 +1334,10 @@ def get_reward(
         + leg_object_penalty
         + robot_object_barrier_penalty
         + robot_object_score_cap_penalty
+        + upright_barrier_penalty
+        + upright_score_cap_penalty
+        + root_tilt_penalty
+        + foot_support_penalty
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -1247,6 +1365,14 @@ def get_reward(
         "leg_object_penalty": leg_object_penalty,
         "robot_object_barrier_penalty": robot_object_barrier_penalty,
         "robot_object_score_cap_penalty": robot_object_score_cap_penalty,
+        "upright_barrier_penalty": upright_barrier_penalty,
+        "upright_score_cap_penalty": upright_score_cap_penalty,
+        "root_tilt_penalty": root_tilt_penalty,
+        "foot_support_penalty": foot_support_penalty,
+        "posture_contact_gate": posture_contact_gate,
+        "posture_pelvis_z": posture_pelvis_z,
+        "root_upright_dot": root_upright_dot,
+        "foot_support_ok": foot_support_ok,
         "robot_object_min_sdf": robot_object_min_sdf,
         "leg_object_min_sdf": leg_object_min_sdf,
         "contact_penetration_gate": contact_penetration_gate,

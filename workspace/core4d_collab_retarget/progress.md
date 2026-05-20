@@ -1726,3 +1726,39 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 新增默认关闭 knobs：upright barrier、upright score cap、root tilt penalty、foot support、posture contact gate；
   - 若 p1 4 个机制 variants 仍 pelvis `<0.25m` 或 contact `0%`，停止 reward sweep，转 reference/support timing 或 lower-body control infeasible audit。
 - 已更新 `EXPERIMENT_TRACKER.md`：新增 E029 plan 行、Plans 路径，并将当前分支改为 `exp/core4d-collab-retarget-e029-stability-control`。
+
+### E029 核心实现中
+
+- 已在 `spider/config.py` 增加默认关闭的 E029 knobs：
+  - `upright_barrier_*`
+  - `upright_score_cap_*`
+  - `root_tilt_penalty_*`
+  - `foot_support_*`
+  - `posture_contact_gate_*`
+- 已在 `spider/simulators/mjwp.py` 新增 runtime reward/gate：
+  - pelvis height squared barrier；
+  - fall-like pelvis score cap；
+  - root tilt penalty；
+  - foot support penalty；
+  - posture-valid contact/hold-contact gate；
+  - info 输出 `upright_barrier_penalty`、`upright_score_cap_penalty`、`root_tilt_penalty`、`foot_support_penalty`、`posture_contact_gate`、`posture_pelvis_z`、`root_upright_dot`、`foot_support_ok`。
+- 已新增 E029 脚本：
+  - `workspace/core4d_collab_retarget/scripts/E029/variants.tsv`
+  - `workspace/core4d_collab_retarget/scripts/E029/generate_e029_overrides.py`
+  - `workspace/core4d_collab_retarget/scripts/run_E029_preprocess.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E029.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E029_remote_tmux.sh`
+  - `workspace/core4d_collab_retarget/scripts/run_E029_remote.sh`
+  - `workspace/core4d_collab_retarget/scripts/pull_E029_remote_results.sh`
+  - `workspace/core4d_collab_retarget/scripts/eval/eval_E029.py`
+- E029 variants 固定 6 条：4 条 `bucket001_p1` 主目标、`bucket001_p2` guard、`box025_p2` guard。
+- 已运行 E029 静态检查：
+  - `.venv/bin/python -m py_compile spider/config.py spider/simulators/mjwp.py workspace/core4d_collab_retarget/scripts/E029/generate_e029_overrides.py workspace/core4d_collab_retarget/scripts/eval/eval_E029.py`
+  - `bash -n` 检查 E029 shell wrappers。
+- 已运行 `bash workspace/core4d_collab_retarget/scripts/run_E029_preprocess.sh`：
+  - 生成 `workspace/core4d_collab_retarget/results/E029/manifest.tsv`，7 行均为 92 列；
+  - 生成 6 个 `examples/config/override/core4d_collab_E029_*.yaml`。
+- 已运行 4-step smoke：
+  - `RUN_TIMEOUT_SECONDS=600 RUN_STALL_TIMEOUT_SECONDS=180 bash workspace/core4d_collab_retarget/scripts/train/train_E029.sh smoke 0`
+  - 6/6 variants 完成，foot support site resolution 显示 `2 sites resolved`；
+  - smoke aggregate：`num_results=6`、`num_target_stability_pass=4`、`num_target_useful_signal=0`，只验证 wiring，不作为 E029 full 结论。

@@ -241,6 +241,28 @@ class Config:
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward
     stability_penalty_scale: float = 0.0  # penalty when pelvis z < threshold
     stability_penalty_threshold: float = 0.55  # pelvis z threshold (m)
+    # E029: harder posture/stability controls. Disabled by default.
+    upright_barrier_scale: float = 0.0
+    upright_barrier_threshold_m: float = 0.55
+    upright_barrier_margin_m: float = 0.10
+    upright_barrier_power: float = 2.0
+    upright_score_cap_scale: float = 0.0
+    upright_score_cap_threshold_m: float = 0.45
+    root_tilt_penalty_scale: float = 0.0
+    root_tilt_penalty_max_deg: float = 55.0
+    root_tilt_penalty_power: float = 2.0
+    foot_support_penalty_scale: float = 0.0
+    foot_support_max_z_m: float = 0.08
+    foot_support_low_pelvis_threshold_m: float = 0.55
+    foot_support_site_names: list[str] = field(
+        default_factory=lambda: ["left_foot", "right_foot"]
+    )
+    foot_support_site_ids: list[int] = field(default_factory=list)
+    posture_contact_gate_enabled: bool = False
+    posture_contact_gate_pelvis_z_m: float = 0.55
+    posture_contact_gate_max_root_tilt_deg: float = 55.0
+    posture_contact_gate_require_foot_support: bool = False
+    posture_contact_gate_hold_contact: bool = True
     # E025: training-time robot/object penetration penalties. These are
     # disabled by default; eval-only penetration metrics remain unchanged.
     robot_object_penalty_scale: float = 0.0
@@ -939,6 +961,25 @@ def process_config(config: Config):
             loguru.logger.info(
                 "Leg/object penalty: {} geoms resolved.", len(geom_ids)
             )
+        posture_active = (
+            config.foot_support_penalty_scale > 0.0
+            or (
+                config.posture_contact_gate_enabled
+                and config.posture_contact_gate_require_foot_support
+            )
+        )
+        if posture_active:
+            site_ids = []
+            for name in config.foot_support_site_names:
+                sid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, name)
+                if sid != -1:
+                    site_ids.append(sid)
+                else:
+                    loguru.logger.warning(
+                        "foot_support_site_names: site '{}' not found.", name
+                    )
+            config.foot_support_site_ids = site_ids
+            loguru.logger.info("Foot support: {} sites resolved.", len(site_ids))
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:
