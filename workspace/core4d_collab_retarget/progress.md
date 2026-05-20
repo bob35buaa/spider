@@ -1330,3 +1330,85 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `E025_bucket005_s2_p2_penalty_lite_hc1.log` age `1681s`
 - 判定为 remote rollout stall，不再等待原 tmux 队列自然恢复。
 - 已修改 `workspace/core4d_collab_retarget/scripts/run_E025_remote.sh`：remote tmux 默认带 `RUN_TIMEOUT_SECONDS=2400`、`RUN_STALL_TIMEOUT_SECONDS=300`，避免后续 stale process 无限阻塞。
+- 已提交并推送 remote stall guard：`6c0e9e7 exp(core4d_collab_retarget): guard E025 remote stalls`。
+- 多次 remote relaunch SSH 在命令启动前 reset，暂时无法可靠 kill/restart stale remote tmux。
+- 为避免本地 GPU 空转，已启动本地 `E025_box023_p2_hc2_gain8_sigma20_ori_nf` full：
+  - `RUN_TIMEOUT_SECONDS=1800 RUN_STALL_TIMEOUT_SECONDS=300 SKIP_EVAL=1 bash workspace/core4d_collab_retarget/scripts/train/train_E025.sh one 0 E025_box023_p2_hc2_gain8_sigma20_ori_nf`
+  - 后续必须注意：remote 上同名 variant 的旧进程/partial 输出需在 pull 前清理或确认未完成，避免覆盖本地结果。
+- 本地 `box023_p2` 运行正常，已到约 `sim_steps: 32/272`。
+- remote cleanup 已成功发送：`E025_REMOTE_CLEANUP_SENT`，stale tmux / E025 run_mjwp processes 已被 kill。
+- remote guarded restart 随后又遇到 SSH reset，暂未重启 remote 队列；当前继续本地推进。
+- 本地 `E025_box023_p2_hc2_gain8_sigma20_ori_nf` 后续监控正常，已到约 `sim_steps: 186/272`。
+- 多次 guarded remote restart 均在 SSH 建连阶段 reset；如果 p2 评估完成后 remote 仍不稳定，E025 bucket penalty variants 将改为本地顺序推进。
+
+### E025 local box023_p2 full 完成
+
+- 本地 `E025_box023_p2_hc2_gain8_sigma20_ori_nf` 已完成；与 p1 一起重新评估：
+  - Aggregate：`num_results=2`、`num_contact_closure_pass=0`、`num_E025_strict_success=0`。
+  - `box023_p1`: 5cm contact `28.51%`，no-fall/object/penetration pass，但 contact closure fail。
+  - `box023_p2`: 5cm contact `52.38%`，object pass，但 no-fall fail、penetration guard fail；deep pen `20.67%`，max pen `6.17cm`，full pelvis min `0.0778m`。
+- 已抽取 p2 frames：
+  - `workspace/core4d_collab_retarget/results/E025/video_frames_skill/E025_box023_p2_hc2_gain8_sigma20_ori_nf_t0208.jpg`
+  - `workspace/core4d_collab_retarget/results/E025/video_frames_skill/E025_box023_p2_hc2_gain8_sigma20_ori_nf_t0390.jpg`
+- E025 contact-closure branch 结论：high hold-contact / high gain 不足以修复 box023 low contact；p2 还引入 stability/artifact regression，后续应转 dynamic target/contact timing diagnosis，而不是重复 mask 或继续加 contact gain。
+- remote 仍不稳定，bucket penalty branch 改为本地顺序推进；已启动 `E025_bucket005_s2_p1_penalty_lite_hc1` full。
+- `E025_bucket005_s2_p1_penalty_lite_hc1` 本地 full 运行正常，已到约 `sim_steps: 228/296`。
+
+### E025 bucket005_s2_p1 lite 完成
+
+- 本地 `E025_bucket005_s2_p1_penalty_lite_hc1` 已完成；与 box023 两个 variants 一起评估：
+  - Aggregate partial：`num_results=3`、`num_E025_strict_success=0`。
+  - `bucket005_s2_p1_penalty_lite`: contact `99.47%`，no-fall/object pass；但 penetration guard fail、leg guard fail。
+  - deep penetration `92.89%`，max pen `5.03cm`，leg-object penetration `17.54%`，full sim leg-object contact `15.54%`。
+- 结论：lite hand penetration penalty 没有降低 p1 deep penetration，反而保持极高 contact/penetration shortcut；按计划继续跑 `E025_bucket005_s2_p1_leg_guard_penalty`。
+- `E025_bucket005_s2_p1_leg_guard_penalty` 本地运行正常，已到约 `sim_steps: 226/296`。
+
+### E025 bucket005_s2_p1 leg_guard 完成
+
+- 本地 `E025_bucket005_s2_p1_leg_guard_penalty` 已完成；4-variant partial eval：
+  - `bucket005_s2_p1_penalty_lite`: contact `99.47%`，deep pen `92.89%`，max pen `5.03cm`，leg pen `17.54%`。
+  - `bucket005_s2_p1_leg_guard`: contact `99.47%`，deep pen `92.89%`，max pen `5.04cm`，leg pen `14.22%`。
+- leg guard 对 lower-body artifact 有小幅帮助，但完全没有降低 hand/object deep penetration；p1 仍 strict fail。
+- 已启动本地 `E025_bucket005_s2_p2_penalty_lite_hc1` full。
+- `E025_bucket005_s2_p2_penalty_lite_hc1` 本地 full 运行正常，已到约 `sim_steps: 232/296`。
+
+### E025 剩余 variants 并行重排
+
+- `E025_bucket005_s2_p2_penalty_lite_hc1` 已完成并纳入 5-variant partial eval：
+  - contact `97.25%`，deep pen `77.83%`，max pen `8.13cm`，leg pen `15.76%`，strict fail。
+- 剩余 full variants 实际为 3 条；本地已有的对应 NPZ 均为 smoke `T=2`，不能计为 full：
+  - `E025_bucket007_p1_penalty_lite_hc1`
+  - `E025_bucket005_s2_p2_penalty_s4_hc1`
+  - `E025_bucket007_p1_penalty_s4_hc1`
+- 远程重试成功启动剩余队列：`E025_REMAINING_STARTED`。
+- 为使用本地 GPU 且避免同名覆盖，已停止远程 GPU0 队列：`E025_G0_STOPPED`；远程只保留 GPU1 跑 `E025_bucket005_s2_p2_penalty_s4_hc1`。
+- 本地已启动 `E025_bucket007_p1_penalty_lite_hc1` full；完成后本地继续 `E025_bucket007_p1_penalty_s4_hc1`。
+- 本地 `E025_bucket007_p1_penalty_lite_hc1` 已到约 `sim_steps: 164/242`。
+- 远程 GPU1 `E025_bucket005_s2_p2_penalty_s4_hc1` 在 `sim_steps: 38/296` 后触发 `RUN_STALL_TIMEOUT_SECONDS=300`，未产生 full 结果；远程 tmux/process 已退出。后续剩余 variants 改为本地顺序完成。
+- 本地 `E025_bucket007_p1_penalty_lite_hc1` 已完成。
+- 已启动本地 `E025_bucket007_p1_penalty_s4_hc1` full；最后还需本地补跑 `E025_bucket005_s2_p2_penalty_s4_hc1`。
+- 本地 `E025_bucket007_p1_penalty_s4_hc1` 已完成。
+- 已启动 E025 最后一条 full：`E025_bucket005_s2_p2_penalty_s4_hc1`。完成后 E025 8/8 full variants 即齐全。
+
+### E025 full 完成与 E022-E025 总结
+
+- `E025_bucket005_s2_p2_penalty_s4_hc1` 已在本地完成；E025 8/8 full variants 齐全。
+- 已运行 `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E025.py --all`：
+  - `num_results=8`
+  - `num_E025_strict_success=0`
+  - `num_object_no_regression_pass=8`
+  - `num_no_fall_pass=7`
+  - `num_contact_closure_pass=6`
+  - `num_penetration_guard_pass=1`
+  - `num_leg_guard_pass=2`
+- 关键结论：
+  - `box023_p1/p2` high contact reward 未闭合 strict 5cm contact；p2 还引入 fall / penetration。
+  - bucket variants 保持 object tracking 和高 contact，但 deep penetration 仍很高。
+  - `bucket007_p1` s4 对 deep penetration 有方向性改善：`51.01% -> 35.57%`，但仍远高于 `<15%`。
+  - `bucket005_s2_p2` s4 改善有限：`77.83% -> 64.53%`。
+  - `bucket005_s2_p1` leg guard 只把 leg pen `17.54% -> 14.22%`，hand deep pen `92.89%` 不变。
+- 已用 video-frames/ffmpeg 抽取 E025 代表帧到 `workspace/core4d_collab_retarget/results/E025/video_frames_skill/`。
+- 已写入：
+  - `workspace/core4d_collab_retarget/log/24_E025_robot_side_contact_collision_repair_results.md`
+  - `workspace/core4d_collab_retarget/log/25_E022_E025_optimization_stage_summary.md`
+- 已更新 `EXPERIMENT_TRACKER.md`：E025 标记完成，并补 E022-E025 stage summary 结论。
