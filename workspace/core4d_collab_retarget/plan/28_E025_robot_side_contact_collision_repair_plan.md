@@ -6,15 +6,18 @@
 
 E020 将 `box023_p2`、`bucket005_s2_p1`、`bucket005_s2_p2`、`bucket007_p1` 归为 `algo_contact`。这组 case 的 object-side transport 已成立，robot 不摔倒，但 contact/collision behavior 没有达到完整 retargeting gate。
 
+Post-E022 update：`box023_p1` 的 contact mask semantics 已修正，但 contact preservation 仍只有约 `25%`，因此作为 low-contact closure case 并入 E025；这不是重复 E022 mask sweep。
+
 E025 目标不是继续调 anchor，而是分离两类问题：
 
-1. `box023_p2`: contact preservation low，主要是 contact closure gap。
+1. `box023_p1/p2`: contact preservation low，主要是 contact closure gap。
 2. bucket / bucket007 cases: contact 高但 deep penetration 高，说明当前 reward 可以通过“手伸进物体”来维持 contact，需要 explicit robot-object penetration penalty。
 
 ## Baseline evidence
 
 | Case | Contact 5cm | Deep pen duration | Max pen | Leg interference | Dominant issue |
 |---|---:|---:|---:|---:|---|
+| `box023_p1` | `25.3%` | `0.0%` | `<5cm` | `0.0%` | mask fixed but contact closure gap remains |
 | `box023_p2` | `28.6%` | `3.3%` | `2.37cm` | `0.0%` | contact closure gap |
 | `bucket005_s2_p1` | `97.6%` | `88.2%` | `5.12cm` | `23.7%` | hand deep penetration + leg shortcut |
 | `bucket005_s2_p2` | `95.9%` | `74.4%` | `7.94cm` | `9.9%` | hand deep penetration |
@@ -30,11 +33,11 @@ Existing code:
 
 | Claim | 最低证据 |
 |---|---|
-| C1 contact closure 对 low-contact case 有效 | `box023_p2` contact preservation `>=70%`，deep pen 不恶化 |
+| C1 contact closure 对 low-contact case 有效 | `box023_p1/p2` contact preservation `>=70%`，deep pen 不恶化 |
 | C2 explicit penetration penalty 降低 bucket artifact | bucket cases deep penetration duration `<15%`，max penetration `<=5cm` |
 | C3 no object-side regression | all cases object Epos `<0.10m`、Erot `<25deg`、transport pass |
 | C4 no stability regression | all cases no fall |
-| C5 至少部分泛化成立 | 4 case 至少 `2/4` strict pass，未通过 case 有明确下一步 |
+| C5 至少部分泛化成立 | 5 case 至少 `2/5` strict pass，未通过 case 有明确下一步 |
 
 ## 改动
 
@@ -71,13 +74,13 @@ E025 需要新增训练期 penetration penalty；当前只有 eval 指标。建�
 
 | Variant | Cases | Params | 目的 |
 |---|---|---|---|
+| `E025_box023_p1_hc2_gain8_sigma20_ori_nf` | `box023_p1` | `hold_contact=2.0`, `gain=8.0`, `sigma=0.20`, `ori_weight=0.3`, `ori_mode=near_field` | post-E022 low-contact closure |
 | `E025_box023_p2_hc2_gain8_sigma20_ori_nf` | `box023_p2` | `hold_contact=2.0`, `gain=8.0`, `sigma=0.20`, `ori_weight=0.3`, `ori_mode=near_field` | low-contact closure |
 | `E025_bucket_penalty_lite_hc1` | bucket005/bucket007 | `robot_object_penalty_scale=2.0`, `deep_threshold=0.02`, `hold_contact=1.0` | reduce hand penetration |
 | `E025_bucket_leg_guard_penalty` | `bucket005_s2_p1` | add `leg_object_penalty_scale=2.0`, margin `0.02` | reduce leg shortcut |
-| `E025_all_penalty_sweep_s1_hc05` | all 4 | `robot_penalty=1.0`, `hold_contact=0.5` | conservative sweep |
-| `E025_all_penalty_sweep_s4_hc1` | all 4 | `robot_penalty=4.0`, `hold_contact=1.0` | stronger anti-penetration |
+| `E025_bucket005_s2_p2_penalty_s4_hc1` / `E025_bucket007_p1_penalty_s4_hc1` | selected bucket cases | `robot_penalty=4.0`, `hold_contact=1.0` | stronger anti-penetration if lite is insufficient |
 
-E025 可以先按 case-group 展开，不要求每个 case 每个 variant 全组合；避免把 4 case x 多 sweep 直接放大到不可控运行量。
+E025 可以先按 case-group 展开，不要求每个 case 每个 variant 全组合；避免把 5 case x 多 sweep 直接放大到不可控运行量。
 
 ### 3. Scripts
 
@@ -112,7 +115,7 @@ Reuse E018b derived tasks and canonical support proxy. Do not copy or patch scen
 | Max penetration | `<=5cm` |
 | Fall | false |
 | Object | Epos `<0.10m`, Erot `<25deg`, transport pass |
-| Strict count | `>=2/4` cases strict pass |
+| Strict count | `>=2/5` cases strict pass |
 
 ## 训练命令
 
@@ -131,7 +134,7 @@ bash workspace/core4d_collab_retarget/scripts/pull_E025_remote_results.sh
 
 ## 决策规则
 
-- 如果 `box023_p2` contact remains low after high contact closure reward, it should move to dynamic target/contact mask timing diagnosis, not more penalty.
+- 如果 `box023_p1/p2` contact remains low after high contact closure reward, it should move to dynamic target/contact timing diagnosis, not more mask or penalty sweep.
 - If bucket contact remains high but deep penetration does not fall under `<15%`, increase penalty only after checking video/keyframes; otherwise the reward may simply choose a different penetration path.
 - If penetration improves but contact collapses, tune contact/penalty balance; do not count it as pass because contact preservation is a primary task objective.
 - If leg shortcut persists only in `bucket005_s2_p1`, keep E025 result partial and split a later lower-body collision geometry experiment.

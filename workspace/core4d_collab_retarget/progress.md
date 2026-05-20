@@ -1207,3 +1207,60 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 8/8 variants 生成 4-step smoke NPZ。
   - `results/E024/scene_snapshot/manifest.txt` 已生成。
   - `eval_E024.py` wiring 正常，aggregate `num_results=8`。4-step smoke 指标不作为实验结论。
+
+### E024 full 运行中
+
+- E024 setup 已提交并推送：`08b3957 exp(core4d_collab_retarget): E024 stability setup`。
+- 本地 full 已完成 `E024_bucket001_p1_root03_gain3_stab_t065`：
+  - `full_pelvis_z_min_m=0.1343m`，`E018b_robot_fall_detected=true`，contact `0.0%`。
+  - object 不回退：Epos `0.0333m`，Erot `2.65deg`，transport pass。
+  - 结论：root sigma `0.30` + contact gain `3` + stability threshold `0.65` 不能修复 p1 fall。
+- 本地 fallback 已完成 `E024_bucket001_p1_root025_gain2_stab_t065`：
+  - `full_pelvis_z_min_m=0.1556m`，仍 fall，contact `0.0%`。
+  - object 不回退：Epos `0.0333m`，Erot `2.65deg`，transport pass。
+  - 结论：降低 root/contact gain 仍不能修复 p1 fall；不应继续重复同类 root/contact 配置。
+- 已启动本地诊断 `E024_bucket001_p1_stab_s1_t055` full，用于隔离 height-only stability reward 是否能单独提高 pelvis/no-fall；当前 rollout 正在运行。
+- 远程 E024 尚未启动：多次 `ssh spider-remote` 仍报 `kex_exchange_identification: read: Connection reset by peer`。后续优先本地顺序跑关键变体，远程只在 SSH 稳定后再接入。
+
+### E025 setup 实施中
+
+- 已新增 E025 脚本骨架：
+  - `scripts/E025/variants.tsv`
+  - `scripts/E025/generate_e025_overrides.py`
+  - `scripts/run_E025_preprocess.sh`
+  - `scripts/train/train_E025.sh`
+  - `scripts/train/train_E025_remote_tmux.sh`
+  - `scripts/run_E025_remote.sh`
+  - `scripts/pull_E025_remote_results.sh`
+  - `scripts/eval/eval_E025.py`
+- E025 scope 现在包含：
+  - E022 未解决的 `box023_p1` contact closure。
+  - E020 `algo_contact` 的 `box023_p2`、`bucket005_s2_p1/p2`、`bucket007_p1`。
+- 已在 `spider/config.py` / `spider/simulators/mjwp.py` 接入默认关闭的训练期 robot/object penetration knobs：
+  - `robot_object_penalty_scale=0.0` 默认不改变旧实验。
+  - `leg_object_penalty_scale=0.0` 默认不改变旧实验。
+  - E025 override 才会打开 hand deep-penetration / leg guard penalty。
+- 静态检查已通过：`py_compile`、E025 shell `bash -n`、`git diff --check`。
+- `bash workspace/core4d_collab_retarget/scripts/run_E025_preprocess.sh` 已成功：
+  - 写入 `results/E025/manifest.tsv` 8 variants。
+  - 写入 8 个 `examples/config/override/core4d_collab_E025_*.yaml`。
+- `bash workspace/core4d_collab_retarget/scripts/train/train_E025.sh smoke 0` 已成功：
+  - 8/8 variants 4-step smoke 跑通，包括 robot-object penalty 和 leg-object penalty 开启的 variants。
+  - `eval_E025.py` wiring 正常，aggregate `num_results=8`。4-step smoke 的 contact/object 指标不作为实验结论。
+- E025 full 尚未启动；等待 E024 p2 主候选 full 完成后再决定本地/远程分配。
+
+### E024 p1 isolate 完成，p2 主候选启动
+
+- 本地诊断 `E024_bucket001_p1_stab_s1_t055` full 已完成并评估：
+  - `full_pelvis_z_min_m=0.0657m`，`E018b_robot_fall_detected=true`，first pelvis `<45cm` frame `170`。
+  - contact `0.0%`，deep penetration `0.0%`，sim leg interference `0.0%`。
+  - object 不回退：Epos `0.0333m`，Erot `2.65deg`，transport pass。
+  - 结论：height-only stability reward 也不能修复 `bucket001_p1`，且比 root/contact 组合更差。
+- `bucket001_p1` 三个 E024 full variants 均失败：`root03_gain3`、`root025_gain2`、`stab_s1_t055`。后续不继续重复同类 stability/contact-gain sweep，应转向更强 upright/root terminal 或 lower-body control regularizer。
+- 已启动本地 `E024_bucket001_p2_root03_gain3_stab_t065` full，用于补齐 p2 主候选证据；当前运行中。
+- `E024_bucket001_p2_root03_gain3_stab_t065` full 已完成并评估：
+  - `full_pelvis_z_min_m=0.7128m`，no fall，stability pass。
+  - contact `79.78%`，object 不回退：Epos `0.0314m`，Erot `6.11deg`，transport pass。
+  - 但 deep penetration `64.65%`，max penetration `8.31cm`，artifact guard fail。
+  - 结论：p2 stability 可以被 root03/gain3 修住，但接触是穿透式接触；需要 E025 collision penalty。
+- 已启动本地 `E024_bucket001_p2_root025_gain2_stab_t065` full，作为 planned fallback 检查降低 contact gain / 更紧 root sigma 是否能减少 p2 penetration artifact；当前运行中。

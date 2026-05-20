@@ -1067,6 +1067,81 @@ def get_reward(
                 * ref_gate
             )
 
+    robot_object_penalty = torch.zeros(N, device=config.device)
+    leg_object_penalty = torch.zeros(N, device=config.device)
+    if (
+        (config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids)
+        or (config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids)
+    ) and config.hand_approach_obj_half_extents:
+        object_geom_id = mujoco.mj_name2id(
+            env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, "object_collision"
+        )
+        if object_geom_id != -1:
+            geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+            geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
+                geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
+            )
+            obj_pos = geom_xpos[:, object_geom_id]
+            obj_mat = geom_xmat[:, object_geom_id]
+            half_ext = torch.tensor(
+                config.hand_approach_obj_half_extents,
+                device=config.device,
+                dtype=geom_xpos.dtype,
+            )
+
+            def geom_box_sdf_min(geom_ids: list[int]) -> torch.Tensor:
+                centers = geom_xpos[:, geom_ids]
+                mats = geom_xmat[:, geom_ids]
+                axes = mats[:, :, :, 2]
+                radii = torch.tensor(
+                    [float(env.model_cpu.geom_size[gid, 0]) for gid in geom_ids],
+                    device=config.device,
+                    dtype=geom_xpos.dtype,
+                )
+                half_lens = torch.tensor(
+                    [
+                        (
+                            float(env.model_cpu.geom_size[gid, 1])
+                            if int(env.model_cpu.geom_type[gid])
+                            == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
+                            else 0.0
+                        )
+                        for gid in geom_ids
+                    ],
+                    device=config.device,
+                    dtype=geom_xpos.dtype,
+                )
+                samples = torch.stack(
+                    (-half_lens, torch.zeros_like(half_lens), half_lens),
+                    dim=1,
+                )
+                points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(
+                    1, -1, 3, 1
+                )
+                delta = points - obj_pos[:, None, None, :]
+                local = torch.einsum("nji,nkpj->nkpi", obj_mat, delta)
+                q = torch.abs(local) - half_ext.view(1, 1, 1, 3)
+                outside = torch.clamp(q, min=0.0).norm(dim=-1)
+                inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+                sdf_points = outside + inside
+                sdf_geom = sdf_points.min(dim=2).values - radii.view(1, -1)
+                return sdf_geom.min(dim=1).values
+
+            if config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids:
+                robot_sdf = geom_box_sdf_min(config.robot_object_penalty_geom_ids)
+                deep_limit = (
+                    config.robot_object_penalty_margin_m
+                    - config.robot_object_penalty_deep_threshold_m
+                )
+                robot_hinge = torch.clamp(deep_limit - robot_sdf, min=0.0)
+                robot_object_penalty = -config.robot_object_penalty_scale * robot_hinge
+            if config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids:
+                leg_sdf = geom_box_sdf_min(config.leg_object_penalty_geom_ids)
+                leg_hinge = torch.clamp(
+                    config.leg_object_penalty_margin_m - leg_sdf, min=0.0
+                )
+                leg_object_penalty = -config.leg_object_penalty_scale * leg_hinge
+
     reward = (
         qpos_rew
         + qvel_rew
@@ -1079,6 +1154,8 @@ def get_reward(
         + contact_hdmi_rew
         + ctrl_ref_guard_rew
         + hold_contact_rew
+        + robot_object_penalty
+        + leg_object_penalty
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -1102,6 +1179,8 @@ def get_reward(
         "contact_hdmi_rew": contact_hdmi_rew,
         "ctrl_ref_guard_rew": ctrl_ref_guard_rew,
         "hold_contact_rew": hold_contact_rew,
+        "robot_object_penalty": robot_object_penalty,
+        "leg_object_penalty": leg_object_penalty,
     }
     return reward, info
 

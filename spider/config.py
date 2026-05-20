@@ -241,6 +241,19 @@ class Config:
     qpos_reward_scale: float = 5.0  # scale for bounded qpos reward
     stability_penalty_scale: float = 0.0  # penalty when pelvis z < threshold
     stability_penalty_threshold: float = 0.55  # pelvis z threshold (m)
+    # E025: training-time robot/object penetration penalties. These are
+    # disabled by default; eval-only penetration metrics remain unchanged.
+    robot_object_penalty_scale: float = 0.0
+    robot_object_penalty_margin_m: float = 0.0
+    robot_object_penalty_deep_threshold_m: float = 0.02
+    robot_object_penalty_geom_names: list[str] = field(
+        default_factory=lambda: ["lh", "rh"]
+    )
+    robot_object_penalty_geom_ids: list[int] = field(default_factory=list)
+    leg_object_penalty_scale: float = 0.0
+    leg_object_penalty_margin_m: float = 0.02
+    leg_object_penalty_geom_names: list[str] = field(default_factory=list)
+    leg_object_penalty_geom_ids: list[int] = field(default_factory=list)
     # E035: local-frame body tracking (HDMI-style)
     use_local_frame_reward: bool = False
     local_frame_upper_ids: list[int] = field(
@@ -839,6 +852,8 @@ def process_config(config: Config):
         config.hand_approach_rew_scale > 0.0
         or config.contact_mask_rew_scale > 0.0
         or config.contact_hdmi_gain > 0.0
+        or config.robot_object_penalty_scale > 0.0
+        or config.leg_object_penalty_scale > 0.0
     ) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
@@ -874,6 +889,36 @@ def process_config(config: Config):
             len(config.hand_approach_body_ids),
             config.hand_approach_obj_half_extents,
         )
+
+    if config.simulator == "mjwp":
+        if config.robot_object_penalty_scale > 0.0:
+            geom_ids = []
+            for name in config.robot_object_penalty_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "robot_object_penalty_geom_names: geom '{}' not found.", name
+                    )
+            config.robot_object_penalty_geom_ids = geom_ids
+            loguru.logger.info(
+                "Robot/object penalty: {} geoms resolved.", len(geom_ids)
+            )
+        if config.leg_object_penalty_scale > 0.0:
+            geom_ids = []
+            for name in config.leg_object_penalty_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "leg_object_penalty_geom_names: geom '{}' not found.", name
+                    )
+            config.leg_object_penalty_geom_ids = geom_ids
+            loguru.logger.info(
+                "Leg/object penalty: {} geoms resolved.", len(geom_ids)
+            )
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:
