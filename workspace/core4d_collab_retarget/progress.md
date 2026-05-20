@@ -1660,3 +1660,18 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `bash workspace/core4d_collab_retarget/scripts/run_E028_preprocess.sh`
   - `RUN_TIMEOUT_SECONDS=600 RUN_STALL_TIMEOUT_SECONDS=180 bash workspace/core4d_collab_retarget/scripts/train/train_E028.sh smoke 0`
 - Smoke 结果：6/6 variants 完成 4-step rollout 并能进入 `eval_E028.py`；该 smoke 仅验证 wiring，不作为 E028 实验结论。
+- 已提交实现 commit：`5b382ff feat(core4d_collab): add E028 hard penetration controls`，并 push 到 `origin/exp/core4d-collab-retarget-e028-hard-penetration`。
+- 已启动本地 full：`RUN_TIMEOUT_SECONDS=2400 RUN_STALL_TIMEOUT_SECONDS=300 bash workspace/core4d_collab_retarget/scripts/train/train_E028.sh local 0`，本地队列包含 `E028_bucket007_p1_barrier_quad_m02` 和 `E028_box025_p2_guard_barrier_m02`。
+- 初次 `run_E028_remote.sh` 在远程主 worktree 失败：远程主 worktree 还有 E026 相关 modified/untracked 文件，直接 `git switch` 会覆盖它们。未清理远程文件，改用独立 worktree。
+- 已在远程创建并启动 E028 专用 worktree：`/home/xiayb/pHRI_workspace/spider_e028_20260521_041811`；该 worktree symlink 主 repo 的 `.venv`、`workspace/core4d_collab_retarget/results`、`logs`，并已通过 `tmux E028` 启动 remote GPU0/GPU1 队列。
+
+### E028 full 运行中
+
+- 本地 `train_E028.sh local 0` 已完成两条：
+  - `E028_bucket007_p1_barrier_quad_m02`
+  - `E028_box025_p2_guard_barrier_m02`
+- 本地初步 eval：
+  - `E028_bucket007_p1_barrier_quad_m02`: contact `1.11%`, deep pen `0.67%`, max pen `2.69cm`, obj `5.50cm`, fall `true`, strict `false`。
+  - `E028_box025_p2_guard_barrier_m02`: contact `0.00%`, deep pen `0.00%`, obj `5.68cm`, fall `false`, strict `false`。
+- 初步判断：barrier 能压 penetration，但第一版 scale/margin 过硬，明显牺牲 contact；guard 也回退，必须在 log 中按 tradeoff failure 记录。
+- 远程首轮 `bucket005_s2_p2_barrier_quad_m02` 与 `bucket005_s2_p1_contact_gate_m02` 已完成并切到第二轮；当前远程第二轮为 `bucket001_p2_contact_gate_m02` 和 `bucket007_p1_scorecap_m01`。
