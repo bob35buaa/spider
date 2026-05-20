@@ -31,6 +31,14 @@ ssh "$REMOTE_HOST" "set -euo pipefail
   if [ ! -e '$REMOTE_WORKTREE/example_datasets' ] && [ -e '$REMOTE_REPO/example_datasets' ]; then
     ln -s '$REMOTE_REPO/example_datasets' '$REMOTE_WORKTREE/example_datasets'
   fi"
+ssh "$REMOTE_HOST" "set -euo pipefail
+  mkdir -p '$REMOTE_WORKTREE/workspace/core4d_collab_retarget' '$REMOTE_WORKTREE/logs'
+  if [ ! -e '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results' ] && [ -e '$REMOTE_REPO/workspace/core4d_collab_retarget/results' ]; then
+    ln -s '$REMOTE_REPO/workspace/core4d_collab_retarget/results' '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results'
+  fi
+  if [ ! -e '$REMOTE_WORKTREE/logs/core4d_collab_retarget' ] && [ -e '$REMOTE_REPO/logs/core4d_collab_retarget' ]; then
+    ln -s '$REMOTE_REPO/logs/core4d_collab_retarget' '$REMOTE_WORKTREE/logs/core4d_collab_retarget'
+  fi"
 ssh "$REMOTE_HOST" "cd '$REMOTE_WORKTREE' && bash workspace/core4d_collab_retarget/scripts/run_E030_preprocess.sh"
 ssh "$REMOTE_HOST" "cd '$REMOTE_WORKTREE' && tmux kill-session -t '$SESSION' 2>/dev/null || true"
 ssh "$REMOTE_HOST" "cd '$REMOTE_WORKTREE' && mkdir -p logs/core4d_collab_retarget/E030 workspace/core4d_collab_retarget/results/E030"

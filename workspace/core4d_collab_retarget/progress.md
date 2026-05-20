@@ -1844,3 +1844,7 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已运行 E030 4-step smoke：`RUN_TIMEOUT_SECONDS=600 RUN_STALL_TIMEOUT_SECONDS=180 bash workspace/core4d_collab_retarget/scripts/train/train_E030.sh smoke 0`。
   - 6/6 variants 完成；
   - `eval_E030.py` 写出 smoke comparison/aggregate；smoke 只验证 wiring，不作为 E030 full 指标结论。
+- 已提交并推送 E030 实现 commit：`e7505f4 feat(core4d_collab): add E030 geometry surface control scripts`。
+- E030 full 已启动本地队列：`RUN_TIMEOUT_SECONDS=2400 RUN_STALL_TIMEOUT_SECONDS=300 bash workspace/core4d_collab_retarget/scripts/train/train_E030.sh local 0`。
+- 首次远程启动失败在 preprocess 阶段：独立 worktree 缺少 ignored 的历史 `workspace/core4d_collab_retarget/results/E018b` 等 source manifests，导致 `KeyError: unknown source_manifest E018b`。
+- 修复方向：远程独立 worktree 除 `.venv`/`example_datasets` 外，还需 symlink 主 repo 的 `workspace/core4d_collab_retarget/results` 与 `logs/core4d_collab_retarget`。
