@@ -35,6 +35,13 @@ ssh "$REMOTE_HOST" "set -euo pipefail
   mkdir -p '$REMOTE_WORKTREE/workspace/core4d_collab_retarget' '$REMOTE_WORKTREE/logs'
   if [ ! -e '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results' ] && [ -e '$REMOTE_REPO/workspace/core4d_collab_retarget/results' ]; then
     ln -s '$REMOTE_REPO/workspace/core4d_collab_retarget/results' '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results'
+  else
+    mkdir -p '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results'
+    for d in E018b E022 E023 E024 E025 E027 E029 holosoma_v2_kinematic E026_full_eval; do
+      if [ ! -e '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results/'\"\$d\" ] && [ -e '$REMOTE_REPO/workspace/core4d_collab_retarget/results/'\"\$d\" ]; then
+        ln -s '$REMOTE_REPO/workspace/core4d_collab_retarget/results/'\"\$d\" '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results/'\"\$d\"
+      fi
+    done
   fi
   if [ ! -e '$REMOTE_WORKTREE/logs/core4d_collab_retarget' ] && [ -e '$REMOTE_REPO/logs/core4d_collab_retarget' ]; then
     ln -s '$REMOTE_REPO/logs/core4d_collab_retarget' '$REMOTE_WORKTREE/logs/core4d_collab_retarget'
