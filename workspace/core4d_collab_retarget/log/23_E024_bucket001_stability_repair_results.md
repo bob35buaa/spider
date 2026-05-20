@@ -31,6 +31,34 @@
 
 未继续 full 跑 baseline replay 与 p2 height-only isolate：E018b 已给出 baseline failure，且 p1 的三个 planned repair variants 已全失败；p2 main/fallback 已证明 stability 可修但 artifact 仍失败，按计划决策规则转入 E025 collision penalty，不继续重复 stability sweep。
 
+## 通俗解释：E024 做了什么、为什么没过
+
+E024 查的是 `bucket001_p1/p2` 的“机器人自己站不住”问题。前面的 E018b 已经说明：物体本身能被 support proxy 托住，object tracking 没有明显坏掉；真正麻烦的是机器人姿态。可以把 E024 理解成：物体那边先不动，只尝试让机器人别趴下、别为了接触把身体拉到很低。
+
+本轮主要调了三类东西：
+
+| 调整 | 通俗含义 | 目的 |
+|---|---|---|
+| `stability_penalty_scale` / `threshold` | 骨盆太低就惩罚 | 逼机器人保持站姿，不要摔到桶附近 |
+| `local_frame_root_sigma` 变小 | root/pelvis 更紧地跟参考动作 | 防止身体姿态漂太远 |
+| `contact_hdmi_gain` 降低 | 降低“为了碰到物体而硬拉手”的力量 | 避免接触 reward 把机器人拉倒或拉进物体 |
+
+计划里一共生成 8 个 variants，但 full 只跑了 5 个关键版本。原因是 baseline 在 E018b 已经明确失败，p1 的三个修复版本也已经全部失败；p2 的 main/fallback 已经证明“能站住但穿透严重”。继续把剩下 baseline 或 p2 height-only isolate 跑完，不会改变当前决策。
+
+分 case 看结果更清楚：
+
+| Case | E024 看到的现象 | 说明 |
+|---|---|---|
+| `bucket001_p1` | 三个修复版本都还是摔，pelvis 最低只有 `0.066-0.156m`，hand-object contact 仍是 `0%` | 这不是简单加一点站立惩罚、收紧 root、降低 contact gain 就能修的。p1 更像是 reference/support timing 或 lower-body 控制本身有问题 |
+| `bucket001_p2` | 两个主版本都不摔了，pelvis 最低 `0.713-0.726m`，contact 也很高 | 稳定性问题被修了一部分；但高 contact 是“手伸进桶里”的接触，deep penetration 仍有 `59.60-64.65%`，max penetration 超过 `8cm` |
+
+所以 E024 的结论不是“完全没用”。它把 bucket001 分成了两种失败模式：
+
+1. `bucket001_p1`：站立修复失败，机器人还是趴下，而且完全没有有效手物接触。下一步不能继续小幅 sweep 这些参数，需要更强的 upright/root terminal gate、lower-body regularizer，或者重新检查 p1 的 reference/support timing。
+2. `bucket001_p2`：站立修复成功，但接触质量很差。它能站住、能碰到物体，但主要是穿透式接触，所以应该转入 collision/penetration penalty，而不是继续调 stability。
+
+没有出现的损失也很重要：5 个 full variants 的 object tracking 都通过，说明 E024 没有破坏 object-side support proxy。失败主要在 robot-side：p1 是 stability/contact 都没起来，p2 是 contact 很高但穿透太重。
+
 ## 量化结果
 
 | Variant | Case | Pelvis min | No fall | Contact 5cm | Deep pen | Max pen | Epos | Erot | Artifact guard | E024 success |

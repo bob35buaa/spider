@@ -1441,3 +1441,18 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 明确回答：两个 case 都各自有一个 shrink variant，但 6 个 variants 里只有 2 个真的 shrink；
   - 分 case 写结果：`box025_p1` 明显改善但不达标，`bucket007_p2` 改善有限且 contact/penetration 略差；
   - 强调 `legpair_off` 是反例，不是修复，因为它可能通过穿透换来表面 contact 数字。
+
+### E024/E025 白话说明补写
+
+- 按用户要求，将 E024/E025 log 也补成更容易读的“问题-做法-结果-结论”结构。
+- E024 `log/23_E024_bucket001_stability_repair_results.md` 新增 `通俗解释：E024 做了什么、为什么没过`：
+  - 解释 E024 不是改 object support proxy，而是尝试修 bucket001 robot-side stability；
+  - 用直观语言解释 stability penalty、root sigma、contact gain 分别在干什么；
+  - 明确计划生成 8 个 variants，但 full 只跑 5 个关键版本，因为 baseline 已知失败，p1 三个 repair 全失败，p2 main/fallback 已足够支持决策；
+  - 分 case 总结：`bucket001_p1` 三个版本仍摔且 contact `0%`；`bucket001_p2` 能站住、contact 高，但 deep penetration `59.60-64.65%`，属于穿透式接触；
+  - 强调 object tracking 5/5 pass，失败仍在 robot-side。
+- E025 `log/24_E025_robot_side_contact_collision_repair_results.md` 新增 `通俗解释：E025 做了什么、为什么没过`：
+  - 把 E025 case 分成低接触 `box023_p1/p2` 和高接触但穿透的 bucket cases；
+  - 解释 E025 不是全组合 sweep，而是按问题类型选 8 个关键 variants；
+  - 分组总结：`box023` 加强 contact reward 仍不能过线，p2 还 fall；bucket hand penalty scale `2/4` 有方向性改善但太软，`bucket005_s2_p1` leg guard 只小幅降低 leg shortcut；
+  - 记录核心结论：不要继续简单加 contact gain 或重复 mask sweep，下一步应做 contact timing/dynamic target 和更硬的 SDF/barrier/rejection 约束。

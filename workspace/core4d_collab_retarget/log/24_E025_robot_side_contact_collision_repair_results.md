@@ -38,6 +38,41 @@ E025 的实现目标是新增默认关闭的训练期 robot-object / leg-object 
 - [x] Eval：`eval_E025.py --all` 完成，`num_results=8`。
 - [x] Visual artifacts：8/8 online MP4 到位，`video-frames` skill 抽取 8 张代表帧。
 
+## 通俗解释：E025 做了什么、为什么没过
+
+E025 处理的是 E022-E024 剩下的 robot-side 问题。到这里 object-side support proxy 基本已经稳定，所以 E025 不再改 anchor 或物体托举方式，而是看机器人手、腿和物体之间的接触质量。
+
+这批 case 其实分成两类：
+
+| 类型 | Case | 直观问题 | E025 的处理 |
+|---|---|---|---|
+| 低接触 | `box023_p1`、`box023_p2` | 手没有持续贴住物体，contact preservation 低 | 加强 contact reward：更强的 hold-contact、更大的 contact gain、更宽的接触范围，并加一点 near-field 手掌朝向约束 |
+| 高接触但穿透 | `bucket005_s2_p1/p2`、`bucket007_p1` | contact 数字很高，但很多时候是手伸进物体里面 | 新增训练期 penetration penalty，惩罚手/机器人进入物体内部；另外给 `bucket005_s2_p1` 试了 leg guard |
+
+这不是全组合 sweep，而是按问题类型选了 8 个关键 variants：
+
+| Group | Variants | 目的 |
+|---|---|---|
+| `box023` contact closure | `box023_p1`、`box023_p2` 各 1 个 high-contact 版本 | 看更强 contact reward 能不能把低接触拉到 `>=70%` |
+| bucket hand penalty lite | `bucket005_s2_p1/p2`、`bucket007_p1` 各 1 个 hand penalty scale `2` 版本 | 看轻量穿透惩罚能不能降低 hand-object deep penetration |
+| bucket stronger hand penalty | `bucket005_s2_p2`、`bucket007_p1` 各 1 个 scale `4` 版本 | 如果 scale `2` 不够，看更强 penalty 有没有方向性收益 |
+| leg guard | `bucket005_s2_p1` 1 个 hand+leg penalty 版本 | 专门看 lower-body/leg shortcut 能不能压下去 |
+
+结果分组看更清楚：
+
+| Case / group | 结果 | 说明 |
+|---|---|---|
+| `box023_p1` | contact 只有 `28.51%`，但 no-fall、penetration 都还可以 | E022 修完 mask 以后，问题已经不是“该不该接触”的标签，而是手的目标位置/时序没有真正闭合到物体表面 |
+| `box023_p2` | contact 到 `52.38%`，但仍不到 `70%`，而且出现 fall 和 penetration regression | 强拉 contact 会把机器人姿态拉坏，不能继续简单加 contact gain |
+| `bucket005_s2_p1` | hand penalty scale `2` 后 contact `99.47%`，deep penetration 仍 `92.89%` | penalty 太弱，优化器仍然选择“高接触 + 手在物体里”的捷径 |
+| `bucket005_s2_p1` leg guard | leg penetration 从 `17.54%` 降到 `14.22%`，但 hand deep penetration 完全没变 | leg guard 对腿部捷径有一点用，但解决不了主要的手-物体穿透 |
+| `bucket005_s2_p2` | scale `2` deep pen `77.83%`，scale `4` 降到 `64.53%` | 更强 penalty 有方向性改善，但离 `<15%` 还很远 |
+| `bucket007_p1` | scale `2` deep pen `51.01%`，scale `4` 降到 `35.57%`，max pen 从 `10.55cm` 降到 `5.16cm` | 这是 E025 最清楚的正向信号，但仍没有过 strict gate |
+
+因此 E025 的结论是：新增 penalty 的工程实现是成功的，8/8 full 都能跑，旧实验默认不受影响，8/8 object tracking 也没有回退；但这个 penalty 还是太“软”。它能在 `bucket005_s2_p2` 和 `bucket007_p1` 上看到改善方向，却挡不住优化器继续用“伸进物体内部”换高 contact。
+
+最重要的负结论是：后面不应该再简单加 contact gain 或重复 mask sweep。`box023` 更应该查 contact target 的时序和动态目标；bucket cases 则需要更硬的几何约束，比如 SDF barrier、CEM sample rejection/projection、或者把目标改成“接近物体表面但不能进入物体内部”。
+
 ## 量化结果
 
 | Variant | Case | Role | Penalty | Contact 5cm | Deep pen | Max pen | Leg pen | No fall | Object | Strict |
