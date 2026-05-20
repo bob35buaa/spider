@@ -32,6 +32,21 @@ ssh "$REMOTE_HOST" "set -euo pipefail
     ln -s '$REMOTE_REPO/example_datasets' '$REMOTE_WORKTREE/example_datasets'
   fi"
 ssh "$REMOTE_HOST" "set -euo pipefail
+  base_data='$REMOTE_REPO/example_datasets/processed/core4d/unitree_g1/humanoid_object'
+  work_data='$REMOTE_WORKTREE/example_datasets/processed/core4d/unitree_g1/humanoid_object'
+  if [ -d \"\$base_data\" ]; then
+    mkdir -p \"\$work_data\"
+    for pat in '*_e018b' '*_e022_*' '*_e023_*' '*_e024_*' '*_e025_*' '*_e029_*'; do
+      for d in \"\$base_data\"/\$pat; do
+        [ -e \"\$d\" ] || continue
+        name=\"\$(basename \"\$d\")\"
+        if [ ! -e \"\$work_data/\$name\" ]; then
+          ln -s \"\$d\" \"\$work_data/\$name\"
+        fi
+      done
+    done
+  fi"
+ssh "$REMOTE_HOST" "set -euo pipefail
   mkdir -p '$REMOTE_WORKTREE/workspace/core4d_collab_retarget' '$REMOTE_WORKTREE/logs'
   if [ ! -e '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results' ] && [ -e '$REMOTE_REPO/workspace/core4d_collab_retarget/results' ]; then
     ln -s '$REMOTE_REPO/workspace/core4d_collab_retarget/results' '$REMOTE_WORKTREE/workspace/core4d_collab_retarget/results'
