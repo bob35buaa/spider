@@ -1621,3 +1621,12 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - E027 full candidates 为 `0`，因为 phase-shift expected gain 全为 `0pp`。
 - 初版 timing script 曾误用 `sim_total_contact_count` 导致 overlap 虚高；已修为 `sim_min_hand_sdf_m/ref_min_hand_sdf_m <= 0.05m` 的 5cm SDF 口径并重跑。
 - 已写入 `workspace/core4d_collab_retarget/log/27_E027_contact_timing_data_quality_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+
+### E028 计划启动
+
+- 已提交 E027 结果 commit：`9324e2a log(core4d_collab): record E027 offline audit results`。
+- 因 E028 预计需要修改 `spider/config.py` 与 `spider/simulators/mjwp.py`，已从 `exp/core4d-collab-retarget` 切出新分支：`exp/core4d-collab-retarget-e028-hard-penetration`。
+- 已创建 E028 计划：`workspace/core4d_collab_retarget/plan/33_E028_hard_no_penetration_surface_feasibility_plan.md`。
+- E028 目标 cases：`bucket005_s2_p1`, `bucket005_s2_p2`, `bucket007_p1`, `bucket001_p2`；`box025_p2` 做 guard。
+- E028 机制边界：只从 E025 soft penetration penalty 升级为 barrier / score cap / contact gate / staged contact；第一版不做 mesh-level surface projection。
+- 已更新 `EXPERIMENT_TRACKER.md`，新增 E028 plan 行与 plan 路径。
