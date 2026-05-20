@@ -1828,3 +1828,19 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 代码审计建议 E030 第一版 0 核心改动，复用已有默认关闭 knobs 和 E023/E028/E029 脚本结构。
 - 已创建 E030 计划文件：`workspace/core4d_collab_retarget/plan/35_E030_lower_body_geometry_surface_control_plan.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：新增 E030 plan 行、关键指标计划行、Plans 路径，并将当前分支改为 `exp/core4d-collab-retarget-e030-geometry-surface-control`。
+- 已提交 E030 plan commit：`f102041 plan(core4d_collab): start E030 geometry surface control`。
+- E030 实现已开始，第一版不改 `spider/` 核心代码：
+  - 新增 `workspace/core4d_collab_retarget/scripts/E030/variants.tsv`，6 个 full variants；
+  - 新增 `generate_e030_assets.py`，负责复制/patch derived task、生成 manifest、case scope 和 overrides；
+  - 新增 `eval_E030.py`，输出 comparison、baseline_delta、ref/sim interference 和 aggregate；
+  - 从 E029 训练/远程脚本机械派生 E030 train/preprocess/remote/pull wrappers，并将 remote launcher 改为固定独立 worktree `/home/xiayb/pHRI_workspace/spider_e030_worktree`。
+- E030 静态检查已通过：
+  - `.venv/bin/python -m py_compile workspace/core4d_collab_retarget/scripts/E030/generate_e030_assets.py workspace/core4d_collab_retarget/scripts/eval/eval_E030.py`
+  - `bash -n` 检查 E030 shell wrappers。
+- 已运行 `bash workspace/core4d_collab_retarget/scripts/run_E030_preprocess.sh`：
+  - 生成 `workspace/core4d_collab_retarget/results/E030/manifest.tsv`，6 variants，99 列；
+  - 生成 6 个 `examples/config/override/core4d_collab_E030_*.yaml`；
+  - `lowerbody_proxy_tiny` 两个 target 均保留 0 个 disabled pairs，shrink 16 个 lower-body/foot geoms。
+- 已运行 E030 4-step smoke：`RUN_TIMEOUT_SECONDS=600 RUN_STALL_TIMEOUT_SECONDS=180 bash workspace/core4d_collab_retarget/scripts/train/train_E030.sh smoke 0`。
+  - 6/6 variants 完成；
+  - `eval_E030.py` 写出 smoke comparison/aggregate；smoke 只验证 wiring，不作为 E030 full 指标结论。
