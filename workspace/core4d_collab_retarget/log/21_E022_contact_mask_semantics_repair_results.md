@@ -37,6 +37,22 @@
 - [x] Unified eval：`eval_unified/` CSV/JSON bundle 已生成。
 - [x] Visual artifacts：4 个 MP4 均为 `272` frame / `5.44s`；train keyframes 与 `video-frames` skill f115 frame 均已落盘。
 
+## Bug 来源与修正细节
+
+E022 修复的是 E020 `contact_mask` 分线暴露出的 contact label 语义错误，而不是训练 runtime crash。问题集中在 `box023_p1`：E018b 复制任务中的 `trajectory_kinematic.npz::contact[:, :2]` 把双手 contact 参考帧几乎标成 all-on，baseline replay 里 `Ref contact any = 100.00%`；但原始 CORE4D 3cm per-hand mask 对选中 person 的实际接触帧只有约 `46%`。这意味着 reward/eval 被告知“几乎所有帧都应该保持手-物体接触”，其中约一半帧其实没有 raw 3cm 接触证据，形成 `54.41%` 的 mask overclaim/mismatch。
+
+这个 bug 会污染 E020 的 contact 归因：如果 ref contact gate 本身是 all-on，那么 contact reward 不再只惩罚真实接触片段里的脱离，而会在大量非接触帧也拉手去贴物体。因此低 contact preservation 不能直接解释为策略没有学会接触闭合，也可能是目标 mask 语义错误导致 reward/eval 目标不干净。
+
+E022 的修正策略是只改 copied task，不回写 E018b 原始任务：
+
+1. 从源 E018b mask NPZ 中读取 `eval_contact_mask_3cm` 或 `spider_contact_mask_3cm`，选择 `box023_p1` 对应 person 的左右手 mask。
+2. 将 raw 3cm mask resize 到 copied task 的 `trajectory_kinematic.npz::contact` 时间长度。
+3. 对 patched variants 写回 `trajectory_kinematic.npz::contact[:, :2]`，使 ref contact 与 raw 3cm selected-person mask 对齐；`raw3_dilate3_hc1` 在此基础上做 3-frame dilation。
+4. 同步生成 Hydra override，让 runtime contact reward 使用同一份 mask path、person index、time-axis 语义和 contact gain/sigma。
+5. 在 `eval_E022.py` 中显式比较 patched ref contact 与实际使用的 raw mask，新增 overclaim/mismatch gate，避免再次把 all-on ref contact 当作有效接触目标。
+
+修正后，3 个 patched variants 的 ref contact any 与 used mask any 对齐到 `45.81-48.90%` 区间，mask overclaim/mismatch 降到 `0-0.44%`；baseline replay 保留 all-on ref contact 作为 control，因此仍显示 `54.41%` overclaim/mismatch。这个对照证明：E022 的 mask semantics bug 已被修掉，但它只是必要修正，不是 contact preservation 失败的充分根因。
+
 ## 量化结果
 
 | Variant | Ref contact any | Used mask any | Mask overclaim | Mask mismatch | Contact 5cm | Epos | Erot | Deep pen | Max pen | Fall | E022 success |

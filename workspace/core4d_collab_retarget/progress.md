@@ -1412,3 +1412,12 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - `workspace/core4d_collab_retarget/log/24_E025_robot_side_contact_collision_repair_results.md`
   - `workspace/core4d_collab_retarget/log/25_E022_E025_optimization_stage_summary.md`
 - 已更新 `EXPERIMENT_TRACKER.md`：E025 标记完成，并补 E022-E025 stage summary 结论。
+
+### E022 bug 来源说明补写
+
+- 按用户要求复核 `log/21_E022_contact_mask_semantics_repair_results.md`，原 log 已包含 E022 量化结果、claims 与结论，但缺少一节独立解释 E020/E022 contact mask bug 的来源和修正链路。
+- 已在 E022 log 中新增 `Bug 来源与修正细节` 小节，明确记录：
+  - bug 来源：E018b copied task 的 `trajectory_kinematic.npz::contact[:, :2]` 对 `box023_p1` 近似 all-on，baseline `Ref contact any = 100.00%`，但 raw 3cm selected-person hand mask 只有约 `46%`；
+  - 影响：reward/eval 会在大量无 raw contact 证据的帧也要求接触，形成 `54.41%` overclaim/mismatch，污染 E020 `contact_mask` 归因；
+  - 修正：E022 只 patch copied task，将 raw 3cm mask resize 后写回 `contact[:, :2]`，同步 Hydra override 的 runtime mask path/person/time-axis，并在 `eval_E022.py` 中加入 overclaim/mismatch gate；
+  - 结论：patched variants 把 mask overclaim/mismatch 降到 `0-0.44%`，证明 mask semantics bug 已修复，但 contact preservation 仍只有 best `25.30%`，说明该 bug 不是充分根因。
