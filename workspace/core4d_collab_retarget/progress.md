@@ -1456,3 +1456,13 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 解释 E025 不是全组合 sweep，而是按问题类型选 8 个关键 variants；
   - 分组总结：`box023` 加强 contact reward 仍不能过线，p2 还 fall；bucket hand penalty scale `2/4` 有方向性改善但太软，`bucket005_s2_p1` leg guard 只小幅降低 leg shortcut；
   - 记录核心结论：不要继续简单加 contact gain 或重复 mask sweep，下一步应做 contact timing/dynamic target 和更硬的 SDF/barrier/rejection 约束。
+
+### E022-E025 baseline 对比表补写
+
+- 用户反馈实验日志仍像流水账，缺少“原来指标是多少、实验后是多少、提升/下降多少、指标方向是什么”。
+- 已在各 log 中补充 baseline 对比表：
+  - E022：新增 `与基线对比：到底提升了什么`，写清 mask overclaim/mismatch 是越低越好，contact 是越高越好；mask 从 `54.41%` 降到 `0-0.44%`，但 contact 只从 `24.50%` 到 `25.30%`。
+  - E023：新增 `与基线对比：缩小 geometry 后是好是坏`，分别对 `lowerbody_proxy_min` 和 `legpair_off` 对比 baseline；明确 geometry interference 降低是好，penetration/sim leg interference 升高是坏。
+  - E024：新增 `与基线对比：站稳了吗，代价是什么`，对 `bucket001_p1/p2` 分别比较 E018b baseline；同时把 E024 主结果表中的 p2 contact 改为真正的 5cm contact 口径 `79.78%/77.53%`，避免之前 `88.76%/92.70%` 的非 5cm contact 口径误导。
+  - E025：新增 `与基线对比：contact 提升了吗，穿透下降了吗`，按低接触 case 与高接触穿透 case 分表比较；明确 `box023_p2` contact 提升但 fall/penetration 变坏，`bucket007_p1` scale 4 deep penetration 明显下降但仍未过线。
+  - Stage summary：新增 `阶段基线对比总表`，集中列出 E022-E025 的关键 baseline/result/Δ/方向/阶段判断。

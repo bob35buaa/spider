@@ -73,6 +73,42 @@ E025 处理的是 E022-E024 剩下的 robot-side 问题。到这里 object-side 
 
 最重要的负结论是：后面不应该再简单加 contact gain 或重复 mask sweep。`box023` 更应该查 contact target 的时序和动态目标；bucket cases 则需要更硬的几何约束，比如 SDF barrier、CEM sample rejection/projection、或者把目标改成“接近物体表面但不能进入物体内部”。
 
+## 与基线对比：contact 提升了吗，穿透下降了吗
+
+读表规则：
+
+- `↑` 表示越高越好，`↓` 表示越低越好。
+- `Δ = E025 结果 - 进入 E025 前的 baseline`；百分比指标的 Δ 单位是 pp。
+- `box023_p1` 的 baseline 用 E022 mask 修复后的 best-contact 结果；其他 case 用 E018b canonical baseline。
+
+低接触 case：contact 有一点提升，但代价或幅度不合格。
+
+| Case | 指标 | 方向 | Baseline | E025 结果 | Δ | 结论 |
+|---|---|---|---:|---:|---:|---|
+| `box023_p1` | Contact 5cm | ↑ | `25.30%` | `28.51%` | `+3.21pp` | 只小幅提升，远低于 `70%` |
+| `box023_p1` | Deep penetration | ↓ | `0.00%` | `4.11%` | `+4.11pp` | 变差，但仍在 guard 内 |
+| `box023_p1` | Max penetration | ↓ | `1.81cm` | `3.37cm` | `+1.56cm` | 变差，但仍低于 `5cm` |
+| `box023_p2` | Contact 5cm | ↑ | `28.57%` | `52.38%` | `+23.81pp` | 明显提升，但仍未达 `70%` |
+| `box023_p2` | Deep penetration | ↓ | `3.33%` | `20.67%` | `+17.34pp` | 明显变差，超过 guard |
+| `box023_p2` | Max penetration | ↓ | `2.37cm` | `6.17cm` | `+3.80cm` | 明显变差 |
+| `box023_p2` | No fall | pass | pass | fail | 变差 | 强拉 contact 把姿态拉坏 |
+
+高接触但穿透 case：penalty 有方向性，但没有压到目标。
+
+| Case / variant | 指标 | 方向 | Baseline | E025 结果 | Δ | 结论 |
+|---|---|---|---:|---:|---:|---|
+| `bucket005_s2_p1` lite | Contact 5cm | ↑ | `97.59%` | `99.47%` | `+1.87pp` | 维持高 contact |
+| `bucket005_s2_p1` lite | Deep penetration | ↓ | `88.15%` | `92.89%` | `+4.74pp` | 变差，penalty 没压住 |
+| `bucket005_s2_p1` leg guard | Leg penetration | ↓ | `23.70%` | `14.22%` | `-9.48pp` | 腿部有改善 |
+| `bucket005_s2_p1` leg guard | Deep penetration | ↓ | `88.15%` | `92.89%` | `+4.74pp` | 手部穿透仍没改善 |
+| `bucket005_s2_p2` scale 2 | Deep penetration | ↓ | `74.38%` | `77.83%` | `+3.45pp` | 变差 |
+| `bucket005_s2_p2` scale 4 | Deep penetration | ↓ | `74.38%` | `64.53%` | `-9.85pp` | 有改善，但仍远高于 `<15%` |
+| `bucket007_p1` scale 2 | Deep penetration | ↓ | `68.46%` | `51.01%` | `-17.45pp` | 有明显改善，但不够 |
+| `bucket007_p1` scale 4 | Deep penetration | ↓ | `68.46%` | `35.57%` | `-32.89pp` | 最明显改善，但仍 fail |
+| `bucket007_p1` scale 4 | Max penetration | ↓ | `8.40cm` | `5.16cm` | `-3.24cm` | 明显改善，但仍略高于 `5cm` |
+
+这张对比表说明：E025 不是完全没有信号，`bucket007_p1` 和 `bucket005_s2_p2` 的 stronger penalty 确实让 deep penetration 下降；但下降幅度还不够。`box023_p2` 的 contact 虽然提升了，却用 fall/penetration 换来的，所以不能算成功。
+
 ## 量化结果
 
 | Variant | Case | Role | Penalty | Contact 5cm | Deep pen | Max pen | Leg pen | No fall | Object | Strict |

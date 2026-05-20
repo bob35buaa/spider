@@ -50,7 +50,7 @@ E024 查的是 `bucket001_p1/p2` 的“机器人自己站不住”问题。前�
 | Case | E024 看到的现象 | 说明 |
 |---|---|---|
 | `bucket001_p1` | 三个修复版本都还是摔，pelvis 最低只有 `0.066-0.156m`，hand-object contact 仍是 `0%` | 这不是简单加一点站立惩罚、收紧 root、降低 contact gain 就能修的。p1 更像是 reference/support timing 或 lower-body 控制本身有问题 |
-| `bucket001_p2` | 两个主版本都不摔了，pelvis 最低 `0.713-0.726m`，contact 也很高 | 稳定性问题被修了一部分；但高 contact 是“手伸进桶里”的接触，deep penetration 仍有 `59.60-64.65%`，max penetration 超过 `8cm` |
+| `bucket001_p2` | 两个主版本都不摔了，pelvis 最低 `0.713-0.726m`，5cm contact `77.53-79.78%` | 稳定性问题被修了一部分；但高 contact 是“手伸进桶里”的接触，deep penetration 仍有 `59.60-64.65%`，max penetration 超过 `8cm` |
 
 所以 E024 的结论不是“完全没用”。它把 bucket001 分成了两种失败模式：
 
@@ -59,6 +59,40 @@ E024 查的是 `bucket001_p1/p2` 的“机器人自己站不住”问题。前�
 
 没有出现的损失也很重要：5 个 full variants 的 object tracking 都通过，说明 E024 没有破坏 object-side support proxy。失败主要在 robot-side：p1 是 stability/contact 都没起来，p2 是 contact 很高但穿透太重。
 
+## 与基线对比：站稳了吗，代价是什么
+
+读表规则：
+
+- `↑` 表示越高越好，`↓` 表示越低越好。
+- `Δ = 本实验 - E018b baseline`；百分比指标的 Δ 单位是 pp。
+- E024 的 baseline 是 E018b canonical row，因为 E024 没有必要重跑已知失败的 baseline full。
+
+`bucket001_p1`：三个版本都没有真正改善。
+
+| Variant | 指标 | 方向 | E018b baseline | E024 结果 | Δ | 结论 |
+|---|---|---|---:|---:|---:|---|
+| `root03_gain3_stab_t065` | Pelvis min | ↑ | `0.145m` | `0.134m` | `-0.011m` | 变差，仍 fall |
+| `root025_gain2_stab_t065` | Pelvis min | ↑ | `0.145m` | `0.156m` | `+0.011m` | 只小幅变好，仍 fall |
+| `stab_s1_t055` | Pelvis min | ↑ | `0.145m` | `0.066m` | `-0.079m` | 明显变差，height-only isolate 失败 |
+| 三个 p1 variants | Contact 5cm | ↑ | `0.00%` | `0.00%` | `0.00pp` | 没有任何接触改善 |
+
+`bucket001_p2`：站姿明显改善，但穿透没有解决。
+
+| Variant | 指标 | 方向 | E018b baseline | E024 结果 | Δ | 结论 |
+|---|---|---|---:|---:|---:|---|
+| `root03_gain3_stab_t065` | No fall | pass | fail | pass | 改善 | 从摔倒变成不摔 |
+| `root03_gain3_stab_t065` | Pelvis min | ↑ | `0.439m` | `0.713m` | `+0.274m` | 明显变好 |
+| `root03_gain3_stab_t065` | Contact 5cm | ↑ | `66.29%` | `79.78%` | `+13.49pp` | 变好 |
+| `root03_gain3_stab_t065` | Deep penetration | ↓ | `64.65%` | `64.65%` | `0.00pp` | 没改善 |
+| `root03_gain3_stab_t065` | Max penetration | ↓ | `6.47cm` | `8.31cm` | `+1.84cm` | 变坏 |
+| `root025_gain2_stab_t065` | No fall | pass | fail | pass | 改善 | 从摔倒变成不摔 |
+| `root025_gain2_stab_t065` | Pelvis min | ↑ | `0.439m` | `0.726m` | `+0.287m` | 明显变好，best pelvis |
+| `root025_gain2_stab_t065` | Contact 5cm | ↑ | `66.29%` | `77.53%` | `+11.24pp` | 变好 |
+| `root025_gain2_stab_t065` | Deep penetration | ↓ | `64.65%` | `59.60%` | `-5.05pp` | 小幅变好，但仍严重超标 |
+| `root025_gain2_stab_t065` | Max penetration | ↓ | `6.47cm` | `8.08cm` | `+1.61cm` | 变坏 |
+
+这张对比表说明：E024 不是“没有任何进展”，它确实把 `bucket001_p2` 从摔倒修到了站稳；但它没有把接触变干净。`bucket001_p1` 则连站稳都没修起来，所以两个 case 的下一步应该分开处理。
+
 ## 量化结果
 
 | Variant | Case | Pelvis min | No fall | Contact 5cm | Deep pen | Max pen | Epos | Erot | Artifact guard | E024 success |
@@ -66,8 +100,8 @@ E024 查的是 `bucket001_p1/p2` 的“机器人自己站不住”问题。前�
 | `E024_bucket001_p1_root03_gain3_stab_t065` | p1 | `0.1343m` | false | `0.00%` | `0.00%` | `0.00cm` | `0.0333m` | `2.65deg` | true | false |
 | `E024_bucket001_p1_root025_gain2_stab_t065` | p1 | `0.1556m` | false | `0.00%` | `0.00%` | `0.00cm` | `0.0333m` | `2.65deg` | true | false |
 | `E024_bucket001_p1_stab_s1_t055` | p1 | `0.0657m` | false | `0.00%` | `0.00%` | `0.00cm` | `0.0333m` | `2.65deg` | true | false |
-| `E024_bucket001_p2_root03_gain3_stab_t065` | p2 | `0.7128m` | true | `88.76%` | `64.65%` | `8.31cm` | `0.0314m` | `6.11deg` | false | false |
-| `E024_bucket001_p2_root025_gain2_stab_t065` | p2 | `0.7257m` | true | `92.70%` | `59.60%` | `8.08cm` | `0.0305m` | `5.65deg` | false | false |
+| `E024_bucket001_p2_root03_gain3_stab_t065` | p2 | `0.7128m` | true | `79.78%` | `64.65%` | `8.31cm` | `0.0314m` | `6.11deg` | false | false |
+| `E024_bucket001_p2_root025_gain2_stab_t065` | p2 | `0.7257m` | true | `77.53%` | `59.60%` | `8.08cm` | `0.0305m` | `5.65deg` | false | false |
 
 Aggregate:
 
@@ -101,14 +135,14 @@ Aggregate:
 - `E024_bucket001_p2_root03_gain3_stab_t065_t0320.jpg`
 - `E024_bucket001_p2_root025_gain2_stab_t065_t0448.jpg`
 
-量化指标和在线 MP4 一致：p1 variants 的 object tracking 保持住，但机器人进入低 pelvis / fall 姿态，手物 contact 为 `0%`；p2 variants 姿态稳定且 contact 很高，但 high contact 来自明显的 hand-object penetration，artifact guard 失败。
+量化指标和在线 MP4 一致：p1 variants 的 object tracking 保持住，但机器人进入低 pelvis / fall 姿态，手物 contact 为 `0%`；p2 variants 姿态稳定且 5cm contact `77.53-79.78%`，但 high contact 来自明显的 hand-object penetration，artifact guard 失败。
 
 ## 结论
 
 E024 是负结果，但把 bucket001 的失败模式分清了：
 
 1. `bucket001_p1` 不是简单的 `stability_penalty_scale`、`local_frame_root_sigma`、`contact_hdmi_gain` 参数问题。三个 planned repair variants 都摔倒，且 contact 仍为 `0%`。下一步应换策略：更强 upright/root terminal gate、lower-body control regularizer，或重新检查 p1 reference/support timing。
-2. `bucket001_p2` 的 fall 可以修复：两个 variants 都 no-fall，pelvis min `>0.71m`，contact `88.76-92.70%`。
+2. `bucket001_p2` 的 fall 可以修复：两个 variants 都 no-fall，pelvis min `>0.71m`，5cm contact `77.53-79.78%`。
 3. 但 p2 的接触是穿透式接触：deep penetration `59.60-64.65%`、max penetration `8cm+`。降低 contact gain / root sigma 只小幅改善，不足以通过 artifact guard。
 4. object-side support proxy 没有回退：5/5 object tracking pass。因此 E024 后续不应继续调 anchor/support proxy。
 

@@ -64,6 +64,39 @@ E023 对每个 case 都做了 3 个版本：
 
 最终结论：E023 证明 lower-body geometry 确实是根因之一，尤其对 `box025_p1` 很明显；但简单把腿/脚碰撞体统一缩小还不够，两个 case 都没有达到 `<15%` 的 geometry repair 目标。它没有破坏 object tracking，也没有引入 fall；主要问题是修得不够细，`bucket007_p2` 还出现 contact/penetration 小幅变差。后续应该做更细的 per-geom collision 建模或训练期 penetration penalty，而不是简单关碰撞 pair。
 
+## 与基线对比：缩小 geometry 后是好是坏
+
+读表规则：
+
+- `↑` 表示越高越好，`↓` 表示越低越好。
+- `Δ = 本实验 - baseline`；百分比指标的 Δ 单位是 pp。
+- E023 的 baseline 是同一个 case 的 `baseline_replay`。也就是说，`box025_p1_lowerbody_proxy_min` 只和 `box025_p1_baseline_replay` 比，`bucket007_p2_lowerbody_proxy_min` 只和 `bucket007_p2_baseline_replay` 比。
+
+真正 shrink 的两个版本：
+
+| Case | 指标 | 方向 | Baseline | Shrink 后 | Δ | 结论 |
+|---|---|---|---:|---:|---:|---|
+| `box025_p1` | Full ref leg/object interference | ↓ | `66.53%` | `25.40%` | `-41.13pp` | 明显变好，但仍高于 `<15%` 目标 |
+| `box025_p1` | Contact 5cm | ↑ | `59.64%` | `63.57%` | `+3.93pp` | 小幅变好，但仍低于 `70%` |
+| `box025_p1` | Deep penetration | ↓ | `6.74%` | `7.30%` | `+0.56pp` | 小幅变差 |
+| `box025_p1` | Max penetration | ↓ | `4.03cm` | `2.24cm` | `-1.79cm` | 变好 |
+| `bucket007_p2` | Full ref leg/object interference | ↓ | `66.32%` | `45.26%` | `-21.05pp` | 有改善，但仍很高 |
+| `bucket007_p2` | Case-window ref interference | ↓ | `57.89%` | `31.58%` | `-26.31pp` | 有改善，但仍未达 `<15%` |
+| `bucket007_p2` | Contact 5cm | ↑ | `29.03%` | `27.96%` | `-1.07pp` | 变差 |
+| `bucket007_p2` | Max penetration | ↓ | `6.54cm` | `6.82cm` | `+0.28cm` | 变差 |
+
+`legpair_off` 诊断分支的对比：
+
+| Case | 指标 | 方向 | Baseline | `legpair_off` | Δ | 结论 |
+|---|---|---|---:|---:|---:|---|
+| `box025_p1` | Contact 5cm | ↑ | `59.64%` | `72.86%` | `+13.22pp` | 表面变好 |
+| `box025_p1` | Robot-object deep penetration | ↓ | `6.74%` | `32.02%` | `+25.28pp` | 严重变坏，说明是穿透式收益 |
+| `box025_p1` | Sim leg/object interference | ↓ | `12.92%` | `45.51%` | `+32.59pp` | 严重变坏 |
+| `bucket007_p2` | Contact 5cm | ↑ | `29.03%` | `15.05%` | `-13.98pp` | 变坏 |
+| `bucket007_p2` | Sim leg/object interference | ↓ | `5.26%` | `14.47%` | `+9.21pp` | 变坏，接近 guard 上限 |
+
+所以 E023 的净结论是：`lowerbody_proxy_min` 对 ref geometry 有真实改善，尤其 `box025_p1`；但改善不够，且没有带来完整 contact 成功。`legpair_off` 虽然在一个指标上能“看起来变好”，但代价是明显穿透，所以不能算修复。
+
 ## 量化结果
 
 | Variant | Patch | Full ref leg intf | Case ref leg intf | Sim leg intf | Contact 5cm | Deep pen | Max pen | Epos | Erot | Fall | E023 success |

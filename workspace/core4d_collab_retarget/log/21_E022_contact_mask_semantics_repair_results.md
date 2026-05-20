@@ -53,6 +53,25 @@ E022 的修正策略是只改 copied task，不回写 E018b 原始任务：
 
 修正后，3 个 patched variants 的 ref contact any 与 used mask any 对齐到 `45.81-48.90%` 区间，mask overclaim/mismatch 降到 `0-0.44%`；baseline replay 保留 all-on ref contact 作为 control，因此仍显示 `54.41%` overclaim/mismatch。这个对照证明：E022 的 mask semantics bug 已被修掉，但它只是必要修正，不是 contact preservation 失败的充分根因。
 
+## 与基线对比：到底提升了什么
+
+读表规则：
+
+- `↑` 表示越高越好，`↓` 表示越低越好。
+- `Δ = 本实验 - baseline`；百分比指标的 Δ 单位是 pp（百分点）。
+- E022 有两个参照：`E018b 原始` 用来判断最终 retarget 指标有没有变好；`E022 baseline_replay` 用来判断 contact mask bug 是否被修掉。
+
+| 指标 | 方向 | E018b 原始 | E022 baseline_replay | E022 patched 最好值 | Δ vs E022 baseline | 结论 |
+|---|---|---:|---:|---:|---:|---|
+| Ref contact 与 raw mask 差距 | ↓ | - | `53.74pp` | `0.00-0.44pp` | `-53.30pp` 到 `-53.74pp` | 明显变好；all-on contact 目标被修掉 |
+| Mask overclaim | ↓ | - | `54.41%` | `0.00%` | `-54.41pp` | 明显变好；错误多标 contact 的问题消失 |
+| Mask mismatch | ↓ | - | `54.41%` | `0.00%` | `-54.41pp` | 明显变好；ref contact 和实际使用 mask 对齐 |
+| Contact 5cm | ↑ | `22.49%` | `24.50%` | `25.30%` | `+0.80pp` | 只小幅提升，远低于 `70%` 目标 |
+| Max penetration | ↓ | `1.88cm` | `1.73cm` | `1.81cm` | `+0.08cm` | 基本持平，略差于 E022 baseline，但仍很低 |
+| Object Epos | ↓ | `0.0435m` | `0.0436m` | `0.0435m` | `-0.0001m` | 基本不变，object tracking 没回退 |
+
+因此 E022 的“成功”只在 mask 语义：mask 指标从严重错误变成对齐；但真正关心的手-物体 contact 几乎没有提升。这就是为什么 E022 结论是“bug 修了，但主任务没过”。
+
 ## 量化结果
 
 | Variant | Ref contact any | Used mask any | Mask overclaim | Mask mismatch | Contact 5cm | Epos | Erot | Deep pen | Max pen | Fall | E022 success |

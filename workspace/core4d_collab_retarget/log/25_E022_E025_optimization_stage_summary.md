@@ -28,6 +28,27 @@ E022-E025 没有产生 strict full-retargeting success，但阶段性价值很�
 3. **单纯 reward 加权不够**：E024 的 stability/contact gain 对 p1 无效，E025 的 high contact reward 和 soft penetration penalty 也不能消除 artifact shortcut。
 4. **下一步应该从 reward sweep 转为约束/时序/几何机制改造**：dynamic target timing、surface-contact feasibility、harder SDF barrier、CEM projection/rejection、lower-body geometry/control regularization。
 
+## 阶段基线对比总表
+
+读表规则：`↑` 越高越好，`↓` 越低越好；`Δ = 实验结果 - baseline`，百分比指标的 Δ 单位是 pp。`baseline` 优先使用进入该实验前的最近有效结果：E022/E024/E025 多数是 E018b，E025 的 `box023_p1` 使用 E022 mask 修复后的 best-contact 结果。
+
+| 实验 | Case / 指标 | 方向 | Baseline | 最好/代表结果 | Δ | 阶段判断 |
+|---|---|---|---:|---:|---:|---|
+| E022 | `box023_p1` mask overclaim | ↓ | `54.41%` | `0.00%` | `-54.41pp` | 明显成功，mask bug 修掉 |
+| E022 | `box023_p1` contact 5cm | ↑ | `24.50%` | `25.30%` | `+0.80pp` | 几乎没提升，contact 主问题仍在 |
+| E023 | `box025_p1` full ref leg/object interference | ↓ | `66.53%` | `25.40%` | `-41.13pp` | 明显改善，但未达 `<15%` |
+| E023 | `bucket007_p2` full ref leg/object interference | ↓ | `66.32%` | `45.26%` | `-21.05pp` | 有改善但仍很高 |
+| E024 | `bucket001_p1` best pelvis min | ↑ | `0.145m` | `0.156m` | `+0.011m` | 小幅改善但仍 fall，基本失败 |
+| E024 | `bucket001_p2` best pelvis min | ↑ | `0.439m` | `0.726m` | `+0.287m` | stability 明显修复 |
+| E024 | `bucket001_p2` deep penetration | ↓ | `64.65%` | `59.60%` | `-5.05pp` | 只小幅改善，仍严重超标 |
+| E025 | `box023_p1` contact 5cm | ↑ | `25.30%` | `28.51%` | `+3.21pp` | 小幅改善但远未达标 |
+| E025 | `box023_p2` contact 5cm | ↑ | `28.57%` | `52.38%` | `+23.81pp` | 接触提高，但 fall/deep pen 变坏 |
+| E025 | `bucket005_s2_p1` deep penetration | ↓ | `88.15%` | `92.89%` | `+4.74pp` | 变坏，penalty 没压住 |
+| E025 | `bucket005_s2_p2` deep penetration | ↓ | `74.38%` | `64.53%` | `-9.85pp` | 有改善但远未达标 |
+| E025 | `bucket007_p1` deep penetration | ↓ | `68.46%` | `35.57%` | `-32.89pp` | 最明显改善，但仍高于 `<15%` |
+
+从这张表看，E022-E025 的正向结果主要是“诊断和局部改善”，不是 strict success：mask 修得很干净，E023 geometry 有实质下降，E024 p2 站稳了，E025 stronger penalty 对部分 bucket case 有信号；但核心指标没有同时过线。
+
 ## 实验逐项总结
 
 ### E022: contact mask semantics repair
@@ -79,7 +100,7 @@ E022-E025 没有产生 strict full-retargeting success，但阶段性价值很�
 - strict success `0/5`。
 - `bucket001_p1` 三个 variants 全部 fall，contact `0%`：
   - best pelvis min only `0.1556m`
-- `bucket001_p2` 两个 variants no-fall，contact `88.76-92.70%`，pelvis min `0.7128-0.7257m`。
+- `bucket001_p2` 两个 variants no-fall，5cm contact `77.53-79.78%`，pelvis min `0.7128-0.7257m`。
 - 但 p2 deep penetration 仍 `59.60-64.65%`，max pen `8cm+`。
 
 结论：
