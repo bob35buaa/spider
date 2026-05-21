@@ -1917,3 +1917,31 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 当前分支更新为 `exp/core4d-collab-retarget-e030-geometry-surface-control`。
 - 已按 E029 口径 staging E030 artifacts：summary CSV/JSON、manifest/case_scope、ref/sim interference、eval summaries、keyframes、plots、scene snapshots、logs；未纳入 NPZ/MP4/outdir/contact masks/timeseries。
 - `git diff --cached --check` 已通过；staged file filter 确认没有 `*.npz`、`*.mp4`、`timeseries_*`、`legobj_timeseries_*`、`*_outdir/`、`contact_masks/`、`online_video/`。
+
+### E030 结果提交完成，进入 E031 规划
+
+- 已提交并推送 E030 结果 commit：
+  - `6e4364b log(core4d_collab): record E030 geometry surface control results`
+  - 推送到 `origin/exp/core4d-collab-retarget-e030-geometry-surface-control`。
+- 按 `plan/31_post_E026_next_stage_optimization_plan.md`，E027-E030 子实验均已完成并记录；下一步进入 E031：Best Dynamic Assembly + Full Evaluation。
+- E031 初步决策：
+  - 不是继续把 runtime surface target 命名为 E031；plan 31 中 E031 明确定义为 E026-style 账本组装；
+  - E030 提出的 runtime surface target / candidate-level rejection-projection 应作为 E031 后续机制实验（若 E031 账本确认 strict 不增长）。
+- 已启动两个只读 explorer：
+  - 候选池/数据分母审计：确认 E031 应纳入 E018b、E022-E025、E028-E030 哪些 variants，以及 E027 quality audit 的 P0/P1 caveat；
+  - 代码复用途径审计：确认 `eval_E026_full_eval.py` 如何派生为 E031，新增哪些 success keys/schema。
+- 本地已确认 E026 eval 当前只读 E018b/E022-E025 + E081/E026 rerun；E031 需要扩展 source list 到 E028/E029/E030，并接入 E027 `case_quality_audit.csv`。
+
+### E031 plan
+
+- 已从 E030 结果分支切出新分支：`exp/core4d-collab-retarget-e031-full-eval`。
+- 两个只读 explorer 已完成：
+  - 候选池审计结论：E031 best-positive pool 应保持保守，只纳入 E018b/E022-E025；E027 无 rollout candidate；E028/E030 全部作为 rejected diagnostic；E029 只保留 guard/non-regression evidence，不替换 E018b `box025_p2` strict baseline。
+  - 代码审计结论：E031 是跨实验汇总，应派生 `eval_E026_full_eval.py`；若做单 variant rollout eval 才用 E030 模板。
+- 已创建 E031 计划：`workspace/core4d_collab_retarget/plan/36_E031_best_dynamic_assembly_full_eval_plan.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：
+  - 当前分支改为 E031；
+  - 实验总览新增 E031 plan 行；
+  - 关键指标演进新增 E031 plan 行；
+  - Plans 路径新增 plan 36。
+- E031 不触发远程 GPU wrapper：它是离线账本组装，不跑 CEM full rollout。
