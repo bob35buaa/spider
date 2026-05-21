@@ -1,0 +1,7 @@
+[07:14:57] === E030 scene snapshot tasks=box023_person2_freejoint_legobj_e030_box023_p2_surface_hold_gate bucket005_s2_person1_freejoint_legobj_e030_bucket005_s2_p1_leg_guard_surface ===
+Wrote workspace/core4d_collab_retarget/results/E030/scene_snapshot/manifest.txt
+[07:14:57] === E030_box023_p2_surface_hold_gate task=box023_person2_freejoint_legobj_e030_box023_p2_surface_hold_gate override=core4d_collab_E030_box023_p2_surface_hold_gate GPU=1 ===
+[07:27:57] ERROR E030_box023_p2_surface_hold_gate stalled: no log update for 300s
+[07:28:07] WARN E030_box023_p2_surface_hold_gate failed; continuing E030 queue
+[07:28:07] === E030_bucket005_s2_p1_leg_guard_surface task=bucket005_s2_person1_freejoint_legobj_e030_bucket005_s2_p1_leg_guard_surface override=core4d_collab_E030_bucket005_s2_p1_leg_guard_surface GPU=1 ===
+[07:53:38] === E030_bucket005_s2_p1_leg_guard_surface done ===

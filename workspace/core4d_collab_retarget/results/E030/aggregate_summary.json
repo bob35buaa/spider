@@ -1,0 +1,22 @@
+{
+  "best_target_contact5_pct": 57.70609318996416,
+  "best_target_ref_leg_interference_pct": 21.370967741935484,
+  "num_clean_guard_pass": 0,
+  "num_clean_guard_results": 1,
+  "num_diagnostic_results": 2,
+  "num_diagnostic_surface_signal": 0,
+  "num_no_pair_deletion_pass": 6,
+  "num_results": 6,
+  "num_shortcut_guard_pass": 0,
+  "num_shortcut_guard_results": 1,
+  "num_target_geometry_results": 2,
+  "num_target_geometry_success": 0,
+  "variants": [
+    "E030_box025_p1_tinygeom_surface_gate",
+    "E030_bucket007_p2_tinygeom_surface_gate",
+    "E030_box023_p1_surface_hold_gate",
+    "E030_box023_p2_surface_hold_gate",
+    "E030_bucket005_s2_p1_leg_guard_surface",
+    "E030_box025_p2_guard_surface"
+  ]
+}

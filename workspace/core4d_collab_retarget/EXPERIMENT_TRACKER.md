@@ -1,6 +1,6 @@
 # CORE4D 协作重定向探索实验跟踪器
 
-分支：`exp/core4d-collab-retarget`
+分支：`exp/core4d-collab-retarget-e030-geometry-surface-control`
 
 新方向编号从 `E001` 开始。`workspace/core4d` 的 E081 仅作为 baseline 引用，不继承为本工作区实验编号。
 
@@ -38,7 +38,7 @@
 | E027 | 2026-05-21 | Data / Timing Audit | **Contact timing + data/retarget quality diagnosis**: 离线聚合 E020/E026/Holosoma/E018b 证据，13/13 case 输出 quality labels。结果：`usable_algorithmic_failure=6`、`usable_with_caveat=4`、`retarget_questionable=2`、`discard_from_success_denominator=1`（`desk021_p1`）。4 个 low-contact timing panel 显示 phase shift 预期收益 `0pp`，不启动 E027 full rollout；后续转 E028 hard no-penetration 与 E030 retarget/geometry/control | ✅ 详见 log 27 |
 | E028 | 2026-05-21 | Hard Penetration | **Hard no-penetration / surface feasibility 负结果**: 6/6 full variants 完成。case-best deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，strict `0/4`；case-best mean deep improvement `16.53pp`，低于 `>=25pp` 目标。`bucket007_p1`/`bucket001_p2` 压低穿透但 contact collapse，`bucket005_s2_p1/p2` 仍高 contact 高穿透，`box025_p2` guard contact 退到 `0%` | ✅ 详见 log 28 |
 | E029 | 2026-05-21 | Stability / Control | **Bucket001 stability / posture-valid contact 局部正结果/接触负结果**: 6/6 full variants 完成。`bucket001_p1` 4/4 stability pass，pelvis min 从 E024 `0.156m` 提到 `0.527-0.584m`，但 contact 仍 `0%`，useful `0/4`、strict `0/4`；`bucket001_p2` guard 高 contact `99.44%` 但 deep pen `63.64%`/max `9.00cm`，guard fail；`box025_p2` guard pass。远端 p2 在 `162/244` stall，由本地 fallback 完成 | ✅ 详见 log 29 |
-| E030 | 2026-05-21 | Geometry / Surface Control | **Lower-body geometry / surface-control 计划**: 针对 E027 标记的 `box025_p1` / `bucket007_p2` retarget geometry 问题，以及 `box023_p1/p2` wrong-side / surface-control 低接触问题。6 个 full variants：2 个 target geometry、2 个 box023 diagnostic、`bucket005_s2_p1` shortcut guard、`box025_p2` clean guard；第一版不改 `spider/` 核心，复用 E023 geometry 派生、E028 barrier/gate、E029 posture gate | 📝 plan 35 |
+| E030 | 2026-05-21 | Geometry / Surface Control | **Lower-body geometry / surface-control 负结果**: 6/6 full variants 完成，第一版无核心 `spider/` 改动。target geometry success `0/2`，diagnostic surface signal `0/2`，clean guard pass `0/1`，shortcut high-penetration guard 正确拒绝。`box025_p1` ref interference `66.53% -> 21.37%` 但 contact `2.50%` 且 fall；`bucket007_p2` contact `57.71%` 但 ref/sim leg artifact 仍高；`box023_p1/p2` surface-control 无信号；不新增数据弃用 case | ✅ 详见 log 30 |
 
 ## Baseline
 
@@ -86,7 +86,7 @@
 | E027 offline audit | 13case quality labels：usable_algorithmic_failure `6`、usable_with_caveat `4`、retarget_questionable `2`、discard_from_success_denominator `1`；timing panels `4/4` priority cases；full candidates `0` | `desk021_p1` 从主 success denominator 弃用但保留 P1 caveat；`box025_p1/bucket007_p2` 转 E030 retarget geometry；`box023_p1/p2` 不做 phase-shift sweep，转 surface/geometry/control 诊断；bucket penetration cases 转 E028 |
 | E028 full | 6/6 full variants；variant aggregate strict `0/6`、guard strict `0/1`、target variant mean deep improvement `6.78pp`。按 4case case-best：deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，contact>=70 on best-deep `2/4`，strict `0/4`，mean deep improvement `16.53pp` | 第一版 hard barrier/contact gate 只能在部分 case 通过“远离物体/切断接触”压低穿透；不能形成 surface contact。下一步需要 object-specific surface target 或 CEM candidate rejection/projection，不能继续加 barrier scale |
 | E029 full | 6/6 full variants；p1 target `4/4` no-fall/stability pass，best pelvis `0.584m`，但 p1 contact `0%`、useful `0/4`、strict `0/4`；guards `1/2` pass，`box025_p2` pass，`bucket001_p2` contact `99.44%` 但 deep pen `63.64%` fail | hard posture feasibility 能修 `bucket001_p1` fall，但不能闭合接触；p1 停止普通 stability reward sweep，转 reachability/support timing/control audit。bucket surface contact 仍需 surface target 或 CEM rejection/projection |
-| E030 plan | 6 个 planned full variants：`box025_p1` / `bucket007_p2` target geometry，`box023_p1/p2` surface-control diagnostic，`bucket005_s2_p1` shortcut guard，`box025_p2` clean guard；禁止 `legpair_off` 作为 success；沿用 E027 多证据弃用协议 | 第一版先不改核心代码，复用已有默认关闭 knobs；若 target success `0/2`，结果应明确是否转 runtime surface target / CEM candidate rejection |
+| E030 full | 6/6 full variants；`num_target_geometry_success=0/2`、`num_diagnostic_surface_signal=0/2`、`num_clean_guard_pass=0/1`、`num_no_pair_deletion_pass=6/6`、`num_E030_success=0/6`。`box025_p1` contact `2.50%`、fall=true、ref int `21.37%`；`bucket007_p2` contact `57.71%` but ref/sim int `43.68/24.74%`；`bucket005_s2_p1` contact `99.47%` but deep pen `94.31%` correctly rejected | 停止 case-specific XML 微调、普通 contact gain sweep、单纯加 barrier scale；下一步转 runtime surface target / candidate-level rejection-projection，并继续沿用 E027 多证据数据弃用协议 |
 
 ## Plans
 
@@ -158,6 +158,7 @@
 - E027: `workspace/core4d_collab_retarget/log/27_E027_contact_timing_data_quality_results.md`
 - E028: `workspace/core4d_collab_retarget/log/28_E028_hard_no_penetration_surface_feasibility_results.md`
 - E029: `workspace/core4d_collab_retarget/log/29_E029_bucket001_stability_control_results.md`
+- E030: `workspace/core4d_collab_retarget/log/30_E030_lower_body_geometry_surface_control_results.md`
 
 ## Git
 

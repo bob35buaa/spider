@@ -1,0 +1,28 @@
+{
+  "disabled_leg_object_pairs": [],
+  "foot_radius": "0.0005",
+  "lowerbody_radius": "0.0025",
+  "patch_mode": "lowerbody_proxy_tiny",
+  "shrunk_leg_geoms": [
+    "left_hip_collision",
+    "left_linkage_brace_collision",
+    "left_shin_collision",
+    "left_thigh_collision",
+    "lf0",
+    "lf1",
+    "lf2",
+    "lf3",
+    "rf0",
+    "rf1",
+    "rf2",
+    "rf3",
+    "right_hip_collision",
+    "right_linkage_brace_collision",
+    "right_shin_collision",
+    "right_thigh_collision"
+  ],
+  "source_derived_task": "bucket007_person2_freejoint_legobj_e018b",
+  "source_manifest": "E018b",
+  "source_variant": "E018b_bucket007_p2_canonical_t02",
+  "variant": "E030_bucket007_p2_tinygeom_surface_gate"
+}

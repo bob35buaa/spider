@@ -1,0 +1,7 @@
+[07:14:57] === E030 scene snapshot tasks=bucket007_person2_freejoint_legobj_e030_bucket007_p2_tinygeom_surface_gate box023_person1_freejoint_legobj_e030_box023_p1_surface_hold_gate ===
+Wrote workspace/core4d_collab_retarget/results/E030/scene_snapshot/manifest.txt
+[07:14:57] === E030_bucket007_p2_tinygeom_surface_gate task=bucket007_person2_freejoint_legobj_e030_bucket007_p2_tinygeom_surface_gate override=core4d_collab_E030_bucket007_p2_tinygeom_surface_gate GPU=0 ===
+[07:31:58] === E030_bucket007_p2_tinygeom_surface_gate done ===
+[07:31:58] === E030_box023_p1_surface_hold_gate task=box023_person1_freejoint_legobj_e030_box023_p1_surface_hold_gate override=core4d_collab_E030_box023_p1_surface_hold_gate GPU=0 ===
+[07:55:29] === E030_box023_p1_surface_hold_gate done ===
+=== E030 remote_gpu0 done ===

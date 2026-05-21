@@ -1848,3 +1848,72 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - E030 full 已启动本地队列：`RUN_TIMEOUT_SECONDS=2400 RUN_STALL_TIMEOUT_SECONDS=300 bash workspace/core4d_collab_retarget/scripts/train/train_E030.sh local 0`。
 - 首次远程启动失败在 preprocess 阶段：独立 worktree 缺少 ignored 的历史 `workspace/core4d_collab_retarget/results/E018b` 等 source manifests，导致 `KeyError: unknown source_manifest E018b`。
 - 修复方向：远程独立 worktree 除 `.venv`/`example_datasets` 外，还需 symlink 主 repo 的 `workspace/core4d_collab_retarget/results` 与 `logs/core4d_collab_retarget`。
+
+### E030 full 运行进展
+
+- 已追加修复并提交远程 worktree 软链问题：
+  - `b360f9e fix(core4d_collab): link E030 remote worktree artifacts`
+  - `16bdc9a fix(core4d_collab): link E030 remote source result dirs`
+  - `029b486 fix(core4d_collab): link E030 remote source tasks`
+- 本地 full 队列已完成：
+  - `E030_box025_p1_tinygeom_surface_gate` 写出 full NPZ 约 1.2MB；
+  - `E030_box025_p2_guard_surface` 写出 full NPZ，并触发临时 eval；
+  - 临时本地 eval 当前仅包含 2 条本地结果：`num_results=2`、`num_target_geometry_success=0`、`num_clean_guard_pass=0/1`。
+- 远程 tmux 已退出：
+  - GPU0 完成 `E030_bucket007_p2_tinygeom_surface_gate` 与 `E030_box023_p1_surface_hold_gate`；
+  - GPU1 完成 `E030_bucket005_s2_p1_leg_guard_surface`；
+  - `E030_box023_p2_surface_hold_gate` 在 `100/272` 后因 `RUN_STALL_TIMEOUT_SECONDS=300` 被判定 stall，未写出完整 NPZ。
+- 已开始拉回远程成功产物；后续需要用更宽松 stall 阈值补跑 `E030_box023_p2_surface_hold_gate`，再进行全量 E030 eval、关键帧观察、结果日志和 tracker 更新。
+
+### E030 远程回收与 p2 fallback
+
+- 远程成功产物已拉回本地，新增 full 结果：
+  - `E030_bucket007_p2_tinygeom_surface_gate`
+  - `E030_box023_p1_surface_hold_gate`
+  - `E030_bucket005_s2_p1_leg_guard_surface`
+- 失败的 `E030_box023_p2_surface_hold_gate` 远程目录只包含 outdir/config 等不完整 artifacts；本地仍有 smoke 时代的 24KB NPZ，不能作为 full 结论。
+- 已启动本地 fallback：
+  - 命令：`RUN_TIMEOUT_SECONDS=3600 RUN_STALL_TIMEOUT_SECONDS=900 bash workspace/core4d_collab_retarget/scripts/train/train_E030.sh one 0 E030_box023_p2_surface_hold_gate`
+  - 当前进入较慢 CEM 段并推进到 `sim_steps: 30/272`，等待完整 NPZ 覆盖 smoke 结果。
+- 在等待 fallback 时，对已完成 5 条 full 结果做预评估：
+  - aggregate：`num_results=5`、`num_target_geometry_success=0/2`、`num_diagnostic_surface_signal=0/1`、`num_clean_guard_pass=0/1`、`num_shortcut_guard_pass=0/1`；
+  - `box025_p1`: contact `2.50%`、ref interference `21.37%`，object/no-penetration 虽过但 contact fail；
+  - `bucket007_p2`: contact `57.71%`，但 ref interference `43.68%`、sim interference `24.74%`，仍 fail；
+  - `bucket005_s2_p1`: contact `99.47%`，但 deep pen `94.31%`，guard 正确 fail；
+  - `box025_p2`: deep/object/no-fall 过，但 contact `0%`，clean guard fail。
+- 已抽查 5 条已完成分支关键帧：
+  - `box025_p1` 在 `f160/f204` 中 sim 侧物体遮挡/脱离 robot hand，橙色 EEF marker 掉到物体下方或视野边缘，解释了 contact `2.5%`；
+  - `bucket007_p2` 在 `f160/f180` 中姿态看起来接近 ref，但腿/身体仍绕 bucket 形成明显 artifact，量化上 ref/sim leg interference 仍过高；
+  - `bucket005_s2_p1` 在 `f160/f204` 中手/脚 marker 与 bucket 表面交叠，符合 high-contact high-penetration 坏解；
+  - `box025_p2` 在 `f160/f204` 中身体与 box 相对姿态尚可，但 EEF marker 未稳定贴在目标接触面，contact 指标回退到 `0%`；
+  - `box023_p1` 在 `f160` 有短暂表面接近，`f204` 已与 box 分离，surface-hold 只得到 `29.32%` contact，不构成 diagnostic signal。
+- `E030_box023_p2_surface_hold_gate` fallback 当前推进到 `sim_steps: 52/272`，日志仍刷新。
+
+### E030 full 完成与正式评估
+
+- `E030_box023_p2_surface_hold_gate` 本地 fallback 已越过远端失败点并完整跑到 `sim_steps: 272/272`：
+  - full NPZ: `workspace/core4d_collab_retarget/results/E030/E030_box023_p2_surface_hold_gate.npz`，约 1.4MB；
+  - MP4: `workspace/core4d_collab_retarget/results/E030/online_video/E030_box023_p2_surface_hold_gate.mp4`，约 805KB；
+  - 单条 fallback 临时 eval 后，已重跑正式全量：`.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E030.py --all`。
+- E030 正式 aggregate：
+  - `num_results=6`；
+  - `num_target_geometry_success=0/2`；
+  - `num_diagnostic_surface_signal=0/2`；
+  - `num_clean_guard_pass=0/1`；
+  - `num_shortcut_guard_pass=0/1`；
+  - `num_no_pair_deletion_pass=6`；
+  - `best_target_contact5_pct=57.71%`；
+  - `best_target_ref_leg_interference_pct=21.37%`。
+- `box023_p2` 结果：contact `8.33%`、fall=true、ref interference `0%` 但 sim case-window leg artifact `21.33%`；关键帧 `f160/f180/f204` 显示 sim 侧翻到 box 上或离开物体，不是有效 surface hold。
+- 结论草案：E030 第一版的 XML geometry shrink + existing reward/control gates 没有产生任何 positive success；下一步应停止 case-specific XML 微调和普通 contact gain sweep，转 runtime surface target / candidate-level rejection-projection，并保留 E027 的数据弃用原则。
+
+### E030 记录与提交准备
+
+- 已写入正式结果日志：`workspace/core4d_collab_retarget/log/30_E030_lower_body_geometry_surface_control_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：
+  - E030 总览从 plan 改为 full 负结果；
+  - 关键指标演进新增 `E030 full`；
+  - Logs 路径新增 log 30；
+  - 当前分支更新为 `exp/core4d-collab-retarget-e030-geometry-surface-control`。
+- 已按 E029 口径 staging E030 artifacts：summary CSV/JSON、manifest/case_scope、ref/sim interference、eval summaries、keyframes、plots、scene snapshots、logs；未纳入 NPZ/MP4/outdir/contact masks/timeseries。
+- `git diff --cached --check` 已通过；staged file filter 确认没有 `*.npz`、`*.mp4`、`timeseries_*`、`legobj_timeseries_*`、`*_outdir/`、`contact_masks/`、`online_video/`。

@@ -1,0 +1,11 @@
+{
+  "disabled_leg_object_pairs": [],
+  "foot_radius": "0.0",
+  "lowerbody_radius": "0.0",
+  "patch_mode": "none",
+  "shrunk_leg_geoms": [],
+  "source_derived_task": "bucket005_s2_person1_freejoint_legobj_e018b",
+  "source_manifest": "E018b",
+  "source_variant": "E018b_bucket005_s2_p1_canonical_t02",
+  "variant": "E030_bucket005_s2_p1_leg_guard_surface"
+}

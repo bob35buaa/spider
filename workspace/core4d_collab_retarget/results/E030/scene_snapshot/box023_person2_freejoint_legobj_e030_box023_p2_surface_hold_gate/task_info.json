@@ -1,0 +1,15 @@
+{
+  "source_scene": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "source_qpos": "/home/ubuntu/Workspace/spider/workspace/core4d/results/E077/holosoma_box023_person2/trimmed/20231008-045-person2-Box023_with_obj_original.npz",
+  "object_initial_pos": [
+    -0.7826600074768066,
+    -1.1213067770004272,
+    0.14026491343975067
+  ],
+  "object_initial_quat": [
+    -0.006451329682022333,
+    -0.0007823040941730142,
+    0.7010128498077393,
+    0.7131190299987793
+  ]
+}

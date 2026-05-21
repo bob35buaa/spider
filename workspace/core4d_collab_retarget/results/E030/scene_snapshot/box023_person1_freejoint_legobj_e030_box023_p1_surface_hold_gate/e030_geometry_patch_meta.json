@@ -1,0 +1,11 @@
+{
+  "disabled_leg_object_pairs": [],
+  "foot_radius": "0.0",
+  "lowerbody_radius": "0.0",
+  "patch_mode": "none",
+  "shrunk_leg_geoms": [],
+  "source_derived_task": "box023_person1_freejoint_legobj_e022_raw3_eval_axis",
+  "source_manifest": "E022",
+  "source_variant": "E022_box023_p1_raw3_eval_axis",
+  "variant": "E030_box023_p1_surface_hold_gate"
+}

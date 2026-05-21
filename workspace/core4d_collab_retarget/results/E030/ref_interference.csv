@@ -1,0 +1,7 @@
+case,case_ref_leg_box_interference_pct,disabled_pair_count,full_ref_leg_box_interference_pct,patch_mode,ref_geometry_pass,role,shrunk_leg_geoms,variant
+box025_p1,27.52808988764045,0,21.370967741935484,lowerbody_proxy_tiny,False,target_geometry,"left_hip_collision,left_linkage_brace_collision,left_shin_collision,left_thigh_collision,lf0,lf1,lf2,lf3,rf0,rf1,rf2,rf3,right_hip_collision,right_linkage_brace_collision,right_shin_collision,right_thigh_collision",E030_box025_p1_tinygeom_surface_gate
+bucket007_p2,29.605263157894733,0,43.684210526315795,lowerbody_proxy_tiny,False,target_geometry,"left_hip_collision,left_linkage_brace_collision,left_shin_collision,left_thigh_collision,lf0,lf1,lf2,lf3,rf0,rf1,rf2,rf3,right_hip_collision,right_linkage_brace_collision,right_shin_collision,right_thigh_collision",E030_bucket007_p2_tinygeom_surface_gate
+box023_p1,0.0,0,0.0,none,True,diagnostic_surface,,E030_box023_p1_surface_hold_gate
+box023_p2,0.0,0,0.0,none,True,diagnostic_surface,,E030_box023_p2_surface_hold_gate
+bucket005_s2_p1,39.33649289099526,0,30.405405405405407,none,False,shortcut_guard,,E030_bucket005_s2_p1_leg_guard_surface
+box025_p2,32.947976878612714,0,22.983870967741936,none,False,clean_guard,,E030_box025_p2_guard_surface
