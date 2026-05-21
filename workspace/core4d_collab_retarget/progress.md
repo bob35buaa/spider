@@ -1945,3 +1945,25 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - 关键指标演进新增 E031 plan 行；
   - Plans 路径新增 plan 36。
 - E031 不触发远程 GPU wrapper：它是离线账本组装，不跑 CEM full rollout。
+
+### E031 full eval assembly 完成
+
+- 已新增并运行 `workspace/core4d_collab_retarget/scripts/eval/eval_E031_full_eval.py`。
+- 静态检查通过：`.venv/bin/python -m py_compile workspace/core4d_collab_retarget/scripts/eval/eval_E031_full_eval.py`。
+- 正式运行完成：`.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E031_full_eval.py --all`。
+- 输出目录：`workspace/core4d_collab_retarget/results/E031_full_eval/`。
+- 结果摘要：
+  - normalized rows `94`；
+  - conservative best rows `13`；
+  - rejected diagnostic candidates `18`；
+  - retarget-questionable cases `box025_p1`、`bucket007_p2`；
+  - success-denominator discard 仍只有 `desk021_p1`。
+- 已修正 E031 strict 归因口径：
+  - E028/E029/E030 只读取各自实验 success 字段，避免 E030 从源 E018b 字段继承 stale success；
+  - `spider_E081_full_rerun` 显式读取 `E081_success_legobj_strict_proxy`，恢复 P0 `4/9`、P1 `4/13` 的 E081 baseline strict proxy。
+- E031 conservative best 结果：
+  - P0 9case: obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`；
+  - P1 13case: obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13`。
+- 已写入正式结果日志：`workspace/core4d_collab_retarget/log/31_E031_full_eval_results.md`。
+- 已更新 `EXPERIMENT_TRACKER.md`：E031 总览、关键指标演进、Logs 路径。
+- E031 结论：post-E026 阶段无新增 strict gain；E028-E030 全部为 diagnostic/rejected evidence。下一机制线应转 runtime surface target / CEM candidate-level rejection-projection。

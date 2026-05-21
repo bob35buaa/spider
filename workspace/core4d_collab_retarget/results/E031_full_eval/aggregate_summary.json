@@ -1,0 +1,51 @@
+{
+  "best_method": "spider_best_conservative_E018b_E022_E025",
+  "num_rejected_diagnostic_candidates": 18,
+  "num_retarget_questionable": 2,
+  "num_success_denominator_discards": 1,
+  "p0_cases": [
+    "box023_p1",
+    "box023_p2",
+    "box025_p1",
+    "box025_p2",
+    "bucket001_p2",
+    "bucket005_s2_p1",
+    "bucket005_s2_p2",
+    "bucket007_p1",
+    "bucket007_p2"
+  ],
+  "p0_contact5_mean_pct": 65.81050192956371,
+  "p0_deep_pen_mean_pct": 30.517852623001836,
+  "p0_falls": 0,
+  "p0_num_cases": 9,
+  "p0_object_pos_mean_cm": 4.9709380707251505,
+  "p0_strict_success": 1,
+  "p1_cases": [
+    "box021_p1",
+    "box021_p2",
+    "box023_p1",
+    "box023_p2",
+    "box025_p1",
+    "box025_p2",
+    "bucket001_p1",
+    "bucket001_p2",
+    "bucket005_s2_p1",
+    "bucket005_s2_p2",
+    "bucket007_p1",
+    "bucket007_p2",
+    "desk021_p1"
+  ],
+  "p1_contact5_mean_pct": 55.8741228677391,
+  "p1_deep_pen_mean_pct": 26.368086945095378,
+  "p1_falls": 3,
+  "p1_num_cases": 13,
+  "p1_object_pos_mean_cm": 5.331201636197444,
+  "p1_strict_success": 1,
+  "retarget_questionable_cases": [
+    "box025_p1",
+    "bucket007_p2"
+  ],
+  "success_denominator_discards": [
+    "desk021_p1"
+  ]
+}

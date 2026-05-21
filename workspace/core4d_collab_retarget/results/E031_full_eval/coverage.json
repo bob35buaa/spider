@@ -1,0 +1,352 @@
+{
+  "E027_quality_audit": {
+    "csv": "workspace/core4d_collab_retarget/results/E027/data_quality/case_quality_audit.csv",
+    "file_exists": true,
+    "rows": 13
+  },
+  "known_missing_reasons": {
+    "E027:rollout_candidates": "E027 was an offline audit; full_variant_candidates.tsv is empty by design",
+    "omniretarget_kinematic:desk021_p1": "Holosoma / OmniRetarget SOCP infeasible; E027 marks desk021_p1 as discard_from_success_denominator",
+    "spider_E081:most_cases": "legacy E081 baseline ran only the original two cases; use spider_E081_full_rerun for 13case paper-metrics coverage"
+  },
+  "omniretarget_kinematic": {
+    "best_positive_pool": false,
+    "cases_missing_13": [
+      "desk021_p1"
+    ],
+    "cases_missing_9": [],
+    "cases_present": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/holosoma_v2_kinematic/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 12,
+    "raw_rows": 12
+  },
+  "spider_E018b": {
+    "best_positive_pool": true,
+    "cases_missing_13": [],
+    "cases_missing_9": [],
+    "cases_present": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E018b/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 13,
+    "raw_rows": 13
+  },
+  "spider_E022": {
+    "best_positive_pool": true,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2"
+    ],
+    "cases_present": [
+      "box023_p1"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E022/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 4,
+    "raw_rows": 4
+  },
+  "spider_E023": {
+    "best_positive_pool": true,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box023_p1",
+      "box023_p2",
+      "box025_p2",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1"
+    ],
+    "cases_present": [
+      "box025_p1",
+      "bucket007_p2"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E023/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 6,
+    "raw_rows": 6
+  },
+  "spider_E024": {
+    "best_positive_pool": true,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2"
+    ],
+    "cases_present": [
+      "bucket001_p1",
+      "bucket001_p2"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E024/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 5,
+    "raw_rows": 5
+  },
+  "spider_E025": {
+    "best_positive_pool": true,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p2",
+      "bucket007_p2"
+    ],
+    "cases_present": [
+      "box023_p1",
+      "box023_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E025/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 8,
+    "raw_rows": 8
+  },
+  "spider_E028": {
+    "best_positive_pool": false,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "bucket001_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "bucket007_p2"
+    ],
+    "cases_present": [
+      "box025_p2",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E028/comparison.csv",
+    "diagnostic_only": true,
+    "file_exists": true,
+    "normalized_rows": 6,
+    "raw_rows": 6
+  },
+  "spider_E029": {
+    "best_positive_pool": false,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2"
+    ],
+    "cases_present": [
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E029/comparison.csv",
+    "diagnostic_only": true,
+    "file_exists": true,
+    "normalized_rows": 6,
+    "raw_rows": 6
+  },
+  "spider_E030": {
+    "best_positive_pool": false,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "bucket001_p2",
+      "bucket005_s2_p2",
+      "bucket007_p1"
+    ],
+    "cases_present": [
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket005_s2_p1",
+      "bucket007_p2"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E030/comparison.csv",
+    "diagnostic_only": true,
+    "file_exists": true,
+    "normalized_rows": 6,
+    "raw_rows": 6
+  },
+  "spider_E081": {
+    "best_positive_pool": false,
+    "cases_missing_13": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box025_p1",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "cases_missing_9": [
+      "box023_p1",
+      "box025_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2"
+    ],
+    "cases_present": [
+      "box023_p2",
+      "box025_p2"
+    ],
+    "comparison_csv": "workspace/core4d/results/E081/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 2,
+    "raw_rows": 2
+  },
+  "spider_E081_full_rerun": {
+    "best_positive_pool": false,
+    "cases_missing_13": [],
+    "cases_missing_9": [],
+    "cases_present": [
+      "box021_p1",
+      "box021_p2",
+      "box023_p1",
+      "box023_p2",
+      "box025_p1",
+      "box025_p2",
+      "bucket001_p1",
+      "bucket001_p2",
+      "bucket005_s2_p1",
+      "bucket005_s2_p2",
+      "bucket007_p1",
+      "bucket007_p2",
+      "desk021_p1"
+    ],
+    "comparison_csv": "workspace/core4d_collab_retarget/results/E026_E081_full/comparison.csv",
+    "diagnostic_only": false,
+    "file_exists": true,
+    "normalized_rows": 13,
+    "raw_rows": 13
+  }
+}

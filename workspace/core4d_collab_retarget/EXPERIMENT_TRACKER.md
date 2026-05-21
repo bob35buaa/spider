@@ -39,7 +39,7 @@
 | E028 | 2026-05-21 | Hard Penetration | **Hard no-penetration / surface feasibility 负结果**: 6/6 full variants 完成。case-best deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，strict `0/4`；case-best mean deep improvement `16.53pp`，低于 `>=25pp` 目标。`bucket007_p1`/`bucket001_p2` 压低穿透但 contact collapse，`bucket005_s2_p1/p2` 仍高 contact 高穿透，`box025_p2` guard contact 退到 `0%` | ✅ 详见 log 28 |
 | E029 | 2026-05-21 | Stability / Control | **Bucket001 stability / posture-valid contact 局部正结果/接触负结果**: 6/6 full variants 完成。`bucket001_p1` 4/4 stability pass，pelvis min 从 E024 `0.156m` 提到 `0.527-0.584m`，但 contact 仍 `0%`，useful `0/4`、strict `0/4`；`bucket001_p2` guard 高 contact `99.44%` 但 deep pen `63.64%`/max `9.00cm`，guard fail；`box025_p2` guard pass。远端 p2 在 `162/244` stall，由本地 fallback 完成 | ✅ 详见 log 29 |
 | E030 | 2026-05-21 | Geometry / Surface Control | **Lower-body geometry / surface-control 负结果**: 6/6 full variants 完成，第一版无核心 `spider/` 改动。target geometry success `0/2`，diagnostic surface signal `0/2`，clean guard pass `0/1`，shortcut high-penetration guard 正确拒绝。`box025_p1` ref interference `66.53% -> 21.37%` 但 contact `2.50%` 且 fall；`bucket007_p2` contact `57.71%` 但 ref/sim leg artifact 仍高；`box023_p1/p2` surface-control 无信号；不新增数据弃用 case | ✅ 详见 log 30 |
-| E031 | 2026-05-21 | Full Eval Assembly | **Best dynamic assembly + E027-E030 evidence 账本计划**: 离线组装 E026-style full eval；best-positive pool 保守限制为 E018b/E022-E025，E028-E030 作为 diagnostic/rejected rows，E027 quality audit 决定 P0/P1 caveat 与唯一 discard `desk021_p1` | 📝 plan 36 |
+| E031 | 2026-05-21 | Full Eval Assembly | **Best dynamic assembly + E027-E030 evidence 账本完成**: 94 normalized rows、13 best-selection rows、18 rejected diagnostic candidates。best-positive pool 保守限制为 E018b/E022-E025，E028-E030 全部作为 diagnostic/rejected rows；P0 best dynamic obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`；P1 best dynamic obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13`。唯一 success-denominator discard 仍是 `desk021_p1` | ✅ 详见 log 31 |
 
 ## Baseline
 
@@ -88,7 +88,7 @@
 | E028 full | 6/6 full variants；variant aggregate strict `0/6`、guard strict `0/1`、target variant mean deep improvement `6.78pp`。按 4case case-best：deep/max penetration pass `2/4`，object `4/4`，no-fall `3/4`，contact>=70 on best-deep `2/4`，strict `0/4`，mean deep improvement `16.53pp` | 第一版 hard barrier/contact gate 只能在部分 case 通过“远离物体/切断接触”压低穿透；不能形成 surface contact。下一步需要 object-specific surface target 或 CEM candidate rejection/projection，不能继续加 barrier scale |
 | E029 full | 6/6 full variants；p1 target `4/4` no-fall/stability pass，best pelvis `0.584m`，但 p1 contact `0%`、useful `0/4`、strict `0/4`；guards `1/2` pass，`box025_p2` pass，`bucket001_p2` contact `99.44%` 但 deep pen `63.64%` fail | hard posture feasibility 能修 `bucket001_p1` fall，但不能闭合接触；p1 停止普通 stability reward sweep，转 reachability/support timing/control audit。bucket surface contact 仍需 surface target 或 CEM rejection/projection |
 | E030 full | 6/6 full variants；`num_target_geometry_success=0/2`、`num_diagnostic_surface_signal=0/2`、`num_clean_guard_pass=0/1`、`num_no_pair_deletion_pass=6/6`、`num_E030_success=0/6`。`box025_p1` contact `2.50%`、fall=true、ref int `21.37%`；`bucket007_p2` contact `57.71%` but ref/sim int `43.68/24.74%`；`bucket005_s2_p1` contact `99.47%` but deep pen `94.31%` correctly rejected | 停止 case-specific XML 微调、普通 contact gain sweep、单纯加 barrier scale；下一步转 runtime surface target / candidate-level rejection-projection，并继续沿用 E027 多证据数据弃用协议 |
-| E031 plan | best-positive pool=`E018b/E022-E025`；diagnostic/rejected pool=`E028/E029/E030`；P0 分母仍 9case，P1 保留 13case；唯一 success-denominator discard=`desk021_p1` | 若 strict 仍为 P0 `1/9`、P1 `1/13`，E031 必须如实记录为“无新增 strict gain”，下一机制线转 runtime surface target / CEM candidate rejection-projection |
+| E031 full eval assembly | 94 normalized rows；13 conservative best rows；18 rejected diagnostic candidates。P0 9case：E081 full rerun strict proxy `4/9`，E031 conservative best obj `4.97cm`、contact `65.81%`、deep pen `30.52%`、fall `0`、strict `1/9`。P1 13case：E081 full rerun strict proxy `4/13`，E031 conservative best obj `5.33cm`、contact `55.87%`、deep pen `26.37%`、fall `3`、strict `1/13`。data caveat: retarget-questionable `box025_p1/bucket007_p2`，唯一 discard `desk021_p1` | E031 确认 post-E026 无新增 strict gain；E028-E030 只提供 rejected/guard evidence。下一机制线转 runtime surface target / CEM candidate-level rejection-projection |
 
 ## Plans
 
@@ -162,6 +162,7 @@
 - E028: `workspace/core4d_collab_retarget/log/28_E028_hard_no_penetration_surface_feasibility_results.md`
 - E029: `workspace/core4d_collab_retarget/log/29_E029_bucket001_stability_control_results.md`
 - E030: `workspace/core4d_collab_retarget/log/30_E030_lower_body_geometry_surface_control_results.md`
+- E031: `workspace/core4d_collab_retarget/log/31_E031_full_eval_results.md`
 
 ## Git
 
