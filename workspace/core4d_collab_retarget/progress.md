@@ -1967,3 +1967,15 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已写入正式结果日志：`workspace/core4d_collab_retarget/log/31_E031_full_eval_results.md`。
 - 已更新 `EXPERIMENT_TRACKER.md`：E031 总览、关键指标演进、Logs 路径。
 - E031 结论：post-E026 阶段无新增 strict gain；E028-E030 全部为 diagnostic/rejected evidence。下一机制线应转 runtime surface target / CEM candidate-level rejection-projection。
+
+### E031 结果目录中文化
+
+- 按用户要求将 `workspace/core4d_collab_retarget/results/E031_full_eval/` 的人读 Markdown 输出改为中文报告口径：
+  - `INDEX.md`
+  - `summary_9case.md`
+  - `summary_13case.md`
+  - `data_quality_caveats.md`
+  - `visual_metric_audit.md`
+- 更新 `eval_E031_full_eval.py`，让后续重跑仍生成中文 Markdown。
+- CSV/JSON 的字段名保留英文，避免破坏后续脚本读取；`coverage.json` 中的 known missing reason 文本已改为中文。
+- 已重新执行 `.venv/bin/python workspace/core4d_collab_retarget/scripts/eval/eval_E031_full_eval.py --all`，核心指标保持不变：P0 strict `1/9`，P1 strict `1/13`。

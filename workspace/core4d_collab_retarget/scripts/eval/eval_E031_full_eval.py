@@ -135,6 +135,98 @@ def _fmt(value: Any, digits: int = 2) -> str:
     return str(value)
 
 
+def _zh_bool(value: Any) -> str:
+    if value is True:
+        return "是"
+    if value is False:
+        return "否"
+    return "-"
+
+
+def _zh_quality(label: Any) -> str:
+    text = str(label or "-")
+    labels = {
+        "usable_algorithmic_failure": "可用，主要是算法失败",
+        "usable_with_caveat": "可用但需 caveat",
+        "retarget_questionable": "前置重定向可疑",
+        "raw_data_questionable": "原始数据可疑",
+        "discard_from_success_denominator": "从成功分母剔除",
+    }
+    return f"`{text}`（{labels[text]}）" if text in labels else text
+
+
+def _zh_role(method: str) -> str:
+    if method in {BEST_METHOD_NAME, "spider_E018b"}:
+        return "保守正向候选"
+    if method in DIAGNOSTIC_METHODS:
+        return "诊断/拒绝"
+    return "基线"
+
+
+def _zh_text(value: Any) -> str:
+    text = str(value or "-")
+    replacements = [
+        ("usable_algorithmic_failure", "可用，主要是算法失败"),
+        ("usable_with_caveat", "可用但需 caveat"),
+        ("retarget_questionable", "前置重定向可疑"),
+        ("raw_data_questionable", "原始数据可疑"),
+        ("discard_from_success_denominator", "从成功分母剔除"),
+        ("failed_evidence_classes", "失败证据类别数"),
+        ("discard_from_p0", "从 P0 剔除"),
+        ("object tracking ok", "物体跟踪可用"),
+        ("holosoma available", "Holosoma 可用"),
+        ("holosoma_missing", "Holosoma 缺失"),
+        ("no fall", "未摔倒"),
+        ("strict pass guard", "strict guard 通过"),
+        ("low_or_collapsed_contact", "接触过低/坍缩"),
+        ("high_deep_pen", "深穿透过高"),
+        ("max_pen_over_5cm", "最大穿透超过 5cm"),
+        ("diagnostic_only_by_E031_rule", "按 E031 规则仅作诊断"),
+        ("E028_hard_barrier_diagnostic_not_positive_pool", "E028 hard barrier 仅作诊断，不进入正向池"),
+        ("stability_only_contact_remains_zero", "只修稳定性，接触仍为 0"),
+        ("E029_stability_diagnostic_not_positive_pool", "E029 stability 仅作诊断，不进入正向池"),
+        ("non_regression_guard_only_E018b_strict_baseline_preferred", "仅是回归 guard，保留 E018b strict baseline"),
+        ("E030_geometry_surface_negative_result_not_positive_pool", "E030 geometry/surface 负结果，不进入正向池"),
+        ("E020 root_cause", "E020 根因"),
+        ("algo_contact", "算法接触"),
+        ("algo_stability", "算法稳定性"),
+        ("retarget_kinematic", "前置运动学重定向"),
+        ("contact_mask", "contact mask"),
+        ("mask_overclaim", "mask 过度覆盖"),
+        ("ref_leg_interference", "参考腿/物干涉"),
+        ("partner_dist", "协作者距离"),
+        ("partner_face", "协作者面"),
+        ("anchor_face", "anchor 面"),
+        ("pelvis_min", "pelvis 最低高度"),
+        ("ref_leg", "参考腿干涉"),
+        ("ref_hand", "参考手接触"),
+        ("current_contact", "当前接触标注"),
+        ("raw_any", "raw 任意接触"),
+        ("mismatch", "不一致"),
+        ("kin_contact28", "kin 28cm 接触"),
+        ("best_contact5", "best 5cm 接触"),
+        ("best_deep_pen", "best 深穿透"),
+        ("Epos", "物体位置误差"),
+        ("deep_pen", "深穿透"),
+        ("contact", "接触"),
+        ("fall", "摔倒"),
+        ("SPIDER physics/control", "SPIDER 物理/控制"),
+        ("SPIDER contact reward/control", "SPIDER 接触 reward/控制"),
+        ("SPIDER collision/contact control", "SPIDER 碰撞/接触控制"),
+        ("OmniRetarget/contact-mask pipeline", "OmniRetarget/contact-mask 流水线"),
+        ("OmniRetarget kinematic pipeline", "OmniRetarget 运动学流水线"),
+        ("OmniRetarget data triage", "OmniRetarget 数据分诊"),
+        ("none", "无"),
+        ("ok=True", "通过=是"),
+        ("ok=False", "通过=否"),
+        ("False", "否"),
+        ("True", "是"),
+    ]
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
+
 def _mean(values: list[Any]) -> float | None:
     floats = [
         float(value)
@@ -332,9 +424,9 @@ def load_sources() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         "rows": len(_read_csv(QUALITY_AUDIT)),
     }
     coverage["known_missing_reasons"] = {
-        "omniretarget_kinematic:desk021_p1": "Holosoma / OmniRetarget SOCP infeasible; E027 marks desk021_p1 as discard_from_success_denominator",
-        "spider_E081:most_cases": "legacy E081 baseline ran only the original two cases; use spider_E081_full_rerun for 13case paper-metrics coverage",
-        "E027:rollout_candidates": "E027 was an offline audit; full_variant_candidates.tsv is empty by design",
+        "omniretarget_kinematic:desk021_p1": "Holosoma / OmniRetarget SOCP 不可行；E027 将 desk021_p1 标记为 discard_from_success_denominator",
+        "spider_E081:most_cases": "legacy E081 baseline 只运行了原始 2 个 case；13case paper-metrics coverage 使用 spider_E081_full_rerun",
+        "E027:rollout_candidates": "E027 是离线审计；full_variant_candidates.tsv 为空表是设计结果",
     }
     return rows, coverage
 
@@ -550,21 +642,20 @@ def summarize_markdown(title: str, cases: list[str], rows: list[dict[str, Any]],
     ]
     caveat_by_case = {row["case"]: row for row in caveats}
     out = [f"# {title}", ""]
-    out.append(f"Cases ({len(cases)}): " + ", ".join(cases))
+    out.append(f"Case 列表（{len(cases)} 个）：" + ", ".join(cases))
     out.append("")
-    out.append("| Method | Role | N | Missing | Obj Pos cm ↓ | Contact 5cm/proxy ↑ | Deep Pen % ↓ | Falls ↓ | Strict ↑ |")
+    out.append("| 方法 | 角色 | N | 缺失 case | 物体位置误差 cm ↓ | 5cm 接触/proxy ↑ | 深穿透 % ↓ | 摔倒数 ↓ | 严格成功 ↑ |")
     out.append("|---|---|---:|---|---:|---:|---:|---:|---:|")
     for method in methods:
         method_rows = _method_rows(rows, method, cases)
         present = sorted({row["case"] for row in method_rows})
         missing = [case for case in cases if case not in present]
-        role = "best-positive" if method in {BEST_METHOD_NAME, "spider_E018b"} else ("diagnostic" if method in DIAGNOSTIC_METHODS else "baseline")
         out.append(
             "| "
             + " | ".join(
                 [
                     method,
-                    role,
+                    _zh_role(method),
                     f"{len(present)}/{len(cases)}",
                     ", ".join(missing) if missing else "-",
                     _fmt(_mean([row.get("obj_pos_cm") for row in method_rows])),
@@ -577,69 +668,74 @@ def summarize_markdown(title: str, cases: list[str], rows: list[dict[str, Any]],
             + " |"
         )
     out.append("")
-    out.append("## Data Caveats")
+    out.append("## 数据质量 caveat")
     out.append("")
-    out.append("| Case | Quality | P0 | Success-denominator discard | Rationale |")
+    out.append("| Case | 质量标签 | P0 | 是否从成功分母剔除 | 判定依据 |")
     out.append("|---|---|---:|---:|---|")
     for case in cases:
         row = caveat_by_case.get(case, {"case": case})
         out.append(
-            f"| {case} | {row.get('quality_label') or '-'} | {case in CASES_9} | "
-            f"{row.get('discard_from_success_denominator') is True} | {row.get('decision_rationale') or '-'} |"
+            f"| {case} | {_zh_quality(row.get('quality_label'))} | {_zh_bool(case in CASES_9)} | "
+            f"{_zh_bool(row.get('discard_from_success_denominator') is True)} | {_zh_text(row.get('decision_rationale'))} |"
         )
     out.append("")
-    out.append("Notes:")
-    out.append("- E028-E030 rows are shown as diagnostic baselines only; they are not eligible for `best-positive` selection.")
-    out.append("- `desk021_p1` remains in P1 caveats but is the only success-denominator discard from E027.")
-    out.append("- If the conservative best strict count remains unchanged, E031 is a ledger result, not a new optimization gain.")
+    out.append("说明：")
+    out.append("- E028-E030 只作为诊断基线展示，不参与 `best-positive` 选择。")
+    out.append("- `desk021_p1` 保留在 P1 caveat 表中，但它是 E027 唯一的 success-denominator discard。")
+    out.append("- 如果 conservative best 的 strict 数量没有变化，E031 只是账本结果，不是新的优化收益。")
     return "\n".join(out) + "\n"
 
 
 def data_quality_markdown(caveats: list[dict[str, Any]]) -> str:
-    out = ["# E031 Data Quality Caveats", ""]
-    out.append("| Case | Quality label | P0 | Discard from success denominator | Evidence | Counter-evidence |")
+    out = ["# E031 数据质量 Caveat", ""]
+    out.append("| Case | 质量标签 | P0 | 是否从成功分母剔除 | 主要证据 | 反证/保留理由 |")
     out.append("|---|---|---:|---:|---|---|")
     for row in caveats:
         out.append(
-            f"| {row['case']} | {row.get('quality_label') or '-'} | {row.get('in_P0_case_set')} | "
-            f"{row.get('discard_from_success_denominator') is True} | {row.get('primary_evidence') or '-'}; "
-            f"{row.get('secondary_evidence') or '-'} | {row.get('counter_evidence') or '-'} |"
+            f"| {row['case']} | {_zh_quality(row.get('quality_label'))} | {_zh_bool(row.get('in_P0_case_set'))} | "
+            f"{_zh_bool(row.get('discard_from_success_denominator') is True)} | {_zh_text(row.get('primary_evidence'))}; "
+            f"{_zh_text(row.get('secondary_evidence'))} | {_zh_text(row.get('counter_evidence'))} |"
         )
     out.append("")
-    out.append("Only `desk021_p1` satisfies the multi-evidence discard protocol. E028-E030 do not introduce new discarded cases.")
+    out.append("只有 `desk021_p1` 满足多证据弃用协议。E028-E030 不新增任何被剔除 case。")
     return "\n".join(out) + "\n"
 
 
 def visual_metric_audit(best_selection: list[dict[str, Any]], rejected: list[dict[str, Any]]) -> str:
-    out = ["# E031 Visual / Metric Audit", ""]
-    out.append("E031 reuses existing videos/keyframes from E026-E030 and records why diagnostic variants are not positive candidates.")
+    out = ["# E031 可视化 / 指标一致性审计", ""]
+    out.append("E031 复用 E026-E030 已归档的视频和关键帧，记录每个诊断 variant 为什么不能作为正向候选。")
     out.append("")
-    out.append("## Conservative Best Selection")
+    out.append("## 保守 Best 选择")
     out.append("")
-    out.append("| Case | Selected variant | Signal | Visual evidence path |")
+    out.append("| Case | 选中 variant | 指标信号 | 可视化证据路径 |")
     out.append("|---|---|---|---|")
     for row in best_selection:
         variant = str(row["selected_variant"])
         exp = _source_exp(variant)
         evidence = f"workspace/core4d_collab_retarget/results/{exp}/online_video/{variant}.mp4"
-        signal = f"contact={_fmt(row.get('contact_proxy_pct'))}%, deep={_fmt(row.get('deep_pen_pct'))}%, fall={row.get('fall')}, strict={row.get('strict_success')}"
+        signal = (
+            f"接触={_fmt(row.get('contact_proxy_pct'))}%, "
+            f"深穿透={_fmt(row.get('deep_pen_pct'))}%, "
+            f"摔倒={_zh_bool(row.get('fall'))}, "
+            f"strict={_zh_bool(row.get('strict_success'))}"
+        )
         out.append(f"| {row['case']} | `{variant}` | {signal} | `{evidence}` |")
     out.append("")
-    out.append("## Rejected Diagnostics")
+    out.append("## 被拒绝的诊断候选")
     out.append("")
-    out.append("| Method | Case | Variant | Reject reason | Visual/keyframe root |")
+    out.append("| 方法 | Case | Variant | 拒绝原因 | 可视化/关键帧目录 |")
     out.append("|---|---|---|---|---|")
     for row in rejected:
         exp = row["method"].replace("spider_", "")
         root = f"workspace/core4d_collab_retarget/results/{exp}/keyframes/{row['variant']}/"
-        out.append(f"| {row['method']} | {row['case']} | `{row['variant']}` | {row['reject_reason']} | `{root}` |")
+        out.append(f"| {row['method']} | {row['case']} | `{row['variant']}` | {_zh_text(row['reject_reason'])} | `{root}` |")
     out.append("")
-    out.append("Guard rule: high-contact high-penetration rows and contact-collapse rows are diagnostic negatives, even when object tracking remains good.")
+    out.append("Guard 规则：高接触但高穿透、以及接触坍缩的行都只能作为诊断负例；即使 object tracking 仍然好，也不能算成功。")
     return "\n".join(out) + "\n"
 
 
 def write_index() -> None:
-    text = """# E031 Full Eval Outputs
+    text = """# E031 Full Eval 输出索引
 
 - `coverage.json`
 - `method_case_metrics.csv`
@@ -651,7 +747,9 @@ def write_index() -> None:
 - `visual_metric_audit.md`
 - `aggregate_summary.json`
 
-E031 is an offline ledger assembly. It does not run new CEM rollouts and does not use the remote GPU wrapper.
+E031 是离线账本组装实验，不运行新的 CEM rollout，也不触发远程 GPU wrapper。
+
+说明：CSV/JSON 保留英文机器可读字段名，Markdown 文件为中文报告口径。
 """
     (RESULTS / "INDEX.md").write_text(text, encoding="utf-8")
 
@@ -684,11 +782,11 @@ def main() -> int:
     _write_json(RESULTS / "coverage.json", coverage)
     _write_json(RESULTS / "aggregate_summary.json", agg)
     (RESULTS / "summary_9case.md").write_text(
-        summarize_markdown("E031 P0 9case Conservative Summary", CASES_9, all_rows, caveats),
+        summarize_markdown("E031 P0 9case 保守汇总", CASES_9, all_rows, caveats),
         encoding="utf-8",
     )
     (RESULTS / "summary_13case.md").write_text(
-        summarize_markdown("E031 P1 13case Conservative Summary", CASES_13, all_rows, caveats),
+        summarize_markdown("E031 P1 13case 保守汇总", CASES_13, all_rows, caveats),
         encoding="utf-8",
     )
     (RESULTS / "data_quality_caveats.md").write_text(data_quality_markdown(caveats), encoding="utf-8")
