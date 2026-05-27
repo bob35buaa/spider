@@ -1,4 +1,4 @@
-# E021 计划：导出 E018b 轨迹给 Holosoma RL（task_afterE018 §4）
+# E021 计划：导出 E018b系列最佳轨迹给 Holosoma RL（task_afterE018 §4）
 
 > 上游：`task_afterE018.md` §4 — 把 E018b 结果导成 holosoma RL 训练能直接吃的格式。
 > 参考：`/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/workspace/pipeline/convert_data_format_mj_p3_for_rl.py`（99 行 batch driver）+ **真正的转换器** `/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/src/holosoma_retargeting/holosoma_retargeting/data_conversion/convert_data_format_mj.py`（620 行）。
@@ -12,14 +12,14 @@
 3. **坐标系一致**：双方 base / object 均 world-frame freejoint。
 4. **单位一致**：SI（m, m/s, rad, rad/s）。
 5. **采样率差**：spider 60Hz（`sim_dt=0.0166667`），RL 期望 50Hz；**holosoma converter 内置 lerp+slerp 重采样**，spider 只需写正确 `fps` 字段。
-6. **E018b 13 NPZ 已就绪**（`results/E018b/E018b_*_canonical_t02.npz`），可直接跑 13 case 转换。
+6. **E018b_E022_E025 13 NPZ 已就绪**（`results/E018b/E018b_*_canonical_t02.npz`），可直接跑 13 case 转换。【需要对应的换成"spider_best_E018b_E022_E025】
 
 ---
 
 ## 1. 目标
 
 A. **一个 ~30 行 shim** `scripts/export/spider_to_rl_shim.py`：读 spider `trajectory_mjwp.npz`，重写为 holosoma `convert_data_format_mj.py` 期望的输入（只需 `qpos` + `fps` 两字段）。
-B. **一个批量 driver** `scripts/export/export_E018b_to_rl.py`：扫 13 case，调用 holosoma 转换器（subprocess），输出到 `/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma/workspace/pipeline/results/spider_E018b_for_rl/`。
+B. **一个批量 driver** `scripts/export/export_E018b_to_rl.py`：扫 13 case，调用 holosoma 转换器（subprocess），输出到 `/home/ubuntu/Workspace/holosoma/workspace/data/spider_E018series_for_rl/`。
 C. **一份 manifest** `scripts/export/manifest_rl.tsv`：variant → object_name 映射，可 git 跟踪用于复现。
 D. **首批端到端验证**：在 `box025_p2`（唯一 paper_generalization_pass）+ `box023_p2`（GT gate pass）跑通转换 → 在 holosoma RL gym 加载验证。
 

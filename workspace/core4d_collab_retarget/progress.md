@@ -1,5 +1,85 @@
 # E001 Progress — 2026-05-17
 
+## 2026-05-27 E029 COLA D6 support body redesign 规划
+
+- 用户指出 E018/E028 的 anchor 设计不应继续沿 support proxy 单点模式扩展，而应对齐 COLA：dynamic support body 与 object 通过 6-DoF joint / D6 连接。
+- 已停止把 E028b anchor refit 作为主线推进；E028b 第 1 条 full 虽已落盘，但不作为新路线结论。
+- 已复查 SPIDER 当前实现：
+  - E018/E028/E028b 使用 `support_proxy_mode=mocap_pad`；
+  - scene 中 `support_weld_anchor` 是 `mocap=true` body；
+  - object 与 mocap body 通过 equality weld 连接；
+  - runtime 用 `support_proxy_point_local` 从 object ref 推出 mocap pose；
+  - 这不是 COLA 的 dynamic support body。
+- 已确认 SPIDER 里 E015 曾实现 `dynamic_weld` prototype：非 mocap `support_dynamic_anchor` + 6 个标量关节 + `qfrc_applied` PD + soft weld；工程 wiring 通过，但 full 失败于 support lag、force/torque clamp、NaN。
+- 已抽取 COLA PDF 关键段落：论文使用 supporting base body 模拟 human carrier，object 与 support body 通过 6-DoF joint 连接，support body 用 velocity / angular PD / height PD 控制。
+- 已阅读 Holosoma r051-r056：
+  - r051 free-contact support proxy 失败，说明接触代理体 load path 不成立；
+  - r052 fixed joint、r052b D6 locked、r052c compliant D6 均通过；
+  - r053-r055 因 object local axis 用错无效；
+  - r056 axis 修正后 sanity/smoke 恢复。
+- 已创建新计划：`workspace/core4d_collab_retarget/plan/34_E029_cola_d6_support_body_redesign_plan.md`。
+- E029 计划固定只处理 `workspace/core4d_collab_retarget/results/E028/candidates.json` 中的 5 条 case；流程为 current-semantics audit -> axis/contact preflight -> D6 no-training sanity -> 5-case full retarget。
+
+## 2026-05-27 E028b anchor refit 启动
+
+- 用户要求按 E028 anchor 可视化结论改进 anchor，并遵循 `experiment-planning-zh`；同时明确要求可视化和 high 模型 subagent 可视化分析。
+- 已创建 E028b 计划：`workspace/core4d_collab_retarget/plan/33_E028b_d003_box021_anchor_refit_plan.md`。
+- E028b 分母固定为 `workspace/core4d_collab_retarget/results/E028/candidates.json` 的 5 条，不把 E028 13case 或旧 bucket/hard-barrier 产物混入。
+- 计划中的 anchor policy：`e028b_contact_centroid_projected`，把 E028 selected side face 上的 contact cloud robust centroid 投影到 object side surface，替代固定 `canonical_z=0.62` 和 free-axis center `0`。
+- 已实现 E028b 脚本：
+  - `workspace/core4d_collab_retarget/scripts/E028b/build_e028b_manifest.py`
+  - `workspace/core4d_collab_retarget/scripts/run_E028b_preprocess.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E028b.sh`
+  - `workspace/core4d_collab_retarget/scripts/eval/eval_E028b.py`
+  - `workspace/core4d_collab_retarget/scripts/eval/index_E028b_online_videos.py`
+- 已增强 `workspace/core4d_collab_retarget/scripts/eval/render_E028_anchor_visuals.py`，支持 `--manifest/--candidates/--out-dir`，可复用于 E028b。
+- 静态检查通过：E028b Python 脚本 `py_compile` 通过，`run_E028b_preprocess.sh` / `train_E028b.sh` / patched `train_E028.sh` `bash -n` 通过。
+- E028b preprocess 已完成：`results/E028b_anchor_refit/manifest.tsv` 5/5，override 5/5，scene XML 5/5；所有 scene 维度均保持 `nq/nv/nu=43/41/29`。
+- E028b anchor refit 数值：mean `anchor_distance_ratio_vs_e028=0.3201`，5/5 比旧 anchor 更贴近 selected-face contact cloud，无 fallback；单 case ratio 为 `0.488, 0.480, 0.168, 0.322, 0.144`。
+- 遇到并修复两个相对路径 bug：`build_e028b_manifest.py` 的 `relative_to(REPO)` 打印路径、`generate_e028_overrides.py` 在相对 `--result-root` 下写 `contact_hdmi_mask_path`。
+- E028b anchor visualization 已完成：`workspace/core4d_collab_retarget/results/E028b_anchor_refit/anchor_visual/` 里有 5 条 `*_anchor_cloud.png`、`*_anchor_motion.mp4`、`*_anchor_motion_sheet.jpg`、`anchor_summary.csv`、`candidate_anchor_cloud_montage.jpg`。
+- 已用 `video-frames` 抽取代表帧：`workspace/core4d_collab_retarget/results/E028b_anchor_refit/anchor_visual/video_frame_check_20231018_029_p2_t1.jpg`，确认 motion MP4 非空、视角正常。
+- High reasoning subagent `Hypatia` 完成独立视觉分析：确认 E028b 5/5 anchor 明显更贴合 contact cloud，建议进入 dynamic full rollout，但 5/5 都不能作为 clean denominator，只能作为 refit 动态验证。
+- E028b smoke 已完成 5/5，5 个新 override/scene 均能被 `run_mjwp.py` 最小运行加载；smoke 只验证 wiring，不作为动力学指标。
+- E028b full local 串行已启动；第 1 条 `E028b_d003_box021_20231011_034_p1_contact_centroid_t02` 已完成并写出 root NPZ、outdir trajectory、online MP4，当前正在跑第 2 条 `20231011_035_p1`。
+- 用户指出第 1 条动态重定向视觉上仍失败，并询问 anchor / active contact points 的语义；已停止正在后台跑的 E028b full（当时第 2 条在跑），避免概念未对齐前继续耗 GPU。
+- 已把 E028b anchor 可视化图例从 `E028 anchor` 改为更准确的 `support anchor`，把 `active contact points` 改为 `ref active contact_pos`，并重生成 E028b anchor_visual 产物。
+
+## 2026-05-27 E028 candidate anchor visualization
+
+- 用户要求后续只看 `workspace/core4d_collab_retarget/results/E028/candidates.json` 中的 case，并先可视化当前 anchor。
+- 已确认 `candidates.json` 只有 5 个 variants：`20231011_034_p1`、`20231011_035_p1`、`20231011_035_p2`、`20231018_029_p2`、`20231020_019_p1`；其中 manifest 里 4/5 已标记 `anchor_face_review=true`。
+- 已新增可视化脚本：`workspace/core4d_collab_retarget/scripts/eval/render_E028_anchor_visuals.py`。脚本只读 manifest/candidates/trajectory/contact mask，输出每个候选的 anchor motion MP4、motion sheet、object-local contact cloud PNG、汇总 CSV/MD。
+- 静态检查已通过：`.venv/bin/python -m py_compile workspace/core4d_collab_retarget/scripts/eval/render_E028_anchor_visuals.py`。
+- 初次渲染 5 个 case 时单 case PNG/MP4 已成功，但 montage 因奇数行拼接报错；已修复 `_write_montage` 并重跑成功。
+- 输出目录：`workspace/core4d_collab_retarget/results/E028/anchor_visual/`，包含 `anchor_visual_eval.md`、`anchor_summary.csv`、`candidate_anchor_cloud_montage.jpg` 和 5 条候选的 `*_anchor_cloud.png` / `*_anchor_motion.mp4` / `*_anchor_motion_sheet.jpg`。
+- 已用 `video-frames` 技能从代表视频 `E028_d003_box021_20231018_029_p2_canonical_t02_anchor_motion.mp4` 抽取 `video_frame_check_20231018_029_p2_t1.jpg`，确认视频非空、视角正常；部分 anchor 会被 object/robot 遮挡，因此主要以 contact cloud + sheet 判断 face/height。
+- 诊断结论已补写到 `workspace/core4d_collab_retarget/log/29_E028_d003_box021_spider_dynamic_retarget_results.md`：5 条候选中只有 `20231018_029_p2` face selection 清晰；其余 4 条 face 选择不稳。即使 `20231018_029_p2`，canonical anchor 与 selected-face contact cloud 的 centroid 仍偏 `0.415m`，说明当前 `canonical_z=0.62` 单点 anchor 不宜直接当作 clean 输入。
+
+## 2026-05-21 E021 rename export
+
+- 用户要求 Holosoma RL 数据命名对齐 v2 `converted_for_rl_trimmed` 风格，即 `{原始CORE4D前缀}_v2_mj_w_obj.npz`。
+- 已在 `workspace/core4d_collab_retarget/scripts/export/manifest_rl.tsv` 增加 `original_prefix`，来源为 E079/E080 原始 case 表、task_info `source_qpos`、以及 Holosoma v2 replace-batch 文件名交叉核对。
+- 已把默认输出改为：`/home/ubuntu/Workspace/holosoma/workspace/data/spider_best_E018b_E022_E025_for_rl_rename/`。
+- 已重跑导出：13/13 conversion `ok`；已重跑 `verify_rl_load.py`：13/13 `ok`。新目录 13 个 `.npz`，总大小约 `7.7M`。
+- 注意：本批 `bucket005_s2` 的原始前缀是 `20231002-004-person{1,2}-bucket005`，不同于用户举例的 v2 baseline `20231002-003-person1-bucket005_v2_mj_w_obj.npz`。
+
+## 2026-05-21 16:17 E021 Holosoma RL export 完成
+
+- 已按用户要求先切回 `exp/core4d-collab-retarget` 分支；切分支时保留了既有未提交的 `plan/22_E021_holosoma_rl_export_plan.md` 修改。
+- 已按 E026 best dynamic selection `spider_best_E018b_E022_E025` 导出 13 个 Holosoma RL NPZ：
+  - 首版输出目录：`/home/ubuntu/Workspace/holosoma/workspace/data/spider_best_E018b_E022_E025_for_rl/`
+  - 原始前缀命名输出目录：`/home/ubuntu/Workspace/holosoma/workspace/data/spider_best_E018b_E022_E025_for_rl_rename/`
+  - Spider 侧转换日志：`workspace/core4d_collab_retarget/results/E021_rl_export_manifest/conversion_log.csv`
+  - 验证结果：`workspace/core4d_collab_retarget/results/E021_rl_export_manifest/verify_load.{csv,json}`
+- 已新增导出脚本：
+  - `workspace/core4d_collab_retarget/scripts/export/spider_to_rl_shim.py`
+  - `workspace/core4d_collab_retarget/scripts/export/export_spider_best_to_rl.py`
+  - `workspace/core4d_collab_retarget/scripts/export/manifest_rl.tsv`
+  - `workspace/core4d_collab_retarget/scripts/export/verify_rl_load.py`
+- 转换结果：13/13 `ok`；load-level 验证：13/13 `ok`。所有输出均为 `fps=[50]`、`joint_pos[T,36]`、`joint_vel[T,35]`，并包含 object/body velocity 字段。
+- 已写入结果日志：`workspace/core4d_collab_retarget/log/28_E021_holosoma_rl_export_results.md`。
+
 ## 2026-05-20 E026 full eval 启动
 
 - 已读取 `task_full_eval.md`、`EXPERIMENT_TRACKER.md`、最新 E025 plan、E022-E025 阶段总结和 progress，按 `experiment-planning-zh` 恢复上下文。
@@ -1621,3 +1701,14 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
   - E027 full candidates 为 `0`，因为 phase-shift expected gain 全为 `0pp`。
 - 初版 timing script 曾误用 `sim_total_contact_count` 导致 overlap 虚高；已修为 `sim_min_hand_sdf_m/ref_min_hand_sdf_m <= 0.05m` 的 5cm SDF 口径并重跑。
 - 已写入 `workspace/core4d_collab_retarget/log/27_E027_contact_timing_data_quality_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+
+### E021 Holosoma RL export 修正与 partner 补齐
+
+- 2026-05-21：用户要求按 E026 best dynamic selection `spider_best_E018b_E022_E025` 导出 Holosoma RL 数据，并切回 `exp/core4d-collab-retarget` 分支；已确认当前分支正确。
+- 已生成原始前缀命名的导出目录：`/home/ubuntu/Workspace/holosoma/workspace/data/spider_best_E018b_E022_E025_for_rl_rename/`。
+- 对比 `/home/ubuntu/Workspace/holosoma/workspace/v2/results/converted_for_rl_trimmed` 后发现半帧问题：Spider `trajectory_mjwp.npz` 的 `qpos` 是 `(control_ticks, ctrl_steps, 43)`，旧 shim 误按 `(T, env, 43)` 取 `env_index=0`，导致 Box025 从应有约 205 帧变成 103 帧。
+- 已修 `workspace/core4d_collab_retarget/scripts/export/spider_to_rl_shim.py`：3D qpos 默认 flatten 成完整 60Hz 序列；`export_spider_best_to_rl.py` 显式传 `--qpos-layout flatten`。
+- 已强制重导 13 条 base npz，并通过 `verify_rl_load.py`：13/13 ok。重导后 Box025 p1 为 206 帧，v2 同名 base 为 205 帧，已恢复到同一时间轴量级。
+- 已新增并运行 `workspace/core4d_collab_retarget/scripts/export/add_partner_hands_to_spider_rl.py`，调用 Holosoma 的 `workspace/v2/scripts/add_partner_hands_to_motion.py`。初版只按 v2 person1 训练模式生成 6 个 person1 partner 文件；根据用户反馈已改为 p1/p2 双向生成，目前 6 对共 12 个 `_v2_mj_w_obj_w_partner.npz`；`desk021_p1` 因缺少 best-selection `desk021_p2` 跳过。
+- 已修复 Holosoma 侧未跟踪脚本 `/home/ubuntu/Workspace/holosoma/workspace/v2/scripts/train/train_core4d_v4.3-spider.sh` 的 `MOTION=...` 多余引号；`bash -n` 通过。
+- 已更新 `workspace/core4d_collab_retarget/log/28_E021_holosoma_rl_export_results.md` 与 `EXPERIMENT_TRACKER.md`，记录新帧数、partner 文件、与 v2 trimmed 目录差异。
