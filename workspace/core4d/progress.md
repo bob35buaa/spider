@@ -800,3 +800,60 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已按用户要求补充 E081 指标定义：`Leg intf` / `leg_box_interference_frames_pct`、`Leg contact` / `leg_object_contact_frames_pct`、`near_2cm`、`object_floor_contact_frames_pct`、`object_bottom_proxy_m` 的计算口径和解释均写入 log 102。
 - [x] 已补充 E081 脚本路径与可复现实验命令：指标脚本 `eval_E081.py`、派生 scene/override 生成脚本、train/local/remote/pull/eval/single 命令均写入 log 102。
 - [x] 已补充 E081 机制分析：E081 没有新增显式腿避障 reward/优化器改动，改善来自腿/脚-箱 contact pair 改变 MuJoCo 前向动力学，使穿箱控制序列在现有 objective 下间接受罚并被 CEM elite selection 淘汰。
+
+---
+
+## E082 进展: E081 路线跑 3 个 D003 Box021 case
+
+- [x] 用户纠正本轮目标工作区为 `workspace/core4d`，不是 `workspace/v2`；E082 将在 core4d 工作区推进。
+- [x] 已回顾 E077-E081：
+  - E077 生成 CORE4D 3cm per-person/per-hand contact mask，并构造 `box023_person2`；
+  - E078 将 MJWP contact mask 改成 HDMI-style per-EEF mask，验证 p2 数据质量明显好于 p1；
+  - E079 将 E077 pipeline 扩到 10+ single-person case，并改用 case-specific contact/intent window；
+  - E080 发现 box025 p2 是 partial positive，但原 scene 没有腿/脚-箱 contact pair；
+  - E081 新建 `*_legobj` 派生 scene，证明新增腿/脚-物体 contact pair 可显著减少腿/箱穿入，且不污染原始 task。
+- [x] 已检查 3 个目标 source task：
+  - `d003_box021_20231011_035_p2`
+  - `d003_box021_20231018_029_p2`
+  - `d003_box021_20231020_019_p1`
+  三者均有 `scene.xml`、`scene_act.xml`、`scene_act_meta.json`、`task_info.json`、`0/trajectory_kinematic.npz`，且 `scene_act.xml` 只有 `left_hand_object/right_hand_object/object_floor`，没有腿/脚-物体 pair。
+- [x] 已确认 3 个 3cm mask 存在：`workspace/core4d_collab_retarget/results/E029/d6/contact_masks/<source_task>/raw_contact_mask_3cm.npz`，其 `spider_contact_mask_3cm` 长度分别为 `133/75/98`，与 source `trajectory_kinematic.npz` 对齐。
+- [x] 已写入 E082 计划：`workspace/core4d/plan/87_E082_d003_box021_e081_legobj_plan.md`。计划采用 E081 非-freejoint scene_act 路线，派生 `*_legobj_e082`，三卡并行，本地 1 卡 + 远程 2 卡；远程同步使用按需 `rsync`，不要求清理另一个工作区的未提交 E030 记录。
+- [x] 已新增并静态检查 E082 脚本：
+  - `workspace/core4d/scripts/E082/variants.tsv`
+  - `workspace/core4d/scripts/E082/create_legobj_cases.py`
+  - `workspace/core4d/scripts/E082/generate_e082_overrides.py`
+  - `workspace/core4d/scripts/E082/run_remote_inside.sh`
+  - `workspace/core4d/scripts/run_E082_preprocess.sh`
+  - `workspace/core4d/scripts/train/train_E082.sh`
+  - `workspace/core4d/scripts/run_E082_remote.sh`
+  - `workspace/core4d/scripts/pull_E082_remote_results.sh`
+  - `workspace/core4d/scripts/eval/eval_E082.py`
+- [x] E082 静态检查通过：新增 Python `py_compile`、新增 shell `bash -n`、`git diff --check`。
+- [x] E082 预处理完成：3 个派生 task 均生成并各自新增 16 个腿/脚-`object_collision` pair；派生 scene_act 均可由 MuJoCo 加载，`nq/nv/nu=42/41/35`，`npair=42`。
+- [x] E082 overrides 已生成，均继承 `core4d_e074a_box023`、使用 `workspace/core4d/results/E082/contact_masks/<source_task>/raw_contact_mask_3cm.npz`、`hold_contact_rew_scale=0.0`，palm normal 自动计算为 left `[0,-1,0]`、right `[0,1,0]`。
+- [x] E082 短 horizon smoke 通过，3 个 variant 均可加载派生 `scene_act.xml`、E082 3cm per-EEF mask 和 override，并生成 `/tmp/e082_smoke_<variant>/trajectory_mjwp_act.npz`：
+  - `E082_d003_box021_20231018_029_p2_legobj`: mask `125->200`，active L/R=`68.5%/74.0%`，final object pos/quat err=`0.0395/0.0012`。
+  - `E082_d003_box021_20231011_035_p2_legobj`: mask `222->316`，active L/R=`75.3%/75.6%`，final object pos/quat err=`0.0440/0.0268`。
+  - `E082_d003_box021_20231020_019_p1_legobj`: mask `164->246`，active L/R=`61.4%/62.6%`，final object pos/quat err=`0.0349/0.0101`。
+- [x] E082 full CEM 已完成：本地 GPU0 跑 `20231018_029_p2`，远程 GPU0/GPU1 跑 `20231011_035_p2` 与 `20231020_019_p1`，三路结果已回收。
+- [x] 2026-05-27 22:49 已启动 E082 full CEM：
+  - 本地 tmux `E082_local_d003_box021`: `E082_d003_box021_20231018_029_p2_legobj` on GPU0。
+  - 远程 tmux `E082_remote_d003_box021`: `remote-gpu0` 跑 `E082_d003_box021_20231011_035_p2_legobj`，`remote-gpu1` 跑 `E082_d003_box021_20231020_019_p1_legobj`。
+  - 注意三张卡同时存在 R108/R109/R110 Holosoma RL 训练负载；E082 已正常加载并开始优化，但运行时长可能受资源竞争影响。若后续出现 OOM/超慢，需要把它记为运行资源问题而不是方法失败。
+- [x] 2026-05-27 22:54 监控：本地 `44/150`，远程 GPU0 `52/266`，远程 GPU1 `40/196`；均正常前进，尚无 `.npz/.mp4` 落盘。
+- [x] 2026-05-27 22:58 监控：本地 `68/150`，远程 GPU0 `74/266`，远程 GPU1 `68/196`；三路 tmux 均存活，尚无结果落盘。
+- [x] 2026-05-27 23:04 监控：本地 `108/150`，远程 GPU0 `112/266`，远程 GPU1 `116/196`；三路均过半，尚无最终 `.npz/.mp4`。
+- [x] 本地 `E082_d003_box021_20231018_029_p2_legobj` 已完成并落盘 `.npz/.mp4`，运行总时长约 `1120.6s`；run 日志 final object tracking error `pos=0.5928, quat=0.2631`。统一 eval 初步显示该 case 明确失败：case-window object mean/max `0.680/1.138m`，sim contact `14.7%`，leg interference `69.8%`，pelvis_z_min `0.355m`。
+- [x] 发现并修复 `eval_E082.py` 路径 bug：train/pull 脚本传入相对 `RESULTS` 时，复用 E078 eval 的 `relative_to(REPO)` 会报错；已改为在 E082 wrapper 内把 `RESULTS` 与 `VARIANTS_FILE` 解析为 repo 绝对路径，并已 rsync 到远程。
+- [x] 远程 GPU1 `E082_d003_box021_20231020_019_p1_legobj` 已完成并自动 eval 成功；run 日志 final object tracking error `pos=0.7659, quat=0.1605`，初步判断也是失败。远程 GPU0 `E082_d003_box021_20231011_035_p2_legobj` 已到 `250/266`，等待收尾。
+- [x] 远程 GPU0 `E082_d003_box021_20231011_035_p2_legobj` 已完成，run 日志 final object tracking error `pos=0.4112, quat=0.2128`；远程 tmux `E082_remote_d003_box021` 正常退出。
+- [x] 已通过 `workspace/core4d/scripts/pull_E082_remote_results.sh` 回收远程结果并重跑本地合并 eval。`workspace/core4d/results/E082/aggregate_summary.json`: `num_results=3`, `main_case_window_success_pct=0.0`, `main_legobj_strict_proxy_success_pct=0.0`。
+- [x] 已用 `/video-frames` skill / ffmpeg 生成 E082 视频 keyframe sheets：
+  - `workspace/core4d/results/E082/keyframes/contact_sheets/E082_d003_box021_20231018_029_p2_legobj_sheet.jpg`
+  - `workspace/core4d/results/E082/keyframes/contact_sheets/E082_d003_box021_20231011_035_p2_legobj_sheet.jpg`
+  - `workspace/core4d/results/E082/keyframes/contact_sheets/E082_d003_box021_20231020_019_p1_legobj_sheet.jpg`
+  - `workspace/core4d/results/E082/keyframes/contact_sheets/E082_all_cases_sheet.jpg`
+- [x] 已写入正式结果日志：`workspace/core4d/log/103_E082_d003_box021_e081_legobj_results.md`。结论：E082 数据/派生 scene/运行链路跑通，但 3 个 D003 Box021 全失败，视觉均为倒伏/推箱/压箱/物体漂移；不建议把 E082 输出接后续 RL。
+- [x] 已更新 `workspace/core4d/EXPERIMENT_TRACKER.md` 的 E082 行和脚本/结果索引。
+- [x] 已针对用户观察的“弯腰搬箱时趴倒、手撑地、029 头部栽进箱子”完成上半身穿模诊断：`workspace/core4d/log/104_E082_body_fall_upperbody_collision_diagnosis.md`。结论：E081/E082 派生 scene 只新增腿/脚-物体 pair，未新增 `head_collision/torso_collision/pelvis_collision/shoulder/elbow` 与 `object_collision` 的 pair；手-地面 pair 已存在，所以 CEM 可用“头/躯干穿箱 + 手撑地”满足局部 objective。三个 Box021 失败 case 的 sim head/torso 穿入率分别为 `76.0/85.3%`、`17.2/51.1%`、`32.4/58.8%`，而 ref head/torso SDF 仍为正；box023 guard 同样无上半身 pair 但没有穿模，主要因为物体更小、p2 ref/contact 更可行。下一步推荐 E083A 先加 upper-body-object collision pairs，再视结果加 upperbody SDF penalty、hand-floor penalty、stability/ctrl guard。

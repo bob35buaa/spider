@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E082 | 2026-05-27 | Phase 18 | **D003 Box021 三 case 回到 E081 leg/foot-object collision 路线 + 上半身穿模诊断**: 在 `workspace/core4d` 完成；为 `d003_box021_20231018_029_p2`、`d003_box021_20231011_035_p2`、`d003_box021_20231020_019_p1` 新建 `*_legobj_e082` 派生 task，原始 source task 不改；每个派生 `scene_act.xml` 新增 16 个腿/脚-`object_collision` pair。三卡 full CEM 完成并回收，`0/3` 通过：case-window obj mean/max 分别 `0.680/1.138m`、`0.457/1.162m`、`0.849/1.480m`，sim contact `14.7/37.4/69.6%`，pelvis z min `0.355/0.183/0.188m`，视觉均为倒伏/推箱/压箱/物体漂移。追加诊断确认：scene 有 `head_collision/torso_collision` geom，但没有 head/torso/pelvis/shoulder/elbow-object pair；手-地面 pair 存在，所以 CEM 可利用“头/躯干穿箱 + 手撑地”局部解。三例 head/torso 穿入率 `76.0/85.3%`、`17.2/51.1%`、`32.4/58.8%`，box023 guard 为 `0/0%`。下一步应做 E083A upper-body-object collision pairs，必要时再加 upperbody/hand-floor/stability/ctrl penalty；不建议把 E082 输出接后续 RL | ❌ 详见 log 103/104 |
 | E081 | 2026-05-16 | Phase 18 | **leg/foot-object collision 派生 scene 验证**: 不改原始 `scene_act.xml`，新建 `box025_person2_legobj` 与 `box023_person2_legobj` 派生任务，在派生 `scene_act.xml` 中追加 16 个腿/脚-`object_collision` pair。box025_p2 本地、box023_p2 guard 远程 GPU1 均完成。结论：box025 p2 腿/箱 case-window interference `28.9%→7.5%`、obj mean/max `0.146/0.289→0.143/0.271`，但 object bottom/floor-contact 没改善，仍是 partial positive；box023 guard 基本不破坏，interference `0→2.7%`、obj mean `0.162→0.164`。新增碰撞物理上必要，但主要瓶颈转向 lift/floor-contact 与性能成本 | ⚠️ 详见 log 102 |
 | E080 | 2026-05-15 | Phase 18 | **box025 大物体边界复查**: 按 E079 no-hold + 3cm mask 口径跑 `box025_person1/person2`。两者 CEM 均完成；case-window 三阈值把 p1/p2 都判 True (`2/2=100%`)，fixed post2 均 False (`0/2`)。二次复核修正结论：p1 是 false positive，腿/箱几何干涉重；p2 视觉上确实接近搬/扶箱，应标为 partial positive / near-usable，但仍有右腿/脚局部干涉和箱体高度低于 ref 的问题。scene 无腿/脚-箱 contact pair，腿不会物理支撑箱子。下一步必须加入 leg-box interference、object lift/floor-contact、object max/orientation/contact continuity/semantic visual label | ⚠️ 详见 log 101 |
 | E079 | 2026-05-15 | Phase 18 | **CORE4D 10+ 高接触质量 case 泛化验证**: E077 pipeline 推广到 6 个 B+C 序列 p1/p2，`11/12` 可运行（`desk021_p2` Holosoma retarget infeasible）；主验证不使用 hand-crafted hold window。按用户纠正后接入 case-specific contact/intent window，并修正 role：`box023_p2` 是 E078 positive guard，`box023_p1` 是 main/已知失败反例。main `6/10=60%` 数值成功（fixed box023-post2 旧口径 `2/10`），低于 C3 `>=7/10`；用户复查后视觉口径更保守：`box021_p1` 视觉好但 ref 接触位置异常，`bucket007_p2`/`bucket005_s2_p2` 相对可信，`desk021_p1` 前段没抬起，`bucket005_s2_p1` 物体持续受力旋转，`box023_p1` false positive，`bucket007_p1` 是 trim/ref data issue。结论: 数据 pipeline work，算法有跨 case 正信号但泛化未过关，下一步需更强语义判据 + trim/ref feasibility/stability audit | ⚠️ 详见 log 100 |
@@ -361,3 +362,10 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E081 train: `workspace/core4d/scripts/train/train_E081.sh`
 - E081 eval: `workspace/core4d/scripts/eval/eval_E081.py`
 - E081 remote/pull: `workspace/core4d/scripts/run_E081_remote.sh`, `workspace/core4d/scripts/pull_E081_remote_results.sh`
+- E082 结果: `workspace/core4d/log/103_E082_d003_box021_e081_legobj_results.md`
+- E082 上半身穿模诊断: `workspace/core4d/log/104_E082_body_fall_upperbody_collision_diagnosis.md`
+- E082 preprocess: `workspace/core4d/scripts/run_E082_preprocess.sh`
+- E082 train: `workspace/core4d/scripts/train/train_E082.sh`
+- E082 eval: `workspace/core4d/scripts/eval/eval_E082.py`
+- E082 body-fall 诊断: `workspace/core4d/scripts/eval/diagnose_E082_body_fall.py`
+- E082 remote/pull: `workspace/core4d/scripts/run_E082_remote.sh`, `workspace/core4d/scripts/pull_E082_remote_results.sh`

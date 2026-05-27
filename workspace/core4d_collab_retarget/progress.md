@@ -1906,3 +1906,57 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 用户反馈帧率偏高后，已将三列对比默认输出改为 `12fps`，并对右侧 sanity 视频按时间均匀抽帧以保持原视频时长。
 - 覆盖 5/5 case，当前视频规格均为 `1920x368 @ 12fps`。
 - 用户观察到右侧 E029 D6 locked 视觉上不如左侧原始 OmniRetarget：物体有漂移，且机器人与物体多处没有接触。重新核对脚本后确认：右侧是 no-training load-path sanity，不是 CEM 后 full retarget；脚本每帧直接写入 robot reference qpos/qvel，只让 support body/object 物理积分，因此不会修复机器人接触。该视频应作为 sanity 未完全通过的证据，而不是作为后续 CEM 的默认输入结果。
+
+### E030 D6 locked 3-case CEM 启动
+
+- 用户明确要求越过 E029 `>=4/5` full gate，直接对 sanity pass 的 3 个 D6 locked case 跑 CEM：本地 1 卡 + 远程 2 卡；不得 kill 其他已有程序；远程结果跑完后回收；视频审查交给 high subagent。
+- 已新增计划 `workspace/core4d_collab_retarget/plan/35_E030_d6_locked_3case_cem_plan.md`。
+- 已新增脚本：
+  - `workspace/core4d_collab_retarget/scripts/train/train_E030.sh`
+  - `workspace/core4d_collab_retarget/scripts/run_E030_remote.sh`
+  - `workspace/core4d_collab_retarget/scripts/pull_E030_remote_results.sh`
+- 3 个 variants 已固化：
+  - local GPU0: `E029_d003_box021_20231018_029_p2_d6_locked`
+  - remote GPU0: `E029_d003_box021_20231011_035_p2_d6_locked`
+  - remote GPU1: `E029_d003_box021_20231020_019_p1_d6_locked`
+- 脚本检查通过：`bash -n`、variant list/manifest lookup、`git diff --check`。
+- 远程仓库落后本地且有旧实验 dirty files；为避免覆盖远程未提交状态，本轮没有 `git pull`，而是只用 `rsync -R` 同步 E030 必需的 `train_E029/train_E030/run_E030_remote`、3 个 D6 locked overrides、3 个 D6 data、3 个 contact masks、3 个 E029D6 derived scene 目录和 Box021 model 文件。
+- 启动前 GPU 检查：
+  - local GPU0 RTX 5090 free 约 `17.5GB`；
+  - remote GPU0 RTX 6000 Ada free 约 `34.0GB`；
+  - remote GPU1 RTX 6000 Ada free 约 `35.1GB`。
+- 已启动：
+  - local tmux `E030_local_d6_locked`；
+  - remote tmux `E030_remote_d6_locked_3case`；
+  - 三个 CEM 日志均已创建，GPU 利用率确认上升。
+- 21:10 CST 轮询：三条均进入 full CEM 主循环，`opt_steps=32`；local `20231018_029_p2` 约 `42/150`，remote `20231011_035_p2` 约 `42/266`，remote `20231020_019_p1` 约 `38/196`；尚无 `trajectory_mjwp.npz`，未见 traceback。
+- 21:13 CST 轮询：local `20231018_029_p2` 约 `54/150`；remote `20231011_035_p2` 约 `56/266`；remote `20231020_019_p1` 约 `50/196`；三条仍在运行，未见结果文件或异常。
+- 21:16 CST 轮询：local `20231018_029_p2` 约 `68/150`；remote `20231011_035_p2` 约 `68/266`；remote `20231020_019_p1` 约 `62/196`；仍无 traceback。
+- 21:20 CST 轮询：local `20231018_029_p2` 约 `86/150`；remote `20231011_035_p2` 约 `84/266`；remote `20231020_019_p1` 约 `80/196`；三条仍在 CEM 主循环。
+- 21:24 CST 轮询：local `20231018_029_p2` 约 `104/150`；remote `20231011_035_p2` 约 `102/266`；remote `20231020_019_p1` 约 `106/196`；仍无 final npz/traceback。
+- 21:28 CST 轮询：local `20231018_029_p2` 约 `124/150`；remote `20231011_035_p2` 约 `124/266`；remote `20231020_019_p1` 约 `128/196`；本地与 remote `019_p1` 接近后段。
+- 21:32 CST：local `E029_d003_box021_20231018_029_p2_d6_locked` 完成，shell 输出 `=== E029 one done ===`；已生成 root npz、outdir `trajectory_mjwp.npz`、online mp4 和关键帧。视频规格 `1440x480 @ 50fps`、`150` frames、`3.0s`；npz qpos/qvel/ctrl shapes 为 `(75,2,49)/(75,2,47)/(75,2,29)`。日志尾部有 EGL cleanup warning，但进程完成且结果完整。
+- 21:35 CST 远程轮询：remote `20231020_019_p1` 约 `174/196`，remote `20231011_035_p2` 约 `172/266`；remote root npz 尚未出现，tmux session 仍在运行。
+- 21:42 CST：remote `E029_d003_box021_20231020_019_p1_d6_locked` 完成，root npz 和 online mp4 已通过 `pull_E030_remote_results.sh` 回收到本地。视频规格 `1440x480 @ 50fps`、`196` frames、`3.92s`；npz qpos/qvel/ctrl shapes 为 `(98,2,49)/(98,2,47)/(98,2,29)`。remote `20231011_035_p2` 仍在运行，约 `198/266` 后继续推进；remote GPU0 仍满载，GPU1 已基本释放。
+- 21:48 CST 远程轮询：remote `20231011_035_p2` 约 `224/266`，尚未生成 root npz；GPU0 仍满载。
+- 21:57 CST：remote `E029_d003_box021_20231011_035_p2_d6_locked` 完成，最终 pull 后本地覆盖 `3/3` root npz、`3/3` outdir `trajectory_mjwp.npz`、`3/3` online mp4 和 keyframes。视频规格：
+  - `20231011_035_p2`: `1440x480 @ 50fps`, `266` frames, `5.32s`;
+  - `20231018_029_p2`: `1440x480 @ 50fps`, `150` frames, `3.00s`;
+  - `20231020_019_p1`: `1440x480 @ 50fps`, `196` frames, `3.92s`.
+- 3 个 root npz shapes：
+  - `20231011_035_p2`: qpos/qvel/ctrl `(133,2,49)/(133,2,47)/(133,2,29)`;
+  - `20231018_029_p2`: qpos/qvel/ctrl `(75,2,49)/(75,2,47)/(75,2,29)`;
+  - `20231020_019_p1`: qpos/qvel/ctrl `(98,2,49)/(98,2,47)/(98,2,29)`.
+- Remote E030 tmux session 已自然退出；日志尾部均有 MuJoCo EGL cleanup warning，但 shell 完成并且所有结果文件存在。
+- 22:04 CST：新增并运行 `workspace/core4d_collab_retarget/scripts/eval/eval_E030.py`，只评估 3 个 E029 D6 locked sanity-pass variants，并显式加载 `scene_e029_d6_locked_*.xml`（避免误用默认 `scene.xml`）。静态检查 `python -m py_compile`、`git diff --check` 通过。
+- E030 量化评估输出：
+  - `workspace/core4d_collab_retarget/results/E030/d6_locked_cem/comparison.csv`
+  - `workspace/core4d_collab_retarget/results/E030/d6_locked_cem/aggregate_summary.json`
+  - 关键帧 sheet：`workspace/core4d_collab_retarget/results/E030/d6_locked_cem/visual_sheets/`
+- E030 评估结果为 `0/3` 成功、`3/3 fail`。case-window object error 均值 `0.855m`，contact pct 均值 `64.08%`，carry progress ratio 均值 `0.014`。逐 case：
+  - `20231011_035_p2`: object mean/max `0.909/1.636m`，contact `91.63%`，pelvis min `0.333m`，fail；
+  - `20231018_029_p2`: object mean/max `0.703/1.151m`，contact `31.01%`，pelvis min `0.363m`，fail；
+  - `20231020_019_p1`: object mean/max `0.954/1.640m`，contact `69.59%`，pelvis min `0.175m`，fail。
+- 与 E029 no-training sanity 对比：同 3 个 case 在 sanity 中 object mean 只有 `0.105-0.113m` 且 pass gate，但 CEM 后 object mean 升到 `0.703-0.954m`。这说明 D6 locked load path 在 no-training sanity 下能拖动物体，但进入 full CEM 后机器人动态/碰撞会把系统推离参考，不能作为可靠后续主线。
+- 子代理独立视觉审查返回：E030 3 个 case 全部 `fail`，主要表现为倒伏、穿插、support/pad 外露、箱体被 support 托住而非机器人有效搬运。
+- 已写入正式结果日志 `workspace/core4d_collab_retarget/log/37_E030_d6_locked_3case_cem_results.md`，并更新 `EXPERIMENT_TRACKER.md`：E030 标记为 negative complete。当前决策为：后续三选一接 CEM 时优先使用 original OmniRetarget 作为起点/约束来源，不使用 E018b 或 E029 D6 locked 作为主线。
