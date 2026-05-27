@@ -1,5 +1,58 @@
 # E001 Progress — 2026-05-17
 
+## 2026-05-27 E029 phase-1 audit/preflight 完成
+
+- 已按 `plan/34_E029_cola_d6_support_body_redesign_plan.md` 实现并运行 E029 phase-1，只处理 `workspace/core4d_collab_retarget/results/E028/candidates.json` 的 5 条 case。
+- 新增脚本：
+  - `workspace/core4d_collab_retarget/scripts/E029/e029_common.py`
+  - `workspace/core4d_collab_retarget/scripts/E029/audit_support_semantics.py`
+  - `workspace/core4d_collab_retarget/scripts/E029/preflight_axis_contact.py`
+- 静态检查通过：`python -m py_compile` 与 `git diff --check -- workspace/core4d_collab_retarget/scripts/E029` 均无报错。
+- 产物：
+  - `workspace/core4d_collab_retarget/results/E029/audit/current_support_semantics.md`
+  - `workspace/core4d_collab_retarget/results/E029/audit/e028_candidate_modes.csv`
+  - `workspace/core4d_collab_retarget/results/E029/preflight/preflight_report.md`
+  - `workspace/core4d_collab_retarget/results/E029/preflight/axis_contact_summary.csv`
+  - `workspace/core4d_collab_retarget/results/E029/preflight/*_axis_contact_panel.jpg`
+- Semantics audit 结论：5/5 candidates 都是 `support_proxy_mode=mocap_pad`、`support_weld_anchor mocap=true`、`nmocap=1`、无 dynamic support body、无 object actuator、`support_proxy_force` 为 0；确认 E018/E028 不是 COLA dynamic support body + D6。
+- Axis/contact preflight 结论：5/5 Box021 的 object-local 高度轴是 `y`，不是 `z`；旧 E018 `canonical_z=0.62*half_z` 在这些 case 上不是高度轴，导致 anchor 与 selected-side contact centroid 偏 `0.135-0.452m`。
+- 当前决策：不继续跑 E028/E028b fixed local-`z` single-anchor full；E029 下一步先做 D6 support-body sanity，endpoint 初始化必须使用 local-`y` height axis + selected-side robust centroid。
+- 已写入结果日志：`workspace/core4d_collab_retarget/log/30_E029_cola_d6_support_preflight_results.md`。
+
+### 2026-05-27 E029 phase-2 D6 assets/sanity 实现中
+
+- 已新增 D6 phase-2 脚本：
+  - `workspace/core4d_collab_retarget/scripts/E029/generate_e029_d6_assets.py`
+  - `workspace/core4d_collab_retarget/scripts/E029/generate_e029_overrides.py`
+  - `workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py`
+  - `workspace/core4d_collab_retarget/scripts/run_E029_preprocess.sh`
+  - `workspace/core4d_collab_retarget/scripts/train/train_E029.sh`
+- 设计：从 `results/E029/preflight/axis_contact_summary.csv` 读取 endpoint；side 轴贴到 selected `+x/-x` 表面；local-`y` 作为高度轴；其他自由轴使用 selected-side robust centroid 并裁剪到 object half extent。
+- D6 manifest 计划生成 `d6_locked` 与 `d6_compliant` 两个 profile；full queue 默认只跑 `d6_compliant`，sanity 可先跑 representative。
+- 静态检查通过：E029 Python 脚本 `py_compile`、`run_E029_preprocess.sh` / `train_E029.sh` `bash -n`、`git diff --check` 均无报错。
+- D6 preprocess 已完成：`workspace/core4d_collab_retarget/results/E029/d6/manifest.tsv` 10 rows；5 个 derived task；每个候选生成 `d6_locked` / `d6_compliant` 两个 scene 和增强 reference。代表 scene 编译为 `nq/nv/nu=49/47/29`、`nmocap=0`、support q/d=`36/35`、object q/d=`42/41`。
+- Representative no-training sanity 已跑：
+  - `d6_locked` raw-ref upper bound pass：drift mean/max `0.0098/0.0232m`，object mean/max `0.1112/0.2500m`，force saturation `0`，无 NaN。
+  - `d6_compliant` raw-ref fail：drift mean/max `0.0057/0.0082m`，但 support target err `0.5736/1.1124m`、object `0.5836/1.1296m`、force saturation `0.6486`。
+  - 过高 locked gain (`kp=20000,rkp=2000` 或 `rkp=800`) 会触发 MuJoCo `QACC huge`；最终 sanity 脚本保留稳定 upper gain `kp=8000,rkp=200`，仅用于 locked upper-bound，不进入 full override。
+- 已用 `video-frames` 抽帧检查 representative sanity：
+  - `d6_locked_raw_t1.jpg`：箱体被 support body 带到机器人前方并明显离地/倾斜。
+  - `d6_compliant_raw_t1.jpg`：箱体没有跟上相机中心，只看到机器人和 support sphere，符合 force saturation/lag。
+- E029 runtime smoke 已完成：`bash workspace/core4d_collab_retarget/scripts/train/train_E029.sh smoke 0` 跑通 5/5 compliant variants；root NPZ 5/5，qpos/qvel/ctrl shapes 为 `(2,2,49)/(2,2,47)/(2,2,29)`，support diagnostics keys present。
+- 当前决策：不进入 5-case full retarget；下一步先修 `d6_compliant` finite-force support command（target ramp/low-pass、force clamp sanity sweep，必要时升级 freejoint support body + quaternion target handling）。
+- 已写入结果日志：`workspace/core4d_collab_retarget/log/31_E029_cola_d6_support_sanity_results.md`。
+
+### 2026-05-27 E029 compliant sanity sweep 实现中
+
+- 已扩展 `workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py`：
+  - 新增 `--target-lowpass-tau`、`--target-ramp-time`、`--force-clamp-override`、`--pos-kp-override`、`--tag` 等 no-training 诊断参数；
+  - target shaping 同时作用到 support target 和对齐的 object target，避免用低通 support 去追 raw object 指标；
+  - timeseries/video 文件名带 tag，避免 sweep 互相覆盖。
+- 已新增 `workspace/core4d_collab_retarget/scripts/E029/sweep_d6_support_sanity.py`，用于 representative/candidates 的 compliant target ramp/low-pass + force clamp sweep。
+- 静态检查通过：`check_d6_support_load_path.py` 与 `sweep_d6_support_sanity.py` `py_compile` 通过，`git diff --check` 通过。
+- 首次运行 representative sweep 时，数值 sweep 完成后在 `--render-best-video` 阶段因 `e029_common` 先导入 mujoco、`MUJOCO_GL=egl` 设置过晚，触发 GLFW/X11 OpenGL context 错误；已修复 `sweep_d6_support_sanity.py` 在导入 common 前设置 `MUJOCO_GL=egl`。
+- 当前待验证：重跑 representative sweep aggregate、是否存在可让 compliant gate 通过的 target/force 组合。
+
 ## 2026-05-27 E029 COLA D6 support body redesign 规划
 
 - 用户指出 E018/E028 的 anchor 设计不应继续沿 support proxy 单点模式扩展，而应对齐 COLA：dynamic support body 与 object 通过 6-DoF joint / D6 连接。
@@ -1712,3 +1765,144 @@ E001 已完成并提交推送；E002 freejoint leg-object control audit full CEM
 - 已新增并运行 `workspace/core4d_collab_retarget/scripts/export/add_partner_hands_to_spider_rl.py`，调用 Holosoma 的 `workspace/v2/scripts/add_partner_hands_to_motion.py`。初版只按 v2 person1 训练模式生成 6 个 person1 partner 文件；根据用户反馈已改为 p1/p2 双向生成，目前 6 对共 12 个 `_v2_mj_w_obj_w_partner.npz`；`desk021_p1` 因缺少 best-selection `desk021_p2` 跳过。
 - 已修复 Holosoma 侧未跟踪脚本 `/home/ubuntu/Workspace/holosoma/workspace/v2/scripts/train/train_core4d_v4.3-spider.sh` 的 `MOTION=...` 多余引号；`bash -n` 通过。
 - 已更新 `workspace/core4d_collab_retarget/log/28_E021_holosoma_rl_export_results.md` 与 `EXPERIMENT_TRACKER.md`，记录新帧数、partner 文件、与 v2 trimmed 目录差异。
+
+### E029 compliant support sweep 完成
+
+- 已按 E029 plan 在 scalar D6 路线上完成 target shaping / force clamp / support PD gain sanity sweep；只使用 `workspace/core4d_collab_retarget/results/E028/candidates.json` 中 5 个 Box021 case。
+- 新增/修改：
+  - `workspace/core4d_collab_retarget/scripts/E029/sweep_d6_support_sanity.py`
+  - `workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py`
+- 静态检查通过：
+  - `python -m py_compile workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py workspace/core4d_collab_retarget/scripts/E029/sweep_d6_support_sanity.py`
+  - `git diff --check -- workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py workspace/core4d_collab_retarget/scripts/E029/sweep_d6_support_sanity.py`
+- Representative sweep：
+  - 默认 compliant target/force sweep `0/24` pass，best `raw_ref tau=0.25 ramp=0.5 clamp=250 kp=200` 仍 object `0.402/1.009m`。
+  - 扩展 `kp/clamp` sweep `0/160` pass，best `clamp=800 kp=1200` object `0.175/0.341m`。
+  - 单点高 gain 诊断通过：`kp=2400/f=1200` object `0.118/0.245m`，`kp=4000/f=2400` object `0.107/0.236m`。
+- Candidate 5-case sanity：
+  - 高平移 gain compliant 仍只有 `1/5` pass；
+  - locked raw upper-bound 为 `3/5` pass；
+  - target low-pass/ramp 会让 `20231011_035_p1` locked 从接近 gate 恶化到 object `0.343/0.672m`，不能作为全局默认；
+  - 提高 rotational gain 可到 `2/5` pass，但 `20231011_034_p1` 出现 `QACC huge` 和 huge drift，`rot_kp=500/torque=800` 更严重。
+- 视觉检查：
+  - best compliant 视频帧已抽取到 `workspace/core4d_collab_retarget/results/E029/d6/sanity_sweep/E029_d003_box021_20231018_029_p2_d6_compliant_best_t0p60.jpg` 和 `..._t1p20.jpg`；
+  - 观察为 support sphere 仍贴在箱体支撑点附近，但 box/support 整体落后 reference，说明本轮主失败不是 anchor 脱开。
+- 已写入 `workspace/core4d_collab_retarget/log/32_E029_compliant_support_sweep_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+- 决策：停止 scalar `3 slide + 3 hinge` D6 full 路线，不跑 5-case CEM；下一步升级 freejoint support body + quaternion target handling。若 freejoint locked 仍不能 `>=4/5`，再回到 per-case preprocessing/data consistency 诊断。
+
+### E029 freejoint support body sanity 完成
+
+- 已继续执行 E029 plan 的 freejoint 升级分支，新建：
+  - `workspace/core4d_collab_retarget/scripts/E029/generate_e029_freejoint_assets.py`
+  - 更新 `workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py`，支持 `free-locked-support` / `free-compliant-support`、quaternion rotation error、`mj_applyFT` freejoint wrench projection、`pos/rot kd` override。
+- 已生成 freejoint assets：
+  - `workspace/core4d_collab_retarget/results/E029/freejoint/manifest.tsv`
+  - 5 candidates × `free_locked/free_compliant` = 10 rows；
+  - 编译维度 `nq/nv/nu=50/47/29`；
+  - support qpos `[pos(3), quat(4)]` 在 `36:43`，object 仍 last `43:50`。
+- Representative sanity：
+  - 初版直接写 freejoint generalized force 时姿态误差偏大；
+  - 改用 `mujoco.mj_applyFT` 后 representative free compliant pass：object `0.116/0.251m`、drift `0.015/0.031m`、force sat `0.0135`；
+  - representative free locked 仍略高于 gate：object `0.134/0.282m`。
+- 5-case sanity：
+  - free compliant raw + `mj_applyFT`: `1/5` pass；
+  - free locked raw + `mj_applyFT`: `3/5` pass；
+  - locked fail case support-object drift mean 仍约 `0.5-0.9cm`，说明不是 anchor 脱开；
+  - free locked object quat mean 约 `14-20deg`，COM error 主要来自 full-pose orientation tracking。
+- Rotational tuning：
+  - `rot_kp=800`、`rot_kp=300/400` with higher damping 都触发 `QACC huge`；
+  - `rot_kd=0` 稳定但不提升 gate。
+- 已写入 `workspace/core4d_collab_retarget/log/33_E029_freejoint_support_body_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+- 决策：freejoint 消除了部分 scalar Euler 风险，但没有把 5-case sanity 推到 `>=4/5`；不跑 full CEM。下一步应修改方法语义：support body 不追完整 object quaternion，而是更接近 COLA 的低维 support actuation + compliant joint limits/friction；同时增加 reference-consistency audit，量化 orientation error 对 COM error 的贡献。
+
+### E029 point-connect 诊断完成
+
+- 已新增 `workspace/core4d_collab_retarget/scripts/E029/generate_e029_connect_assets.py`，生成 point-connect 诊断资产：
+  - `workspace/core4d_collab_retarget/results/E029/connect/manifest.tsv`
+  - 5 个 `connect_compliant` scene/data；
+  - 编译维度 `nq/nv/nu=50/47/29`；
+  - object 内新增 `e029_object_support_contact` child body，support freejoint 与该 contact body 用 equality `connect`，不再 full weld 锁姿态。
+- 已更新 `check_d6_support_load_path.py`，新增 `connect-compliant-support` mode。
+- 初始一致性检查：
+  - representative qpos_ref[0] 下 `support_dynamic_anchor` 与 `e029_object_support_contact` 距离 `1.1e-16m`；
+  - 说明 connect XML anchor 初始化没有明显错位。
+- Sanity 结果：
+  - upper-bound `kp=8000/force=unclamped` 5/5 `QACC huge`，不作为有效物理配置；
+  - finite-force point-connect 三组 `kp400_f120`、`kp800_f250`、`kp1200_f400` 均 `0/5` pass；
+  - representative `kp1200_f400` object `0.662/1.261m`，support-object drift `0.837/1.635m`，force saturation `0.095`；
+  - 抽帧 `workspace/core4d_collab_retarget/results/E029/connect/sanity/E029_d003_box021_20231018_029_p2_connect_point_kp1200_f400_t1p20.jpg` 显示 box 没有被有效运输，和 drift 指标一致。
+- 已写入 `workspace/core4d_collab_retarget/log/34_E029_point_connect_diagnostic_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+- 决策：single point connect 欠约束，不应替代 full D6/weld；full weld 过约束但 load path 更强。下一步如果继续 E029，应做 bounded/compliant 6D joint approximation，而不是继续 anchor/gain sweep。
+
+### E029 multi-connect bounded 6D 诊断完成
+
+- 已新增 `workspace/core4d_collab_retarget/scripts/E029/generate_e029_multiconnect_assets.py`，生成 multi-connect bounded 6D 诊断资产：
+  - `workspace/core4d_collab_retarget/results/E029/multiconnect/manifest.tsv`
+  - 5 个 E028 candidate case × 4 个 profiles = 20 个 scene/data rows；
+  - profiles 为 `multi_triad`、`multi_cross`、`multi_cross_stiff`、`multi_cross_ultra`；
+  - support body 为 freejoint dynamic body，object 仍 last freejoint，编译维度 `nq/nv/nu=50/47/29`。
+- 已更新 `workspace/core4d_collab_retarget/scripts/E029/check_d6_support_load_path.py`，新增 `multi-triad-support`、`multi-cross-support`、`multi-cross-stiff-support`、`multi-cross-ultra-support` modes。
+- 5-case sanity 结果：
+  - `multi-triad-support`: `0/5` pass，representative object `0.493/1.013m`，drift `0.559/1.229m`；
+  - `multi-cross-support`: `0/5` pass，representative object `0.429/0.913m`，drift `0.434/1.045m`；
+  - `multi-cross-stiff-support`: `0/5` pass，representative object `0.204/0.484m`，drift `0.177/0.529m`；
+  - `multi-cross-ultra-support`: `0/5` pass，representative object `0.106/0.228m`，drift `0.062/0.152m`。
+- 可视化：
+  - 视频 `workspace/core4d_collab_retarget/results/E029/multiconnect/sanity/E029_d003_box021_20231018_029_p2_multi_cross_ultra_representative_default_sanity.mp4`
+  - 抽帧 `workspace/core4d_collab_retarget/results/E029/multiconnect/sanity/E029_d003_box021_20231018_029_p2_multi_cross_ultra_t1p20.jpg`
+  - 观察：box 已能部分运输，support spheres 在顶部支撑区域附近，比 single point-connect 明显好；但 support drift 仍超 gate，robot 姿态前倾。
+- 已写入 `workspace/core4d_collab_retarget/log/35_E029_multiconnect_bounded_6d_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+- 决策：E029 不跑 full CEM。当前失败不再是单纯 anchor/preprocessing 问题，而是 support-object load-path 语义问题；若继续，需要 true per-axis D6 或 dedicated relative-pose impedance controller，不应继续重复 anchor/gain sweep。
+
+### E029 plan-34 gate audit 补齐
+
+- 审计发现 `plan/34_E029_cola_d6_support_body_redesign_plan.md` 列出的 `workspace/core4d_collab_retarget/scripts/eval/eval_E029.py` 尚不存在；full 没触发是正确的，但缺少统一 eval/gate 汇总入口。
+- 已新增并运行 `workspace/core4d_collab_retarget/scripts/eval/eval_E029.py --all`：
+  - 输出 `workspace/core4d_collab_retarget/results/E029/eval/eval_summary.md`
+  - 输出 `workspace/core4d_collab_retarget/results/E029/eval/eval_summary.json`
+  - 输出 `workspace/core4d_collab_retarget/results/E029/eval/sanity_overview.csv`
+- Eval 覆盖：
+  - candidates `5`
+  - audit rows `5`
+  - preflight rows `5`
+  - candidate sanity summaries `30`
+  - manifests: scalar D6 `10`、freejoint `10`、connect `5`、multiconnect `20`
+  - visualization: axis/contact panels `5`、sanity videos `12`、frames `11`
+- 按 plan 34 的 modes 表补齐 baseline modes：
+  - `mocap-weld-current`: candidates `0/5`，object mean avg/worst `0.078/0.091m`，non-gate-eligible；
+  - `direct-object-wrench-control`: candidates `0/5`，object mean avg/worst `0.187/0.214m`，non-gate-eligible；
+  - `eval_E029.py` 已把 `baseline` family 排除出 full gate，避免把 direct object/mocap 对照误当成 COLA D6 success。
+- Gate 结果：
+  - best candidate sanity 为 `results/E029/d6/sanity/candidates_d6-locked-support_raw_ref_candidates_locked_raw_summary.csv`
+  - pass `3/5`，object mean avg/worst `0.116/0.127m`，support drift mean avg/worst `0.007/0.010m`
+  - plan full gate 要求 `>=4/5`，因此 `full_cem_decision=stop_before_full_sanity_failed`
+- 用户追问 best 版本与 5-case 可视化覆盖后，已补渲染 best gate-eligible 版本 `d6-locked-support raw_ref` 的 5 个 candidate videos：
+  - `workspace/core4d_collab_retarget/results/E029/d6/sanity/E029_d003_box021_20231011_034_p1_d6_locked_candidates_locked_raw_viz_sanity.mp4`
+  - `workspace/core4d_collab_retarget/results/E029/d6/sanity/E029_d003_box021_20231011_035_p1_d6_locked_candidates_locked_raw_viz_sanity.mp4`
+  - `workspace/core4d_collab_retarget/results/E029/d6/sanity/E029_d003_box021_20231011_035_p2_d6_locked_candidates_locked_raw_viz_sanity.mp4`
+  - `workspace/core4d_collab_retarget/results/E029/d6/sanity/E029_d003_box021_20231018_029_p2_d6_locked_candidates_locked_raw_viz_sanity.mp4`
+  - `workspace/core4d_collab_retarget/results/E029/d6/sanity/E029_d003_box021_20231020_019_p1_d6_locked_candidates_locked_raw_viz_sanity.mp4`
+  - summary: `workspace/core4d_collab_retarget/results/E029/d6/sanity/candidates_d6-locked-support_raw_ref_candidates_locked_raw_viz_summary.md`
+- 已写入 `workspace/core4d_collab_retarget/log/36_E029_plan34_gate_audit_results.md` 并更新 `EXPERIMENT_TRACKER.md`。
+- 静态检查通过：`python -m py_compile workspace/core4d_collab_retarget/scripts/eval/eval_E029.py`。
+
+### E029 log 36 中文化修订
+
+- 按用户要求，将 `workspace/core4d_collab_retarget/log/36_E029_plan34_gate_audit_results.md` 的标题、表头、状态、结论说明尽量改为中文。
+- 保留 `D6`、`full CEM`、`gate`、`sanity`、`support`、`manifest`、具体 mode 名和文件路径等实验复现所需术语。
+- `git diff --check -- workspace/core4d_collab_retarget/log/36_E029_plan34_gate_audit_results.md` 通过。
+
+### E029 三列对比可视化完成
+
+- 已新增 `workspace/core4d_collab_retarget/scripts/E029/render_e029_threeway_comparison.py`，只对 `workspace/core4d_collab_retarget/results/E028/candidates.json` 中的 5 个 D003 Box021 case 渲染三列对比视频。
+- 三列含义：
+  - 左：原始 OmniRetarget source trajectory；
+  - 中：E018b-style canonical support proxy，即同 case 的 E028 canonical rollout。注意这些 D003 case 没有真正的 E018b 原始结果文件，因此中间列不能标成 literal E018b；
+  - 右：E029 当前最好 gate-eligible 版本 `D6 locked raw_ref` 的 sanity 可视化。
+- 输出目录：
+  - `workspace/core4d_collab_retarget/results/E029/compare_threeway/`
+  - 索引：`workspace/core4d_collab_retarget/results/E029/compare_threeway/threeway_comparison_index.md`
+  - CSV：`workspace/core4d_collab_retarget/results/E029/compare_threeway/threeway_comparison_index.csv`
+- 用户反馈帧率偏高后，已将三列对比默认输出改为 `12fps`，并对右侧 sanity 视频按时间均匀抽帧以保持原视频时长。
+- 覆盖 5/5 case，当前视频规格均为 `1920x368 @ 12fps`。
+- 用户观察到右侧 E029 D6 locked 视觉上不如左侧原始 OmniRetarget：物体有漂移，且机器人与物体多处没有接触。重新核对脚本后确认：右侧是 no-training load-path sanity，不是 CEM 后 full retarget；脚本每帧直接写入 robot reference qpos/qvel，只让 support body/object 物理积分，因此不会修复机器人接触。该视频应作为 sanity 未完全通过的证据，而不是作为后续 CEM 的默认输入结果。
