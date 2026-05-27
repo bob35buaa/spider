@@ -1,0 +1,17 @@
+# @package _global_
+# Auto-generated for E083 upper-body-object collision validation.
+defaults:
+  - core4d_e074a_box023
+  - _self_
+
+task: d003_box021_20231011_035_p2_upperobj_e083
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d/results/E083/contact_masks/d003_box021_20231011_035_p2/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 1
+contact_hdmi_mask_time_axis: auto
+contact_hdmi_palm_normal_left: [0.0, -1.0, 0.0]
+contact_hdmi_palm_normal_right: [0.0, 1.0, 0.0]
+hold_contact_rew_scale: 0.0
+# E083A isolates collision-pair effects; no new reward penalty yet.
+hold_contact_start_eval_time: 0.0
+hold_contact_end_eval_time: 0.0

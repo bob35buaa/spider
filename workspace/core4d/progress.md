@@ -857,3 +857,25 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已写入正式结果日志：`workspace/core4d/log/103_E082_d003_box021_e081_legobj_results.md`。结论：E082 数据/派生 scene/运行链路跑通，但 3 个 D003 Box021 全失败，视觉均为倒伏/推箱/压箱/物体漂移；不建议把 E082 输出接后续 RL。
 - [x] 已更新 `workspace/core4d/EXPERIMENT_TRACKER.md` 的 E082 行和脚本/结果索引。
 - [x] 已针对用户观察的“弯腰搬箱时趴倒、手撑地、029 头部栽进箱子”完成上半身穿模诊断：`workspace/core4d/log/104_E082_body_fall_upperbody_collision_diagnosis.md`。结论：E081/E082 派生 scene 只新增腿/脚-物体 pair，未新增 `head_collision/torso_collision/pelvis_collision/shoulder/elbow` 与 `object_collision` 的 pair；手-地面 pair 已存在，所以 CEM 可用“头/躯干穿箱 + 手撑地”满足局部 objective。三个 Box021 失败 case 的 sim head/torso 穿入率分别为 `76.0/85.3%`、`17.2/51.1%`、`32.4/58.8%`，而 ref head/torso SDF 仍为正；box023 guard 同样无上半身 pair 但没有穿模，主要因为物体更小、p2 ref/contact 更可行。下一步推荐 E083A 先加 upper-body-object collision pairs，再视结果加 upperbody SDF penalty、hand-floor penalty、stability/ctrl guard。
+
+---
+
+## E083 进展: upper-body-object collision pairs
+
+- [x] 已读取 `workspace/core4d/log/104_E082_body_fall_upperbody_collision_diagnosis.md` 和 `experiment-planning-zh/remote-execution.md`，确认本轮按 E083A 推进：只在派生 scene 中增加 upper-body-object collision pairs，先隔离验证碰撞约束本身。
+- [x] 已写入 E083 计划：`workspace/core4d/plan/88_E083_upperbody_object_collision_plan.md`。实验矩阵为 3 个 Box021 main + `box023_p2` guard；本地 GPU0 跑 `20231018_029_p2`，远程 GPU0 跑 `20231011_035_p2`，远程 GPU1 串行跑 `20231020_019_p1` 与 guard；不 kill 其他已有实验。
+- [x] 已新增 E083 脚本集：`workspace/core4d/scripts/E083/variants.tsv`、`create_upperobj_cases.py`、`generate_e083_overrides.py`、`run_remote_inside.sh`、`run_E083_preprocess.sh`、`train_E083.sh`、`run_E083_remote.sh`、`pull_E083_remote_results.sh`、`eval_E083.py`、`extract_E083_contact_sheets.sh`。
+- [x] E083 静态检查通过：`py_compile` 覆盖 E083 Python 与 E082 诊断脚本，`bash -n` 覆盖 E083 shell，`git diff --check` 通过。
+- [x] E083 预处理完成：4 个 `*_upperobj_e083` 派生 task 均生成；每个派生 `scene_act.xml` 可由 MuJoCo 加载，`nq/nv/nu/npair=42/41/35/49`，且包含 16 个腿/脚-`object_collision` pair 和 7 个 upper-body-`object_collision` pair。4 个 override 已生成，contact mask 已复制到 `workspace/core4d/results/E083/contact_masks/`。
+- [x] E083 短 horizon smoke 通过：4 个 variant 均用 `max_sim_steps=4` 成功加载派生 scene/override/mask 并产出 `/tmp/e083_smoke_<variant>/trajectory_mjwp_act.npz`。
+- [x] 2026-05-28 00:10 已启动 E083 full CEM：本地 tmux `E083_local_upperobj` 跑 `E083_d003_box021_20231018_029_p2_upperobj` on GPU0；远程 tmux `E083_remote_upperobj` 已通过按需 `rsync` 同步脚本、overrides、derived scenes、contact masks 和 assets 后启动，remote GPU0 跑 `20231011_035_p2`，remote GPU1 串行跑 `20231020_019_p1` 与 `box023_p2` guard。启动过程未 kill 任何已有 session。
+- [x] E083 eval 小修：`first_case_window_*` 首帧指标改为严格限制在 case window 内；`eval_E083.py` 已重新 `py_compile` 并 rsync 到远程，不影响正在跑的 CEM，后续本地合并 eval 会覆盖远程临时 summary。
+- [x] 2026-05-28 00:15 监控：本地 `20231018_029_p2` 到 `98/150`，远程 GPU0 `20231011_035_p2` 到 `78/266`，远程 GPU1 `20231020_019_p1` 到 `52/196`；三路 tmux 均存活，尚无 `.npz` 落盘。
+- [x] 本地 `E083_d003_box021_20231018_029_p2_upperobj` 已完成并自动 eval，产出 `.npz/.mp4/keyframes`。初步指标仍失败：case-window obj mean `0.608m`，pelvis z min `0.478m`，sim contact `69.0%`，head/torso penetration `38.8/27.9%`，upperbody any penetration `82.2%`，LH floor contact `10.1%`，`E083_success_upperbody_physical_proxy=False`。这说明“加 pair”没有直接消除上半身穿箱/压箱局部解，后续需结合视频和远程结果确认是否是 solver 允许较大穿入、碰撞体半径口径、或 CEM 转为上身压箱。
+- [x] 2026-05-28 00:27 监控：远程 GPU0 `20231011_035_p2` 到 `194/266`，远程 GPU1 `20231020_019_p1` 到 `116/196`；远程 tmux 仍存活，guard 尚未启动，远程 `.npz` 数量仍为 0。
+- [x] 本地 E083 029 视觉复核完成：subagent high 判断 E083 确实避免了 E082 那种头/身体深度栽进箱体和后段箱体大翻滚，但从 f50 起仍明显倒伏/趴箱，f75-f149 基本是上身压在箱顶/箱沿，头颈/上胸仍有浅穿或卡边。时序指标一致：head f35 首次浅穿，torso f94 后浅穿，LH f137 开始撑地；pelvis 不再低于 45cm，leg-box interference 从 E082 `69.8%` 降到 `0%`，但 object-floor contact 仍 `94.6%`、object bottom 比 ref 低 `11.8cm`。结论：E083A 只加 collision pair 把“深穿箱”改成“被箱子挡住后趴箱/压箱”，没有解决站立支撑与搬运策略。
+- [x] E083 远程结果已回收：remote GPU0 `20231011_035_p2` 于 `00:36` 完成，remote GPU1 `20231020_019_p1` 于 `00:38` 完成、`box023_p2` guard 于 `01:12` 完成；`workspace/core4d/scripts/pull_E083_remote_results.sh` 已拉回 3 个远程 `.npz/.mp4/logs` 并在本地重跑合并 eval。
+- [x] E083 完整评估完成：`workspace/core4d/results/E083/aggregate_summary.json` 为 `num_results=4`、main case-window success `0/3=0%`、main upperbody physical proxy success `0/3=0%`、guard=`E083_box023_p2_upperobj_guard`。`comparison.csv` 与 `upperbody_diagnostics.csv` 已生成。
+- [x] E083 可视化完成：`workspace/core4d/scripts/eval/extract_E083_contact_sheets.sh` 已生成 4 个 per-case sheet 和 `E083_all_cases_sheet.jpg`；subagent high 全量视觉复核结论：3 个 Box021 均不可用，标签分别为“趴箱/穿箱型失败”、“趴箱+腿部干涉严重”、“跌倒/手撑地+头部穿箱”；`box023_p2` guard 可用且未退化。
+- [x] 已写入 E083 正式结果日志：`workspace/core4d/log/105_E083_upperbody_object_collision_results.md`；已更新 `EXPERIMENT_TRACKER.md`。核心结论：upper-body-object pairs 对 guard 安全、能减少 E082 的深穿箱，但不能解决 Box021 的错误接触语义，E083A 不可作为 RL seed。
+- [x] 已写入下一步 E084 计划：`workspace/core4d/plan/89_E084_box021_constraint_groups_plan.md`。规划 3 组实验：A safety penalty（upperbody/hand-floor/stability）、B upright/ctrl trust（stronger ctrl guard + task_body + 降低 contact/object 牵引）、C semantic hand contact + lift（hand-only gate + object lift/floor penalty）。每组先跑 `20231018_029_p2` main + `box023_p2` guard，三卡并行；若某组有效，再 E085 扩展到 3 个 Box021 main。

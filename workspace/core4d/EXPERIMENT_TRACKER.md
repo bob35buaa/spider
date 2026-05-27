@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 |
 |-----|------|-------|------|------|
+| E083 | 2026-05-28 | Phase 18 | **upper-body-object collision pairs 验证**: 沿 log 104 的诊断，为 3 个 D003 Box021 main 和 `box023_p2` guard 新建 `*_upperobj_e083` 派生 task；每个派生 `scene_act.xml` 保留 16 个腿/脚-`object_collision` pair，并新增 7 个 head/torso/pelvis/shoulder/elbow-`object_collision` pair，`npair=49`。本地+远程三卡 full CEM 完成并回收，Box021 main `0/3` 通过：obj mean `0.608/0.903/0.866m`，pelvis min `0.478/0.563/0.193m`，upperbody penetration `82.2/92.5/83.1%`，object-floor `94.6/100/97.3%`；视觉为趴箱/浅穿/手撑地/腿部干涉。`box023_p2` guard 通过：obj mean `0.160m`，pelvis min `0.675m`，upperbody penetration `0%`。结论：upper-body pair 对 guard 安全，能减少 E082 的深穿箱，但不能解决 Box021 的错误接触语义；下一步 E084 规划三组 reward/constraint 实验：safety penalty、upright/ctrl trust、semantic hand contact + lift | ❌ 详见 log 105；plan 89 |
 | E082 | 2026-05-27 | Phase 18 | **D003 Box021 三 case 回到 E081 leg/foot-object collision 路线 + 上半身穿模诊断**: 在 `workspace/core4d` 完成；为 `d003_box021_20231018_029_p2`、`d003_box021_20231011_035_p2`、`d003_box021_20231020_019_p1` 新建 `*_legobj_e082` 派生 task，原始 source task 不改；每个派生 `scene_act.xml` 新增 16 个腿/脚-`object_collision` pair。三卡 full CEM 完成并回收，`0/3` 通过：case-window obj mean/max 分别 `0.680/1.138m`、`0.457/1.162m`、`0.849/1.480m`，sim contact `14.7/37.4/69.6%`，pelvis z min `0.355/0.183/0.188m`，视觉均为倒伏/推箱/压箱/物体漂移。追加诊断确认：scene 有 `head_collision/torso_collision` geom，但没有 head/torso/pelvis/shoulder/elbow-object pair；手-地面 pair 存在，所以 CEM 可利用“头/躯干穿箱 + 手撑地”局部解。三例 head/torso 穿入率 `76.0/85.3%`、`17.2/51.1%`、`32.4/58.8%`，box023 guard 为 `0/0%`。下一步应做 E083A upper-body-object collision pairs，必要时再加 upperbody/hand-floor/stability/ctrl penalty；不建议把 E082 输出接后续 RL | ❌ 详见 log 103/104 |
 | E081 | 2026-05-16 | Phase 18 | **leg/foot-object collision 派生 scene 验证**: 不改原始 `scene_act.xml`，新建 `box025_person2_legobj` 与 `box023_person2_legobj` 派生任务，在派生 `scene_act.xml` 中追加 16 个腿/脚-`object_collision` pair。box025_p2 本地、box023_p2 guard 远程 GPU1 均完成。结论：box025 p2 腿/箱 case-window interference `28.9%→7.5%`、obj mean/max `0.146/0.289→0.143/0.271`，但 object bottom/floor-contact 没改善，仍是 partial positive；box023 guard 基本不破坏，interference `0→2.7%`、obj mean `0.162→0.164`。新增碰撞物理上必要，但主要瓶颈转向 lift/floor-contact 与性能成本 | ⚠️ 详见 log 102 |
 | E080 | 2026-05-15 | Phase 18 | **box025 大物体边界复查**: 按 E079 no-hold + 3cm mask 口径跑 `box025_person1/person2`。两者 CEM 均完成；case-window 三阈值把 p1/p2 都判 True (`2/2=100%`)，fixed post2 均 False (`0/2`)。二次复核修正结论：p1 是 false positive，腿/箱几何干涉重；p2 视觉上确实接近搬/扶箱，应标为 partial positive / near-usable，但仍有右腿/脚局部干涉和箱体高度低于 ref 的问题。scene 无腿/脚-箱 contact pair，腿不会物理支撑箱子。下一步必须加入 leg-box interference、object lift/floor-contact、object max/orientation/contact continuity/semantic visual label | ⚠️ 详见 log 101 |
@@ -369,3 +370,10 @@ E013: Intra-rollout Mocap Partner → "修复E011架构限制, rollout内更新p
 - E082 eval: `workspace/core4d/scripts/eval/eval_E082.py`
 - E082 body-fall 诊断: `workspace/core4d/scripts/eval/diagnose_E082_body_fall.py`
 - E082 remote/pull: `workspace/core4d/scripts/run_E082_remote.sh`, `workspace/core4d/scripts/pull_E082_remote_results.sh`
+- E083 结果: `workspace/core4d/log/105_E083_upperbody_object_collision_results.md`
+- E084 计划: `workspace/core4d/plan/89_E084_box021_constraint_groups_plan.md`
+- E083 preprocess: `workspace/core4d/scripts/run_E083_preprocess.sh`
+- E083 train: `workspace/core4d/scripts/train/train_E083.sh`
+- E083 eval: `workspace/core4d/scripts/eval/eval_E083.py`
+- E083 sheet: `workspace/core4d/scripts/eval/extract_E083_contact_sheets.sh`
+- E083 remote/pull: `workspace/core4d/scripts/run_E083_remote.sh`, `workspace/core4d/scripts/pull_E083_remote_results.sh`
