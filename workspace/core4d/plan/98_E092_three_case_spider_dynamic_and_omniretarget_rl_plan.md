@@ -252,3 +252,40 @@ logs/E092/
 - 不在本轮扩大 Box026 top7 或 box004 person1。
 - 不同时大改 reward；除非三条 case 都在同一类 pelvis collapse 上失败，再单独开姿态约束实验。
 - 不把 Box025 的 `--replace_wrist_with_fingertip` reach hack 默认套到这三条 medium-box case。
+
+## 11. 2026-05-29 执行结果
+
+正式结果日志：`workspace/core4d/log/114_E092_three_case_spider_dynamic_and_omniretarget_rl_results.md`
+
+### 11.1 Stage A `spider_dyn smoke`
+
+已按本地 1 卡 + 远程 2 卡完成并回收：
+
+| variant | case | status | pelvis min | object mean | head/upper | hand-floor |
+|---|---|---|---:|---:|---:|---:|
+| `E092D1_box004_083_p2_dyn` | C1 | FAIL | `0.074m` | `0.006m` | `0/0%` | `0/1.0%` |
+| `E092D2_box026_039_p2_dyn` | C2 | FAIL | `0.191m` | `0.008m` | `0/0%` | `0/0%` |
+| `E092D3_box026_135_p2_dyn` | C3 | FAIL | `0.186m` | `0.006m` | `0/0%` | `0/39.0%` |
+
+结论：三条均未达到 smoke `PASS/REVIEW+`，因此不跑 Stage A full，也没有 Stage B `rl_from_spider` 输入。
+
+### 11.2 Stage C `rl_from_omni smoke`
+
+已按本地 1 卡 + 远程 2 卡完成并回收：
+
+| variant | case | status | pelvis min | object mean | head/upper | hand-floor |
+|---|---|---|---:|---:|---:|---:|
+| `E092O1_box004_083_p2_omni` | C1 | FAIL | `0.073m` | `0.006m` | `0/0%` | `0/1.0%` |
+| `E092O2_box026_039_p2_omni` | C2 | FAIL | `0.135m` | `0.008m` | `0/0%` | `0/0%` |
+| `E092O3_box026_135_p2_omni` | C3 | FAIL | `0.189m` | `0.006m` | `0/0%` | `0/40.2%` |
+
+结论：三条 direct OmniRetarget smoke 均未达到 pelvis `>=0.45m` 标准，因此不跑 Stage C main。
+
+### 11.3 视觉复核与路线决策
+
+- 6 个 smoke mp4、60 张 keyframes 和 6 张 contact sheets 均已生成。
+- high subagent `019e6fc7-1fa9-7442-af87-b56c8f376236` 复核认为量化 FAIL 与画面一致：C1/C3 明显 pelvis collapse，C3 右手/右臂贴地，C2 低髋/半跪/压箱。
+- 未观察到明确 head/upper-body 穿箱，说明 E083 之后的 upper-body pair/safety 不是本轮主瓶颈。
+- spider_dyn 与 rl_from_omni 没有有意义的视觉差异；当前失败集中在 pelvis/upright/contact dynamics，而不是单纯的上游数据筛选是否通过。
+
+最终决策：停止本轮 full/main，下一轮应先开 C1-only pelvis/upright/floor/contact 约束实验，再决定是否回到 Box026 或扩大 medium-box 数据。

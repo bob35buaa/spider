@@ -1337,3 +1337,11 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] Stage A smoke 按本地 1 卡 + 远程 2 卡完成：本地 C1，远程 GPU0 C2，远程 GPU1 C3；远程结果已通过 `pull_E092_remote_results.sh spider-dyn-smoke` 回收到本地。
 - [x] 统一本地 eval：C1 `pelvis_min=0.074m`、C2 `0.191m`、C3 `0.186m`，三条均 `FAIL`。object tracking 都很好（mean `0.006/0.008/0.006m`），head/upper 均 `0%`；主要失败是 pelvis collapse，C3 另有 RH floor `39%`。
 - [ ] 按计划：Stage A 无 `WORK`，因此不跑 Stage A full，不生成 Stage B `rl_from_spider` 输入；继续执行 Stage C direct OmniRetarget 三卡对照。
+
+## 2026-05-29 02:10 CST: E092 Stage C smoke 三卡完成
+
+- [x] Stage C `rl_from_omni` smoke 已按本地 1 卡 + 远程 2 卡完成：本地 C1，远程 GPU0 C2，远程 GPU1 C3。远程结果已通过 `pull_E092_remote_results.sh rl-omni-smoke` 从 clean clone `/home/xiayb/pHRI_workspace/spider_e092_run` 回收到本地。
+- [x] 统一本地 eval 已覆盖 `workspace/core4d/results/E092/rl_from_omni/smoke/smoke_eval_summary.{json,csv,md}`：C1 `pelvis_min=0.073m`、C2 `0.135m`、C3 `0.189m`，三条均 `FAIL`。object tracking 仍很好（mean `0.006/0.008/0.006m`），head/upper 均 `0%`；主因仍是 pelvis collapse，C3 另有 RH floor `40.2%`。
+- [x] 可视化产物已齐：6 个 smoke mp4 均存在，60 张 keyframe jpg 非空；已用 ffmpeg 生成 `workspace/core4d/results/E092/visual_review/contact_sheets/*_sheet.jpg` 供 high subagent 视觉复核。
+- [x] high subagent `019e6fc7-1fa9-7442-af87-b56c8f376236` 已完成 6 条 smoke 视频 contact sheet 复核：视觉确认量化失败模式真实存在，C1/C3 明显 pelvis collapse，C3 右手/右臂贴地，C2 低髋/半跪/压箱；spider_dyn 与 rl_from_omni 无有意义视觉差异。
+- [x] 已按 plan 决策：跳过 Stage A full、Stage B `rl_from_spider` 和 Stage C main；正式 log 写入 `workspace/core4d/log/114_E092_three_case_spider_dynamic_and_omniretarget_rl_results.md`，plan 98、tracker 和 comparison artifacts 已更新。
