@@ -1328,3 +1328,12 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已新增评估脚本：`eval_E092_spider_dyn.py`、`eval_E092_rl.py`，输出 JSON/CSV/MD，并记录 `WORK/PASS/FAIL`。
 - [x] 已新增远程脚本：`run_E092_remote.sh` 与 `pull_E092_remote_results.sh`，按 `spider-remote` 的 GPU0/GPU1 tmux 并行启动和回收。
 - [ ] 下一步：运行 py_compile/bash -n，执行 `build_three_case_tasks.py --force`，验证 scene/task/override。
+
+## 2026-05-29 02:02 CST: E092 Stage A smoke 三卡完成
+
+- [x] 静态检查通过：`python -m py_compile` 覆盖 E092 builder/eval；`bash -n` 覆盖 E092 train/remote/pull；`git diff --check` 干净。
+- [x] `python workspace/core4d/scripts/E092/build_three_case_tasks.py --force` 完成 6 个派生 task，三条 case 的 `scene_act.xml` 均 `nq/nv/nu/npair=42/41/35/49`，qpos 分别为 `(105,43)`、`(123,43)`、`(82,43)`。
+- [x] 已提交并推送 E092 scaffold commit `aee4fc1`，供远程 clean clone 同步。远程原 repo 有本地改动阻塞 `git pull`，已改用独立 clean clone `/home/xiayb/pHRI_workspace/spider_e092_run`，只软链接旧 repo `.venv`，没有 reset 旧工作树。
+- [x] Stage A smoke 按本地 1 卡 + 远程 2 卡完成：本地 C1，远程 GPU0 C2，远程 GPU1 C3；远程结果已通过 `pull_E092_remote_results.sh spider-dyn-smoke` 回收到本地。
+- [x] 统一本地 eval：C1 `pelvis_min=0.074m`、C2 `0.191m`、C3 `0.186m`，三条均 `FAIL`。object tracking 都很好（mean `0.006/0.008/0.006m`），head/upper 均 `0%`；主要失败是 pelvis collapse，C3 另有 RH floor `39%`。
+- [ ] 按计划：Stage A 无 `WORK`，因此不跑 Stage A full，不生成 Stage B `rl_from_spider` 输入；继续执行 Stage C direct OmniRetarget 三卡对照。
