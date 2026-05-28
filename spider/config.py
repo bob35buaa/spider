@@ -208,6 +208,11 @@ class Config:
     contact_hdmi_dynamic_target: bool = (
         False  # True=use per-frame ref-derived target instead of fixed
     )
+    contact_hdmi_target_source: str = (
+        "ref_fk"  # "ref_fk" | "external"; external loads object-local targets from npz
+    )
+    contact_hdmi_target_path: str = ""
+    contact_hdmi_target_time_axis: str = "auto"  # "auto" | "spider" | "eval" | "raw"
     contact_hdmi_target_uses_eef_offset: bool = (
         False  # True=derive dynamic target from ref wrist+eef_offset, not wrist origin
     )
@@ -254,6 +259,24 @@ class Config:
     leg_object_penalty_margin_m: float = 0.02
     leg_object_penalty_geom_names: list[str] = field(default_factory=list)
     leg_object_penalty_geom_ids: list[int] = field(default_factory=list)
+    # E084: direct hand-floor and object support/lift shaping for unstable
+    # box-lift cases. Disabled by default.
+    hand_floor_penalty_scale: float = 0.0
+    hand_floor_penalty_margin_m: float = 0.03
+    hand_floor_penalty_geom_names: list[str] = field(
+        default_factory=lambda: ["lh", "rh"]
+    )
+    hand_floor_penalty_geom_ids: list[int] = field(default_factory=list)
+    hand_object_deep_penalty_scale: float = 0.0
+    hand_object_deep_penalty_threshold_m: float = 0.01
+    hand_object_deep_penalty_geom_names: list[str] = field(
+        default_factory=lambda: ["lh", "rh"]
+    )
+    hand_object_deep_penalty_geom_ids: list[int] = field(default_factory=list)
+    object_lift_rew_scale: float = 0.0
+    object_lift_sigma: float = 0.05
+    object_floor_penalty_scale: float = 0.0
+    object_floor_margin_m: float = 0.02
     # E035: local-frame body tracking (HDMI-style)
     use_local_frame_reward: bool = False
     local_frame_upper_ids: list[int] = field(
@@ -854,6 +877,9 @@ def process_config(config: Config):
         or config.contact_hdmi_gain > 0.0
         or config.robot_object_penalty_scale > 0.0
         or config.leg_object_penalty_scale > 0.0
+        or config.hand_floor_penalty_scale > 0.0
+        or config.object_lift_rew_scale > 0.0
+        or config.object_floor_penalty_scale > 0.0
     ) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
@@ -918,6 +944,35 @@ def process_config(config: Config):
             config.leg_object_penalty_geom_ids = geom_ids
             loguru.logger.info(
                 "Leg/object penalty: {} geoms resolved.", len(geom_ids)
+            )
+        if config.hand_floor_penalty_scale > 0.0:
+            geom_ids = []
+            for name in config.hand_floor_penalty_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "hand_floor_penalty_geom_names: geom '{}' not found.", name
+                    )
+            config.hand_floor_penalty_geom_ids = geom_ids
+            loguru.logger.info(
+                "Hand/floor penalty: {} geoms resolved.", len(geom_ids)
+            )
+        if config.hand_object_deep_penalty_scale > 0.0:
+            geom_ids = []
+            for name in config.hand_object_deep_penalty_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "hand_object_deep_penalty_geom_names: geom '{}' not found.",
+                        name,
+                    )
+            config.hand_object_deep_penalty_geom_ids = geom_ids
+            loguru.logger.info(
+                "Hand/object deep penalty: {} geoms resolved.", len(geom_ids)
             )
 
     # output dir: write artifacts alongside the trial unless explicitly overridden

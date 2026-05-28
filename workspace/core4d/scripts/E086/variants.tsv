@@ -1,0 +1,3 @@
+# variant	source_task	derived_task	mask_source_dir	mask_slug	person_idx	split	role
+E086A_rawtarget_strict_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	local	main
+E086B_rawtarget_vfloor_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	manual	main

@@ -1,0 +1,4 @@
+# variant	source_task	derived_task	mask_source_dir	mask_slug	person_idx	split	role	group	mass_kg	notes
+E087A_m5_rawtarget_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083_m5_e087	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	local	main	mass_only	5.0	E085 raw target, object mass scaled to 5kg
+E087B_m10_rawtarget_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083_m10_e087	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	remote-gpu0	main	mass_only	10.0	E085 raw target, object mass scaled to 10kg
+E087C_m5_safe_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083_m5_e087	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	remote-gpu1	main	safety_tuned	5.0	5kg plus lower contact/object gain and stronger safety

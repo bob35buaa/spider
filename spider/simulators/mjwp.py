@@ -696,11 +696,17 @@ def get_reward(
     ):
         xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
         body_pos_sim = xpos_sim[:, config.task_body_ids]  # (N, K, 3)
+        task_body_xpos_ref = body_xpos_ref
+        if (
+            body_xpos_ref.shape[0] != len(config.task_body_ids)
+            and body_xpos_ref.shape[0] > max(config.task_body_ids)
+        ):
+            task_body_xpos_ref = body_xpos_ref[config.task_body_ids]
         body_weights = torch.tensor(
             config.task_body_weights, device=config.device, dtype=body_pos_sim.dtype
         )  # (K,)
         # body_xpos_ref is (K, 3) for this timestep
-        err = ((body_pos_sim - body_xpos_ref.unsqueeze(0)) ** 2).sum(dim=-1)  # (N, K)
+        err = ((body_pos_sim - task_body_xpos_ref.unsqueeze(0)) ** 2).sum(dim=-1)
         task_body_rew = -config.task_body_rew_scale * (err * body_weights).sum(dim=1)
 
     # E018: separate object position/orientation tracking with high weight
@@ -1069,9 +1075,21 @@ def get_reward(
 
     robot_object_penalty = torch.zeros(N, device=config.device)
     leg_object_penalty = torch.zeros(N, device=config.device)
+    hand_floor_penalty = torch.zeros(N, device=config.device)
+    hand_object_deep_penalty = torch.zeros(N, device=config.device)
+    object_lift_rew = torch.zeros(N, device=config.device)
+    object_floor_penalty = torch.zeros(N, device=config.device)
     if (
         (config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids)
         or (config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids)
+        or (
+            config.hand_object_deep_penalty_scale > 0.0
+            and config.hand_object_deep_penalty_geom_ids
+        )
+        or (
+            config.object_lift_rew_scale > 0.0
+            or config.object_floor_penalty_scale > 0.0
+        )
     ) and config.hand_approach_obj_half_extents:
         object_geom_id = mujoco.mj_name2id(
             env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, "object_collision"
@@ -1141,6 +1159,53 @@ def get_reward(
                     config.leg_object_penalty_margin_m - leg_sdf, min=0.0
                 )
                 leg_object_penalty = -config.leg_object_penalty_scale * leg_hinge
+            if (
+                config.hand_object_deep_penalty_scale > 0.0
+                and config.hand_object_deep_penalty_geom_ids
+            ):
+                hand_sdf = geom_box_sdf_min(config.hand_object_deep_penalty_geom_ids)
+                deep_hinge = torch.clamp(
+                    -config.hand_object_deep_penalty_threshold_m - hand_sdf,
+                    min=0.0,
+                )
+                hand_object_deep_penalty = (
+                    -config.hand_object_deep_penalty_scale * deep_hinge
+                )
+            if config.object_lift_rew_scale > 0.0 or config.object_floor_penalty_scale > 0.0:
+                obj_half_z = float(config.hand_approach_obj_half_extents[2])
+                obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
+                if config.nq_obj == 7:
+                    ref_obj_z = qpos_ref[-5]
+                else:
+                    ref_obj_z = qpos_ref[-4]
+                ref_bottom = ref_obj_z - obj_half_z
+                if config.object_lift_rew_scale > 0.0:
+                    sigma = max(float(config.object_lift_sigma), 1e-6)
+                    lift_err = torch.abs(obj_bottom - ref_bottom)
+                    object_lift_rew = config.object_lift_rew_scale * torch.exp(
+                        -lift_err / sigma
+                    )
+                if config.object_floor_penalty_scale > 0.0:
+                    min_bottom = ref_bottom - config.object_floor_margin_m
+                    floor_hinge = torch.clamp(min_bottom - obj_bottom, min=0.0)
+                    object_floor_penalty = (
+                        -config.object_floor_penalty_scale * floor_hinge
+                    )
+
+    if config.hand_floor_penalty_scale > 0.0 and config.hand_floor_penalty_geom_ids:
+        geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+        radii = torch.tensor(
+            [
+                float(env.model_cpu.geom_size[gid, 0])
+                for gid in config.hand_floor_penalty_geom_ids
+            ],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        centers_z = geom_xpos[:, config.hand_floor_penalty_geom_ids, 2]
+        clearance = centers_z - radii.view(1, -1)
+        hinge = torch.clamp(config.hand_floor_penalty_margin_m - clearance, min=0.0)
+        hand_floor_penalty = -config.hand_floor_penalty_scale * hinge.sum(dim=1)
 
     reward = (
         qpos_rew
@@ -1156,6 +1221,10 @@ def get_reward(
         + hold_contact_rew
         + robot_object_penalty
         + leg_object_penalty
+        + hand_floor_penalty
+        + hand_object_deep_penalty
+        + object_lift_rew
+        + object_floor_penalty
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -1181,6 +1250,10 @@ def get_reward(
         "hold_contact_rew": hold_contact_rew,
         "robot_object_penalty": robot_object_penalty,
         "leg_object_penalty": leg_object_penalty,
+        "hand_floor_penalty": hand_floor_penalty,
+        "hand_object_deep_penalty": hand_object_deep_penalty,
+        "object_lift_rew": object_lift_rew,
+        "object_floor_penalty": object_floor_penalty,
     }
     return reward, info
 

@@ -1,3 +1,104 @@
+# E085 Progress — 2026-05-28
+
+## 当前状态: raw-contact target 修复已完成预处理，准备接入 MJWP smoke gate
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 恢复实验上下文，当前目标是沿 E084 语义审计继续推进 E085，先修复数据层 contact target，再决定是否进入 CEM。
+- [x] 写入计划：`workspace/core4d/plan/91_E085_raw_contact_target_repair_plan.md`。
+- [x] 在 `spider/config.py` / `examples/run_mjwp.py` 增加默认关闭的 external contact target 接口：
+  - 默认 `contact_hdmi_target_source=ref_fk`，旧实验行为不变。
+  - `contact_hdmi_target_source=external` 时从 `.npz` 读取 object-local `(T,2,3)` target，并按 `qpos_ref` 长度 resize。
+- [x] 新增 raw contact target 预处理：
+  - `workspace/core4d/scripts/E085/generate_raw_contact_targets.py`
+  - `workspace/core4d/scripts/E085/target_cases.tsv`
+  - `workspace/core4d/scripts/run_E085_preprocess.sh`
+- [x] 预处理已完成并输出：
+  - main: `workspace/core4d/results/E085/raw_targets/E085A_rawtarget_main/raw_contact_targets.{npz,csv}`。
+  - guard: `workspace/core4d/results/E085/raw_targets/E085A_rawtarget_guard/raw_contact_targets.{npz,csv}`。
+- [x] 关键诊断结论：
+  - `d003_box021_20231018_029_p2` 旧 G1 wrist pseudo target 与 raw contact surface 的 active-frame mean delta：left `27.20cm`，right `26.98cm`。
+  - `box023_person2` guard 的对应 delta：left `24.64cm`，right `27.82cm`。
+  - 因此“左手目标像在箱体下沿/底面附近”主要不是 mask 选错，而是旧 target 由 retargeted G1 wrist 反推，空间语义和 raw 手-箱表面接触点不一致。
+- [x] 修正 target 输出策略：MJWP reward 使用投影到 collision box 表面的 semantic raw target，另存 raw visual mesh target 仅用于诊断，避免 visual mesh 和 collision box 尺寸/边界不一致。
+- [x] 补齐 E085 执行脚本与评估入口：
+  - `workspace/core4d/scripts/E085/variants.tsv`
+  - `workspace/core4d/scripts/E085/generate_e085_overrides.py`
+  - `workspace/core4d/scripts/train/train_E085.sh`
+  - `workspace/core4d/scripts/run_E085_remote.sh`
+  - `workspace/core4d/scripts/pull_E085_remote_results.sh`
+  - `workspace/core4d/scripts/eval/eval_E085.py`
+  - `workspace/core4d/scripts/eval/extract_E085_contact_sheets.sh`
+- [x] 生成 E085 override 并完成 Hydra compose 检查：
+  - `core4d_E085A_rawtarget_main`: 继承 E084C main，`contact_hdmi_target_source=external`，raw target 文件存在。
+  - `core4d_E085A_rawtarget_guard`: 继承 E084C guard，`contact_hdmi_target_source=external`，raw target 文件存在。
+- [x] 静态检查通过：`py_compile` 覆盖 E085 generator/eval 与 `run_mjwp.py`/`config.py`；`bash -n` 覆盖 E085 train/remote/pull/eval/preprocess shell。
+- [x] 4-step smoke 通过：
+  - main external target 加载日志：`eval_contact_target_object_local len 125→200`，dynamic target shape `(200,2,3)`。
+  - guard external target 加载日志：`eval_contact_target_object_local len 227→322`，dynamic target shape `(322,2,3)`。
+- [x] 修复 raw visual target 到 collision box 的投影策略：
+  - 旧逻辑用 `abs(local)/half` 最大轴选 face；visual 点在 collision box 内部时会误把离 `+y` 侧面更近的点投到 `-z` 面。
+  - 新逻辑：内部点选最近 surface margin，外部点选最大越界轴。
+  - 重新预处理后，main left face 从 `+x:1/+y:15/-z:35` 变为 `+x:1/+y:35/-z:15`，mean vfrac 从 `0.037` 提到 `0.057`。
+  - 但 main left target 仍然偏低，说明除了投影 bug，raw SMPL-X/object 接触几何本身也在低侧区域；需要继续做 fingertip-vs-broad target 选择审计。
+- [x] nearest-face target 版本的 4-step smoke 已重跑通过，external target 加载日志仍正常。
+- [x] 新增并运行 target selection 审计：`workspace/core4d/scripts/E085/audit_target_selection.py`。
+  - 输出：`workspace/core4d/results/E085/target_selection_audit/`。
+  - main left 对比：`broad_projected` vfrac mean/median `0.057/0.060`，`tip_best_projected` `0.052/0.044`，`tip_mean_projected` `0.063/0.068`，`high_close_projected` `0.103/0.107`。
+  - main left fingertip 平均每 active frame 有 `4.55/5` 个 fingertip 在 3cm 内，tip min dist mean `0.76cm`；因此 contact mask 不是主要错误，fingertip target 也没有回到侧面中部。
+  - 结论：旧 G1 pseudo target 的 27cm 偏移是方法 target 错；nearest-face projection bug 会额外制造下沿感；修复后 raw target 仍偏低，属于 raw 几何/人手姿态与 G1 可达性的形态差异，需用 CEM 实测是否能承受，否则转 support-body/COLA seed。
+- [x] 启动 E085 CEM：
+  - 远程 guard：`spider-remote` tmux session `E085_rawtarget_gate`，运行 `E085A_rawtarget_guard`。
+  - 本地 main：`bash workspace/core4d/scripts/train/train_E085.sh local 0`。
+- [x] 本地 main 已完成并自动评估，gate 未通过：
+  - `workspace/core4d/results/E085/E085A_rawtarget_main.{npz,mp4}`。
+  - `workspace/core4d/results/E085/comparison.csv`。
+  - `workspace/core4d/results/E085/keyframes/contact_sheets/E085A_rawtarget_main_sheet.jpg`。
+  - case-window contact `82.95%`，obj err mean `0.665m`，pelvis z min `0.659m`，hand-floor `0%/0%`。
+  - 失败项：head-object penetration `18.60%`，upperbody-object penetration `53.49%`，first head penetration frame `35`。
+  - 视觉观察：sim 没有手撑地/摔倒，但为了贴低位 contact target，长期弯腰压箱，头/右肩/双肘和箱体干涉；这支持“低位 raw hand target 对 G1 形态不可达或 reward 会利用穿透接触”的判断。
+- [x] 写入下一轮迭代计划：`workspace/core4d/plan/92_E086_rawtarget_failure_iteration_plan.md`。
+  - E086A：raw target + strict upperbody / hand deep penetration penalty。
+  - E086B：raw target with minimum vertical fraction，验证低位 target 是否是形态瓶颈。
+  - E086C：support-body/COLA seed route。
+- [x] 实现 E086A 最小改动：
+  - `spider/config.py`: 新增 `hand_object_deep_penalty_*` 配置，并解析 `lh/rh` geom。
+  - `spider/simulators/mjwp.py`: 新增 hand-object deep penetration penalty，只惩罚 SDF 小于 `-threshold` 的深穿透，不惩罚正常接触附近。
+  - `examples/config/override/core4d_E086A_rawtarget_strict_main.yaml`: E085 raw target + contact gain `5→3` + upperbody penalty `2→8` + hand deep penalty scale `10`。
+  - `workspace/core4d/scripts/train/train_E086.sh` / `workspace/core4d/scripts/eval/eval_E086.py` / `workspace/core4d/scripts/E086/variants.tsv`。
+- [x] E086A 静态/Hydra/smoke 通过：hand deep penalty 解析 `2` 个 geom，external target 加载 `125→200`，4-step smoke 无异常。
+- [x] E086A main full 完成，gate 未通过且比 E085 更差：
+  - contact `82.95%→76.74%`，obj err mean `0.665→0.698m`。
+  - head-object penetration `18.60%→58.91%`。
+  - upperbody-object penetration `53.49%→72.87%`。
+  - left hand penetration `73.64%→35.66%` 下降，但 right hand penetration `54.26%→65.12%` 上升，right hand floor contact `0%→10.85%`。
+  - 视觉观察：strict penalty 没有让姿态站起来，反而继续用头/身体压箱并翻箱；单纯堵手部深穿透不是解法。
+- [x] 实现并生成 E086B target vertical-floor 变体：
+  - `workspace/core4d/scripts/E086/make_vfrac_floor_target.py`。
+  - 输出：`workspace/core4d/results/E086/vfrac_floor_targets/E086B_vfrac_floor_main/raw_contact_targets.npz`。
+  - main left active target vfrac mean/min/max 约 `0.198/0.182/0.208`，相比 E085 `0.057/0.005/0.105` 明显抬高。
+  - `core4d_E086B_rawtarget_vfloor_main` Hydra 检查和 4-step smoke 通过。
+- [x] E086B full 完成，gate 未通过：
+  - contact `75.19%`，obj err mean `0.710m`。
+  - head-object penetration `62.79%`，upperbody-object penetration `68.99%`。
+  - hand penetration left/right `58.91%/62.79%`，hand-floor `0%/0%`。
+  - 视觉观察：左手 target 抬高后仍没有恢复 upright carry，sim 继续用头/胸前倾压箱；低位 target 是因素之一，但不是单独充分解释，当前 reward/optimization 会优先找“压箱支撑”局部最优。
+
+## 待完成
+
+- [ ] 若 smoke/gate 通过，再进入本地+远程 CEM；若失败，先分析视频/关键帧，不重复跑同配置。
+- [ ] 等远程 guard 完成，pull 回本地并合并 eval。
+- [ ] E085 remote guard 完成后回收并写 E085/E086 结果日志。
+- [ ] 下一步不继续手调 target/penalty，转 E086C support-body/COLA seed 方案。
+
+## 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|------|---------|----------|
+| 初版 raw target 直接落在 visual mesh surface，和 MJWP collision box surface 有尺寸差 | 1 | 将 semantic raw visual contact point 投影到 collision box surface，MJWP 使用 projected target；CSV/NPZ 同时保留 visual target 诊断字段 |
+
+---
+
 # E078 Progress — 2026-05-15
 
 ## 当前状态: E078 已完成，结果日志已写入
@@ -879,3 +980,72 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] E083 可视化完成：`workspace/core4d/scripts/eval/extract_E083_contact_sheets.sh` 已生成 4 个 per-case sheet 和 `E083_all_cases_sheet.jpg`；subagent high 全量视觉复核结论：3 个 Box021 均不可用，标签分别为“趴箱/穿箱型失败”、“趴箱+腿部干涉严重”、“跌倒/手撑地+头部穿箱”；`box023_p2` guard 可用且未退化。
 - [x] 已写入 E083 正式结果日志：`workspace/core4d/log/105_E083_upperbody_object_collision_results.md`；已更新 `EXPERIMENT_TRACKER.md`。核心结论：upper-body-object pairs 对 guard 安全、能减少 E082 的深穿箱，但不能解决 Box021 的错误接触语义，E083A 不可作为 RL seed。
 - [x] 已写入下一步 E084 计划：`workspace/core4d/plan/89_E084_box021_constraint_groups_plan.md`。规划 3 组实验：A safety penalty（upperbody/hand-floor/stability）、B upright/ctrl trust（stronger ctrl guard + task_body + 降低 contact/object 牵引）、C semantic hand contact + lift（hand-only gate + object lift/floor penalty）。每组先跑 `20231018_029_p2` main + `box023_p2` guard，三卡并行；若某组有效，再 E085 扩展到 3 个 Box021 main。
+
+---
+
+## E084 进展: Box021 constraint groups main gate
+
+- [x] 已按 E084 plan 改为 main-gate 策略：只在 `d003_box021_20231018_029_p2` 主 case 上先跑 A/B/C 三组；如果没有组通过，则不跑 `box023_p2` guard。
+- [x] 已新增 reward/config 支持：`hand_floor_penalty_*`、`object_lift_rew_*`、`object_floor_penalty_*`；并复用既有 `robot_object_penalty_*` 做 upperbody-object SDF penalty。
+- [x] 已新增 E084 脚本集：`workspace/core4d/scripts/E084/variants.tsv`、`generate_e084_overrides.py`、`run_remote_inside.sh`、`run_E084_preprocess.sh`、`train_E084.sh`、`run_E084_remote.sh`、`pull_E084_remote_results.sh`、`eval_E084.py`、`extract_E084_contact_sheets.sh`。
+- [x] E084 预处理完成：6 个 overrides 已生成，main/guard mask 均复制到 `workspace/core4d/results/E084/contact_masks/`；A/B/C 三组短 smoke 通过。
+- [x] 2026-05-28 02:06 启动 full CEM：本地 tmux `E084_local_main` 跑 A；远程 tmux `E084_remote_main_gate` 跑 B/C。B 首次远程 run 触发 `task_body_rew` shape bug（8 个 task bodies vs 32 个 full-body FK）。
+- [x] 已修复 B 的 shape bug：`spider/simulators/mjwp.py` 在 `body_xpos_ref` 为 full-body FK 时按 `task_body_ids` 切回目标 body；本地 optimizer smoke 通过后，远程 `E084_remote_B_retry` 重跑 B 成功。
+- [x] E084 三组 main 完成并回收远程结果；本地 merged eval 完成：`num_main_results=3`、`accepted_groups=[]`、`guard_splits_to_run=[]`、`stop_before_guard=true`。
+- [x] E084 关键量化：A safety pelvis min `0.596m`、hand-floor `0/0%`，但 upperbody penetration `80.6%`、object-floor `93.8%`；B upright obj mean `0.417m`、bottom gap `-4.3cm`，但 contact `9.3%`、LH floor `39.5%`、视觉翻箱；C semantic/lift upperbody penetration `82.2%`、object-floor `96.9%`、bottom gap `-11.9cm`。
+- [x] E084 可视化完成：`workspace/core4d/results/E084/keyframes/contact_sheets/` 生成 A/B/C sheets；subagent high 复核结论：A/C 是“稳定但不抬/蹲抱压箱”，B 是“明显翻箱/接触失控”，三者均不可作为 RL seed。
+- [x] 已写入 E084 结果日志：`workspace/core4d/log/106_E084_box021_constraint_groups_results.md`；已更新 `EXPERIMENT_TRACKER.md`。
+- [x] 已写入下一步 E085 计划：`workspace/core4d/plan/90_E085_box021_exit_gate_seed_routes_plan.md`。E085 规划三组：A feasibility/seed audit，B kinematic/support seed route，C hard-gate staged CEM；第一阶段先做审计，不直接继续 full CEM 小调参。
+
+---
+
+## E084 追加诊断: contact target 语义核查
+
+- [x] 已新增并运行 `workspace/core4d/scripts/eval/audit_E084_contact_target_semantics.py`，输出到 `workspace/core4d/results/E084/contact_target_audit/`。
+- [x] 修正坐标解释：raw mesh local 不能直接与 MuJoCo object-local 比，必须先应用 `object_visual` 的固定 `geom_pos/geom_quat`；正确 MuJoCo object frame 中 box 底面是 `-y`，顶面是 `+y`，不是 local `-z`。
+- [x] mask 核查完成：E084 auto 选择 `eval_contact_mask_3cm`，`125->200`，person2 active L/R=`68.5/74.0%`，qpos active frame `41-188` 对应 raw frame `75-129`；未发现错人/错帧。
+- [x] raw 接触点核查完成：person2 left/right broad hand min dist mean `1.8/2.2mm`，fingertip min dist mean `7.6/9.6mm`；raw left 是低侧面 contact，raw right 是高侧面 contact。
+- [x] G1 target 核查完成：当前 dynamic target 是 `wrist_yaw_link + [0.05,0,0]`，不是 raw fingertip/contact centroid；G1 ref target 与 raw surface centroid 平均差约 `27cm`，主要沿 object `x` 轴在对侧。结论：问题主要在 G1 wrist pseudo contact target 失真，不是 contact mask 二值门控本身。
+- [x] sim 实际手部补查完成：E084A/C 手不再撑地并能以约 `7cm` 均值追随 dynamic target，但 target 本身语义偏 raw；E084B 没追上目标且出现低手/撑地失败模式。
+- [x] 已写入正式诊断日志：`workspace/core4d/log/107_E084_contact_target_semantics_audit.md`；已更新 `EXPERIMENT_TRACKER.md`。
+
+---
+
+## E085 进展: raw contact target 修复与 gate
+
+- [x] 已按用户追问继续做全面检查：contact mask/person/time 未发现错人错帧，`eval_contact_mask_3cm` 为 person2，`125->200`，active L/R=`68.5%/74.0%`。
+- [x] 已确认旧 E084 dynamic target 是 G1 `wrist_yaw_link + [0.05,0,0]`，不是 raw fingertip/contact centroid；old G1 target 与 raw surface target 平均差约 `27cm`。
+- [x] 已实现 external contact target：`examples/run_mjwp.py` 支持从 `.npz` 读取 `spider_contact_target_object_local` / `eval_contact_target_object_local`，并 resize 到 `qpos_ref` 长度。
+- [x] 已生成 E085 raw target，并修正 projection bug：inside visual points 用 nearest-face projection，不再按最大归一化轴误投 face。main left face counts 修正后为 `+x:1,+y:35,-z:15`，vfrac mean `0.057`；right vfrac mean `0.895`。
+- [x] target-selection audit 完成：main left 的 `broad_projected`、`tip_best_projected`、`tip_mean_projected` vfrac mean 分别为 `0.057/0.052/0.063`，说明 left 低位不是 broad centroid 单独造成；active frame 平均 `4.55/5` 个 fingertips 在 `3cm` 内。
+- [x] E085 main 本地 full CEM 完成：contact `82.95%`，obj mean/max `0.665/1.068m`，pelvis min `0.659m`，但 head/upper penetration `18.60/53.49%`，hand penetration `73.64/54.26%`，gate fail。
+- [x] E085 guard 远程 full CEM 已回收：contact `88.00%`，obj mean/max `0.226/0.431m`，head/upper penetration `2.00/2.00%`，hand penetration `77.33/27.33%`，gate fail。
+- [x] E085 可视化 sheet 已生成到 `workspace/core4d/results/E085/keyframes/contact_sheets/`。main 视觉为低头/肩肘手压箱，guard 视觉接近但手部穿透高。
+
+## E086 进展: raw-target failure iteration
+
+- [x] 已写入 E086 计划：`workspace/core4d/plan/92_E086_rawtarget_failure_iteration_plan.md`，验证 strict penetration penalty 与 left target vfrac floor 两条局部修复。
+- [x] 已新增 `hand_object_deep_penalty` 配置与 reward 实现；E086A override/smoke 通过。
+- [x] 已生成 E086B vfrac-floor target：left min vfrac `0.2`，输出 `workspace/core4d/results/E086/vfrac_floor_targets/E086B_vfrac_floor_main/raw_contact_targets.npz`。
+- [x] E086A full CEM 完成：contact `76.74%`，obj mean/max `0.698/1.134m`，pelvis min `0.624m`，head/upper penetration `58.91/72.87%`，RH floor `10.85%`，失败且较 E085 更差。
+- [x] E086B full CEM 完成：contact `75.19%`，obj mean/max `0.710/1.170m`，pelvis min `0.613m`，head/upper penetration `62.79/68.99%`，失败。抬高 left target 后仍然压箱，说明 target height 不是唯一主因。
+- [x] 已写入正式结果日志：`workspace/core4d/log/108_E085_E086_rawtarget_cem_iteration_results.md`；已更新 `EXPERIMENT_TRACKER.md`。下一步不继续手调 penalty/vfrac，转 COLA-style support body / 6-DoF connector seed。
+
+---
+
+## E087 进展: Box021 质量与 reward 分项诊断
+
+- [x] 根据用户新判断调整方向：暂不继续 COLA-style support body，先检查 `1) object mass 是否太大` 与 `2) reward 分项贡献是否在鼓励压箱局部解`。
+- [x] 初步质量审计发现强信号：`d003_box021_20231018_029_p2_upperobj_e083` object mass 为 `29.632kg`，而 `box023_p2` guard 与 `box025_p2` 相关 scene 为 `5.0kg`；所有 box021 派生 scene 继承 `29.632kg`，不是 E083/E085 派生过程引入。
+- [x] 已写入 E087 计划：`workspace/core4d/plan/93_E087_box021_mass_reward_audit_plan.md`。E087 分为 mass audit/sweep、reward breakdown replay、reward tuning 三步，先只跑 box021 029 main gate。
+- [x] 已新增 E087 脚本：`mass_audit.py`、`create_mass_variants.py`、`generate_e087_overrides.py`、`reward_breakdown.py`、`eval_E087.py`、`train_E087.sh`、`run_E087_preprocess.sh` 和 `variants.tsv`。
+- [x] 静态检查通过：E087 Python `py_compile`、shell `bash -n`、`git diff --check` 均通过。
+- [x] E087 preprocess 完成：质量审计输出到 `workspace/core4d/results/E087/mass_audit/`；创建 `d003_box021_20231018_029_p2_upperobj_e083_m5_e087` 和 `_m10_e087` 两个派生 task，并按质量比例缩放 object inertia；生成 `core4d_E087A/B/C` overrides。
+- [x] 已对 E085/E086 四个已有 rollout 跑离线 reward breakdown，输出到 `workspace/core4d/results/E087/reward_breakdown/`。关键结论：E085 main case-window 平均 `contact_hdmi_rew=2.747`、`qpos_rew=1.965`、`task_obj=0.383`，但 `robot_object_penalty=-0.030`、hand deep penalty 为 `0`，说明 safety 惩罚量级远小于 contact/local tracking；E086A 虽把 `robot_object_penalty` 提到 `-0.218`，仍小于 contact/qpos 总正项且引入更差姿态。
+- [x] E087 三个变体 smoke 通过：`E087A_m5_rawtarget_main`、`E087B_m10_rawtarget_main`、`E087C_m5_safe_main` 均可加载派生 scene、E085 raw target 和对应 reward 配置。
+- [x] 本地 `E087A_m5_rawtarget_main` full CEM 已完成并落盘；首次自动 eval 因 E087 `variants.tsv` 列顺序不兼容 E083/E081 评估链路而失败，已修正 TSV 为 E081-compatible 格式，并同步修正 `train_E087.sh`/`eval_E087.py` 的字段解析；不需要重跑 CEM，只需重跑 eval。
+- [x] E087 本地+远程 full CEM 已完成并回收：本地 `E087A_m5_rawtarget_main`，远程 GPU0 `E087B_m10_rawtarget_main`，远程 GPU1 `E087C_m5_safe_main`。合并 eval 完成，`num_results=3`、`accepted_variants=[]`。
+- [x] E087 关键量化：5kg raw target contact `82.9%` 但 obj mean `0.782m`、head/upper penetration `89.1/89.1%`；10kg raw target obj mean `0.735m`、head/upper `69.8/76.0%`，略好但仍失败；5kg+safety contact `65.9%`、obj mean `0.774m`，但 head/upper 仍 `89.1/89.1%`。
+- [x] 已补跑 E087A/B/C reward breakdown：E087C safety-tuned 把 `contact_hdmi_rew` 降到 `0.853`、`robot_object_penalty` 提到 `-0.634`，但仍没阻止头/上身压箱，说明只靠当前 scalar penalty 调权不足以形成 hard constraint。
+- [x] E087 可视化 sheet 已生成：`workspace/core4d/results/E087/keyframes/contact_sheets/E087_all_cases_sheet.jpg`。视觉观察：三组都仍是弯腰/趴箱/上身压箱；10kg 比 5kg 稳一些但不成功，5kg+safety 手部更保守但头/上身问题没解决。
+- [x] 已写入正式结果日志：`workspace/core4d/log/109_E087_box021_mass_reward_audit_results.md`；已更新 `EXPERIMENT_TRACKER.md`。下一步建议不是继续小幅 weight sweep，而是 hard safety gate / elite filtering，并修正 object lift/floor reward 口径。

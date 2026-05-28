@@ -913,32 +913,90 @@ def main(config: Config):
         if obj_body_id_e040 != -1:
             T = qpos_ref.shape[0]
             n_eef = len(config.hand_approach_body_ids)
-            target_np = np.zeros((T, n_eef, 3), dtype=np.float32)
-            eef_offset_np = np.asarray(config.contact_hdmi_eef_offset, dtype=np.float32)
-            if config.contact_hdmi_target_uses_eef_offset:
-                from scipy.spatial.transform import Rotation as _R_e073
-            for t in range(T):
-                mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
-                mujoco.mj_forward(mj_model, mj_data_ref)
-                obj_pos = mj_data_ref.xpos[obj_body_id_e040]
-                obj_mat = mj_data_ref.xmat[obj_body_id_e040].reshape(3, 3)
-                for ei, hid in enumerate(config.hand_approach_body_ids):
-                    hand_pos = mj_data_ref.xpos[hid]
-                    # Hand/contact point in object local frame. Historical
-                    # dynamic targets used the wrist body origin; E073 can
-                    # switch to the same wrist+eef_offset point used by reward.
-                    if config.contact_hdmi_target_uses_eef_offset:
-                        hand_quat = mj_data_ref.xquat[hid]
-                        hand_rot = _R_e073.from_quat(
-                            [hand_quat[1], hand_quat[2], hand_quat[3], hand_quat[0]]
+            if config.contact_hdmi_target_source == "external":
+                if not config.contact_hdmi_target_path:
+                    raise ValueError(
+                        "contact_hdmi_target_source=external requires contact_hdmi_target_path"
+                    )
+                target_path = Path(config.contact_hdmi_target_path)
+                if not target_path.is_absolute():
+                    target_path = Path.cwd() / target_path
+                target_data = np.load(target_path, allow_pickle=True)
+                axis = config.contact_hdmi_target_time_axis
+                if axis == "auto":
+                    if (
+                        "spider_contact_target_object_local" in target_data
+                        and target_data["spider_contact_target_object_local"].shape[0]
+                        == T
+                    ):
+                        axis = "spider"
+                    elif (
+                        "eval_contact_target_object_local" in target_data
+                        and target_data["eval_contact_target_object_local"].shape[0] == T
+                    ):
+                        axis = "eval"
+                    else:
+                        axis = (
+                            "eval"
+                            if "eval_contact_target_object_local" in target_data
+                            else "spider"
                         )
-                        contact_delta = hand_rot.apply(eef_offset_np)
-                        hand_pos = hand_pos + contact_delta
-                    target_np[t, ei] = obj_mat.T @ (hand_pos - obj_pos)
+                key = f"{axis}_contact_target_object_local"
+                if key not in target_data:
+                    raise KeyError(f"{target_path} missing {key}")
+                target_np = target_data[key].astype(np.float32)
+                if target_np.ndim != 3 or target_np.shape[1:] != (n_eef, 3):
+                    raise ValueError(
+                        f"{key} expected shape (T,{n_eef},3), got {target_np.shape}"
+                    )
+                original_len = target_np.shape[0]
+                target_np = _resize_contact_mask(target_np, T)
+                loguru.logger.info(
+                    "E085 external contact target: source={} key={} len {}→{}",
+                    target_path,
+                    key,
+                    original_len,
+                    T,
+                )
+            elif config.contact_hdmi_target_source == "ref_fk":
+                target_np = np.zeros((T, n_eef, 3), dtype=np.float32)
+                eef_offset_np = np.asarray(
+                    config.contact_hdmi_eef_offset, dtype=np.float32
+                )
+                if config.contact_hdmi_target_uses_eef_offset:
+                    from scipy.spatial.transform import Rotation as _R_e073
+                for t in range(T):
+                    mj_data_ref.qpos[:] = qpos_ref[t].detach().cpu().numpy()
+                    mujoco.mj_forward(mj_model, mj_data_ref)
+                    obj_pos = mj_data_ref.xpos[obj_body_id_e040]
+                    obj_mat = mj_data_ref.xmat[obj_body_id_e040].reshape(3, 3)
+                    for ei, hid in enumerate(config.hand_approach_body_ids):
+                        hand_pos = mj_data_ref.xpos[hid]
+                        # Hand/contact point in object local frame. Historical
+                        # dynamic targets used the wrist body origin; E073 can
+                        # switch to the same wrist+eef_offset point used by reward.
+                        if config.contact_hdmi_target_uses_eef_offset:
+                            hand_quat = mj_data_ref.xquat[hid]
+                            hand_rot = _R_e073.from_quat(
+                                [
+                                    hand_quat[1],
+                                    hand_quat[2],
+                                    hand_quat[3],
+                                    hand_quat[0],
+                                ]
+                            )
+                            contact_delta = hand_rot.apply(eef_offset_np)
+                            hand_pos = hand_pos + contact_delta
+                        target_np[t, ei] = obj_mat.T @ (hand_pos - obj_pos)
+            else:
+                raise ValueError(
+                    f"Unsupported contact_hdmi_target_source={config.contact_hdmi_target_source}"
+                )
             contact_target_per_frame = torch.tensor(target_np, device=config.device)
             loguru.logger.info(
-                "E040 dynamic target: shape={}, uses_eef_offset={}",
+                "E040 dynamic target: shape={}, source={}, uses_eef_offset={}",
                 tuple(contact_target_per_frame.shape),
+                config.contact_hdmi_target_source,
                 config.contact_hdmi_target_uses_eef_offset,
             )
 

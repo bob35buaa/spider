@@ -1,0 +1,7 @@
+# @package _global_
+# E087A: E085 raw target with Box021 mass scaled to 5kg.
+defaults:
+  - core4d_E085A_rawtarget_main
+  - _self_
+
+task: d003_box021_20231018_029_p2_upperobj_e083_m5_e087

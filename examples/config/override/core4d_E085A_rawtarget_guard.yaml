@@ -1,0 +1,12 @@
+# @package _global_
+# Auto-generated for E085 raw-contact target repair.
+defaults:
+  - core4d_E084C_box023_p2_semantic_guard
+  - _self_
+
+task: box023_person2_upperobj_e083
+contact_hdmi_dynamic_target: true
+contact_hdmi_target_source: external
+contact_hdmi_target_path: workspace/core4d/results/E085/raw_targets/E085A_rawtarget_guard/raw_contact_targets.npz
+contact_hdmi_target_time_axis: auto
+contact_hdmi_target_uses_eef_offset: false
