@@ -1,0 +1,4 @@
+# E089 B4 SPIDER smoke on B-path repaired top cases
+# variant	source_task	derived_task	mask_source_dir	mask_slug	person_idx	split	role
+E089B4_d003_box021_20231018_031_p2_btop_upperobj_e089b	d003_box021_20231018_031_p2_btop	d003_box021_20231018_031_p2_btop_upperobj_e089b	-	-	1	local-gpu0	main
+E089B4_d003_box021_20231020_020_p1_btop_upperobj_e089b	d003_box021_20231020_020_p1_btop	d003_box021_20231020_020_p1_btop_upperobj_e089b	-	-	1	local-gpu0	main

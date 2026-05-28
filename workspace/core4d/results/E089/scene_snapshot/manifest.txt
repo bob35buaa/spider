@@ -1,0 +1,11 @@
+# Scene snapshot for E089
+# Captured: 2026-05-28T19:28:09+08:00
+# Git HEAD: ee6783a (exp/core4d-collab-retarget)
+
+case                             file                       size  sha256
+box021_person1                   scene.xml                 30195  38f453d11f2c79dc170b40c0f9c55f609ae1ac747fe02e743df3136a1054b1b6
+box021_person1                   scene_act.xml             31174  8ccdd1f2246c4b74f4597fa6d963627d23ceb257d4b866adec7d7284e56182b7
+box021_person1_upperobj_e089     scene.xml                 30195  38f453d11f2c79dc170b40c0f9c55f609ae1ac747fe02e743df3136a1054b1b6
+box021_person1_upperobj_e089     scene_act.xml             34283  81adad1fd1c01e91130e6f105b23e745d2d05691dd612348e759034fd2b6871d
+box021_person1_upperobj_e089     scene_act_meta.json          27  5ec7dfe9212b998492ed7cb279e2e6dca79d6350bbeeaf5e56d58bcf3fafe6ff
+box021_person1_upperobj_e089     task_info.json              270  1d56f06f7d41449ad532b1b1ab8d1c6550002c7cee90a35d217cac6abaa6c130

@@ -1,0 +1,27 @@
+# @package _global_
+# E089 A path: SPIDER dynamic on old box021_person1 (G1-Feasibility gate PASS).
+# Validates that gate-pass cases work under E088 hard-gate + clearance reward stack.
+# Differences vs E088A: ref_fk target (no raw-target npz exists for this old case),
+# use existing box021_person1 mask, swap task to derived upperobj_e089.
+defaults:
+  - core4d_E088A_m10_gate_main
+  - _self_
+
+task: box021_person1_upperobj_e089
+
+# Use ref_fk dynamic target since old box021_person1 has no external raw-target npz.
+# G1 ref IK wrist FK already passes G1-Feasibility gate (top_face 70%, no wrist-in-box).
+contact_hdmi_target_source: ref_fk
+contact_hdmi_target_path: ""
+contact_hdmi_target_uses_eef_offset: true
+
+# Existing box021_person1 contact mask from E081 prep
+contact_hdmi_mask_source: core4d_3cm
+contact_hdmi_mask_path: workspace/core4d_collab_retarget/results/E026_E081_full/contact_masks/box021_person1/raw_contact_mask_3cm.npz
+contact_hdmi_mask_person_idx: 0
+contact_hdmi_mask_time_axis: auto
+
+# Hold-window disabled (this is not box023)
+hold_contact_rew_scale: 0.0
+hold_contact_start_eval_time: 0.0
+hold_contact_end_eval_time: 0.0

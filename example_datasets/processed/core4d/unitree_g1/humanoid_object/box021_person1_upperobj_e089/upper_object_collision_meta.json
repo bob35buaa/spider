@@ -1,0 +1,61 @@
+{
+  "added_leg_foot_pairs": [
+    "left_hip_collision_object",
+    "right_hip_collision_object",
+    "left_thigh_collision_object",
+    "right_thigh_collision_object",
+    "left_shin_collision_object",
+    "right_shin_collision_object",
+    "left_linkage_brace_collision_object",
+    "right_linkage_brace_collision_object",
+    "lf0_object",
+    "lf1_object",
+    "lf2_object",
+    "lf3_object",
+    "rf0_object",
+    "rf1_object",
+    "rf2_object",
+    "rf3_object"
+  ],
+  "added_upper_body_pairs": [
+    "head_collision_object",
+    "torso_collision_object",
+    "pelvis_collision_object",
+    "left_shoulder_yaw_collision_object",
+    "right_shoulder_yaw_collision_object",
+    "left_elbow_yaw_collision_object",
+    "right_elbow_yaw_collision_object"
+  ],
+  "derived_task": "box021_person1_upperobj_e089",
+  "leg_foot_geoms": [
+    "left_hip_collision",
+    "right_hip_collision",
+    "left_thigh_collision",
+    "right_thigh_collision",
+    "left_shin_collision",
+    "right_shin_collision",
+    "left_linkage_brace_collision",
+    "right_linkage_brace_collision",
+    "lf0",
+    "lf1",
+    "lf2",
+    "lf3",
+    "rf0",
+    "rf1",
+    "rf2",
+    "rf3"
+  ],
+  "note": "E083 derived scene; source task scene_act.xml is not modified.",
+  "object_geom": "object_collision",
+  "patched_file": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box021_person1_upperobj_e089/scene_act.xml",
+  "source_task": "box021_person1",
+  "upper_body_geoms": [
+    "head_collision",
+    "torso_collision",
+    "pelvis_collision",
+    "left_shoulder_yaw_collision",
+    "right_shoulder_yaw_collision",
+    "left_elbow_yaw_collision",
+    "right_elbow_yaw_collision"
+  ]
+}

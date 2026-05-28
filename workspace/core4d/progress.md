@@ -1117,3 +1117,54 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已补跑 E087A/B/C reward breakdown：E087C safety-tuned 把 `contact_hdmi_rew` 降到 `0.853`、`robot_object_penalty` 提到 `-0.634`，但仍没阻止头/上身压箱，说明只靠当前 scalar penalty 调权不足以形成 hard constraint。
 - [x] E087 可视化 sheet 已生成：`workspace/core4d/results/E087/keyframes/contact_sheets/E087_all_cases_sheet.jpg`。视觉观察：三组都仍是弯腰/趴箱/上身压箱；10kg 比 5kg 稳一些但不成功，5kg+safety 手部更保守但头/上身问题没解决。
 - [x] 已写入正式结果日志：`workspace/core4d/log/109_E087_box021_mass_reward_audit_results.md`；已更新 `EXPERIMENT_TRACKER.md`。下一步建议不是继续小幅 weight sweep，而是 hard safety gate / elite filtering，并修正 object lift/floor reward 口径。
+
+---
+
+## 2026-05-28 19:30 CST: E089 启动（A+B 并行）
+
+- 计划：`workspace/core4d/plan/95_E089_g1_feasibility_AB_validation_plan.md`
+- 诊断依据：`workspace/exp_diagnostic/diagnostic_report.md` + `data_filter_recommendation.md`
+- A 路：本地 GPU0 跑 `box021_person1` SPIDER (E088 reward stack + ref_fk target)
+- B 路：subagent 在 holosoma 做 OmniRetarget top-face 约束
+
+### A 路进展
+- [x] 派生 task `box021_person1_upperobj_e089`（16 leg + 7 upper-body collision pair），脚本 `workspace/core4d/scripts/E089/create_e089_cases.py`
+- [x] Scene snapshot 入 `workspace/core4d/results/E089/scene_snapshot/`
+- [x] Override `examples/config/override/core4d_E089A_box021_person1_upperobj.yaml`（继承 E088A，切 ref_fk target）
+- [x] Train script `workspace/core4d/scripts/train/train_E089.sh`（smoke/local 两模式）
+- [x] Eval script `workspace/core4d/scripts/eval/eval_E089.py`（含 E085-E088 baseline 对照表）
+- [x] **A 路 smoke 完成（4 CEM iter, ~6.5 min）**：
+  - `contact_frac_either=60.2%`、`obj_err_mean=1.3cm`
+  - **head_pen=0.0%、upper_pen=0.0%、hand_floor=0.0% 双手**
+  - 对比 E087A: head/upper/floor = 89%/89%/81%；E088A = 28%/55%/11%
+  - pelvis_min=0.19m（smoke 没收敛，预期 full 收敛后稳）
+- [ ] **A 路 full CEM 进行中**（background task `b1wx8ktk3`，预计 30-40 min）
+
+### B 路进展
+- [x] subagent 已启动（agentId aea193977a4a6c89d，background）
+- [ ] 等 B1 audit 完成
+
+### 关键判定
+- C1 已通过：smoke 阶段 head/upper/hand-floor penetration 三项全 0%，证明 G1-Feasibility gate pass 与 SPIDER dynamic feasibility 在 box021_person1 上强相关。
+- C2 待 full CEM 完成后验证。
+
+---
+
+## 2026-05-28 20:20 CST: E089 完成
+
+### 完整结果
+- **A 路 full CEM 完成**：pelvis_min=0.687m，head/upper/hand-floor 全 0%，obj_err 1.3cm，contact 60.2%
+- **B 路 13 case 修复完成**：subagent post-IK damped-LS，wrist world-up-face-frac 4-14% → 99-100%
+- **B4 SPIDER smoke 完成**：top-2 case head 0%/0%，upper 1.9%/0%，floor 7.5%/0%
+- **4/4 claims 通过**
+
+### 已写入
+- log: `workspace/core4d/log/111_E089_g1_feasibility_AB_results.md`
+- EXPERIMENT_TRACKER 已更新（含 E089 行 + Logs 链接）
+- evals: `workspace/core4d/results/E089/eval_summary.json`
+
+### 已识别 follow-up
+- P1: 修 G1-feasibility gate 让 `top_face_frac` 识别 world-up 而非 hardcoded local +z
+- P2: B-path top-2 跑 full CEM（smoke 已证 head/upper 0，pelvis 待 full 收敛）
+- P3: 把 gate 集成到 holosoma D005b
+- P4 / P5: 真 pre-IK B-1（需 holosoma env），应用到 Box026 等新箱型
