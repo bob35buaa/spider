@@ -1168,3 +1168,141 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - P2: B-path top-2 跑 full CEM（smoke 已证 head/upper 0，pelvis 待 full 收敛）
 - P3: 把 gate 集成到 holosoma D005b
 - P4 / P5: 真 pre-IK B-1（需 holosoma env），应用到 Box026 等新箱型
+
+---
+
+## 2026-05-28 21:05 CST: E090 计划探索
+
+- [x] 已读取用户思考 `workspace/exp_diagnostic/my_thoughts.md`、诊断报告、E089 plan/log、E028/E030/E082-E088 关键记录和 Holosoma V1 README。
+- [x] 关键判断：诊断和 E089 强支持“上游 retarget 后的 G1 wrist/eef 几何不可执行”是 D003 Box021 失败主因；但 D003 production 没有显式启用 Phase 4 flags，不能直接归因到 Phase 4 改进本身。更高优先级变量是 `--replace_wrist_with_fingertip`、原始 solver/code path、以及 hand target semantic。
+- [x] 已写入 E090 详细计划：`workspace/core4d/plan/96_E090_original_omniretarget_ablation_plan.md`。核心实验矩阵为 current baseline、current no-fingertip、original solver same input、original full、current Phase4、topface pre-IK；先跑 3 个 canonical Box021 failure case，几何 gate 通过后再接 SPIDER smoke/full 和 13 case 扩展。
+
+## 2026-05-28 21:25 CST: E090 根据 H2 反馈调整
+
+- [x] 用户补充 `--replace_wrist_with_fingertip` 的原始动机是 Box025 太大、G1 臂展不够，因此用 fingertip cluster 替代 wrist 来增加 reach。该动机支持 H2：同一 reach hack 对 Box021 低位合抱可能把 target 推到侧面/下沿/箱体内部。
+- [x] 已更新 `workspace/core4d/plan/96_E090_original_omniretarget_ablation_plan.md`：E090 改为 H2-first。第一批只跑 current no-fingertip 与 topface-preIK；original solver/full 和 Phase4 flags 降为第二批条件执行。新增 Box025 guard 风险：即使 no-fingertip 改善 Box021，也不能全局删除 fingertip replacement，只能按物体尺寸/接触面条件化启用。
+
+## 2026-05-28 21:55 CST: E090 Phase 0 gate 修复
+
+- [x] 已修 `workspace/exp_diagnostic/scripts/g1_feasibility_gate.py`：repo root 不再写死 `/mnt/ali...`，支持 `--tasks`；`top_face_frac` 改为 object 当前姿态下 outward normal 最接近 world +Z 的 face。
+- [x] 校准时发现严格 world-up face 会误杀 `box025_person2`（该 case 是高侧壁/legacy local +z 接触，E080 标 partial positive）。为保留 Box025 guard，新增 `legacy_local_z_face_frac` 与 `support_face_frac=max(top_face_frac, legacy_local_z_face_frac)`，gate 用 `support_face_frac >= 30%` 判定。严格 world-up 指标仍保留，供 E090 topface-preIK 对比。
+- [x] 已同步简化 `workspace/exp_diagnostic/scripts/gate_compare_b_path.py`，删除临时 world-up 补丁逻辑，直接复用新 gate。
+- [x] 验证命令通过：`python -m py_compile workspace/exp_diagnostic/scripts/g1_feasibility_gate.py workspace/exp_diagnostic/scripts/gate_compare_b_path.py`；`python workspace/exp_diagnostic/scripts/g1_feasibility_gate.py --tasks d003_box021_20231018_029_p2 d003_box021_20231011_035_p2 d003_box021_20231020_019_p1 box023_person2 box025_person2 --output-json workspace/core4d/results/E090/gate_phase0_calibration.json`。结果：3 个 D003 Box021 canonical failure 全 REJECT，`box023_person2` PASS，`box025_person2` PASS。
+
+## 2026-05-28 22:15 CST: E090 Phase 1A 脚本落地
+
+- [x] 已新增 `workspace/core4d/scripts/E090/canonical_cases.tsv`，包含 3 个 canonical failure case：`20231018_029_p2`、`20231011_035_p2`、`20231020_019_p1`。
+- [x] 已新增 `workspace/core4d/scripts/E090/rewrite_wrist_top_face_preik.py`：对 converted NPZ 的 `global_joint_positions[:,20:22]` 做 world-up face +5cm pre-IK rewrite，并写 summary JSON。
+- [x] 已新增 `workspace/core4d/scripts/E090/run_holosoma_retarget_ablation.sh`：固化 convert -> 可选 topface rewrite -> robot_retarget -> trim -> SPIDER scene/trajectory/scene_act/verify 流程；默认 variants 为 `current_no_fingertip,topface_preik`。
+- [x] 已新增 `workspace/core4d/scripts/eval/eval_E090_retarget_geometry.py`，从 `workspace/core4d/results/E090/variants.tsv` 读取产物并运行新 G1 gate，输出 `workspace/core4d/results/E090/geometry/geometry_summary.{json,csv}`。
+- [x] 静态检查通过：`python -m py_compile workspace/core4d/scripts/E090/rewrite_wrist_top_face_preik.py workspace/core4d/scripts/eval/eval_E090_retarget_geometry.py`，`bash -n workspace/core4d/scripts/E090/run_holosoma_retarget_ablation.sh`，`git diff --check`。
+- [x] dry-run 通过：`bash workspace/core4d/scripts/E090/run_holosoma_retarget_ablation.sh --dry-run --variants current_no_fingertip --case-set canonical` 展开出的三条 no-fingertip 命令路径正确。
+- [x] 首次实际运行遇到环境问题：`source /home/ubuntu/Workspace/holosoma/scripts/source_retargeting_setup.sh` 后 `python` 仍缺 `smplx`，报 `ModuleNotFoundError: No module named 'smplx'`。已确认 `/home/ubuntu/.holosoma_deps/miniconda3/envs/hsretargeting/bin/python` 可 import `smplx,mujoco`，因此更新 E090 runner 显式使用 `HS_PYTHON`，并把 `HSRETARGETING_BIN` 放到 PATH。
+
+## 2026-05-28 22:36 CST: E090 计划按 H2 偏好再更新
+
+- [x] 已根据用户反馈更新 `workspace/core4d/plan/96_E090_original_omniretarget_ablation_plan.md`：标题改为 H2-first，明确 `--replace_wrist_with_fingertip` 是为 Box025 reach 设计的条件性策略候选，而不是应被全局删除的错误参数。
+- [x] 已在计划中新增 `world-up top face` 术语澄清：它是物体当前姿态下 6 个 collision face 中 outward normal 最接近 world/MuJoCo `+Z` 的面，不等于 hardcoded local `+z`。
+- [x] 已新增 C6 / Phase 2B Box025 reach guard：若 no-fingertip 改善 Box021 但损害 Box025，最终结论必须是按物体尺寸、接触面、inside-risk 或 reach margin 条件化启用 fingertip replacement。
+
+## 2026-05-28 22:38 CST: E090 Phase 1A 继续启动
+
+- [x] 已按 `experiment-planning-zh` 恢复 `EXPERIMENT_TRACKER.md`、E090 plan 和 `progress.md` 当前状态；确认当前应从 Phase 1A 实际 retarget 继续，而不是重写计划。
+- [x] 已启动 sidecar explorer `019e6f05-3ac9-7a60-a208-4e20037fff89` 审计 E090 Phase 1A runner/manifest/eval 的可运行性；主线程同时推进静态检查与本地实际运行。
+- [x] Phase 1A 启动前静态检查通过：`bash -n`、`python -m py_compile`、`git diff --check`，以及 `HS_PYTHON` 下 `import smplx,mujoco`。
+- [ ] 已启动实际运行：`bash workspace/core4d/scripts/E090/run_holosoma_retarget_ablation.sh --case-set canonical --variants current_no_fingertip,topface_preik`，日志写入 `workspace/core4d/results/E090/logs/phase1a_retarget_20260528_2239.log`。目前 `20231018_029_p2` no-fingertip 全链路完成，topface-preIK retarget 进行中。
+- [x] Sidecar explorer 返回：env/path/XML/TSV schema 无硬阻塞；主要风险是 `variants.tsv` 中途失败会保留部分 manifest，不能在长跑未完成时直接 eval。
+- [x] Phase 1A 首轮实际运行部分成功：`20231018_029_p2` 和 `20231011_035_p2` 的 no-fingertip/topface-preIK 四个产物均完成 verify；`20231020_019_p1` no-fingertip 在 Holosoma `robot_retarget.py` 约 frame 79 报 `RuntimeError: CVXPY solve failed: infeasible`，没有生成 retargeted/trimmed 产物。下一步不重复该失败配置，改为只继续第三个 case 的 topface-preIK，并保留已有 manifest。
+- [x] 已小修 `workspace/core4d/scripts/E090/run_holosoma_retarget_ablation.sh`：新增 `--only-base-task` 与 `--append-manifest`，用于在失败后只补跑剩余可行变体并保留已有成功行；`bash -n`、`git diff --check`、dry-run 均通过。
+- [x] 已修 runner 的 dry-run 副作用：dry-run 不再创建/覆盖/追加 `variants.tsv`；已清理一次 dry-run 导致的重复 manifest 行。当前 `workspace/core4d/results/E090/variants.tsv` 为 5 个成功产物。
+- [x] Phase 2 geometry eval 完成：输出 `workspace/core4d/results/E090/geometry/geometry_summary.{json,csv}`。no-fingertip 两条可跑 case inside 均为 0%，但 support 仅 `17.3/14.7%` 与 `27.1/21.8%`，仍未过 30%；第三条 no-fingertip solver infeasible。topface-preIK support 为 `100/100%`、`100/100%`、`98/100%`，后两条 gate PASS；第一条只因 `T=78<80` 被 reject。
+- [x] 已新增 Phase 2B guard manifest `workspace/core4d/scripts/E090/guard_cases.tsv`，包含 `box023_person2` (`20231008/045/person2/Box023`) 和 `box025_person2` (`20231011/048/person2/Box025`)。
+- [x] 已扩展 E090 runner 支持 `--case-set guard`；guard dry-run 不再污染 manifest，检查后 `variants.tsv` 仍为 5 行。
+- [x] Guard retarget 已完成并追加到 manifest：`box023_person2_btop_preik_e090` trim 后 `T=138`，`box025_person2_btop_preik_e090` trim 后 `T=162`。
+- [x] 已重跑 E090 geometry eval，`workspace/core4d/results/E090/geometry/geometry_summary.csv` 更新为 7 行。新增 guard 结论：`box023_person2_btop_preik_e090` PASS（inside `0/0%`，support `100/100%`）；`box025_person2_btop_preik_e090` REJECT（inside `48.1/51.9%`，signed distance 均值约 `-1/-7mm`，虽 support `98.8/96.9%`）。
+- [x] 已更新 E090 计划：把 Phase 1A/2B 实证结果写入 `workspace/core4d/plan/96_E090_original_omniretarget_ablation_plan.md`；下一步收敛为先跑 Box021 topface-preIK 的两个 gate-pass case (`20231011_035_p2`、`20231020_019_p1`) 的 SPIDER smoke，Box025 topface-preIK 仅作为 negative guard，不作为全局策略推广。
+
+## 2026-05-28 23:08 CST: E090 Phase 3 smoke 准备
+
+- [x] 已启动 sidecar explorer `019e6f16-1822-7990-bf60-0dd24e95892f` 只读审计 E081/E083/E089 的 SPIDER 派生、override、train/eval 模式；其结论与主线程一致：E090 不能直接训练原始 retarget task，必须派生 m10 + leg/upper-body-object collision 的 smoke task。
+- [x] 已新增 `workspace/core4d/scripts/E090/build_spider_tasks.py`：从 `d003_box021_20231011_035_p2_btop_preik_e090` 和 `d003_box021_20231020_019_p1_btop_preik_e090` 生成两个 `*_upperobj_m10_smoke` 派生 task；复制 E090 qpos，注入 E083 的 16 leg/foot + 7 upper-body object pairs，并把 `scene.xml`/`scene_act.xml` object mass 从 `29.632kg` 缩放到 `10kg`。
+- [x] 已新增 `workspace/core4d/scripts/train/train_E090_smoke.sh` 和 `workspace/core4d/scripts/eval/eval_E090.py`；override 生成到 `examples/config/override/core4d_E090S1_box021_20231011_035_p2_btop.yaml` 与 `core4d_E090S2_box021_20231020_019_p1_btop.yaml`，继承 E089A safety stack，使用 `ref_fk` target，禁用旧 contact mask。
+- [x] Build 与轻量验证通过：两个派生 task 的 `scene_act.xml` 均为 `nq/nv/nu=42/41/35`、`npair=49`、object mass `10kg`，原始 freejoint trajectory qpos 分别为 `(135,43)` 和 `(101,43)`；`variants_smoke.tsv` 已生成并可被 `train_E090_smoke.sh list` 读取。
+- [x] E090 Phase 3 smoke 已完成：`bash workspace/core4d/scripts/train/train_E090_smoke.sh local 0` 顺序跑 S1/S2，并自动写入 `workspace/core4d/results/E090/smoke/smoke_eval_summary.{json,csv}` 与 `workspace/core4d/results/E090/eval_summary.json`。
+- [x] Smoke 量化：S1 `E090S1_box021_20231011_035_p2_btop` PASS，`T=135`、contact `95.6%`、obj mean `0.001m`、pelvis min `0.538m`、head/upper/LH/RH-floor 全 `0%`；S2 FAIL，`T=101`、contact `40.6%`、obj mean `0.011m`、pelvis min `0.180m`、head/upper `0%` 但 `LH_floor=56.4%`。
+- [x] Smoke 视觉复核：S1 没有明显头胸穿箱或手撑地，但 4-iter 阶段仍弯腰、头部贴近箱面，属于“安全改善但姿态未完全收敛”；S2 后段左手/身体落地并翻箱，不能进入 full。
+- [x] 已新增 `workspace/core4d/scripts/train/train_E090_full.sh`，并扩展 `workspace/core4d/scripts/eval/eval_E090.py` 支持 `--stage full`。full 默认只跑 smoke-pass 的 S1，S2 不重复推进。
+- [x] E090 Phase 4 full 已完成：`bash workspace/core4d/scripts/train/train_E090_full.sh local 0` 只跑 S1，耗时约 18min，结果写入 `workspace/core4d/results/E090/full/full_eval_summary.{json,csv}`。
+- [x] Full 量化：S1 full `contact=57.8%`、`obj_mean=0.009m`、head/upper/LH/RH-floor 全 `0%`，但 `pelvis_min=0.134m`，因此 full fail。视觉确认机器人趴低/跪低、头部贴近箱面，pelvis failure 是真实姿态问题。
+- [x] 轻量诊断：source ref 经 `load_data`/scene-act conversion 后 pelvis min 约 `0.657m`，而 full rollout sim pelvis min `0.134m`，说明失败来自 CEM/reward 的低姿态局部解，不是 topface-preIK retarget reference 先天低 pelvis。
+- [x] 已写入正式结果日志 `workspace/core4d/log/112_E090_h2_first_retarget_and_spider_smoke_results.md`，并更新 E090 plan 的 Phase 3/4 证据与决策树。下一步不扩展 D003 13 case，先做 S1-only 姿态约束验证。
+- [x] 已更新 `workspace/core4d/EXPERIMENT_TRACKER.md`：新增 E090 总览行和 log 列表摘要，状态标为 `❌/🔬`（几何/safety 有效，但 full 因 pelvis collapse 未通过）。
+
+## 2026-05-28 23:42 CST: E091 data_construction_v2 计划更新启动
+
+- [x] 已按 `experiment-planning-zh` 恢复 E090 结果、`workspace/exp_diagnostic/data_filter_recommendation.md` 与 Holosoma `workspace/v3/data_construction` 现状。
+- [x] 计划主线已根据用户反馈从 B 路 Box021 D003 扩展调整为 C 路：在 Holosoma `workspace/v3/data_construction_v2` 新建实验链路，优先开 Box026，再看 Box004/Box022。
+- [x] 关键依据：E090 支持 H2 的几何语义判断，但 Box021 topface-preIK full CEM 仍因 pelvis collapse 失败；旧 Holosoma 链路 D001/D002 已发现 Box026/box004 clean 候选，而 D003 ready 队列只含 Box021，Box026/box004/Box022 需要补模板/OmniRetarget/可视化 gate。
+- [x] 已写入 E091 计划：`workspace/core4d/plan/97_E091_holosoma_data_construction_v2_medium_boxes_plan.md`。计划明确 `world-up top face` 定义、`--replace_wrist_with_fingertip` 的 Box025 reach-hack 定位、Box026 > box004 > Box022 的优先级、D005b gate、可视化输出和 high-reasoning 复核。
+- [x] 已吸收 sidecar 审计结果：旧 Holosoma 脚本/JSON 有 `data_constructon` 硬编码但实际目录是 `data_construction`；Box026/box004 的 blocker 是缺 SPIDER/MuJoCo source scene template；D004/D005 当前实际 PNG 产物不完整，E091 必须重新生成 raw/retarget/G1 overlay 可视化并做存在性/非空检查。
+- [x] 已更新 `workspace/core4d/EXPERIMENT_TRACKER.md`，新增 E091 计划行，状态 `📋`。
+
+## 2026-05-29 00:06 CST: E091 Phase 0 脚本实现
+
+- [x] 已新增 `workspace/core4d/scripts/E091/make_data_construction_v2_dirs.sh`，创建 Holosoma `workspace/v3/data_construction_v2/{inputs,scripts,results,visualizations,logs,reports}`。
+- [x] 已新增 `workspace/core4d/scripts/E091/build_medium_box_manifest.py`，从旧 D001/D002 生成 Box026/box004/Box022 manifest、Stage2b backlog TSV、尺寸/ready dashboard。
+- [x] 已新增 `workspace/core4d/scripts/E091/make_raw_contact_visuals.py`，从旧 D002 `raw_contact_proxy.npz` 生成 per-case raw contact timeline PNG 与 aggregate dashboard，并检查 PNG 非空。
+- [x] Phase 0 已实际运行：`data_construction_v2` 生成 `80` 条 medium manifest、`15` 条 Stage2b backlog（Box026 7、box004 4、Box022 stress-test 4），当前 `source_scene_exists=0`，因此 Stage2b 全部 disabled 等模板补齐。
+- [x] Raw-contact 可视化已生成并通过非空检查：`16/16` PNG nonblank，输出在 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/visualizations/raw_contact/` 与 `visualizations/dashboard/`。
+- [x] 已新增并运行 `workspace/core4d/scripts/E091/template_preflight.py` / `run_template_preflight.sh`：15 条 backlog 全部 `needs_source_scene_template`；object mesh 均存在。Box026 half extents 约 `0.3145 x 0.1972 x 0.2345m`，建议 base template `box021_person1`；box004 half extents 约 `0.1740 x 0.1318 x 0.2236m`，建议 base template `box023_person1`。
+- [x] 已吸收 high subagent 可视化复核：图像信息足够且 `16/16` 非空；Box026 top3 建议 `e091_box026_20231018_039_p2`、`e091_box026_20231018_040_p2`、`e091_box026_20231020_135_p2`；box004 `20231003_2/083 p2/p1` 适合作为低风险对照；Box026 fail/hold 与 Box022 暂不进主线。
+- [x] 已修 E091 Stage2b 输入风险：`build_medium_box_manifest.py` 现在额外输出严格 12 列 `inputs/cases_stage2b_medium_pipeline.tsv`；`run_stage2b_medium_boxes.sh --dry-run` 在当前模板未补齐时正确报告 `ENABLED_ROWS=0` 并退出，不会误喂带诊断列的 TSV 给 SPIDER pipeline。
+- [x] 已新增 `workspace/core4d/scripts/E091/create_source_scene_templates.py` 并创建首批 source templates：`box026_person2`、`box004_person2`。对应 scene 均可被 MuJoCo load (`nq=43,nv=41,nu=29`)，object mesh 已复制到 `example_datasets/processed/core4d/assets/objects/{box026,box004}/`，质量暂设 `5kg` 避免 Box021 D003 的 `29.632kg` 异常。
+- [x] 重新生成 manifest/preflight 后，Stage2b ready 从 `0` 增至 `6`：Box026 person2 4 条、box004 person2 2 条。已输出首批 case files：`cases_stage2b_box026_first_pipeline.tsv`、`cases_stage2b_box026_top3_pipeline.tsv`、`cases_stage2b_box004_control_pipeline.tsv`。
+- [x] 已把 `workspace/core4d/data_preprocess/pipeline.sh` 改成向后兼容的 `REPLACE_WRIST_WITH_FINGERTIP` 开关（默认 `1` 保持旧行为）；E091 `run_stage2b_medium_boxes.sh` 默认设为 `0`，符合 medium-box 不默认使用 Box025 reach hack 的计划。dry-run 已确认 convert 命令不带 `--replace_wrist_with_fingertip`。
+
+### E091 遇到的错误
+
+| 错误 | 尝试次数 | 处理 |
+|---|---:|---|
+| `e091_box026_20231018_039_p2` 首次实际 Stage2b 在 `robot_retarget.py` 报 `ValueError: string is not a file: models/Box026/Box026.obj` | 1 | 定位为新物体模型生成到了 SPIDER repo，Holosoma retarget cwd 找不到。已在 `workspace/core4d/data_preprocess/pipeline.sh` 加 `sync_generated_object_model`，convert 后把 `src/holosoma_retargeting/.../models/<object>` 同步到 Holosoma repo；dry-run 已确认 retarget 前会执行同步。 |
+| 同一 case 第二次在 `InteractionMeshRetargeter` 报 `ParseXML: Error opening file 'models/g1/g1_29dof_w_Box026.xml'` | 1 | 定位为 G1-with-object retarget XML 未生成。已扩展 `create_source_scene_templates.py`，为 Box026/box004 生成并 MuJoCo load `g1_29dof_w_<object>.xml`，同时写 OBJ/URDF 到 Holosoma retarget models。 |
+| `e091_box026_20231018_040_p2` 在 no-fingertip retarget 第约 67/99 帧报 `CVXPY solve failed: infeasible` | 1 | 不重复同配置；批处理因此未跑到第三条。已生成单独 case file `cases_stage2b_box026_135_p2_pipeline.tsv`，继续跑 `e091_box026_20231020_135_p2`。 |
+
+### E091 首条 Stage2b / D005b 结果
+
+- [x] `e091_box026_20231018_039_p2` no-fingertip Stage2b 已完整通过：retarget `142` 帧，trim 后 `123` 帧，SPIDER `trajectory_kinematic.npz` `(123,43)`，`scene.xml nq/nv/nu=43/41/29`，`scene_act.xml nq/nv/nu=42/41/35`，verify `trimmed_qpos_matches_spider_qpos=true`。
+- [x] 该 case 的 D005b gate 已运行：inside `L/R=0.8%/0.0%`、signed distance `+8.1/+9.1cm`、pelvis min `0.705m`、T `123` 均好；但 support-face fraction 约 `20%`，低于 30% 阈值，因此当前判定 `REJECT: no_hand_on_support_face_≥30%`。下一步继续跑 Box026 top3 另外两条，不因单条 near-reject 直接放弃 Box026。
+
+## 2026-05-29 00:17 CST: E091 计划按 Box026 top3 初筛更新
+
+- [x] `e091_box026_20231020_135_p2` no-fingertip Stage2b 已完成：retarget `116` 帧，trim 后 `82` 帧，SPIDER `trajectory_kinematic.npz` `(82,43)`，verify `trimmed_qpos_matches_spider_qpos=true`。
+- [x] 已补跑 Box026 两条成功预处理的 D005b gate，输出到 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/d005b_g1_feasibility/box026_top_success_gate.json`。
+- [x] D005b 结果：`039_p2` 仍为 near-reject，主要问题是 support-face frac `~20% < 30%`；`135_p2` 也是 near-reject，support-face frac `~62%`，但 right wrist inside `12.2% > 10%`。
+- [x] 决策更新：暂停继续扩大 Box026 no-fingertip top7；下一步优先跑 `cases_stage2b_box004_control_pipeline.tsv`，先争取一个 medium-object positive pipeline。若 box004 也无 pass，再对 Box026 `039_p2` / `135_p2` 做有限 H2 variant（support-face-preIK / exterior projection），不重复 `040_p2` no-fingertip。
+- [x] 已更新计划文件 `workspace/core4d/plan/97_E091_holosoma_data_construction_v2_medium_boxes_plan.md`：新增 `0.1 2026-05-29 动态更新`，并改写 Phase 2 成功标准和下一步执行顺序。
+
+## 2026-05-29 00:23 CST: E091 box004 positive pipeline 初筛
+
+- [x] 已跑 `cases_stage2b_box004_control_pipeline.tsv` 中的 `e091_box004_20231003_2_083_p2`，no-fingertip Stage2b 全链路完成：retarget `121` 帧，trim 后 `105` 帧，SPIDER `trajectory_kinematic.npz` `(105,43)`，`scene.xml nq/nv/nu=43/41/29`，`scene_act.xml nq/nv/nu=42/41/35`，verify `trimmed_qpos_matches_spider_qpos=true`。
+- [x] 已重跑 D005b summary：`e091_box004_20231003_2_083_p2` 为当前第一条 PASS，inside `L/R=0.0%/0.0%`、signed distance `+18.5/+14.1cm`、support-face either `42.9%`、pelvis min `0.679m`、T `105`。Box026 两条保持 reject/near-reject。
+- [x] 已新增并运行 `workspace/core4d/scripts/E091/make_medium_box_visual_qc.py`，输出 D005b TSV/MD、object-local overlay、timeline、MuJoCo keyframe sheet 和 aggregate dashboard。PNG 非空检查 `11/11` 通过。
+- [x] 关键输出：`/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/d005b_g1_feasibility/d005b_summary.tsv`、`/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/visual_qc/summary.md`、`/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/visualizations/d005b/`、`/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/visualizations/keyframes/`。
+- [x] high-reasoning subagent `019e6f65-9798-73b0-b68d-0b396e38aae9` 已完成可视化复核：box004 判定为 visually credible PASS，可作为 seed positive；Box026 两条 reject 与 overlay/timeline 一致，不建议同配置扩量。
+- [x] 已写入复核报告 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/reports/high_subagent_d005b_review.md`。
+- [x] 已新增并运行 `workspace/core4d/scripts/E091/make_top_medium_box_bank.py`：top bank 3 行，top candidate 1 行。`e091_box004_20231003_2_083_p2` rank 1、score `88.878`、decision `top_candidate`；两条 Box026 为 `review_only`。
+- [x] 已新增 E091 minimal smoke 脚本：`workspace/core4d/scripts/E091/build_spider_smoke_tasks.py`、`workspace/core4d/scripts/train/train_E091_smoke.sh`、`workspace/core4d/scripts/eval/eval_E091.py`。静态检查通过。
+- [x] 已生成 smoke 派生 task `e091_box004_20231003_2_083_p2_upperobj_m5_smoke` 与 override `examples/config/override/core4d_E091S1_box004_20231003_2_083_p2.yaml`：scene_act `nq/nv/nu=42/41/35`、`npair=49`、object mass `5kg`、trajectory `(105,43)`，加入 16 个 leg/foot-object 和 7 个 upper-body-object pairs。
+- [x] 已完成 top1 minimal smoke：`bash workspace/core4d/scripts/train/train_E091_smoke.sh local 0`。产物在 `workspace/core4d/results/E091/smoke/`，包含 rollout NPZ、mp4、keyframes、`smoke_eval_summary.{json,csv}`。
+- [x] E091 smoke eval 已按本计划补充 pelvis 检查并重跑：`smoke_collision_pass=true`（head `0%`、upper `0%`、LH floor `0%`、RH floor `1.0%`、object mean error `0.006m`），但 `pelvis_min=0.079m`，`pelvis_collapse_warning=true`，因此 `stage_pass=false`。
+- [x] 按 `video-frames` skill 从 smoke mp4 额外抽取 `workspace/core4d/results/E091/smoke/keyframes_skill/E091S1_box004_20231003_2_083_p2_f80.jpg`；自动抽取 keyframes `9/9` 非空。
+- [x] high-reasoning subagent `019e6f6e-9002-7fe3-ae85-ec3ae02bd69d` 已完成 smoke keyframes 复核：判定 `REVIEW`。头/上身穿箱与手撑地不是主因，物体 tracking 稳定；中后段 pelvis/hip 明显塌陷，属于 dynamics follow-up。
+- [x] 已写入 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/reports/high_subagent_smoke_review.md`。
+- [x] 已写正式 log `workspace/core4d/log/113_E091_data_construction_v2_medium_box_results.md`；已更新 E091 plan 0.2 结果与 `EXPERIMENT_TRACKER.md`。结论：data_construction_v2 数据链路已跑通到 smoke，当前 seed 为 box004；smoke 未 final pass 是 pelvis collapse，不回滚 D005b/top bank，不在 E091 内继续优化算法。
+
+## 2026-05-29 00:43 CST: E091 OmniRetarget 可视化补齐
+
+- [x] 根据用户指出“OmniRetarget 结果需要可视化”，已新增并运行 `workspace/core4d/scripts/E091/make_omniretarget_visuals.py`。它直接读取 Holosoma v2 Stage2b 的 `retargeted/*.npz` 与 `trimmed/*.npz`，用 source scene 渲染，不再用 SPIDER/D005b keyframes 代替 OmniRetarget 可视化。
+- [x] 输出到 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/visualizations/omniretarget/`：每个成功 retarget case 有 `retargeted_keyframes.png`、`trimmed_keyframes.png`、`omniretarget_timeline.png`、`retargeted.mp4`。
+- [x] 覆盖 4 个已尝试 Stage2b 目录：3 个成功可视化（box004 p2、Box026 039 p2、Box026 135 p2），1 个 `e091_box026_20231018_040_p2` 标记为 `missing_retargeted_npz`（CVXPY infeasible 后没有 retargeted NPZ）。
+- [x] 非空检查通过：OmniRetarget PNG `9/9` nonblank，MP4 `3/3` exists。manifest/summary 写入 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/omniretarget_visuals/`。

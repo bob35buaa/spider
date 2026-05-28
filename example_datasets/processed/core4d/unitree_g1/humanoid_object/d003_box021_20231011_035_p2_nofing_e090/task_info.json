@@ -1,0 +1,23 @@
+{
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231011_035_p2_upperobj_e083/scene.xml",
+  "source_qpos": "workspace/core4d/results/E090/retarget/holosoma_d003_box021_20231011_035_p2_nofing_e090/trimmed/20231011-035-person2-Box021_with_obj_original.npz",
+  "task": "d003_box021_20231011_035_p2_nofing_e090",
+  "data_id": "0",
+  "date": "20231011",
+  "seq": "035",
+  "person": "person2",
+  "object_name": "Box021",
+  "object_model_rel": "box/box021_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    -0.32559633255004883,
+    -1.4941272735595703,
+    0.13938553631305695
+  ],
+  "object_initial_quat": [
+    0.7224826812744141,
+    0.6904245018959045,
+    -0.02957167662680149,
+    -0.021407270804047585
+  ]
+}

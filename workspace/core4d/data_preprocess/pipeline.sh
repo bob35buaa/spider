@@ -13,6 +13,7 @@ PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 REF_FPS="${REF_FPS:-30.0}"
 EVAL_FPS="${EVAL_FPS:-50.0}"
 TRIM_MODE="${TRIM_MODE:-holosoma}"
+REPLACE_WRIST_WITH_FINGERTIP="${REPLACE_WRIST_WITH_FINGERTIP:-1}"
 CASE_FILE="workspace/core4d/data_preprocess/cases_box023.tsv"
 FORCE=0
 DRY_RUN=0
@@ -36,7 +37,7 @@ Options:
 
 Environment overrides:
   HOLOSOMA_DIR, CORE4D_REAL_ROOT, SMPLX_MODEL_DIR, RESULT_ROOT, PYTHON_BIN,
-  REF_FPS, EVAL_FPS, TRIM_MODE, REPO
+  REF_FPS, EVAL_FPS, TRIM_MODE, REPLACE_WRIST_WITH_FINGERTIP, REPO
 
 External absolute paths:
   HOLOSOMA_DIR       Absolute path to the Holosoma repo.
@@ -50,6 +51,10 @@ Project-internal paths should stay relative to REPO:
 
 TRIM_MODE:
   holosoma   Use Holosoma workspace/pipeline/trim_no_contact.py (default).
+
+REPLACE_WRIST_WITH_FINGERTIP:
+  1          Preserve legacy convert behavior and pass --replace_wrist_with_fingertip (default).
+  0          Use wrist targets directly; useful for medium-box H2/E091 ablations.
 USAGE
 }
 
@@ -129,6 +134,19 @@ repo_path() {
   esac
 }
 
+sync_generated_object_model() {
+  local object_name=$1
+  local src_dir="$REPO/src/holosoma_retargeting/holosoma_retargeting/models/$object_name"
+  local dst_parent="$HOLOSOMA_DIR/src/holosoma_retargeting/holosoma_retargeting/models"
+  if [ -d "$src_dir" ] && [ "$REPO" != "$HOLOSOMA_DIR" ]; then
+    echo "+ sync generated object model: $src_dir -> $dst_parent/"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      mkdir -p "$dst_parent"
+      cp -a "$src_dir" "$dst_parent/"
+    fi
+  fi
+}
+
 is_auto_value() {
   case "$1" in
     auto|-|-1) return 0 ;;
@@ -198,18 +216,24 @@ process_case() {
         # shellcheck disable=SC1090
         source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
       fi
-      run_cmd python "$HOLOSOMA_DIR/workspace/pipeline/convert_core4d_to_omniretarget.py" \
+      convert_args=(
+        python "$HOLOSOMA_DIR/workspace/pipeline/convert_core4d_to_omniretarget.py" \
         --core4d_dir "$core4d_motion_root" \
         --smplx_model_dir "$SMPLX_MODEL_DIR" \
         --output_dir "$converted_dir" \
         --date "$date" \
         --seq "$seq" \
         --person "$person" \
-        --with_object \
-        --replace_wrist_with_fingertip
+        --with_object
+      )
+      if [ "$REPLACE_WRIST_WITH_FINGERTIP" = "1" ]; then
+        convert_args+=(--replace_wrist_with_fingertip)
+      fi
+      run_cmd "${convert_args[@]}"
     else
       echo "skip convert: $converted_dir/${task_name}.npz exists"
     fi
+    sync_generated_object_model "$object_name"
 
     if [ "$FORCE" -eq 1 ] || [ ! -f "$retargeted_npz" ]; then
       echo "+ source $HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"

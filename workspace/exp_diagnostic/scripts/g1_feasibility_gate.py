@@ -20,9 +20,15 @@ New per-case metrics (none of these exist in D005):
    natural carry pose has gap ~0.05-0.15 m. Reject if > 0.30 m on either
    hand (= "deep bending required").
 
-4. top_face_frac (per hand): fraction of frames whose chosen face is
-   `+z` in the object local frame, i.e. hand on top edge/face. Soft
-   reward; > 0.30 is good for box-lift tasks.
+4. top_face_frac (per hand): fraction of frames whose chosen face is the
+   object face whose outward normal best aligns with world +Z. This is not
+   hardcoded to local +z because rotated boxes (e.g. box021) can have local
+   +y as the world-up face. Soft reward; > 0.30 is good for box-lift tasks.
+
+4b. support_face_frac (per hand): max(world-up face frac, legacy local +z
+    face frac). This keeps known Box025 partial-positive cases admitted,
+    because their useful contacts are high side-wall contacts under the
+    current object frame convention rather than literal world-up face contacts.
 
 5. pelvis_z_min: lowest pelvis height during the motion. Reject if
    < 0.55m (deep squat → CEM unstable downstream).
@@ -31,24 +37,25 @@ New per-case metrics (none of these exist in D005):
    gives CEM less context.
 
 Usage:
-    python g1_feasibility_gate.py [task_dir [task_dir ...]]
+    python g1_feasibility_gate.py [task_dir_or_name ...]
+    python g1_feasibility_gate.py --tasks task_name [task_name ...]
 
 If no args, runs over a built-in CASES dict spanning known fail/pass
 cases for calibration.
 """
 from __future__ import annotations
+import argparse
 import os
 os.environ.setdefault("MUJOCO_GL", "egl")
 os.environ.setdefault("MUJOCO_EGL_DEVICE_ID", "0")
 
-import sys
 from pathlib import Path
 import numpy as np
 import mujoco
 import xml.etree.ElementTree as ET
 import json
 
-ROOT = Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider")
+ROOT = Path(__file__).resolve().parents[3]
 TASKS_DIR = ROOT / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
 
 CALIBRATION_CASES = {
@@ -71,8 +78,8 @@ GATE = {
     "max_wrist_below_pelvis_gap": 0.30,     # deep bending blocked
     "min_pelvis_z_min": 0.60,               # box021_11035 pmin=0.583 → reject (deep squat ref)
     "min_trajectory_T": 80,                  # box021_18029 T=75 → reject
-    "min_top_face_frac_either_hand": 0.20,  # at least one hand on +z face ≥20% of frames
-                                            # (real grip strategy; box021 cases all =0%, box023=51%, box025=100%)
+    "min_support_face_frac_either_hand": 0.30,  # at least one hand on world-up or high side support face
+                                                # (box023≈49%, box025 local-z=100%, D003 box021 fail ≤29%)
 }
 
 EEF_OFFSET = np.array([0.05, 0.0, 0.0])
@@ -110,17 +117,19 @@ def evaluate(task_dir: Path) -> dict:
 
     pelvis_z = qpos[:, 2]
     L_loc = np.zeros((T, 3)); R_loc = np.zeros((T, 3))
+    obj_mats = np.zeros((T, 3, 3))
     L_world_z = np.zeros(T);  R_world_z = np.zeros(T)
     from scipy.spatial.transform import Rotation as R
     for t in range(T):
         data.qpos[:] = qpos[t]; mujoco.mj_forward(model, data)
+        obj_mats[t] = data.xmat[obj_bid].reshape(3, 3)
         for h, bid, loc_arr, wz_arr in [(0, bidL, L_loc, L_world_z),
                                          (1, bidR, R_loc, R_world_z)]:
             pos = data.xpos[bid].copy(); quat = data.xquat[bid].copy()
             rot = R.from_quat([quat[1], quat[2], quat[3], quat[0]])
             world = pos + rot.apply(EEF_OFFSET)
             obj_pos = data.xpos[obj_bid].copy()
-            obj_mat = data.xmat[obj_bid].reshape(3, 3)
+            obj_mat = obj_mats[t]
             loc_arr[t] = obj_mat.T @ (world - obj_pos)
             wz_arr[t] = world[2]
 
@@ -130,13 +139,21 @@ def evaluate(task_dir: Path) -> dict:
         ax = np.argmax(np.abs(norm), axis=1)
         sgn = np.sign(np.take_along_axis(norm, ax[:, None], axis=1).squeeze(1))
         signed = sgn * np.take_along_axis(loc, ax[:, None], axis=1).squeeze(1) - half[ax]
-        top_face = ((sgn > 0) & (ax == 2)).mean()
+        local_world_up = np.einsum("tji,j->ti", obj_mats, np.array([0.0, 0.0, 1.0]))
+        top_ax = np.argmax(np.abs(local_world_up), axis=1)
+        top_sgn = np.sign(np.take_along_axis(local_world_up, top_ax[:, None], axis=1).squeeze(1))
+        top_sgn[top_sgn == 0.0] = 1.0
+        top_face = ((ax == top_ax) & (sgn == top_sgn)).mean()
+        legacy_local_z_face = ((sgn > 0) & (ax == 2)).mean()
+        support_face = max(float(top_face), float(legacy_local_z_face))
         below = float(np.mean(pelvis_z - wz))
         return {
             "inside_box_frac": inside,
             "signed_dist_mean_m": float(signed.mean()),
             "signed_dist_min_m": float(signed.min()),
             "top_face_frac": float(top_face),
+            "legacy_local_z_face_frac": float(legacy_local_z_face),
+            "support_face_frac": float(support_face),
             "wrist_below_pelvis_gap_m": below,
             "wrist_world_z_mean_m": float(wz.mean()),
             "wrist_world_z_min_m": float(wz.min()),
@@ -166,9 +183,9 @@ def evaluate(task_dir: Path) -> dict:
         reasons.append(f"pelvis_z_min_<{int(GATE['min_pelvis_z_min']*100)}cm")
     if T < GATE["min_trajectory_T"]:
         reasons.append(f"trajectory_T_<{GATE['min_trajectory_T']}")
-    top_either = max(out["L"]["top_face_frac"], out["R"]["top_face_frac"])
-    if top_either < GATE["min_top_face_frac_either_hand"]:
-        reasons.append(f"no_hand_on_top_face_≥{int(GATE['min_top_face_frac_either_hand']*100)}%")
+    support_either = max(out["L"]["support_face_frac"], out["R"]["support_face_frac"])
+    if support_either < GATE["min_support_face_frac_either_hand"]:
+        reasons.append(f"no_hand_on_support_face_≥{int(GATE['min_support_face_frac_either_hand']*100)}%")
     out["gate_pass"] = len(reasons) == 0
     out["gate_reject_reasons"] = reasons
     return out
@@ -183,36 +200,51 @@ def fmt_row(r):
         f"L_in={L['inside_box_frac']*100:>5.1f}%  R_in={R['inside_box_frac']*100:>5.1f}%  "
         f"L_d={L['signed_dist_mean_m']:+.3f}  R_d={R['signed_dist_mean_m']:+.3f}  "
         f"L_gap={L['wrist_below_pelvis_gap_m']:+.3f}  R_gap={R['wrist_below_pelvis_gap_m']:+.3f}  "
-        f"L_top={L['top_face_frac']*100:>4.0f}%  "
+        f"L_top={L['top_face_frac']*100:>4.0f}%  L_sup={L['support_face_frac']*100:>4.0f}%  "
         f"pmin={r['pelvis_z_min']:.3f}  "
         f"PASS" if r["gate_pass"] else
         f"{r['task']:<55} T={r['T']:>3}  "
         f"L_in={L['inside_box_frac']*100:>5.1f}%  R_in={R['inside_box_frac']*100:>5.1f}%  "
         f"L_d={L['signed_dist_mean_m']:+.3f}  R_d={R['signed_dist_mean_m']:+.3f}  "
         f"L_gap={L['wrist_below_pelvis_gap_m']:+.3f}  R_gap={R['wrist_below_pelvis_gap_m']:+.3f}  "
-        f"L_top={L['top_face_frac']*100:>4.0f}%  "
+        f"L_top={L['top_face_frac']*100:>4.0f}%  L_sup={L['support_face_frac']*100:>4.0f}%  "
         f"pmin={r['pelvis_z_min']:.3f}  REJECT  {','.join(r['gate_reject_reasons'])}"
     )
 
 
 def main():
-    args = sys.argv[1:]
-    if args:
-        cases = {Path(a).name: Path(a) for a in args}
+    parser = argparse.ArgumentParser()
+    parser.add_argument("task_dirs", nargs="*", help="Task names under humanoid_object or explicit task dirs.")
+    parser.add_argument("--tasks", nargs="+", default=None, help="Task names under humanoid_object.")
+    parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=ROOT / "workspace/exp_diagnostic/findings/06_g1_feasibility_gate.json",
+    )
+    args = parser.parse_args()
+
+    requested = args.tasks if args.tasks else args.task_dirs
+    if requested:
+        cases = {}
+        for name in requested:
+            p = Path(name)
+            td = p if p.exists() else TASKS_DIR / name
+            cases[td.name] = td
     else:
         cases = {label: TASKS_DIR / td for label, td in CALIBRATION_CASES.items()}
 
     results = {}
     print(f"Gate thresholds: {GATE}\n")
     print(f"{'task / label':<55} {'T':>3}  {'L_in%':>6} {'R_in%':>6}  {'L_d':>6} {'R_d':>6}  "
-          f"{'L_gap':>6} {'R_gap':>6}  {'L_top%':>6}  {'pmin':>6}  decision")
+          f"{'L_gap':>6} {'R_gap':>6}  {'L_top%':>6} {'L_sup%':>6}  {'pmin':>6}  decision")
     print("-" * 200)
     for label, td in cases.items():
         r = evaluate(td)
         results[label] = r
         print(fmt_row(r))
 
-    out_path = ROOT / "workspace/exp_diagnostic/findings/06_g1_feasibility_gate.json"
+    out_path = args.output_json
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({"gate": GATE, "results": results}, indent=2))
     print(f"\nsaved {out_path}")
 

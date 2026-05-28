@@ -1,0 +1,36 @@
+{
+  "added_leg_foot_pairs": [],
+  "added_upper_body_pairs": [],
+  "derived_task": "d003_box021_20231011_035_p2_btop_preik_e090_upperobj_m10_smoke",
+  "leg_foot_geoms": [
+    "left_hip_collision",
+    "right_hip_collision",
+    "left_thigh_collision",
+    "right_thigh_collision",
+    "left_shin_collision",
+    "right_shin_collision",
+    "left_linkage_brace_collision",
+    "right_linkage_brace_collision",
+    "lf0",
+    "lf1",
+    "lf2",
+    "lf3",
+    "rf0",
+    "rf1",
+    "rf2",
+    "rf3"
+  ],
+  "note": "E083 derived scene; source task scene_act.xml is not modified.",
+  "object_geom": "object_collision",
+  "patched_file": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231011_035_p2_btop_preik_e090_upperobj_m10_smoke/scene_act.xml",
+  "source_task": "d003_box021_20231011_035_p2_btop_preik_e090",
+  "upper_body_geoms": [
+    "head_collision",
+    "torso_collision",
+    "pelvis_collision",
+    "left_shoulder_yaw_collision",
+    "right_shoulder_yaw_collision",
+    "left_elbow_yaw_collision",
+    "right_elbow_yaw_collision"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "data_id": "0",
+  "date": "20231020",
+  "e090_mass_patch": [
+    {
+      "new_diaginertia": [
+        0.284953,
+        0.335791,
+        0.203949
+      ],
+      "new_mass_kg": 10.0,
+      "old_diaginertia": [
+        0.284953,
+        0.335791,
+        0.203949
+      ],
+      "old_mass_kg": 10.0,
+      "scale": 1.0,
+      "scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231020_019_p1_btop_preik_e090_upperobj_m10_smoke/scene.xml"
+    },
+    {
+      "new_diaginertia": [
+        0.284953,
+        0.335791,
+        0.203949
+      ],
+      "new_mass_kg": 10.0,
+      "old_diaginertia": [
+        0.284953,
+        0.335791,
+        0.203949
+      ],
+      "old_mass_kg": 10.0,
+      "scale": 1.0,
+      "scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231020_019_p1_btop_preik_e090_upperobj_m10_smoke/scene_act.xml"
+    }
+  ],
+  "e090_note": "topface-preIK canonical gate pass; T=101",
+  "e090_smoke_mass_kg": 10.0,
+  "e090_variant": "E090S2_box021_20231020_019_p1_btop",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    0.38020560145378113,
+    0.17726317048072815,
+    0.15207165479660034
+  ],
+  "object_initial_quat": [
+    -0.010489605367183685,
+    -0.0223823394626379,
+    0.7102011442184448,
+    0.7035647630691528
+  ],
+  "object_model_rel": "box/box021_m.obj",
+  "object_name": "Box021",
+  "person": "person1",
+  "seq": "019",
+  "source_qpos": "workspace/core4d/results/E090/retarget/holosoma_d003_box021_20231020_019_p1_btop_preik_e090/trimmed/20231020-019-person1-Box021_with_obj_original.npz",
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231020_019_p1_upperobj_e083/scene.xml",
+  "source_task_e090_smoke": "d003_box021_20231020_019_p1_btop_preik_e090",
+  "task": "d003_box021_20231020_019_p1_btop_preik_e090_upperobj_m10_smoke"
+}

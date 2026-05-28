@@ -1,0 +1,32 @@
+{
+  "asset_path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/assets/objects/box026/box026_m.obj",
+  "base_scene": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box021_person1/scene.xml",
+  "base_template": "box021_person1",
+  "diaginertia": [
+    0.15648257438555022,
+    0.25647531352766606,
+    0.2296802615286362
+  ],
+  "extents_m": [
+    0.6289734499999999,
+    0.39449338,
+    0.46897031
+  ],
+  "force": true,
+  "half_extents_m": [
+    0.31448672499999997,
+    0.19724669,
+    0.234485155
+  ],
+  "mass_kg": 5.0,
+  "mujoco_load_ok": true,
+  "nq": 43,
+  "nu": 29,
+  "nv": 41,
+  "object_key": "box026",
+  "person": "person2",
+  "retarget_g1_xml_path": "/home/ubuntu/Workspace/holosoma/src/holosoma_retargeting/holosoma_retargeting/models/g1/g1_29dof_w_Box026.xml",
+  "retarget_model_dir": "/home/ubuntu/Workspace/holosoma/src/holosoma_retargeting/holosoma_retargeting/models/Box026",
+  "scene_path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box026_person2/scene.xml",
+  "task": "box026_person2"
+}
