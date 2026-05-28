@@ -1,0 +1,39 @@
+{
+  "new_mass_kg": 10.0,
+  "patched": [
+    {
+      "new_diaginertia": [
+        0.2849534287257019,
+        0.3357910367170626,
+        0.20394910907127428
+      ],
+      "new_mass_kg": 10.0,
+      "old_diaginertia": [
+        0.844374,
+        0.995016,
+        0.604342
+      ],
+      "old_mass_kg": 29.632,
+      "scale": 0.3374730021598272,
+      "scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231018_029_p2_upperobj_e083_m10_e087/scene_act.xml"
+    },
+    {
+      "new_diaginertia": [
+        0.2849534287257019,
+        0.3357910367170626,
+        0.20394910907127428
+      ],
+      "new_mass_kg": 10.0,
+      "old_diaginertia": [
+        0.844374,
+        0.995016,
+        0.604342
+      ],
+      "old_mass_kg": 29.632,
+      "scale": 0.3374730021598272,
+      "scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231018_029_p2_upperobj_e083_m10_e087/scene.xml"
+    }
+  ],
+  "source_task": "d003_box021_20231018_029_p2_upperobj_e083",
+  "target_task": "d003_box021_20231018_029_p2_upperobj_e083_m10_e087"
+}

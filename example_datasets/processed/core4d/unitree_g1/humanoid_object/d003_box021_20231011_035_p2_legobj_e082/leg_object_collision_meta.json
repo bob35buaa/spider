@@ -1,0 +1,25 @@
+{
+  "added_pairs": [
+    "left_hip_collision_object",
+    "right_hip_collision_object",
+    "left_thigh_collision_object",
+    "right_thigh_collision_object",
+    "left_shin_collision_object",
+    "right_shin_collision_object",
+    "left_linkage_brace_collision_object",
+    "right_linkage_brace_collision_object",
+    "lf0_object",
+    "lf1_object",
+    "lf2_object",
+    "lf3_object",
+    "rf0_object",
+    "rf1_object",
+    "rf2_object",
+    "rf3_object"
+  ],
+  "derived_task": "d003_box021_20231011_035_p2_legobj_e082",
+  "note": "E082 derived scene; source task scene_act.xml is not modified.",
+  "object_geom": "object_collision",
+  "patched_file": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231011_035_p2_legobj_e082/scene_act.xml",
+  "source_task": "d003_box021_20231011_035_p2"
+}

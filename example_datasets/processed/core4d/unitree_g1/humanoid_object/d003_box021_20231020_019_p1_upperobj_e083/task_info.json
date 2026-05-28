@@ -1,0 +1,25 @@
+{
+  "data_id": "0",
+  "date": "20231020",
+  "e083_note": "Derived for E083; source task files are not modified.",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    0.37988588213920593,
+    0.17728786170482635,
+    0.1520785391330719
+  ],
+  "object_initial_quat": [
+    -0.010942354798316956,
+    -0.02147553861141205,
+    0.7100623846054077,
+    0.7037261724472046
+  ],
+  "object_model_rel": "box/box021_m.obj",
+  "object_name": "Box021",
+  "person": "person1",
+  "seq": "019",
+  "source_qpos": "../holosoma/workspace/v3/data_constructon/d003_omniretarget_spider_production/results/holosoma_d003_box021_20231020_019_p1/trimmed/20231020-019-person1-Box021_with_obj_original.npz",
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box021_person1/scene.xml",
+  "source_task_e083": "d003_box021_20231020_019_p1",
+  "task": "d003_box021_20231020_019_p1_upperobj_e083"
+}
