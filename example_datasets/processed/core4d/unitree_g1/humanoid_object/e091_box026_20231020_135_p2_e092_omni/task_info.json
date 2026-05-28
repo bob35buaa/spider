@@ -1,0 +1,42 @@
+{
+  "data_id": "0",
+  "date": "20231020",
+  "e092_case_id": "C3",
+  "e092_note": "E091 D005b reject: right wrist inside=12.2%.",
+  "e092_route": "rl_omni",
+  "e092_validation": {
+    "missing_leg_pairs": [],
+    "missing_upper_pairs": [],
+    "model_npair": 49,
+    "model_nq": 42,
+    "model_nu": 35,
+    "model_nv": 41,
+    "object_mass_kg": 5.0,
+    "trajectory_qpos_shape": [
+      82,
+      43
+    ],
+    "validation_ok": true
+  },
+  "e092_variant": "E092O3_box026_135_p2_omni",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    -0.2308085858821869,
+    -0.36108192801475525,
+    0.19995419681072235
+  ],
+  "object_initial_quat": [
+    0.5209546685218811,
+    0.5185589790344238,
+    0.47730782628059387,
+    0.48153921961784363
+  ],
+  "object_model_rel": "box/box026_m.obj",
+  "object_name": "Box026",
+  "person": "person2",
+  "seq": "135",
+  "source_qpos": "../holosoma/workspace/v3/data_construction_v2/results/stage2b_medium/results/holosoma_e091_box026_20231020_135_p2/trimmed/20231020-135-person2-Box026_with_obj_original.npz",
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box026_person2/scene.xml",
+  "source_task_e092": "e091_box026_20231020_135_p2",
+  "task": "e091_box026_20231020_135_p2_e092_omni"
+}

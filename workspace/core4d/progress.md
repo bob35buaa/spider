@@ -1306,3 +1306,25 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 输出到 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/visualizations/omniretarget/`：每个成功 retarget case 有 `retargeted_keyframes.png`、`trimmed_keyframes.png`、`omniretarget_timeline.png`、`retargeted.mp4`。
 - [x] 覆盖 4 个已尝试 Stage2b 目录：3 个成功可视化（box004 p2、Box026 039 p2、Box026 135 p2），1 个 `e091_box026_20231018_040_p2` 标记为 `missing_retargeted_npz`（CVXPY infeasible 后没有 retargeted NPZ）。
 - [x] 非空检查通过：OmniRetarget PNG `9/9` nonblank，MP4 `3/3` exists。manifest/summary 写入 `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/omniretarget_visuals/`。
+
+## 2026-05-29 01:04 CST: E092 三 case SPIDER dynamics + OmniRetarget RL 规划草案
+
+- [x] 根据用户建议写入整体规划草案：`workspace/core4d/plan/98_E092_three_case_spider_dynamic_and_omniretarget_rl_plan.md`。
+- [x] 计划默认三条 case 为 E091 已成功生成 OmniRetarget 可视化的 `e091_box004_20231003_2_083_p2`、`e091_box026_20231018_039_p2`、`e091_box026_20231020_135_p2`；`e091_box026_20231018_040_p2` 因 CVXPY infeasible 无可用 OmniRetarget NPZ，暂不纳入。
+- [x] 规划拆成两条路线：每 case 先跑 SPIDER dynamic retarget，只有 `WORK` 序列进入 RL-from-SPIDER；同时三条 case 全部跑 direct OmniRetarget RL 作为对照。
+- [ ] 尚未实现 E092 脚本或启动训练；等待用户确认整体规划和 RL 入口定义。
+
+## 2026-05-29 01:18 CST: E092 执行准备
+
+- [x] 已按用户要求启动 E092 实验落地：目标是 Stage A/B/C 训练均采用本地 1 卡 + 远程 2 卡并行，按 `remote-execution.md` 回收结果。
+- [x] 恢复了 E092 plan、远程执行文档、E091/E090 eval/build/train 脚本上下文；当前仓库可见训练入口是 `examples/run_mjwp.py`/MJWP 动态优化栈，未发现独立 PPO/RL trainer。
+- [ ] 当前实现策略：先把 E092 的 “RL from Omni / RL from SPIDER” 接入既有 core4d MJWP 训练/评估栈，作为当前 repo 内可执行的训练入口；若后续发现独立 RL trainer，再替换 Stage B/C launcher。
+
+## 2026-05-29 01:31 CST: E092 scaffold 实现中
+
+- [x] 已新增 `workspace/core4d/scripts/E092/build_three_case_tasks.py`：为三条 case 生成 `spider_dyn` 与 `rl_omni` 两套路由派生 task，并写 `workspace/core4d/scripts/E092/variants.tsv`。
+- [x] 已新增 `workspace/core4d/scripts/E092/build_rl_tasks.py`：计划在 Stage A full 出现 `WORK` 后，把 scene_act 动态 rollout 反转成 freejoint `trajectory_kinematic.npz`，生成 `rl_spider` task 与 manifest。
+- [x] 已新增 Stage A/B/C 训练脚本：`train_E092_spider_dyn.sh`、`train_E092_rl_from_omni.sh`、`train_E092_rl_from_spider.sh`，均支持 `local|remote-gpu0|remote-gpu1` split。
+- [x] 已新增评估脚本：`eval_E092_spider_dyn.py`、`eval_E092_rl.py`，输出 JSON/CSV/MD，并记录 `WORK/PASS/FAIL`。
+- [x] 已新增远程脚本：`run_E092_remote.sh` 与 `pull_E092_remote_results.sh`，按 `spider-remote` 的 GPU0/GPU1 tmux 并行启动和回收。
+- [ ] 下一步：运行 py_compile/bash -n，执行 `build_three_case_tasks.py --force`，验证 scene/task/override。

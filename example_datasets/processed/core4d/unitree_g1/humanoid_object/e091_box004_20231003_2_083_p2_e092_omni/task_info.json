@@ -1,0 +1,42 @@
+{
+  "data_id": "0",
+  "date": "20231003_2",
+  "e092_case_id": "C1",
+  "e092_note": "E091 D005b PASS; smoke pelvis collapse follow-up.",
+  "e092_route": "rl_omni",
+  "e092_validation": {
+    "missing_leg_pairs": [],
+    "missing_upper_pairs": [],
+    "model_npair": 49,
+    "model_nq": 42,
+    "model_nu": 35,
+    "model_nv": 41,
+    "object_mass_kg": 5.0,
+    "trajectory_qpos_shape": [
+      105,
+      43
+    ],
+    "validation_ok": true
+  },
+  "e092_variant": "E092O1_box004_083_p2_omni",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    0.01482628658413887,
+    -1.245201826095581,
+    0.125186488032341
+  ],
+  "object_initial_quat": [
+    -0.05275939032435417,
+    -0.04521750286221504,
+    0.7027673721313477,
+    0.7080182433128357
+  ],
+  "object_model_rel": "box/box004_m.obj",
+  "object_name": "box004",
+  "person": "person2",
+  "seq": "083",
+  "source_qpos": "../holosoma/workspace/v3/data_construction_v2/results/stage2b_medium/results/holosoma_e091_box004_20231003_2_083_p2/trimmed/20231003_2-083-person2-box004_with_obj_original.npz",
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box004_person2/scene.xml",
+  "source_task_e092": "e091_box004_20231003_2_083_p2",
+  "task": "e091_box004_20231003_2_083_p2_e092_omni"
+}
