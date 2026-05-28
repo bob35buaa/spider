@@ -107,11 +107,25 @@ def _extract_cli_overrides(cfg: DictConfig) -> dict:
 
 def _aggregate_info_list(info_list: list[dict]) -> dict:
     info_aggregated = {}
-    for k in info_list[0].keys():
-        if any(k not in info for info in info_list):
-            loguru.logger.warning("Skipping info key '{}' because it is missing in some ticks.", k)
+    keys = []
+    seen = set()
+    for info in info_list:
+        for key in info:
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
+
+    def to_numpy(value):
+        if isinstance(value, torch.Tensor):
+            return value.detach().cpu().numpy()
+        return value
+
+    for k in keys:
+        sample = next((to_numpy(info[k]) for info in info_list if k in info), None)
+        if sample is None:
             continue
-        values = [info[k] for info in info_list]
+        filler = np.zeros_like(sample)
+        values = [to_numpy(info[k]) if k in info else filler for info in info_list]
         try:
             info_aggregated[k] = np.stack(values, axis=0)
         except ValueError as exc:

@@ -196,6 +196,26 @@ def make_rollout_fn(
             "trace": trace_list,  # (N, H, n_trace, 3)
             **mean_info,
         }
+        if config.cem_safety_gate_enabled and "cem_gate_min_sdf" in info_combined:
+            sample_gate_min_sdf = info_combined["cem_gate_min_sdf"].min(dim=0).values
+            sample_gate_violation_pct = info_combined["cem_gate_violation"].mean(dim=0)
+            sample_gate_violation_depth_mean = info_combined[
+                "cem_gate_violation_depth"
+            ].mean(dim=0)
+            sample_gate_valid_mask = (
+                sample_gate_min_sdf >= config.cem_safety_gate_min_sdf_m
+            ) & (
+                sample_gate_violation_pct
+                <= config.cem_safety_gate_max_violation_pct
+            )
+            info.update(
+                {
+                    "sample_gate_min_sdf": sample_gate_min_sdf,
+                    "sample_gate_violation_pct": sample_gate_violation_pct,
+                    "sample_gate_violation_depth_mean": sample_gate_violation_depth_mean,
+                    "sample_gate_valid_mask": sample_gate_valid_mask,
+                }
+            )
         return ctrls, mean_rew, terminate, info
 
     return rollout
@@ -241,6 +261,63 @@ def _compute_weights_impl(
     return weights, nan_mask
 
 
+def _compute_weights_with_gate_impl(
+    rews: torch.Tensor,
+    num_samples: int,
+    temperature: float,
+    elite_fraction: float,
+    valid_mask: torch.Tensor,
+    violation_pct: torch.Tensor,
+    violation_depth: torch.Tensor,
+    min_valid_frac: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, bool]:
+    """Compute elite weights after applying a sample-level hard safety gate."""
+    nan_mask = torch.isnan(rews) | torch.isinf(rews)
+    rews_min = (
+        rews[~nan_mask].min()
+        if (~nan_mask).any()
+        else torch.tensor(-1000.0, device=rews.device)
+    )
+    rews_clean = torch.where(nan_mask, rews_min, rews)
+
+    top_k = max(1, int(elite_fraction * num_samples))
+    min_valid_count = max(1, int(np.ceil(float(min_valid_frac) * num_samples)))
+    valid_mask = valid_mask.to(device=rews.device, dtype=torch.bool) & (~nan_mask)
+    valid_count = int(valid_mask.sum().item())
+    fallback_used = valid_count < min_valid_count
+
+    if fallback_used:
+        rew_std = rews_clean.std(unbiased=False).clamp(min=1e-6)
+        rew_norm = (rews_clean - rews_clean.mean()) / rew_std
+        fallback_score = (
+            -violation_depth.to(rews.device)
+            - violation_pct.to(rews.device)
+            + 1e-3 * rew_norm
+        )
+        fallback_score = torch.where(
+            nan_mask,
+            torch.full_like(fallback_score, -float("inf")),
+            fallback_score,
+        )
+        k = min(top_k, num_samples)
+        top_indices = torch.topk(fallback_score, k=k, largest=True).indices
+    else:
+        candidate_indices = torch.nonzero(valid_mask).squeeze(-1)
+        k = min(top_k, int(candidate_indices.shape[0]))
+        candidate_rews = rews_clean[candidate_indices]
+        rel_top = torch.topk(candidate_rews, k=k, largest=True).indices
+        top_indices = candidate_indices[rel_top]
+
+    weights = torch.zeros_like(rews_clean)
+    top_rews = rews_clean[top_indices]
+    top_rews_normalized = (
+        (top_rews - top_rews.mean()) / (top_rews.std(unbiased=False) + 1e-2)
+    )
+    top_weights = F.softmax(top_rews_normalized / temperature, dim=0)
+    weights[top_indices] = top_weights
+    return weights, nan_mask, top_indices, fallback_used
+
+
 # Compiled version (torch.compile requires PyTorch 2.0+)
 if hasattr(torch, "compile"):
     _compute_weights_compiled = torch.compile(_compute_weights_impl)
@@ -279,6 +356,10 @@ def make_optimize_once_fn(
         # rollout
         # domain randomization: pick the minimum reward across all DR parameter sets
         min_rew = torch.full((config.num_samples,), float("inf"), device=config.device)
+        combined_gate_valid_mask = None
+        combined_gate_min_sdf = None
+        combined_gate_violation_pct = None
+        combined_gate_violation_depth_mean = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
                 config,
@@ -288,8 +369,45 @@ def make_optimize_once_fn(
                 env_param,
             )
             min_rew = torch.minimum(min_rew, rews)
+            if (
+                config.cem_safety_gate_enabled
+                and "sample_gate_valid_mask" in rollout_info
+            ):
+                valid_mask = rollout_info["sample_gate_valid_mask"]
+                min_sdf = rollout_info["sample_gate_min_sdf"]
+                violation_pct = rollout_info["sample_gate_violation_pct"]
+                violation_depth = rollout_info["sample_gate_violation_depth_mean"]
+                combined_gate_valid_mask = (
+                    valid_mask
+                    if combined_gate_valid_mask is None
+                    else (combined_gate_valid_mask & valid_mask)
+                )
+                combined_gate_min_sdf = (
+                    min_sdf
+                    if combined_gate_min_sdf is None
+                    else torch.minimum(combined_gate_min_sdf, min_sdf)
+                )
+                combined_gate_violation_pct = (
+                    violation_pct
+                    if combined_gate_violation_pct is None
+                    else torch.maximum(combined_gate_violation_pct, violation_pct)
+                )
+                combined_gate_violation_depth_mean = (
+                    violation_depth
+                    if combined_gate_violation_depth_mean is None
+                    else torch.maximum(
+                        combined_gate_violation_depth_mean, violation_depth
+                    )
+                )
         # Use worst-case rewards across DR parameter sets
         rews = min_rew
+        if config.cem_safety_gate_enabled and combined_gate_valid_mask is not None:
+            rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
+            rollout_info["sample_gate_min_sdf"] = combined_gate_min_sdf
+            rollout_info["sample_gate_violation_pct"] = combined_gate_violation_pct
+            rollout_info["sample_gate_violation_depth_mean"] = (
+                combined_gate_violation_depth_mean
+            )
 
         # resample based on terminate condition
 
@@ -297,7 +415,26 @@ def make_optimize_once_fn(
         elite_fraction = (
             sample_params.get("elite_fraction", 0.1) if sample_params else 0.1
         )
-        if config.use_torch_compile and elite_fraction == 0.1:
+        gate_enabled = (
+            config.cem_safety_gate_enabled
+            and "sample_gate_valid_mask" in rollout_info
+        )
+        selected_indices = None
+        gate_fallback_used = False
+        if gate_enabled:
+            weights, nan_mask, selected_indices, gate_fallback_used = (
+                _compute_weights_with_gate_impl(
+                    rews,
+                    config.num_samples,
+                    config.temperature,
+                    elite_fraction,
+                    rollout_info["sample_gate_valid_mask"],
+                    rollout_info["sample_gate_violation_pct"],
+                    rollout_info["sample_gate_violation_depth_mean"],
+                    config.cem_safety_gate_min_valid_frac,
+                )
+            )
+        elif config.use_torch_compile and elite_fraction == 0.1:
             weights, nan_mask = _compute_weights_compiled(
                 rews, config.num_samples, config.temperature
             )
@@ -324,9 +461,13 @@ def make_optimize_once_fn(
         elite_std = None
         if sample_params and sample_params.get("return_elite_std", False):
             top_k = max(1, int(elite_fraction * config.num_samples))
-            top_indices = torch.topk(rews, k=top_k, largest=True).indices
+            top_indices = (
+                selected_indices
+                if selected_indices is not None
+                else torch.topk(rews, k=top_k, largest=True).indices
+            )
             elite_ctrls = ctrls_samples[top_indices]  # (top_k, H, nu)
-            elite_std = elite_ctrls.std(dim=0)  # (H, nu)
+            elite_std = elite_ctrls.std(dim=0, unbiased=False)  # (H, nu)
 
         # down sample traces by selecting topk and uniform samples for visualization
         n_uni = max(0, min(config.num_trace_uniform_samples, config.num_samples))
@@ -343,7 +484,9 @@ def make_optimize_once_fn(
             else torch.tensor([], dtype=torch.long, device=config.device)
         )
         idx_top = (
-            torch.topk(rews, k=n_topk, largest=True).indices
+            selected_indices[:n_topk]
+            if selected_indices is not None and n_topk > 0
+            else torch.topk(rews, k=n_topk, largest=True).indices
             if n_topk > 0
             else torch.tensor([], dtype=torch.long, device=config.device)
         )
@@ -372,6 +515,15 @@ def make_optimize_once_fn(
         info["rew_min"] = rews_np.min()
         info["rew_median"] = np.median(rews_np)
         info["rew_mean"] = rews_np.mean()
+        if gate_enabled:
+            valid_mask = rollout_info["sample_gate_valid_mask"]
+            info["cem_gate_valid_frac"] = valid_mask.float().mean().item()
+            info["cem_gate_fallback_used"] = float(gate_fallback_used)
+            info["cem_gate_selected_valid_frac"] = (
+                valid_mask[selected_indices].float().mean().item()
+                if selected_indices is not None and selected_indices.numel() > 0
+                else 0.0
+            )
 
         # Downsample and store trace site positions for selected sample trajectories
         if "trace" in rollout_info:

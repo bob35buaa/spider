@@ -25,6 +25,7 @@ from spider.math import quat_sub
 from spider.optimizers.sampling import (
     _compute_weights_compiled,
     _compute_weights_impl,
+    _compute_weights_with_gate_impl,
     sample_ctrls,
 )
 
@@ -323,6 +324,26 @@ def make_rollout_fn_fast(  # noqa: D103
             "trace": trace_list,
             **mean_info,
         }
+        if config.cem_safety_gate_enabled and "cem_gate_min_sdf" in info_combined:
+            sample_gate_min_sdf = info_combined["cem_gate_min_sdf"].min(dim=0).values
+            sample_gate_violation_pct = info_combined["cem_gate_violation"].mean(dim=0)
+            sample_gate_violation_depth_mean = info_combined[
+                "cem_gate_violation_depth"
+            ].mean(dim=0)
+            sample_gate_valid_mask = (
+                sample_gate_min_sdf >= config.cem_safety_gate_min_sdf_m
+            ) & (
+                sample_gate_violation_pct
+                <= config.cem_safety_gate_max_violation_pct
+            )
+            info.update(
+                {
+                    "sample_gate_min_sdf": sample_gate_min_sdf,
+                    "sample_gate_violation_pct": sample_gate_violation_pct,
+                    "sample_gate_violation_depth_mean": sample_gate_violation_depth_mean,
+                    "sample_gate_valid_mask": sample_gate_valid_mask,
+                }
+            )
 
         if record_states:
             info["recorded_qpos"] = recorded_qpos
@@ -354,6 +375,10 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         ctrls_samples = sample_ctrls(config, ctrls, sample_params)
 
         min_rew = torch.full((config.num_samples,), float("inf"), device=config.device)
+        combined_gate_valid_mask = None
+        combined_gate_min_sdf = None
+        combined_gate_violation_pct = None
+        combined_gate_violation_depth_mean = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
                 config,
@@ -364,9 +389,65 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                 record_states=select_best,
             )
             min_rew = torch.minimum(min_rew, rews)
+            if (
+                config.cem_safety_gate_enabled
+                and "sample_gate_valid_mask" in rollout_info
+            ):
+                valid_mask = rollout_info["sample_gate_valid_mask"]
+                min_sdf = rollout_info["sample_gate_min_sdf"]
+                violation_pct = rollout_info["sample_gate_violation_pct"]
+                violation_depth = rollout_info["sample_gate_violation_depth_mean"]
+                combined_gate_valid_mask = (
+                    valid_mask
+                    if combined_gate_valid_mask is None
+                    else (combined_gate_valid_mask & valid_mask)
+                )
+                combined_gate_min_sdf = (
+                    min_sdf
+                    if combined_gate_min_sdf is None
+                    else torch.minimum(combined_gate_min_sdf, min_sdf)
+                )
+                combined_gate_violation_pct = (
+                    violation_pct
+                    if combined_gate_violation_pct is None
+                    else torch.maximum(combined_gate_violation_pct, violation_pct)
+                )
+                combined_gate_violation_depth_mean = (
+                    violation_depth
+                    if combined_gate_violation_depth_mean is None
+                    else torch.maximum(
+                        combined_gate_violation_depth_mean, violation_depth
+                    )
+                )
         rews = min_rew
+        if config.cem_safety_gate_enabled and combined_gate_valid_mask is not None:
+            rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
+            rollout_info["sample_gate_min_sdf"] = combined_gate_min_sdf
+            rollout_info["sample_gate_violation_pct"] = combined_gate_violation_pct
+            rollout_info["sample_gate_violation_depth_mean"] = (
+                combined_gate_violation_depth_mean
+            )
 
-        if config.use_torch_compile:
+        gate_enabled = (
+            config.cem_safety_gate_enabled
+            and "sample_gate_valid_mask" in rollout_info
+        )
+        selected_indices = None
+        gate_fallback_used = False
+        if gate_enabled:
+            weights, nan_mask, selected_indices, gate_fallback_used = (
+                _compute_weights_with_gate_impl(
+                    rews,
+                    config.num_samples,
+                    config.temperature,
+                    0.1,
+                    rollout_info["sample_gate_valid_mask"],
+                    rollout_info["sample_gate_violation_pct"],
+                    rollout_info["sample_gate_violation_depth_mean"],
+                    config.cem_safety_gate_min_valid_frac,
+                )
+            )
+        elif config.use_torch_compile:
             weights, nan_mask = _compute_weights_compiled(
                 rews, config.num_samples, config.temperature
             )
@@ -381,7 +462,10 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
             )
 
         if select_best:
-            best_idx = torch.argmax(rews).item()
+            if selected_indices is not None and selected_indices.numel() > 0:
+                best_idx = int(selected_indices[0].item())
+            else:
+                best_idx = torch.argmax(rews).item()
             ctrls_out = ctrls_samples[best_idx]
         else:
             ctrls_out = (weights[:, None, None] * ctrls_samples).sum(dim=0)
@@ -401,7 +485,9 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
             else torch.tensor([], dtype=torch.long, device=config.device)
         )
         idx_top = (
-            torch.topk(rews, k=n_topk, largest=True).indices
+            selected_indices[:n_topk]
+            if selected_indices is not None and n_topk > 0
+            else torch.topk(rews, k=n_topk, largest=True).indices
             if n_topk > 0
             else torch.tensor([], dtype=torch.long, device=config.device)
         )
@@ -430,6 +516,15 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         info["rew_min"] = rews_np.min()
         info["rew_median"] = np.median(rews_np)
         info["rew_mean"] = rews_np.mean()
+        if gate_enabled:
+            valid_mask = rollout_info["sample_gate_valid_mask"]
+            info["cem_gate_valid_frac"] = valid_mask.float().mean().item()
+            info["cem_gate_fallback_used"] = float(gate_fallback_used)
+            info["cem_gate_selected_valid_frac"] = (
+                valid_mask[selected_indices].float().mean().item()
+                if selected_indices is not None and selected_indices.numel() > 0
+                else 0.0
+            )
 
         if "trace" in rollout_info:
             info["trace_sample"] = rollout_info["trace"][sel_idx].cpu().numpy()

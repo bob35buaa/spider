@@ -66,6 +66,8 @@ TERM_KEYS = [
     "hand_object_deep_penalty",
     "object_lift_rew",
     "object_floor_penalty",
+    "object_clearance_rew",
+    "object_clearance_penalty",
     "stability_penalty",
     "total_reward",
 ]
@@ -385,6 +387,8 @@ def compute_breakdown(variant: str, override: str, task: str, npz_path: Path) ->
     hand_object_deep_penalty = np.zeros(T, dtype=np.float32)
     object_lift_rew = np.zeros(T, dtype=np.float32)
     object_floor_penalty = np.zeros(T, dtype=np.float32)
+    object_clearance_rew = np.zeros(T, dtype=np.float32)
+    object_clearance_penalty = np.zeros(T, dtype=np.float32)
     object_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "object_collision")
     if object_gid >= 0 and config.hand_approach_obj_half_extents:
         half_ext = np.asarray(config.hand_approach_obj_half_extents, dtype=np.float32)
@@ -406,6 +410,46 @@ def compute_breakdown(variant: str, override: str, task: str, npz_path: Path) ->
             if config.object_floor_penalty_scale > 0.0:
                 floor_hinge = np.maximum((ref_bottom - config.object_floor_margin_m) - obj_bottom, 0.0)
                 object_floor_penalty = -config.object_floor_penalty_scale * floor_hinge
+        if config.object_clearance_rew_scale > 0.0 or config.object_clearance_penalty_scale > 0.0:
+            obj_half_z = float(config.hand_approach_obj_half_extents[2])
+            obj_bottom = sim["geom_xpos"][:, object_gid, 2] - obj_half_z
+            clearance = obj_bottom - float(config.object_clearance_floor_z)
+            source = config.object_clearance_gate_source
+            if source == "always":
+                window_gate = np.ones(T, dtype=np.float32)
+            elif source == "time_window":
+                window_gate = (
+                    (times >= config.object_clearance_start_eval_time)
+                    & (times <= config.object_clearance_end_eval_time)
+                ).astype(np.float32)
+            elif source == "contact_mask":
+                window_gate = (
+                    mask.max(axis=1).astype(np.float32)
+                    if mask is not None
+                    else np.ones(T, dtype=np.float32)
+                )
+            else:
+                raise ValueError(f"Unsupported object_clearance_gate_source={source!r}")
+            if config.object_clearance_rew_scale > 0.0:
+                target_mid = 0.5 * (
+                    config.object_clearance_min_m + config.object_clearance_max_m
+                )
+                object_clearance_rew = (
+                    config.object_clearance_rew_scale
+                    * np.exp(
+                        -np.abs(clearance - target_mid)
+                        / max(config.object_clearance_sigma, 1e-6)
+                    )
+                    * window_gate
+                )
+            if config.object_clearance_penalty_scale > 0.0:
+                below = np.maximum(config.object_clearance_min_m - clearance, 0.0)
+                above = np.maximum(clearance - config.object_clearance_max_m, 0.0)
+                object_clearance_penalty = (
+                    -config.object_clearance_penalty_scale
+                    * (below + config.object_clearance_above_weight * above)
+                    * window_gate
+                )
 
     hand_floor_penalty = np.zeros(T, dtype=np.float32)
     if config.hand_floor_penalty_scale > 0.0 and config.hand_floor_penalty_geom_ids:
@@ -433,6 +477,8 @@ def compute_breakdown(variant: str, override: str, task: str, npz_path: Path) ->
         "hand_object_deep_penalty": hand_object_deep_penalty,
         "object_lift_rew": object_lift_rew,
         "object_floor_penalty": object_floor_penalty,
+        "object_clearance_rew": object_clearance_rew,
+        "object_clearance_penalty": object_clearance_penalty,
         "stability_penalty": stability_penalty,
     }
     total = np.zeros(T, dtype=np.float32)
@@ -480,6 +526,8 @@ def compute_breakdown(variant: str, override: str, task: str, npz_path: Path) ->
             "hand_object_deep_penalty_scale": config.hand_object_deep_penalty_scale,
             "object_lift_rew_scale": config.object_lift_rew_scale,
             "object_floor_penalty_scale": config.object_floor_penalty_scale,
+            "object_clearance_rew_scale": config.object_clearance_rew_scale,
+            "object_clearance_penalty_scale": config.object_clearance_penalty_scale,
             "stability_penalty_scale": config.stability_penalty_scale,
         },
     }
@@ -528,6 +576,8 @@ def main() -> None:
                 "task_obj_mean": cw["task_obj_rew_mean"],
                 "robot_obj_pen_mean": cw["robot_object_penalty_mean"],
                 "hand_deep_pen_mean": cw["hand_object_deep_penalty_mean"],
+                "object_clearance_rew_mean": cw["object_clearance_rew_mean"],
+                "object_clearance_pen_mean": cw["object_clearance_penalty_mean"],
                 "total_mean": cw["total_reward_mean"],
             },
             indent=2,
@@ -538,4 +588,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

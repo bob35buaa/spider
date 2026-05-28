@@ -1,3 +1,71 @@
+# E088 Progress — 2026-05-28
+
+## 当前状态: E088 full CEM 已完成；三组 main gate 全失败，不建议接 RL
+
+## 完成步骤
+
+- [x] 按 `experiment-planning-zh` 恢复 E087 结果上下文，确认当前问题不是继续小幅调 `robot_object_penalty_scale`，而是 CEM elite selection 仍允许穿箱 sample 更新分布。
+- [x] 检查 CEM 入口：
+  - `spider/optimizers/sampling.py` 的 `_compute_weights_impl()` 当前只基于 scalar reward 做 top-k softmax。
+  - `spider/optimizers/sampling_fast.py` 有并行的 fast/select-best 路径，也需要同步处理。
+  - 因此 E088 的 hard gate 应该显式传递 `sample_gate_valid_mask`，而不是只把 invalid reward 设成 `-inf`。
+- [x] 写入详细计划：`workspace/core4d/plan/94_E088_hard_safety_gate_lift_floor_plan.md`。
+- [x] 实现第一版 E088 机制改动：
+  - `spider/config.py` 新增默认关闭的 `cem_safety_gate_*` 与 `object_clearance_*` 配置，并解析 upper-body collision geoms。
+  - `spider/simulators/mjwp.py` 提取 object-box SDF helper，输出 `cem_gate_min_sdf / violation / depth`，并增加绝对 `object_clearance_rew / penalty / m`。
+  - `spider/optimizers/sampling.py` 与 `sampling_fast.py` 在 rollout 后聚合 sample-level gate 指标，并在 elite selection 前应用 valid mask；valid 样本不足时使用 least-violation fallback。
+  - `py_compile` 已覆盖 `spider/config.py`、`spider/simulators/mjwp.py`、`spider/optimizers/sampling.py`、`spider/optimizers/sampling_fast.py`。
+- [x] 补齐 E088 实验封装：
+  - `workspace/core4d/scripts/E088/variants.tsv`
+  - `workspace/core4d/scripts/E088/generate_e088_overrides.py`
+  - `workspace/core4d/scripts/train/train_E088.sh`
+  - `workspace/core4d/scripts/E088/run_remote_inside.sh`
+  - `workspace/core4d/scripts/run_E088_remote.sh`
+  - `workspace/core4d/scripts/pull_E088_remote_results.sh`
+  - `workspace/core4d/scripts/eval/eval_E088.py`
+  - overrides: `core4d_E088A_m10_gate_main.yaml`, `core4d_E088B_m10_gate_low_main.yaml`, `core4d_E088C_m10_gate_clearance_main.yaml`
+- [x] 修复 `examples/run_mjwp.py` 信息聚合：旧逻辑只按第一个 tick 的 keys 保存，导致 warmup tick 后出现的 reward/gate info 被丢弃；现在改为 union-of-keys，缺失 tick 用零补齐。
+- [x] 静态检查通过：
+  - `py_compile` 覆盖 `examples/run_mjwp.py`、E088 eval/generator 和 E088 修改的核心模块。
+  - `bash -n` 覆盖 E088 train/remote/pull 脚本。
+  - `git diff --check` 覆盖 E088 相关代码和脚本。
+- [x] 本地 smoke：
+  - 4-step smoke 三个 variant 均通过，Hydra 新字段和数据加载正常；`CEM safety gate: 7 geoms resolved`。
+  - 24-step E088C smoke 进入一次 CEM，npz 已包含 `cem_gate_*`、`sample_gate_*`、`object_clearance_*` keys。
+  - 24-step smoke 也暴露严格 gate 早期 `cem_gate_valid_frac=0`、`fallback_used=1`，说明 full run 要重点看 fallback 是否长期占主导。
+- [x] 远程多卡 full CEM 已启动：
+  - remote host: `spider-remote`
+  - remote repo: `/home/xiayb/pHRI_workspace/spider`
+  - tmux session: `E088_gate_clearance`
+  - GPU0: `E088A_m10_gate_main`
+  - GPU1: `E088B_m10_gate_low_main`，完成后串行 `E088C_m10_gate_clearance_main`
+  - 15:44 检查：两张 RTX 6000 Ada 均有负载，A/B 已进入 CEM，单 tick `opt_steps=32`，plan time 约 `10s`。
+- [x] 远程 full CEM 已完成并回收本地，合并评估、gate summary、reward breakdown、keyframes 均已生成。
+- [x] E088A/B/C 三组均未通过 gate，`accepted_variants=[]`：
+  - E088A hard gate only: contact `82.17%`，obj mean/max `0.695/1.148m`，pelvis min `0.181m`，head/upper penetration `27.91/55.04%`，fallback `90.71%`。
+  - E088B low-contact/object: contact `70.54%`，obj mean/max `0.722/1.198m`，pelvis min `0.643m`，head/upper penetration `71.32/75.19%`，valid frac `0`。
+  - E088C + absolute clearance: contact `73.64%`，obj mean/max `0.612/0.985m`，head/upper penetration `19.38/80.62%`，LH floor `40.31%`；clearance 有效但视觉为翻箱/侧倒。
+- [x] 已写入正式结果日志：`workspace/core4d/log/110_E088_hard_safety_gate_lift_floor_results.md`；已更新 `EXPERIMENT_TRACKER.md`。
+
+## 待完成
+
+- [x] 实现默认关闭的 `cem_safety_gate_*` 与 `object_clearance_*` config。
+- [x] 提取 upper-body/object SDF 计算，给 rollout 输出 sample 级 violation 指标。
+- [x] 修改 normal/fast CEM elite selection，加入 valid-mask top-k 与 fallback。
+- [x] 增加绝对 object bottom clearance reward/penalty。
+- [x] 生成 E088 override/train/eval 脚本，先跑 main case smoke，再决定是否进入 full CEM。
+- [x] 启动远程多卡 full CEM：GPU0 跑 E088A，GPU1 串行跑 E088B/E088C。
+- [x] 回收远程结果，运行 E088 merged eval，生成 comparison/gate summary/keyframes。
+- [x] 写 E088 结果 log 并更新 tracker。
+
+## 关键解释
+
+Hard gate 的作用位置是 CEM top-k 之前：head/torso/pelvis/shoulder/elbow 穿箱超阈值的 sample 不允许成为 elite。它不是继续加大 soft penalty。
+
+绝对 clearance reward 的作用是直接约束 `object_collision` 底面离地高度，例如 `bottom_clearance >= 4cm`，避免当前“相对 ref bottom”在 main 上几乎没有贡献。
+
+---
+
 # E085 Progress — 2026-05-28
 
 ## 当前状态: raw-contact target 修复已完成预处理，准备接入 MJWP smoke gate

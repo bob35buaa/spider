@@ -65,6 +65,97 @@ def _compile_step(
     return capture.graph
 
 
+def _geom_box_sdf_min(
+    config: Config,
+    env: MJWPEnv,
+    geom_ids: list[int],
+    object_geom_id: int,
+    geom_xpos: torch.Tensor | None = None,
+    geom_xmat: torch.Tensor | None = None,
+    half_ext: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Minimum adjusted SDF from selected robot geoms to object_collision box."""
+    if geom_xpos is None:
+        geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+    if geom_xmat is None:
+        geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
+            geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
+        )
+    if half_ext is None:
+        half_ext = torch.tensor(
+            config.hand_approach_obj_half_extents,
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+    if not geom_ids:
+        return torch.full(
+            (geom_xpos.shape[0],),
+            float("inf"),
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+
+    obj_pos = geom_xpos[:, object_geom_id]
+    obj_mat = geom_xmat[:, object_geom_id]
+    centers = geom_xpos[:, geom_ids]
+    mats = geom_xmat[:, geom_ids]
+    axes = mats[:, :, :, 2]
+    radii = torch.tensor(
+        [float(env.model_cpu.geom_size[gid, 0]) for gid in geom_ids],
+        device=config.device,
+        dtype=geom_xpos.dtype,
+    )
+    half_lens = torch.tensor(
+        [
+            (
+                float(env.model_cpu.geom_size[gid, 1])
+                if int(env.model_cpu.geom_type[gid])
+                == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
+                else 0.0
+            )
+            for gid in geom_ids
+        ],
+        device=config.device,
+        dtype=geom_xpos.dtype,
+    )
+    samples = torch.stack((-half_lens, torch.zeros_like(half_lens), half_lens), dim=1)
+    points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(1, -1, 3, 1)
+    delta = points - obj_pos[:, None, None, :]
+    local = torch.einsum("nji,nkpj->nkpi", obj_mat, delta)
+    q = torch.abs(local) - half_ext.view(1, 1, 1, 3)
+    outside = torch.clamp(q, min=0.0).norm(dim=-1)
+    inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+    sdf_points = outside + inside
+    sdf_geom = sdf_points.min(dim=2).values - radii.view(1, -1)
+    return sdf_geom.min(dim=1).values
+
+
+def _sample_gate_from_ref_mask(
+    mask,
+    num_samples: int,
+    device: str,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Convert scalar/per-EEF/per-sample contact mask to one gate per sample."""
+    if not torch.is_tensor(mask):
+        mask = torch.tensor(mask, device=device, dtype=dtype)
+    else:
+        mask = mask.to(device=device, dtype=dtype)
+    if mask.ndim == 0:
+        return mask.view(1).expand(num_samples)
+    if mask.ndim == 1:
+        if mask.shape[0] == num_samples:
+            return mask
+        return mask.max().view(1).expand(num_samples)
+    if mask.ndim == 2:
+        if mask.shape[0] == num_samples:
+            return mask.max(dim=1).values
+        if mask.shape[1] == num_samples:
+            return mask.max(dim=0).values
+        return mask[0].max().view(1).expand(num_samples)
+    return mask.reshape(-1)[0].view(1).expand(num_samples)
+
+
 # TODO: define update environment parameter kernel functions, combine them compile step, also add parameter to be modified into MJWPEnv
 
 # --
@@ -1079,6 +1170,12 @@ def get_reward(
     hand_object_deep_penalty = torch.zeros(N, device=config.device)
     object_lift_rew = torch.zeros(N, device=config.device)
     object_floor_penalty = torch.zeros(N, device=config.device)
+    cem_gate_min_sdf = torch.zeros(N, device=config.device)
+    cem_gate_violation = torch.zeros(N, device=config.device)
+    cem_gate_violation_depth = torch.zeros(N, device=config.device)
+    object_clearance_rew = torch.zeros(N, device=config.device)
+    object_clearance_penalty = torch.zeros(N, device=config.device)
+    object_clearance_m = torch.zeros(N, device=config.device)
     if (
         (config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids)
         or (config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids)
@@ -1089,6 +1186,11 @@ def get_reward(
         or (
             config.object_lift_rew_scale > 0.0
             or config.object_floor_penalty_scale > 0.0
+        )
+        or (config.cem_safety_gate_enabled and config.cem_safety_gate_geom_ids)
+        or (
+            config.object_clearance_rew_scale > 0.0
+            or config.object_clearance_penalty_scale > 0.0
         )
     ) and config.hand_approach_obj_half_extents:
         object_geom_id = mujoco.mj_name2id(
@@ -1108,42 +1210,15 @@ def get_reward(
             )
 
             def geom_box_sdf_min(geom_ids: list[int]) -> torch.Tensor:
-                centers = geom_xpos[:, geom_ids]
-                mats = geom_xmat[:, geom_ids]
-                axes = mats[:, :, :, 2]
-                radii = torch.tensor(
-                    [float(env.model_cpu.geom_size[gid, 0]) for gid in geom_ids],
-                    device=config.device,
-                    dtype=geom_xpos.dtype,
+                return _geom_box_sdf_min(
+                    config,
+                    env,
+                    geom_ids,
+                    object_geom_id,
+                    geom_xpos=geom_xpos,
+                    geom_xmat=geom_xmat,
+                    half_ext=half_ext,
                 )
-                half_lens = torch.tensor(
-                    [
-                        (
-                            float(env.model_cpu.geom_size[gid, 1])
-                            if int(env.model_cpu.geom_type[gid])
-                            == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
-                            else 0.0
-                        )
-                        for gid in geom_ids
-                    ],
-                    device=config.device,
-                    dtype=geom_xpos.dtype,
-                )
-                samples = torch.stack(
-                    (-half_lens, torch.zeros_like(half_lens), half_lens),
-                    dim=1,
-                )
-                points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(
-                    1, -1, 3, 1
-                )
-                delta = points - obj_pos[:, None, None, :]
-                local = torch.einsum("nji,nkpj->nkpi", obj_mat, delta)
-                q = torch.abs(local) - half_ext.view(1, 1, 1, 3)
-                outside = torch.clamp(q, min=0.0).norm(dim=-1)
-                inside = torch.clamp(q.max(dim=-1).values, max=0.0)
-                sdf_points = outside + inside
-                sdf_geom = sdf_points.min(dim=2).values - radii.view(1, -1)
-                return sdf_geom.min(dim=1).values
 
             if config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids:
                 robot_sdf = geom_box_sdf_min(config.robot_object_penalty_geom_ids)
@@ -1171,6 +1246,15 @@ def get_reward(
                 hand_object_deep_penalty = (
                     -config.hand_object_deep_penalty_scale * deep_hinge
                 )
+            if config.cem_safety_gate_enabled and config.cem_safety_gate_geom_ids:
+                cem_gate_min_sdf = geom_box_sdf_min(config.cem_safety_gate_geom_ids)
+                cem_gate_violation_depth = torch.clamp(
+                    config.cem_safety_gate_min_sdf_m - cem_gate_min_sdf,
+                    min=0.0,
+                )
+                cem_gate_violation = (cem_gate_violation_depth > 0.0).to(
+                    geom_xpos.dtype
+                )
             if config.object_lift_rew_scale > 0.0 or config.object_floor_penalty_scale > 0.0:
                 obj_half_z = float(config.hand_approach_obj_half_extents[2])
                 obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
@@ -1190,6 +1274,58 @@ def get_reward(
                     floor_hinge = torch.clamp(min_bottom - obj_bottom, min=0.0)
                     object_floor_penalty = (
                         -config.object_floor_penalty_scale * floor_hinge
+                    )
+            if (
+                config.object_clearance_rew_scale > 0.0
+                or config.object_clearance_penalty_scale > 0.0
+            ):
+                obj_half_z = float(config.hand_approach_obj_half_extents[2])
+                obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
+                object_clearance_m = obj_bottom - config.object_clearance_floor_z
+                source = config.object_clearance_gate_source
+                if source == "always":
+                    window_gate = torch.ones_like(object_clearance_m)
+                elif source == "time_window":
+                    time_arr = wp.to_torch(env.data_wp.time)
+                    window_gate = (
+                        (time_arr >= config.object_clearance_start_eval_time)
+                        & (time_arr <= config.object_clearance_end_eval_time)
+                    ).to(object_clearance_m.dtype)
+                elif source == "contact_mask":
+                    window_gate = _sample_gate_from_ref_mask(
+                        approach_mask_val,
+                        N,
+                        config.device,
+                        object_clearance_m.dtype,
+                    )
+                else:
+                    raise ValueError(
+                        f"Unsupported object_clearance_gate_source={source!r}"
+                    )
+                if config.object_clearance_rew_scale > 0.0:
+                    sigma = max(float(config.object_clearance_sigma), 1e-6)
+                    target_mid = 0.5 * (
+                        config.object_clearance_min_m + config.object_clearance_max_m
+                    )
+                    clearance_err = torch.abs(object_clearance_m - target_mid)
+                    object_clearance_rew = (
+                        config.object_clearance_rew_scale
+                        * torch.exp(-clearance_err / sigma)
+                        * window_gate
+                    )
+                if config.object_clearance_penalty_scale > 0.0:
+                    below = torch.clamp(
+                        config.object_clearance_min_m - object_clearance_m,
+                        min=0.0,
+                    )
+                    above = torch.clamp(
+                        object_clearance_m - config.object_clearance_max_m,
+                        min=0.0,
+                    )
+                    object_clearance_penalty = (
+                        -config.object_clearance_penalty_scale
+                        * (below + config.object_clearance_above_weight * above)
+                        * window_gate
                     )
 
     if config.hand_floor_penalty_scale > 0.0 and config.hand_floor_penalty_geom_ids:
@@ -1225,6 +1361,8 @@ def get_reward(
         + hand_object_deep_penalty
         + object_lift_rew
         + object_floor_penalty
+        + object_clearance_rew
+        + object_clearance_penalty
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -1254,6 +1392,12 @@ def get_reward(
         "hand_object_deep_penalty": hand_object_deep_penalty,
         "object_lift_rew": object_lift_rew,
         "object_floor_penalty": object_floor_penalty,
+        "cem_gate_min_sdf": cem_gate_min_sdf,
+        "cem_gate_violation": cem_gate_violation,
+        "cem_gate_violation_depth": cem_gate_violation_depth,
+        "object_clearance_rew": object_clearance_rew,
+        "object_clearance_penalty": object_clearance_penalty,
+        "object_clearance_m": object_clearance_m,
     }
     return reward, info
 

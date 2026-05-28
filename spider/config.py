@@ -277,6 +277,39 @@ class Config:
     object_lift_sigma: float = 0.05
     object_floor_penalty_scale: float = 0.0
     object_floor_margin_m: float = 0.02
+    # E088: CEM-level hard safety gate. Disabled by default; when enabled,
+    # samples that penetrate the object with upper-body geoms are excluded from
+    # elite selection before the control distribution is updated.
+    cem_safety_gate_enabled: bool = False
+    cem_safety_gate_mode: str = "elite_filter"
+    cem_safety_gate_geom_names: list[str] = field(
+        default_factory=lambda: [
+            "head_collision",
+            "torso_collision",
+            "pelvis_collision",
+            "left_shoulder_yaw_collision",
+            "right_shoulder_yaw_collision",
+            "left_elbow_yaw_collision",
+            "right_elbow_yaw_collision",
+        ]
+    )
+    cem_safety_gate_geom_ids: list[int] = field(default_factory=list)
+    cem_safety_gate_min_sdf_m: float = -0.005
+    cem_safety_gate_max_violation_pct: float = 0.0
+    cem_safety_gate_min_valid_frac: float = 0.02
+    cem_safety_gate_fallback: str = "least_violation"
+    # E088: absolute object bottom clearance shaping. This uses world-frame
+    # object_collision bottom height instead of relative-to-reference bottom.
+    object_clearance_rew_scale: float = 0.0
+    object_clearance_penalty_scale: float = 0.0
+    object_clearance_floor_z: float = 0.0
+    object_clearance_min_m: float = 0.04
+    object_clearance_max_m: float = 0.18
+    object_clearance_sigma: float = 0.04
+    object_clearance_above_weight: float = 0.25
+    object_clearance_gate_source: str = "contact_mask"
+    object_clearance_start_eval_time: float = 0.0
+    object_clearance_end_eval_time: float = 999.0
     # E035: local-frame body tracking (HDMI-style)
     use_local_frame_reward: bool = False
     local_frame_upper_ids: list[int] = field(
@@ -880,6 +913,9 @@ def process_config(config: Config):
         or config.hand_floor_penalty_scale > 0.0
         or config.object_lift_rew_scale > 0.0
         or config.object_floor_penalty_scale > 0.0
+        or config.cem_safety_gate_enabled
+        or config.object_clearance_rew_scale > 0.0
+        or config.object_clearance_penalty_scale > 0.0
     ) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
@@ -973,6 +1009,20 @@ def process_config(config: Config):
             config.hand_object_deep_penalty_geom_ids = geom_ids
             loguru.logger.info(
                 "Hand/object deep penalty: {} geoms resolved.", len(geom_ids)
+            )
+        if config.cem_safety_gate_enabled:
+            geom_ids = []
+            for name in config.cem_safety_gate_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "cem_safety_gate_geom_names: geom '{}' not found.", name
+                    )
+            config.cem_safety_gate_geom_ids = geom_ids
+            loguru.logger.info(
+                "CEM safety gate: {} geoms resolved.", len(geom_ids)
             )
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
