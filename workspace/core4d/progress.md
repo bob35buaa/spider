@@ -1420,3 +1420,18 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - Patched `workspace/core4d/scripts/train/train_E094_handbox_proj_cem.sh` to pass `video_camera=auto` for future E094 smoke/full launches.
 - Added `workspace/core4d/scripts/E094/rerender_cem_autocam.py` so completed E094 CEM rollouts can be re-rendered as `*_autocam.mp4` from `trajectory_mjwp_act.npz` + `config_act.yaml` without rerunning CEM. Static compile passed; pre-completion dry run correctly skipped missing NPZ.
 - Running E094 full CEM was not stopped. Current active local session continues; remote P2/P3 logs continue advancing. Since those jobs started before this patch, their in-run mp4s may still use the old camera and should be re-rendered from saved trajectories after completion.
+
+### 2026-05-29 14:08 CST - E094 P1 full CEM completed; autocam rendered
+
+- Local `E094P1_box004_083_p2_hbproj` full CEM completed and wrote `workspace/core4d/results/E094/cem/full/E094P1_box004_083_p2_hbproj.npz` plus original mp4. The wrapper printed a shell EOF after completion because the script was modified while that bash process was still reading it; current `bash -n workspace/core4d/scripts/train/train_E094_handbox_proj_cem.sh` passes.
+- P1 eval status: `WORK`; `T=105`, contact `61.0%`, object mean/max `0.007/0.018m`, pelvis min `0.658m`, head/upper/LH-floor/RH-floor all `0.0%`.
+- Re-rendered corrected camera video: `workspace/core4d/results/E094/cem/full/E094P1_box004_083_p2_hbproj_full_autocam.mp4` (`1440x480`, `210` frames). Keyframes under `workspace/core4d/results/E094/cem/full/keyframes_autocam/E094P1_box004_083_p2_hbproj/`; inspected `f0092.jpg`, full robot and object are visible for both ref/sim.
+- Remote P3 had completed by this checkpoint but was not yet pulled; remote P2 still running.
+
+### 2026-05-29 14:28 CST - E094 full CEM complete and logged
+
+- Remote P2/P3 completed in `/home/xiayb/pHRI_workspace/spider_e094_run`; updated `workspace/core4d/scripts/pull_E094_remote_results.sh` to default to that clone and pull `*_outdir_full` directories, then pulled results/logs locally.
+- Unified eval over all three variants wrote `workspace/core4d/results/E094/cem/full/full_eval_summary.{json,csv,md}`: C1 `WORK`; C2 `FAIL` due pelvis `0.440m`; C3 `FAIL` due pelvis `0.171m` and RH floor `22.0%`.
+- Re-rendered P2/P3 corrected autocam videos with `workspace/core4d/scripts/E094/rerender_cem_autocam.py`; all three corrected videos are `1440x480` with expected frame counts (`210/246/164`). Visual spot checks show C2 is low-hip/prone-on-box despite excellent object/contact metrics; C3 is fall/box-flip.
+- High subagent `019e7267-da6b-71d1-8b3b-4011d9e7552f` completed CEM autocam review at `workspace/core4d/results/E094/cem/full/visual_review/high_subagent_cem_autocam_review.md`, agreeing C1 supports WORK and C2/C3 should not enter RL.
+- Wrote official log `workspace/core4d/log/116_E094_g1_handbox_target_projection_results.md` and updated `workspace/core4d/EXPERIMENT_TRACKER.md` with E094 summary.
