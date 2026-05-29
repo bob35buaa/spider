@@ -1435,3 +1435,8 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - Re-rendered P2/P3 corrected autocam videos with `workspace/core4d/scripts/E094/rerender_cem_autocam.py`; all three corrected videos are `1440x480` with expected frame counts (`210/246/164`). Visual spot checks show C2 is low-hip/prone-on-box despite excellent object/contact metrics; C3 is fall/box-flip.
 - High subagent `019e7267-da6b-71d1-8b3b-4011d9e7552f` completed CEM autocam review at `workspace/core4d/results/E094/cem/full/visual_review/high_subagent_cem_autocam_review.md`, agreeing C1 supports WORK and C2/C3 should not enter RL.
 - Wrote official log `workspace/core4d/log/116_E094_g1_handbox_target_projection_results.md` and updated `workspace/core4d/EXPERIMENT_TRACKER.md` with E094 summary.
+
+### 2026-05-29 14:42 CST - E094 log clarified after user feedback
+
+- User pointed out the E094 log blurred E093's next-step recommendation with E094's post-result recommendation. Rewrote `workspace/core4d/log/116_E094_g1_handbox_target_projection_results.md` to explicitly separate: E093 next step = target semantic repair / G1-handbox-aware projection; E094 implements that; E094 after-result next step = posture/valid-contact gate for Box026 or Holosoma RL only for C1.
+- Added clearer sections for `adaptive_support` definition, rejected candidates (`handbox_compensated`, direct `support_patch`), final visualization paths, CEM setup/results, autocam camera fix, decisions, and next steps.
