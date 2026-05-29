@@ -120,6 +120,18 @@ CEM 结果：
 - `box021_d003_029_p2`：inside 被清掉，support 明显改善，但 target 位移已经到 20-30cm 级别。
 - `box026_039_p2` / `box026_135_p2`：support/inside 指标被修好，但依赖 36-63cm 的大位移，因此 projection gate 只能给 `REVIEW`，不能当作低风险修复。
 
+### 4.1 box004 的 target 实际改了多少
+
+对 `box004_083_p2`，`reward_delta_p90=0` 的含义不是“一帧都没改”，而是 **绝大多数帧没改**。按 `per_frame_projection.csv` 逐帧统计：
+
+| hand | total hand-frames | raw-active frames | changed frames | mean over all | p90 over all | max changed | changed frame |
+|---|---:|---:|---:|---:|---:|---:|---|
+| left | 105 | 71 | 1 | 0.00123m | 0.000m | 0.129m | frame 16, `+x -> +y` |
+| right | 105 | 72 | 1 | 0.00324m | 0.000m | 0.340m | frame 86, `-x -> +y` |
+| both | 210 | 143 | 2 | 0.00224m | 0.000m | 0.340m | 2/210 hand-frames |
+
+所以对 box004 来说，`adaptive_support` 不是整体重定向 contact target，而是只修了两个明显落到非 support face 的离群 hand-frame。`208/210` 个 hand-frame 完全保持旧 target；全帧平均位移只有 `2.2mm`，因此它基本保留了 E092 box004 已经 work 的 target 分布。
+
 ## 5. Full CEM 设置
 
 三条 CEM case 来自 E092 三 case：
@@ -154,6 +166,31 @@ bash workspace/core4d/scripts/pull_E094_remote_results.sh full
 - C1 是有效 positive result：object tracking、contact、安全姿态都过 gate。
 - C2 的 object tracking 和 contact 很好，但 pelvis 只有 `0.440m`，说明不是可用站立搬箱动作。
 - C3 更差，pelvis `0.171m`，并出现 RH floor `22.0%`。
+
+### 6.1 相对 E092 full CEM 的变化
+
+这里对比的是 `workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.csv`，不是 E092 早期 smoke/paired comparison。
+
+| case | metric | E092 full | E094 adaptive_support full | delta | interpretation |
+|---|---|---:|---:|---:|---|
+| C1 box004 | contact either | 64.8% | 61.0% | -3.8pp | 小幅下降，但仍 WORK |
+| C1 box004 | obj mean/max | 0.006/0.019m | 0.007/0.018m | +0.2mm / -1.2mm | 基本持平 |
+| C1 box004 | pelvis min | 0.663m | 0.658m | -0.006m | 基本持平 |
+| C1 box004 | safety | head/upper/floor all 0% | head/upper/floor all 0% | unchanged | 安全 gate 不变 |
+| C2 box026_039 | contact either | 33.3% | 80.5% | +47.2pp | target repair 明显增强接触 |
+| C2 box026_039 | obj mean/max | 0.009/0.042m | 0.002/0.017m | -7.4mm / -24.1mm | object tracking 明显变好 |
+| C2 box026_039 | pelvis min | 0.083m | 0.440m | +0.357m | 比 E092 高很多，但仍低于可用站姿阈值 |
+| C2 box026_039 | status | FAIL | FAIL | unchanged | 视觉仍是低髋/趴箱局部解 |
+| C3 box026_135 | contact either | 57.3% | 41.5% | -15.9pp | 变差 |
+| C3 box026_135 | obj mean/max | 0.008/0.041m | 0.010/0.041m | +2.5mm / +0.5mm | 略差 |
+| C3 box026_135 | pelvis min | 0.177m | 0.171m | -0.006m | 基本不变，仍倒地 |
+| C3 box026_135 | RH floor | 17.1% | 22.0% | +4.9pp | 手/臂撑地风险更重 |
+
+读法：
+
+- C1 box004：E094 只动了 2 个 hand-frame，所以 CEM 指标和 E092 full 基本一致；`WORK` 结论没变。这支持“box004 属于已可行 pattern，target repair 没破坏它”。
+- C2 box026_039：E094 把 contact/object 指标大幅修好，pelvis 也从 `0.083m` 提到 `0.440m`，但仍没过姿态语义；这就是“target 层修好了，但 full-body posture 仍失败”的最清楚例子。
+- C3 box026_135：E094 没带来收益，contact 更低、RH floor 更高，说明这个 sequence 的问题不只是 wrong-face target，可能还有参考动作/姿态/箱体翻转局部解共同作用。
 
 ## 7. 可视化观察
 

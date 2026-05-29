@@ -1440,3 +1440,8 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 
 - User pointed out the E094 log blurred E093's next-step recommendation with E094's post-result recommendation. Rewrote `workspace/core4d/log/116_E094_g1_handbox_target_projection_results.md` to explicitly separate: E093 next step = target semantic repair / G1-handbox-aware projection; E094 implements that; E094 after-result next step = posture/valid-contact gate for Box026 or Holosoma RL only for C1.
 - Added clearer sections for `adaptive_support` definition, rejected candidates (`handbox_compensated`, direct `support_patch`), final visualization paths, CEM setup/results, autocam camera fix, decisions, and next steps.
+
+### 2026-05-29 15:02 CST - Added E094 target-delta and E092 full comparison
+
+- Responded to user questions on how much `adaptive_support` changed box004 contact target and how final E094 CEM compares against E092. Computed box004 per-frame deltas from `workspace/core4d/results/E094/handbox_target_projection/per_frame_projection.csv`: only 2/210 hand-frames changed (left frame 16 by 0.129m, right frame 86 by 0.340m), mean over all hand-frames 0.00224m, p90 0m.
+- Updated `workspace/core4d/log/116_E094_g1_handbox_target_projection_results.md` with section 4.1 and section 6.1. Comparison uses E092 full CEM summary (`workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.csv`), not the earlier smoke/paired comparison. Key deltas: C1 remains WORK with near-identical metrics; C2 contact/object improve strongly but posture still fails; C3 slightly worsens and remains FAIL.
