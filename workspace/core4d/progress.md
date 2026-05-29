@@ -1556,3 +1556,17 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - Unified E096b summary is saved at `workspace/core4d/results/E096b/cem/full/full_eval_summary.{md,csv,json}`. Both P1/P2 are `advance_to_rl=true`.
 - Generated frame sheets under `workspace/core4d/results/E096b/visual_review/frame_sheets/` and wrote manual visual review `workspace/core4d/results/E096b/visual_review/manual_visual_review.md`; visual review supports both `WORK` decisions.
 - Wrote official log `workspace/core4d/log/119_E096b_box004_mask_on_full_cem_results.md` and updated `workspace/core4d/EXPERIMENT_TRACKER.md`. E096b confirms the E096 box004 positive result is robust after switching from fallback mask to CORE4D raw 3cm mask.
+
+### 2026-05-29 20:20 CST - E097 feature-based data_construction_v2 refresh started
+
+- User asked to optimize `data_construction_v2` using the feature-based route (`raw contact / reach / inside / support / CEM posture gate`) and find new likely-work cases excluding already verified ones.
+- Audited existing E091/E095/E096/E096b outputs and found the remaining candidate pool is mainly box021 review, Box022 raw-contact-missing review, and Box026 holdout after excluding verified box004 positives/rejects.
+- Wrote plan `workspace/core4d/plan/104_E097_feature_based_data_construction_v2_plan.md`. Next step is a new E097 miner that emits explicit verified exclusions and a new unverified candidate queue.
+
+### 2026-05-29 20:28 CST - E097 candidate miner complete
+
+- Added and ran `workspace/core4d/scripts/E097/mine_feature_based_candidates.py`. It writes both SPIDER-side results under `workspace/core4d/results/E097/feature_candidate_mining/` and Holosoma-side results under `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/e097_feature_candidates/`.
+- New Holosoma input queue: `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/inputs/cases_e097_feature_candidate_pipeline.tsv`.
+- Output counts: `38` candidate/audit rows, `14` verified rows excluded, `8` unverified candidate rows, `6` enabled next-batch rows.
+- Enabled next-batch rows are all `candidate_target_posture_gate`: `e091_box021_20231018_028_p1`, `028_p2`, `e091_box021_20231020_020_p2`, `e091_box021_20231011_035_p1`, `e091_box021_20231018_030_p2`, `e091_box021_20231020_019_p2`. These require Stage2b plus inside/support gate before any full CEM/RL.
+- Wrote official log `workspace/core4d/log/120_E097_feature_based_data_construction_v2_results.md` and updated tracker.
