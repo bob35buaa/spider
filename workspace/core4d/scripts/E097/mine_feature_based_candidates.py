@@ -64,6 +64,46 @@ KNOWN_OUTCOMES: dict[str, dict[str, str]] = {
         "stage": "d005b_reject_and_full_cem_fail",
         "note": "E091 right-inside reject; E092/E094 full CEM posture fail.",
     },
+    "e091_box021_20231018_028_p1": {
+        "status": "verified_reject",
+        "stage": "d003_omniretarget_infeasible",
+        "note": "Legacy D003 OmniRetarget log reports CVXPY infeasible; E097 visual review has raw-contact only.",
+    },
+    "e091_box021_20231018_028_p2": {
+        "status": "verified_reject",
+        "stage": "d004_visual_reject_fall_prone",
+        "note": "Legacy D004 visual QC rejected this retargeted sequence as fall/prone.",
+    },
+    "e091_box021_20231020_020_p2": {
+        "status": "verified_review",
+        "stage": "d004_visual_pass",
+        "note": "Legacy D004 visual QC already passed/reviewed this sequence; do not rediscover as new data.",
+    },
+    "e091_box021_20231011_035_p1": {
+        "status": "verified_review",
+        "stage": "d004_visual_pass",
+        "note": "Legacy D004 visual QC already passed/reviewed this sequence; do not rediscover as new data.",
+    },
+    "e091_box021_20231018_030_p2": {
+        "status": "verified_review",
+        "stage": "d004_visual_pass_check_shortcut",
+        "note": "Legacy D004 visual QC already passed/reviewed this sequence with shortcut concern.",
+    },
+    "e091_box021_20231020_019_p2": {
+        "status": "verified_review",
+        "stage": "d004_visual_review",
+        "note": "Legacy D004 visual QC already marked this sequence for review.",
+    },
+    "e091_box021_20231018_030_p1": {
+        "status": "verified_review",
+        "stage": "d004_visual_review",
+        "note": "Legacy D004 visual QC already marked this sequence for review.",
+    },
+    "e091_box021_20231018_029_p1": {
+        "status": "verified_review",
+        "stage": "d004_visual_review",
+        "note": "Legacy D004 visual QC already marked this sequence for review.",
+    },
     "e091_box021_20231018_029_p2": {
         "status": "verified_reject",
         "stage": "full_cem_fail",
@@ -501,16 +541,23 @@ def write_summary(path: Path, rows: list[dict[str, Any]], pipeline: list[dict[st
             f"| `{row['target_task']}` | `{row['known_status']}` | `{row['known_stage']}` | {row['feature_note']} |"
         )
 
-    lines.extend(
-        [
-            "",
-            "## Decision",
-            "",
-            "- New likely-work candidates are not yet RL-ready. They should run Stage2b/OmniRetarget, then D005b/E096-style inside/support target gate, then full CEM posture gate.",
-            "- The current best new batch is box021, but only as `candidate_target_posture_gate`; this reflects both its strong raw contact and its known posture/target risk.",
-            "- Box026 remains a large-reach holdout despite raw contact; Box022 needs raw-contact preflight before preprocess.",
-        ]
-    )
+    lines.extend(["", "## Decision", ""])
+    if candidates:
+        lines.extend(
+            [
+                "- New likely-work candidates are not yet RL-ready. They should run Stage2b/OmniRetarget, then D005b/E096-style inside/support target gate, then full CEM posture gate.",
+                "- The current best new batch is box021, but only as `candidate_target_posture_gate`; this reflects both its strong raw contact and its known posture/target risk.",
+                "- Box026 remains a large-reach holdout despite raw contact; Box022 needs raw-contact preflight before preprocess.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "- After adding legacy D003/D004 visual-QC outcomes, this mined pool has no clean unverified next-batch candidates.",
+                "- The prior six Box021 rows are useful for visual review/diagnosis, but should not be rediscovered as new data.",
+                "- The remaining actionable expansion is to run raw-contact preflight for Box022 or broaden the inventory beyond the current medium-box old D001/D002 pool; Box026 remains a large-reach holdout.",
+            ]
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

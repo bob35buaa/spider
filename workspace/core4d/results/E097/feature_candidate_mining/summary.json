@@ -1,16 +1,8 @@
 {
-  "enabled_targets": [
-    "e091_box021_20231018_028_p1",
-    "e091_box021_20231018_028_p2",
-    "e091_box021_20231020_020_p2",
-    "e091_box021_20231011_035_p1",
-    "e091_box021_20231018_030_p2",
-    "e091_box021_20231020_019_p2"
-  ],
+  "enabled_targets": [],
   "pipeline_file": "/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/inputs/cases_e097_feature_candidate_pipeline.tsv",
   "route_counts": {
-    "candidate_target_posture_gate": 8,
-    "excluded_verified": 14,
+    "excluded_verified": 22,
     "hold_raw_contact_failed": 6,
     "large_reach_holdout": 4,
     "raw_contact_preflight_disabled": 6

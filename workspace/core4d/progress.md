@@ -1570,3 +1570,11 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - Output counts: `38` candidate/audit rows, `14` verified rows excluded, `8` unverified candidate rows, `6` enabled next-batch rows.
 - Enabled next-batch rows are all `candidate_target_posture_gate`: `e091_box021_20231018_028_p1`, `028_p2`, `e091_box021_20231020_020_p2`, `e091_box021_20231011_035_p1`, `e091_box021_20231018_030_p2`, `e091_box021_20231020_019_p2`. These require Stage2b plus inside/support gate before any full CEM/RL.
 - Wrote official log `workspace/core4d/log/120_E097_feature_based_data_construction_v2_results.md` and updated tracker.
+
+### 2026-05-29 20:55 CST - E097 visual review and candidate correction
+
+- User asked to regenerate visualizations for the E097 cases. Added `workspace/core4d/scripts/E097/make_e097_visuals.py` and generated `workspace/core4d/results/E097/visual_review/`.
+- Visual outputs: `6/6` raw-contact PNGs, `10/10` MuJoCo mp4s decodable at `1280x432@15fps`, `10` keyframe PNGs, `5` timeline PNGs. `e091_box021_20231018_028_p1` has raw-contact only because legacy D003 OmniRetarget is CVXPY infeasible and no retargeted/trimmed NPZ exists.
+- Used `video-frames` to extract QC frames for `020_p2` and `028_p2`; auto-framed left panel shows full robot and box, while right panel keeps legacy `track2` for comparison.
+- Important correction: the six prior E097 enabled rows were not clean unverified candidates. They have legacy D003/D004 outcomes (`028_p1` infeasible, `028_p2` D004 reject, the remaining four D004 pass/review/check-shortcut). Updated `mine_feature_based_candidates.py`, reran E097 mining, and current queue is now `0` enabled rows (`22` verified excluded, `0` unverified candidates).
+- Wrote addendum log `workspace/core4d/log/121_E097_visual_review_and_candidate_correction.md` and updated tracker. The preserved visual input for this legacy review is `workspace/core4d/results/E097/visual_review/visual_input_cases.tsv`.

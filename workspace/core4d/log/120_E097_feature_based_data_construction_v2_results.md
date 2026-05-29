@@ -4,6 +4,8 @@
 
 对应计划：`workspace/core4d/plan/104_E097_feature_based_data_construction_v2_plan.md`
 
+> 2026-05-29 correction: 后续重新可视化时发现本日志原先列出的 6 条 enabled Box021 rows 并不是干净的未验证新候选；它们已有 legacy D003/D004 visual-QC 或 infeasible 记录。E097 miner 已修正，当前 pipeline enabled rows 为 `0`。详见 `workspace/core4d/log/121_E097_visual_review_and_candidate_correction.md`。
+
 ## 1. 目标和结论
 
 用户要求把 E095/E096/E096b 的结论反映回 `data_construction_v2`：后续找数据不能再按 object key 或 source scene readiness 加权，而应按 `raw contact / reach / inside / support / CEM posture gate` 这条 feature route 排队，并排除已经验证过的 case。
