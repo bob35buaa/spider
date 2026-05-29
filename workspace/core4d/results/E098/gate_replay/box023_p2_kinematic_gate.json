@@ -1,0 +1,13 @@
+{
+  "case": "box023_p2_kinematic",
+  "qpos_path": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person2/0/trajectory_kinematic.npz",
+  "scene_xml": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person2/scene.xml",
+  "T": 136,
+  "pelvis_min_z": 0.6788510606950348,
+  "pelvis_tilt_max_deg": 101.03994569557011,
+  "lie_on_box_frac": 0.20588235294117646,
+  "gate_pelvis_low": false,
+  "gate_pelvis_tilt": true,
+  "gate_lie_on_box": false,
+  "gate_overall_fail": true
+}

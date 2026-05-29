@@ -163,7 +163,23 @@ def _endpoint(row: dict[str, str], preflight: dict[str, str]) -> tuple[np.ndarra
     half = common.object_half(row)
     side = preflight["selected_side_face"]
     if side not in common.SIDE_FACES:
-        side = row["anchor_face"] if row["anchor_face"] in common.SIDE_FACES else "+x"
+        # B3 修复 (exp_diagnostic_v2 §2)：原回退是无条件 "+x"；B1 修复后
+        # row["anchor_face"] 可能是 ±z，此时仍需选一个 SIDE。优先级：
+        # 1. row["anchor_face"] 本身已是 SIDE → 用它
+        # 2. preflight 提供了 selected_side_face 备选则用之
+        # 3. 否则 raise，显式告知 caller 该 case 需要人工选 side
+        anchor_face = row.get("anchor_face", "")
+        if anchor_face in common.SIDE_FACES:
+            side = anchor_face
+        elif preflight.get("selected_side_face") in common.SIDE_FACES:
+            side = preflight["selected_side_face"]
+        else:
+            raise ValueError(
+                f"_endpoint: cannot pick SIDE face for row={row.get('source_task','?')!r} "
+                f"anchor_face={anchor_face!r} preflight selected_side_face="
+                f"{preflight.get('selected_side_face')!r}. "
+                "Either rerun preflight or specify side manually."
+            )
     centroid = _parse_point(preflight["selected_side_centroid"])
     if not np.all(np.isfinite(centroid)):
         centroid = _parse_point(preflight["selected_robust_centroid"])

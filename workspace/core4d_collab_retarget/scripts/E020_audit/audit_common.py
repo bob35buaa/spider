@@ -216,19 +216,24 @@ def _save_simple_plot(path: Path, title: str, series: list[tuple[str, np.ndarray
     plt.close(fig)
 
 
+_ALL_FACES = ["+x", "-x", "+y", "-y", "+z", "-z"]  # B1 修复：含 ±z
+
+
 def _face_label(point: np.ndarray, center: np.ndarray, half: np.ndarray) -> str:
+    """B1 修复：全 3D argmax，可返回 ±z。"""
     rel = (np.asarray(point, dtype=np.float64) - center) / np.clip(half, 1e-8, None)
-    axis = int(np.argmax(np.abs(rel[:2])))
+    axis = int(np.argmax(np.abs(rel)))
     sign = "+" if rel[axis] >= 0.0 else "-"
-    return f"{sign}{'xy'[axis]}"
+    return f"{sign}{'xyz'[axis]}"
 
 
 def _face_counts(points: np.ndarray, center: np.ndarray, half: np.ndarray) -> tuple[str, float, dict[str, int]]:
+    """B1 修复：counts 字典覆盖 6 个面而非仅 4 个侧面。"""
     if len(points) == 0:
-        return "", 0.0, {face: 0 for face in ["+x", "-x", "+y", "-y"]}
+        return "", 0.0, {face: 0 for face in _ALL_FACES}
     labels = [_face_label(point, center, half) for point in points]
     counts = Counter(labels)
-    for face in ["+x", "-x", "+y", "-y"]:
+    for face in _ALL_FACES:
         counts.setdefault(face, 0)
     face, count = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0]
     return face, float(count / max(len(points), 1)), dict(counts)

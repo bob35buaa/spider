@@ -1,0 +1,15 @@
+{
+  "case": "E089A_box021_person1_WORK",
+  "qpos_path": "workspace/core4d/results/E089/A/E089A_box021_person1_upperobj_outdir/trajectory_mjwp_act.npz",
+  "scene_xml": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box021_person1_upperobj_e089/scene_act.xml",
+  "T": 88,
+  "pelvis_min_z": 0.6867474317550659,
+  "pelvis_end_z": 0.7814973816275597,
+  "pelvis_tilt_max_deg": 96.87076023128728,
+  "pelvis_tilt_end_deg": 63.33824623913467,
+  "lie_on_box_frac": 0.0,
+  "gate_pelvis_low": false,
+  "gate_pelvis_tilt": false,
+  "gate_lie_on_box": false,
+  "gate_overall_fail": false
+}

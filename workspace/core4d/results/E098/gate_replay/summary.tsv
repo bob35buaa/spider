@@ -1,0 +1,2 @@
+case	T	pelvis_min_z	pelvis_tilt_max_deg	lie_on_box_frac	gate_pelvis_low	gate_pelvis_tilt	gate_lie_on_box	gate_overall_fail	json	per_frame_npz
+box023_p2_kinematic	136	0.6788510606950348	101.03994569557011	0.20588235294117646	False	True	False	True	workspace/core4d/results/E098/gate_replay/box023_p2_kinematic_gate.json	workspace/core4d/results/E098/gate_replay/box023_p2_kinematic_per_frame.npz

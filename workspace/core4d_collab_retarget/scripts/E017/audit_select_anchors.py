@@ -45,8 +45,15 @@ ATTRIBUTION_CSV = RESULTS / "e016_anchor_failure_attribution.csv"
 ANCHOR_BODY = "support_weld_anchor"
 ANCHOR_GEOM = "support_weld_anchor_geom"
 WELD_NAME = "e017_support_weld"
-FACE_ORDER = ["+x", "-x", "+y", "-y"]
-OPPOSITE_FACE = {"+x": "-x", "-x": "+x", "+y": "-y", "-y": "+y"}
+# B1 修复 (exp_diagnostic_v2 §2)：FACE_ORDER 从 xy-only 扩展到全 6 面，
+# 老 face_label 永远不返回 ±z 是 wrong-target，导致 box021 D003 9/13 case
+# anchor_face_review=true。统一改用 face_utils.FACE_ORDER。
+FACE_ORDER = ["+x", "-x", "+y", "-y", "+z", "-z"]
+OPPOSITE_FACE = {
+    "+x": "-x", "-x": "+x",
+    "+y": "-y", "-y": "+y",
+    "+z": "-z", "-z": "+z",
+}
 PERSON_RE = re.compile(r"_person([12])(?=$|_)")
 
 FIELDNAMES = [
@@ -190,15 +197,17 @@ def _indent(elem: ET.Element, level: int = 0) -> None:
 
 
 def face_label(point: np.ndarray, half: np.ndarray) -> str:
-    xy_norm = np.abs(point[:2]) / np.clip(half[:2], 1e-6, None)
-    axis = int(np.argmax(xy_norm))
+    """B1 修复：全 3D argmax，可返回 ±z；老版仅 xy。"""
+    norm = np.abs(point) / np.clip(half, 1e-6, None)
+    axis = int(np.argmax(norm))
     sign = "+" if point[axis] >= 0.0 else "-"
-    return f"{sign}{'xy'[axis]}"
+    return f"{sign}{'xyz'[axis]}"
 
 
 def _face_axis_sign(face: str) -> tuple[int, float]:
-    axis = 0 if face.endswith("x") else 1
-    sign = 1.0 if face.startswith("+") else -1.0
+    """B1 修复：支持全 6 面；老版 ±z 静默映射到 y。"""
+    axis = "xyz".index(face[1])
+    sign = 1.0 if face[0] == "+" else -1.0
     return axis, sign
 
 
@@ -208,18 +217,25 @@ def _face_sort_key(item: tuple[str, int]) -> tuple[int, int]:
 
 
 def _clip_anchor(point: np.ndarray, half: np.ndarray, *, z_upper_frac: float = 0.65) -> np.ndarray:
+    """B1 修复：3 个轴对称裁剪。
+
+    旧版 z 强压到 [-0.25·hz, 0.65·hz]，意味着 anchor 永远不能在底面或顶面，
+    与"接触点投票主面 +z 主导"的下游需求互斥。新版默认对称 0.90·half；
+    z_upper_frac 保留参数但不再非对称裁剪，仅作为输入兼容。
+    """
     out = np.asarray(point, dtype=np.float64).copy()
-    out[:2] = np.clip(out[:2], -0.90 * half[:2], 0.90 * half[:2])
-    out[2] = float(np.clip(out[2], -0.25 * half[2], z_upper_frac * half[2]))
+    out = np.clip(out, -0.90 * half, 0.90 * half)
     return out
 
 
 def _snap_to_face(point: np.ndarray, half: np.ndarray, face: str) -> np.ndarray:
+    """B1 修复：用 3-轴循环代替 `other = 1 - axis`，支持 ±z 面。"""
     out = _clip_anchor(point, half)
     axis, sign = _face_axis_sign(face)
-    other = 1 - axis
     out[axis] = sign * half[axis]
-    out[other] = float(np.clip(out[other], -0.65 * half[other], 0.65 * half[other]))
+    others = [i for i in (0, 1, 2) if i != axis]
+    for j in others:
+        out[j] = float(np.clip(out[j], -0.65 * half[j], 0.65 * half[j]))
     return out
 
 

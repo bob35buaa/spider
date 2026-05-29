@@ -162,9 +162,12 @@ def _robust_centroid(points: np.ndarray) -> np.ndarray:
 
 
 def _project_to_face(face: str, centroid: np.ndarray, half: np.ndarray) -> np.ndarray:
+    """B2 修复 (exp_diagnostic_v2 §2)：原版 `axis = 0 if face.endswith('x') else 1`
+    把 ±z 静默映射到 ±y。改用通用 "xyz".index(face[1]) 解析 6 面。
+    """
     point = np.asarray(centroid, dtype=np.float64).copy()
-    axis = 0 if face.endswith("x") else 1
-    sign = 1.0 if face.startswith("+") else -1.0
+    axis = "xyz".index(face[1])
+    sign = 1.0 if face[0] == "+" else -1.0
     point[axis] = sign * float(half[axis])
     for idx in range(3):
         if idx == axis:

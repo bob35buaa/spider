@@ -134,23 +134,28 @@ def _indent(elem: ET.Element, level: int = 0) -> None:
 
 
 def _face_axis_sign(face: str) -> tuple[int, float]:
-    axis = 0 if face.endswith("x") else 1
-    sign = 1.0 if face.startswith("+") else -1.0
+    """B1 修复 (exp_diagnostic_v2 §2)：支持全 6 面（含 ±z）。"""
+    axis = "xyz".index(face[1])
+    sign = 1.0 if face[0] == "+" else -1.0
     return axis, sign
 
 
 def face_label(point: np.ndarray, half: np.ndarray) -> str:
-    xy_norm = np.abs(point[:2]) / np.clip(half[:2], 1e-6, None)
-    axis = int(np.argmax(xy_norm))
+    """B1 修复：全 3D argmax，可返回 ±z。"""
+    norm = np.abs(point) / np.clip(half, 1e-6, None)
+    axis = int(np.argmax(norm))
     sign = "+" if point[axis] >= 0.0 else "-"
-    return f"{sign}{'xy'[axis]}"
+    return f"{sign}{'xyz'[axis]}"
 
 
 def canonical_anchor(face: str, half: np.ndarray, z_frac: float = CANONICAL_Z_FRAC) -> np.ndarray:
+    """B1 修复：之前 z 永远固定到 z_frac·half[2]，与 ±z 面互斥；
+    现在若 face 是 ±z，z 取 sign·half[2]；其它面 z 仍按 z_frac 历史行为。"""
     point = np.zeros(3, dtype=np.float64)
     axis, sign = _face_axis_sign(face)
     point[axis] = sign * float(half[axis])
-    point[2] = float(z_frac * half[2])
+    if axis != 2:  # ±x / ±y 面：z 保留历史的 z_frac·half[2] 习惯
+        point[2] = float(z_frac * half[2])
     return point
 
 

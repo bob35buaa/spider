@@ -125,6 +125,15 @@ def main(
             mujoco.mj_forward(mj_model, mj_data)
 
             # Contact detection
+            # B4 DEPRECATION NOTICE (exp_diagnostic_v2 §2/§4):
+            # `contact_pos` written here is the IK FK PALM SITE position (after IK
+            # has placed G1 in the retargeted pose), NOT raw human mocap fingertip.
+            # All downstream "raw contact" face statistics in
+            # workspace/core4d_collab_retarget/scripts/E017/E018/E020/E028 actually
+            # consume this FK proxy. For box021 D003 where IK is itself flaky, this
+            # is misleading. See exp_diagnostic_v2/findings/02 §3 (B4) + §4 (B6)
+            # for the wrist≠contact root cause. A future fix is to write a separate
+            # `contact_pos_fk` field and also store raw mocap fingertips.
             contact_pos = mj_data.site_xpos[contact_site_ids, :].copy()
             if contact_detection_mode == "one":
                 contact = np.ones(len(contact_site_ids))

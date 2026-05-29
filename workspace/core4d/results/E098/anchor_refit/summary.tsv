@@ -1,0 +1,13 @@
+case	hand	n_contact	old_top	new_top	delta	status
+d003_box021_20231018_029_p2	L	75	-x(73)	-x(52)	same	
+d003_box021_20231018_029_p2	R	75	-x(64)	+z(49)	DIFFER	
+d003_box021_20231011_035_p2	L	133	+x(108)	+x(102)	same	
+d003_box021_20231011_035_p2	R	133	-x(111)	-x(107)	same	
+d003_box021_20231020_019_p1	L	98	+x(70)	+x(47)	same	
+d003_box021_20231020_019_p1	R	98	-x(71)	-x(64)	same	
+d003_box021_20231018_030_p1	L	88	+y(84)	+z(64)	DIFFER	
+d003_box021_20231018_030_p1	R	88	+x(65)	+z(59)	DIFFER	
+d003_box021_20231020_020_p2	L	87	-x(70)	-x(55)	same	
+d003_box021_20231020_020_p2	R	87	+x(68)	+z(66)	DIFFER	
+d003_box021_20231018_028_p2	L	92	+y(86)	-z(61)	DIFFER	
+d003_box021_20231018_028_p2	R	92	-x(70)	-x(70)	same	

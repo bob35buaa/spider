@@ -1,0 +1,15 @@
+{
+  "case": "E088A_box021_029_p2_FAIL",
+  "qpos_path": "workspace/core4d/results/E088/E088A_m10_gate_main_outdir/trajectory_mjwp_act.npz",
+  "scene_xml": "example_datasets/processed/core4d/unitree_g1/humanoid_object/d003_box021_20231018_029_p2_upperobj_e083_m10_e087/scene_act.xml",
+  "T": 75,
+  "pelvis_min_z": 0.1810072660446167,
+  "pelvis_end_z": 0.18993496681962693,
+  "pelvis_tilt_max_deg": 95.62308936634314,
+  "pelvis_tilt_end_deg": 74.67232399060651,
+  "lie_on_box_frac": 0.36,
+  "gate_pelvis_low": true,
+  "gate_pelvis_tilt": false,
+  "gate_lie_on_box": true,
+  "gate_overall_fail": true
+}

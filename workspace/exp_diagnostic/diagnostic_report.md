@@ -219,3 +219,15 @@ E082-E088 的失败不是 reward 调参问题，也不是 mass、不是 hard gat
 - `workspace/exp_diagnostic/findings/03_fk_wrist_local.txt`
 - `workspace/exp_diagnostic/findings/04_overlay_*.png` (5 张)
 - `workspace/exp_diagnostic/diagnostic_report.md` — 本文档
+
+---
+
+## ERRATA — 2026-05-30（在 exp_diagnostic_v2 + E098 修订后追加）
+
+**§3.2 / §3.5 的"接触面 / 主面 / signed dist"具体数值受 B1 + B4 污染**：
+
+- **B1**：当时使用的 `face_label` 来自 `workspace/core4d_collab_retarget/scripts/E017/audit_select_anchors.py:192`，只用 xy 二维 argmax，**完全屏蔽 ±z 面**。所以 §3.2 表中 "box021 18029_p2 L 主面 = -x、signed dist +0.079" 这类 "L/R 主面"应理解为"xy 投影下投票最多的水平面"，不是真 3D 主面。按全 3D argmax 重算，box021 D003 多数 hand-case 主面是 +z（见 `workspace/exp_diagnostic_v2/findings/02_face_selection_audit.md` §3 B1 表）。
+- **B4**：§3.3 表中"L wrist world z 0.470 / R wrist world z 0.497"是从 `trajectory_kinematic.npz` 的 `contact_pos` 读出，但 `contact_pos` 实际是 **IK FK palm site** 而非 raw mocap。下游 §3.2 / §3.5 文字也踩了这个坑。
+- **B6**：进一步，"wrist FK 33% 帧 INSIDE box" 这条 H1 关键证据本身**部分是 wrist 内陷的几何假象**——人指尖贴 +y 侧外、wrist 被反向弯曲带到 box 几何中心方向，FK 落点看上去 INSIDE 但实际人手没穿模。详 `workspace/exp_diagnostic_v2/findings/02_face_selection_audit.md` §4。
+
+**H1 结论方向仍然正确**（box021 D003 几何对单 G1 不可行），**但具体描述的几何画面需以 v2 §3 B1 + §4 B6 为准**。E098 (Stage 0) 修复 B1+B2+B3+B4+B5；E099+ 起所有"接触面 / 主面"统计应使用 `workspace/core4d/scripts/E098/face_utils.py` 的全 3D helper，不应回到本文档 §3.2/§3.5 的 xy-only 表。
