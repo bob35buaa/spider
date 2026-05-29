@@ -10,12 +10,43 @@
 - [x] 已修正 `workspace/core4d/scripts/E095/mine_worklike_candidates.py`：`score` 继续保持几何/raw-contact；tier/risk 改为 feature-based route（worklike priority、target/posture gate、missing raw-contact long-edge review、large-reach dynamics holdout），不再用特定 box ID 命名规则。
 - [x] 已重跑 E095 candidate mining：候选仍为 `32` 条，第一批仍为 `3` 条；`source_scene_exists` 不进入分数，`rank` 是 execution queue rank。
 - [x] 已同步更新 E095 plan/log/result summary；旧的 `cases_e095_box021_review_disabled.tsv` 被移除，替换为 `cases_e095_target_posture_gate_review_disabled.tsv`。
+- [x] 已新增 E096 脚本骨架：
+  - `workspace/core4d/scripts/E096/build_contact_manifest.py`
+  - `workspace/core4d/scripts/E096/build_cem_tasks.py`
+  - `workspace/core4d/scripts/E096/run_contact_semantics.sh`
+  - `workspace/core4d/scripts/train/train_E096_box004_cem.sh`
+  - `workspace/core4d/scripts/eval/eval_E096_cem.py`
+  - `workspace/core4d/scripts/run_E096_remote.sh`
+  - `workspace/core4d/scripts/pull_E096_remote_results.sh`
+- [x] E096 static checks 通过：`py_compile` 覆盖 E096 Python 脚本，`bash -n` 覆盖 E096 shell 脚本，`git diff --check` 通过。
+- [x] 已生成 E096 contact manifest：
+  - P1 `box004_083_p1` ready。
+  - P2 `box004_082_p1` ready。
+  - P3 `box004_082_p2` blocked：missing scene/trajectory/mask/audit，仍是 OmniRetarget infeasible 后无 SPIDER trajectory。
+- [x] 已生成并验证 ready-case CEM derived tasks：
+  - `e091_box004_20231003_2_083_p1_e096_cem`
+  - `e091_box004_20231003_2_082_p1_e096_cem`
+  - 两者 `scene_act` 均 `nq=42 nv=41 nu=35 npair=49 mass=5.0 validation=ok`。
+- [x] E096 contact semantic analysis 已完成：
+  - `workspace/core4d/results/E096/contact_semantics/geometry_summary.md`
+  - `workspace/core4d/results/E096/contact_semantics/visuals/mujoco/videos/`
+  - `workspace/core4d/results/E096/adaptive_support_projection/projection_summary.md`
+  - `workspace/core4d/results/E096/adaptive_support_projection/visuals/mujoco/videos/`
+  - P1/P2 PNG/MP4 均存在且非空。
+- [x] P3 隔离 retry 已完成且失败：
+  - retry target `e096_box004_20231003_2_082_p2_fingertip`
+  - `REPLACE_WRIST_WITH_FINGERTIP=1`
+  - 仍在 OmniRetarget frame 约 `81/139` 报 `RuntimeError: CVXPY solve failed: infeasible`
+  - 记录：`workspace/core4d/results/E096/preprocess_retry/retry_summary.md`
 
 ## 待完成
 
 - [x] 重跑 E095 candidate mining 并检查 candidate bank/tier count。
 - [x] 更新 E095 plan/log/result summary，明确 template readiness 不加分、object key 不做数值加权/降权。
-- [ ] 继续 E096：三 case contact semantic analysis、preprocess retry/阻断记录、full CEM 并行启动。
+- [x] 静态检查并运行 E096 manifest/task builder。
+- [x] 运行 E096 contact semantic analysis 和 projection 可视化。
+- [x] preprocess retry/阻断记录。
+- [ ] full CEM 并行启动。
 
 ---
 

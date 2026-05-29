@@ -1,0 +1,1503 @@
+{
+  "meta": {
+    "box004_082_p1": {
+      "T": 109,
+      "half": [
+        0.173952,
+        0.131777,
+        0.223595
+      ],
+      "raw_meta": {
+        "mask_key": "spider_contact_mask_3cm",
+        "raw_idx_for_qpos": [
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138
+        ],
+        "raw_source": [
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ]
+        ],
+        "sample_count": 20000
+      }
+    },
+    "box004_083_p1": {
+      "T": 102,
+      "half": [
+        0.173952,
+        0.131777,
+        0.223595
+      ],
+      "raw_meta": {
+        "mask_key": "spider_contact_mask_3cm",
+        "raw_idx_for_qpos": [
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120
+        ],
+        "raw_source": [
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "close_centroid",
+            ""
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "close_centroid",
+            "close_centroid"
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ],
+          [
+            "",
+            ""
+          ]
+        ],
+        "sample_count": 20000
+      }
+    },
+    "handbox": {
+      "left": {
+        "half": [
+          0.07091469,
+          0.03827877,
+          0.0582394
+        ],
+        "offset": [
+          0.10741466,
+          -0.01162729,
+          0.0102105
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_link": "left_handbox_link"
+      },
+      "right": {
+        "half": [
+          0.070914065,
+          0.03827877,
+          0.05823941
+        ],
+        "offset": [
+          0.10741404,
+          0.01162729,
+          0.01021049
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_link": "right_handbox_link"
+      }
+    },
+    "handbox_urdf": "/home/ubuntu/Workspace/holosoma/src/holosoma/holosoma/data/robots/g1/main_mesh_collision_handbox_m5.urdf",
+    "threebox_source": "workspace/core4d/scripts/convert/patch_hand_3box.py constants"
+  },
+  "summary": [
+    {
+      "T": 102,
+      "bad_proxy_flags": "wrist5_raw_delta_gt20cm,sphere_gap_p90_gt10cm,handbox_gap_p90_gt10cm",
+      "best_proxy_by_distance": {
+        "handbox_surface": 63
+      },
+      "case_id": "box004_083_p1",
+      "hand": "left",
+      "handbox_surface_gap_mean_m": 0.207192,
+      "handbox_surface_gap_p90_abs_m": 0.221977,
+      "object_group": "box004",
+      "raw_active_frac": 0.617647,
+      "raw_face_counts": {
+        "+y": 63
+      },
+      "raw_inside_frac": 0.0,
+      "raw_support_frac": 1.0,
+      "role": "E096_P1_first_batch_ready",
+      "sphere_surface_gap_mean_m": 0.224995,
+      "sphere_surface_gap_p90_abs_m": 0.237154,
+      "task": "e091_box004_20231003_2_083_p1",
+      "threebox_surface_gap_mean_m": 0.231885,
+      "threebox_surface_gap_p90_abs_m": 0.244726,
+      "wrist5_face_counts": {
+        "+y": 63,
+        "+z": 39
+      },
+      "wrist5_inside_frac": 0.0,
+      "wrist5_support_frac": 1.0,
+      "wrist5_to_raw_max_m": 0.318315,
+      "wrist5_to_raw_mean_m": 0.263276,
+      "wrist5_to_raw_median_m": 0.264099,
+      "wrist5_to_raw_p90_m": 0.275793,
+      "wrist5_vs_contact_pos_mean_m": 0.03
+    },
+    {
+      "T": 102,
+      "bad_proxy_flags": "wrist5_raw_delta_gt20cm,sphere_gap_p90_gt10cm,handbox_gap_p90_gt10cm",
+      "best_proxy_by_distance": {
+        "handbox_surface": 57,
+        "threebox_surface": 5
+      },
+      "case_id": "box004_083_p1",
+      "hand": "right",
+      "handbox_surface_gap_mean_m": 0.168137,
+      "handbox_surface_gap_p90_abs_m": 0.184285,
+      "object_group": "box004",
+      "raw_active_frac": 0.607843,
+      "raw_face_counts": {
+        "-y": 62
+      },
+      "raw_inside_frac": 0.0,
+      "raw_support_frac": 0.0,
+      "role": "E096_P1_first_batch_ready",
+      "sphere_surface_gap_mean_m": 0.20963,
+      "sphere_surface_gap_p90_abs_m": 0.22486,
+      "task": "e091_box004_20231003_2_083_p1",
+      "threebox_surface_gap_mean_m": 0.17522,
+      "threebox_surface_gap_p90_abs_m": 0.19107,
+      "wrist5_face_counts": {
+        "+x": 50,
+        "+y": 52
+      },
+      "wrist5_inside_frac": 0.0,
+      "wrist5_support_frac": 0.509804,
+      "wrist5_to_raw_max_m": 0.353882,
+      "wrist5_to_raw_mean_m": 0.291869,
+      "wrist5_to_raw_median_m": 0.290324,
+      "wrist5_to_raw_p90_m": 0.305436,
+      "wrist5_vs_contact_pos_mean_m": 0.03
+    },
+    {
+      "T": 109,
+      "bad_proxy_flags": "wrist5_raw_delta_gt20cm,sphere_gap_p90_gt10cm,handbox_gap_p90_gt10cm",
+      "best_proxy_by_distance": {
+        "handbox_surface": 56,
+        "threebox_surface": 4
+      },
+      "case_id": "box004_082_p1",
+      "hand": "left",
+      "handbox_surface_gap_mean_m": 0.173963,
+      "handbox_surface_gap_p90_abs_m": 0.210173,
+      "object_group": "box004",
+      "raw_active_frac": 0.550459,
+      "raw_face_counts": {
+        "+y": 55,
+        "+z": 5
+      },
+      "raw_inside_frac": 0.0,
+      "raw_support_frac": 1.0,
+      "role": "E096_P2_first_batch_ready",
+      "sphere_surface_gap_mean_m": 0.196656,
+      "sphere_surface_gap_p90_abs_m": 0.230159,
+      "task": "e091_box004_20231003_2_082_p1",
+      "threebox_surface_gap_mean_m": 0.197541,
+      "threebox_surface_gap_p90_abs_m": 0.229295,
+      "wrist5_face_counts": {
+        "+x": 1,
+        "+y": 48,
+        "+z": 48,
+        "-x": 12
+      },
+      "wrist5_inside_frac": 0.0,
+      "wrist5_support_frac": 0.880734,
+      "wrist5_to_raw_max_m": 0.335683,
+      "wrist5_to_raw_mean_m": 0.236436,
+      "wrist5_to_raw_median_m": 0.236051,
+      "wrist5_to_raw_p90_m": 0.263978,
+      "wrist5_vs_contact_pos_mean_m": 0.03
+    },
+    {
+      "T": 109,
+      "bad_proxy_flags": "wrist5_raw_delta_gt20cm,sphere_gap_p90_gt10cm,handbox_gap_p90_gt10cm",
+      "best_proxy_by_distance": {
+        "handbox_surface": 61
+      },
+      "case_id": "box004_082_p1",
+      "hand": "right",
+      "handbox_surface_gap_mean_m": 0.175721,
+      "handbox_surface_gap_p90_abs_m": 0.199011,
+      "object_group": "box004",
+      "raw_active_frac": 0.559633,
+      "raw_face_counts": {
+        "+y": 4,
+        "+z": 12,
+        "-y": 44,
+        "-z": 1
+      },
+      "raw_inside_frac": 0.0,
+      "raw_support_frac": 0.196721,
+      "role": "E096_P2_first_batch_ready",
+      "sphere_surface_gap_mean_m": 0.202305,
+      "sphere_surface_gap_p90_abs_m": 0.208057,
+      "task": "e091_box004_20231003_2_082_p1",
+      "threebox_surface_gap_mean_m": 0.189459,
+      "threebox_surface_gap_p90_abs_m": 0.204684,
+      "wrist5_face_counts": {
+        "+x": 51,
+        "+y": 53,
+        "-x": 4,
+        "-z": 1
+      },
+      "wrist5_inside_frac": 0.0,
+      "wrist5_support_frac": 0.477064,
+      "wrist5_to_raw_max_m": 0.370683,
+      "wrist5_to_raw_mean_m": 0.2716,
+      "wrist5_to_raw_median_m": 0.269231,
+      "wrist5_to_raw_p90_m": 0.2897,
+      "wrist5_vs_contact_pos_mean_m": 0.03
+    }
+  ]
+}

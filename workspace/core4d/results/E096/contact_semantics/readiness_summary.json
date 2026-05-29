@@ -1,0 +1,11 @@
+{
+  "blocked_cases": {
+    "box004_082_p2": "missing scene_exists,trajectory_exists,mask_exists,audit_exists"
+  },
+  "num_cases": 3,
+  "num_ready": 2,
+  "ready_cases": [
+    "box004_083_p1",
+    "box004_082_p1"
+  ]
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "T": 102,
+    "case_id": "box004_083_p1",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E096/adaptive_support_projection/targets/box004_083_p1_e091_box004_20231003_2_083_p1_adaptive_support_targets.npz",
+    "task": "e091_box004_20231003_2_083_p1"
+  },
+  {
+    "T": 109,
+    "case_id": "box004_082_p1",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E096/adaptive_support_projection/targets/box004_082_p1_e091_box004_20231003_2_082_p1_adaptive_support_targets.npz",
+    "task": "e091_box004_20231003_2_082_p1"
+  }
+]

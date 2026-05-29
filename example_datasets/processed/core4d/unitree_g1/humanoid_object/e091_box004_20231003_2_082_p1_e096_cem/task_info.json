@@ -1,0 +1,42 @@
+{
+  "data_id": "0",
+  "date": "20231003_2",
+  "e096_case_id": "box004_082_p1",
+  "e096_note": "E096 full CEM with ref_fk wrist5cm target; contact projection is diagnostic",
+  "e096_route": "cem_ref_fk",
+  "e096_validation": {
+    "missing_leg_pairs": [],
+    "missing_upper_pairs": [],
+    "model_npair": 49,
+    "model_nq": 42,
+    "model_nu": 35,
+    "model_nv": 41,
+    "object_mass_kg": 5.0,
+    "trajectory_qpos_shape": [
+      109,
+      43
+    ],
+    "validation_ok": true
+  },
+  "e096_variant": "E096P2_box004_082_p1_cem",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    0.5825471878051758,
+    0.37718141078948975,
+    0.13379532098770142
+  ],
+  "object_initial_quat": [
+    -0.1992706060409546,
+    -0.19242648780345917,
+    0.67816162109375,
+    0.6807056069374084
+  ],
+  "object_model_rel": "box/box004_m.obj",
+  "object_name": "box004",
+  "person": "person1",
+  "seq": "082",
+  "source_qpos": "../holosoma/workspace/v3/data_construction_v2/results/stage2b_medium/results/holosoma_e091_box004_20231003_2_082_p1/trimmed/20231003_2-082-person1-box004_with_obj_original.npz",
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box004_person1/scene.xml",
+  "source_task_e096": "e091_box004_20231003_2_082_p1",
+  "task": "e091_box004_20231003_2_082_p1_e096_cem"
+}
