@@ -1,0 +1,18 @@
+Snapshot written to workspace/core4d/results/E096/scene_snapshot
+Files:
+total 16
+drwxrwxr-x 3 xiayb xiayb 4096 May 29 16:44 .
+drwxrwxr-x 7 xiayb xiayb 4096 May 29 16:44 ..
+drwxrwxr-x 2 xiayb xiayb 4096 May 29 16:44 e091_box004_20231003_2_082_p1_e096_cem
+-rw-rw-r-- 1 xiayb xiayb  735 May 29 16:44 manifest.txt
+
+Manifest:
+# Scene snapshot for E096
+# Captured: 2026-05-29T16:44:48+08:00
+# Git HEAD: ba5f7b5 (exp/core4d-collab-retarget)
+
+case                             file                       size  sha256
+e091_box004_20231003_2_082_p1_e096_cem scene.xml                 30391  e24ef94a0745b9029a61873db4958fbb569f3662a168d27798c15c687e3880a1
+e091_box004_20231003_2_082_p1_e096_cem scene_act.xml             34369  85df0e7b5ed82da59a2e8c541220c8545fd22a39377143bb0bc57c2437042252
+e091_box004_20231003_2_082_p1_e096_cem scene_act_meta.json          27  9382ff8f41360573fc8089515e4c4680ab5da29f4a73863139d49055924187b0
+e091_box004_20231003_2_082_p1_e096_cem task_info.json             1313  df4be705599323e6799d088c704616215f15f0c80e3757df697033646aedb2ea

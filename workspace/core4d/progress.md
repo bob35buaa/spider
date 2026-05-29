@@ -38,6 +38,11 @@
   - `REPLACE_WRIST_WITH_FINGERTIP=1`
   - 仍在 OmniRetarget frame 约 `81/139` 报 `RuntimeError: CVXPY solve failed: infeasible`
   - 记录：`workspace/core4d/results/E096/preprocess_retry/retry_summary.md`
+- [x] E096 full CEM 已启动：
+  - local tmux `E096_local_cem`: P1 `E096P1_box004_083_p1_cem` on local GPU0。
+  - remote tmux `E096_remote_cem`: P2 `E096P2_box004_082_p1_cem` on remote GPU0。
+  - remote GPU1 split 无 variant，因为 P3 preprocess blocked，日志记录 `No E096 variants for split=remote-gpu1; nothing to run.`。
+  - 启动前已记录 local/remote `nvidia-smi`，未停止现有 RL jobs。
 
 ## 待完成
 
@@ -46,7 +51,8 @@
 - [x] 静态检查并运行 E096 manifest/task builder。
 - [x] 运行 E096 contact semantic analysis 和 projection 可视化。
 - [x] preprocess retry/阻断记录。
-- [ ] full CEM 并行启动。
+- [x] full CEM 并行启动。
+- [ ] 回收 full CEM 结果并评估。
 
 ---
 
@@ -1517,3 +1523,11 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - User correctly pointed out that `source_scene_exists` should not be a worklike bonus because source scene templates are easy to fill in. Updated `mine_worklike_candidates.py` so score excludes source-scene readiness.
 - Also removed object-key numeric bonuses/penalties from score. The current score is geometry/raw-contact only; Box026/box021/Box022 affect only execution `tier` / `risk_label`, not numerical score.
 - Re-generated `workspace/core4d/results/E095/worklike_candidate_mining/` and v2 copied summaries. First-batch scores changed to `083_p1=87.998`, `082_p1=79.582`, `082_p2=70.283`; `rank` is now explicitly documented as execution queue rank, not pure score rank.
+
+### 2026-05-29 17:32 CST - E096 full CEM and visual review complete
+
+- Ran E096 contact semantics and adaptive-support diagnostic for the two preprocess-ready box004 cases. Geometry summary shows wrist5/raw gaps of `0.236-0.292m`, but `inside=0%`; projection gate PASS with reward delta p90 `0m`.
+- Retried P3 `e091_box004_20231003_2_082_p2` with `REPLACE_WRIST_WITH_FINGERTIP=1`; OmniRetarget still failed with `RuntimeError: CVXPY solve failed: infeasible` around frame `81/139`, so P3 remains `preprocess_blocked`.
+- Full CEM completed for P1/P2. Unified eval: P1 `WORK` (`contact=56.9%`, obj mean/max `0.007/0.022m`, pelvis `0.639m`, all safety floor/upper/head `0%`); P2 `WORK` (`contact=54.1%`, obj mean/max `0.011/0.034m`, pelvis `0.643m`, all safety `0%`).
+- High subagent visual review confirmed P1/P2 WORK: no obvious fall, prone-on-box, head/upper/hand-floor contact, or target semantic misplacement. Saved review to `workspace/core4d/results/E096/visual_review/high_subagent_review.md`.
+- Wrote official log `workspace/core4d/log/118_E096_box004_three_case_full_cem_results.md` and updated tracker. Next recommended step: use P1/P2 plus known-WORK `083_p2` as the box004 positive set for Holosoma RL input preparation.

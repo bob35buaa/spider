@@ -56,12 +56,14 @@ Tier summary：
 
 第一批：
 
-| rank | target | raw score | source scene | status |
-|---:|---|---:|---|---|
-| 1 | `e091_box004_20231003_2_083_p2` | 100.0 | `box004_person2` | known WORK control |
-| 2 | `e091_box004_20231003_2_083_p1` | 100.0 | `box004_person1` | new priority |
-| 3 | `e091_box004_20231003_2_082_p1` | 91.932 | `box004_person1` | new priority |
-| 4 | `e091_box004_20231003_2_082_p2` | 80.682 | `box004_person2` | new priority, later preprocess reject |
+| rank | target | score | raw-contact score | source scene | status |
+|---:|---|---:|---:|---|---|
+| 1 | `e091_box004_20231003_2_083_p2` | 87.998 | 100.0 | `box004_person2` | known WORK control |
+| 2 | `e091_box004_20231003_2_083_p1` | 87.998 | 100.0 | `box004_person1` | new priority |
+| 3 | `e091_box004_20231003_2_082_p1` | 79.582 | 91.932 | `box004_person1` | new priority |
+| 4 | `e091_box004_20231003_2_082_p2` | 70.283 | 80.682 | `box004_person2` | new priority, later preprocess reject |
+
+这里的 `score` 已经排除 source-scene readiness；`source scene` 列只用于说明当前 pipeline 是否容易落地，不作为 work-likelihood 证据。`raw-contact score` 是 D002/raw-contact 强度的输入项，不等于最终 queue score。
 
 ## 3. Source Scene 和快照
 
