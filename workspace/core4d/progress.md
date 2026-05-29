@@ -1531,3 +1531,9 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - Full CEM completed for P1/P2. Unified eval: P1 `WORK` (`contact=56.9%`, obj mean/max `0.007/0.022m`, pelvis `0.639m`, all safety floor/upper/head `0%`); P2 `WORK` (`contact=54.1%`, obj mean/max `0.011/0.034m`, pelvis `0.643m`, all safety `0%`).
 - High subagent visual review confirmed P1/P2 WORK: no obvious fall, prone-on-box, head/upper/hand-floor contact, or target semantic misplacement. Saved review to `workspace/core4d/results/E096/visual_review/high_subagent_review.md`.
 - Wrote official log `workspace/core4d/log/118_E096_box004_three_case_full_cem_results.md` and updated tracker. Next recommended step: use P1/P2 plus known-WORK `083_p2` as the box004 positive set for Holosoma RL input preparation.
+
+### 2026-05-29 18:03 CST - E096b mask-on rerun started
+
+- User asked to rerun E096 with the correct CORE4D 3cm contact mask, named E096b, using local GPU0 + remote GPU0 and not killing existing RL processes.
+- Wrote plan `workspace/core4d/plan/103_E096b_box004_mask_on_full_cem_plan.md`.
+- Added E096b scripts to build mask-on derived tasks, run local/remote full CEM, and pull remote results. E096b keeps E096's CEM/safety/scene setup and changes only `contact_hdmi_mask_source/path` to the correct per-case `core4d_3cm` mask.
