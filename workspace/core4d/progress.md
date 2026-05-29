@@ -1,3 +1,24 @@
+# E096/E095 Progress — 2026-05-29
+
+## 当前状态: E095 candidate mining 口径已修正；继续 E096 三 case contact/CEM 实验准备
+
+## 完成步骤
+
+- [x] 已恢复实验规划规则和 E095/E096 上下文。
+- [x] 已创建 E096 计划：`workspace/core4d/plan/102_E096_box004_three_case_semantics_full_cem_plan.md`。
+- [x] 针对用户反馈核对 E095：`source scene template 已存在`当前未进入 `score`，只作为 pipeline readiness；但旧脚本和日志仍用 `box021/box022/box026` 命名 tier，容易被理解为按 object ID 加权/降权。
+- [x] 已修正 `workspace/core4d/scripts/E095/mine_worklike_candidates.py`：`score` 继续保持几何/raw-contact；tier/risk 改为 feature-based route（worklike priority、target/posture gate、missing raw-contact long-edge review、large-reach dynamics holdout），不再用特定 box ID 命名规则。
+- [x] 已重跑 E095 candidate mining：候选仍为 `32` 条，第一批仍为 `3` 条；`source_scene_exists` 不进入分数，`rank` 是 execution queue rank。
+- [x] 已同步更新 E095 plan/log/result summary；旧的 `cases_e095_box021_review_disabled.tsv` 被移除，替换为 `cases_e095_target_posture_gate_review_disabled.tsv`。
+
+## 待完成
+
+- [x] 重跑 E095 candidate mining 并检查 candidate bank/tier count。
+- [x] 更新 E095 plan/log/result summary，明确 template readiness 不加分、object key 不做数值加权/降权。
+- [ ] 继续 E096：三 case contact semantic analysis、preprocess retry/阻断记录、full CEM 并行启动。
+
+---
+
 # E088 Progress — 2026-05-28
 
 ## 当前状态: E088 full CEM 已完成；三组 main gate 全失败，不建议接 RL

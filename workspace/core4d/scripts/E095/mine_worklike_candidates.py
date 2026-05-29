@@ -20,7 +20,7 @@ DEFAULT_OUT_ROOT = Path("workspace/core4d/results/E095/worklike_candidate_mining
 
 PERSON_SHORT = {"person1": "p1", "person2": "p2"}
 KNOWN_WORK = {"e091_box004_20231003_2_083_p2"}
-BOX004_PRIORITY = {
+FIRST_BATCH_TARGETS = {
     "e091_box004_20231003_2_083_p1",
     "e091_box004_20231003_2_082_p1",
     "e091_box004_20231003_2_082_p2",
@@ -72,39 +72,73 @@ def raw_proxy_path(row: dict[str, Any], old_root: Path) -> str:
     return str(path) if path.is_file() else ""
 
 
+def geometry_features(row: dict[str, Any]) -> tuple[float, float, float]:
+    volume_ratio = as_float(row.get("size_vs_box023_volume_ratio"), 999.0)
+    extents = [
+        as_float(row.get("extent_x_m")),
+        as_float(row.get("extent_y_m")),
+        as_float(row.get("extent_z_m")),
+    ]
+    max_extent = max(extents)
+    min_extent = min(extents)
+    aspect = max_extent / max(min_extent, 1e-6)
+    return volume_ratio, max_extent, aspect
+
+
+def route_bucket(target: str, row: dict[str, Any], d2: dict[str, Any] | None) -> str:
+    volume_ratio, max_extent, aspect = geometry_features(row)
+    raw_pass = bool(d2 and d2.get("stage1_decision") == "raw_contact_pass")
+
+    if target in KNOWN_WORK:
+        return "tier0_known_work"
+    if target in FIRST_BATCH_TARGETS:
+        return "tier1_worklike_priority"
+    if raw_pass and volume_ratio <= 1.45 and max_extent <= 0.50 and aspect <= 1.80:
+        return "tier1_worklike_extra"
+    if d2 is None or not raw_pass:
+        if max_extent >= 0.60 or volume_ratio >= 2.0:
+            return "tier3_missing_raw_contact_long_edge_review"
+        return "tier5_other_review"
+    if max_extent >= 0.55 or volume_ratio >= 2.50:
+        return "tier4_large_reach_dynamics_holdout"
+    if volume_ratio >= 1.45 or max_extent >= 0.48 or aspect >= 1.75:
+        return "tier2_target_posture_gate_review"
+    return "tier5_other_review"
+
+
 def risk_label(row: dict[str, Any], d2: dict[str, Any] | None) -> tuple[str, str]:
-    obj = str(row["object_key"])
+    target = planned_target(row)
+    volume_ratio, max_extent, aspect = geometry_features(row)
     action = str(row.get("action", ""))
-    if obj == "box004":
-        return "positive_pattern", "closest to E092/E094 WORK pattern"
-    if obj == "box021":
-        return "review_after_target_gate", "smaller than Box026 but prior D003/Box021 CEM failures require target/posture gate"
-    if obj == "box026":
-        return "deprioritize_box026", "recent E092/E094 full CEM failures despite raw-contact pass; large reach/wrong-face risk"
-    if obj == "box022":
-        return "needs_raw_contact_and_reach_review", "long dimension is larger than Box026; no D002 raw-contact evidence yet"
     if action.startswith("pass") or action == "rot":
         return "reject_action_family", "non-lift/move action family"
+    if target in KNOWN_WORK:
+        return "known_positive_control", "previous full CEM WORK control"
+    if target in FIRST_BATCH_TARGETS:
+        return "worklike_priority", "box004/box023-scale geometry selected for first-batch execution"
     if d2 is None:
+        if max_extent >= 0.60 or volume_ratio >= 2.0:
+            return (
+                "missing_raw_contact_long_edge_review",
+                f"missing D002 raw-contact; long edge {max_extent:.3f}m / volume ratio {volume_ratio:.2f} needs review",
+            )
         return "needs_raw_contact", "not in D002 raw-contact queue"
-    return "generic_review", "not matched to known positive pattern"
+    if max_extent >= 0.55 or volume_ratio >= 2.50:
+        return (
+            "large_reach_dynamics_holdout",
+            f"large geometry ({max_extent:.3f}m max edge, volume ratio {volume_ratio:.2f}); recent large-box CEM failures require separate repair route",
+        )
+    if volume_ratio >= 1.45 or max_extent >= 0.48 or aspect >= 1.75:
+        return (
+            "target_posture_gate_review",
+            f"medium-large geometry ({max_extent:.3f}m max edge, volume ratio {volume_ratio:.2f}, aspect {aspect:.2f}); run target/posture gate before CEM",
+        )
+    return "generic_review", "not matched to first-batch worklike geometry"
 
 
 def score_row(row: dict[str, Any], d2: dict[str, Any] | None) -> tuple[float, str, str, str]:
     target = planned_target(row)
-    obj = str(row["object_key"])
-    volume_ratio = as_float(row.get("size_vs_box023_volume_ratio"), 999.0)
-    max_extent = max(
-        as_float(row.get("extent_x_m")),
-        as_float(row.get("extent_y_m")),
-        as_float(row.get("extent_z_m")),
-    )
-    min_extent = min(
-        as_float(row.get("extent_x_m")),
-        as_float(row.get("extent_y_m")),
-        as_float(row.get("extent_z_m")),
-    )
-    aspect = max_extent / max(min_extent, 1e-6)
+    volume_ratio, max_extent, aspect = geometry_features(row)
     raw_score = as_float(d2.get("stage1_raw_contact_score") if d2 else "", -20.0)
     both = as_float(d2.get("target_both_active_frac_3cm") if d2 else "", 0.0)
     longest = as_float(d2.get("target_both_longest_run_active_frac_3cm") if d2 else "", 0.0)
@@ -117,25 +151,10 @@ def score_row(row: dict[str, Any], d2: dict[str, Any] | None) -> tuple[float, st
     aspect_penalty = max(0.0, aspect - 1.8) * 12.0
 
     # Score is object-agnostic and excludes pipeline readiness.
-    # Object/failure history is captured only by tier/risk_label.
     score = size_score + raw_component + contact_component
     score -= long_extent_penalty + aspect_penalty
 
-    if target in KNOWN_WORK:
-        tier = "tier0_known_work"
-    elif target in BOX004_PRIORITY:
-        tier = "tier1_box004_priority"
-    elif obj == "box004":
-        tier = "tier1_box004_extra"
-    elif obj == "box021" and d2 and d2.get("stage1_decision") == "raw_contact_pass":
-        tier = "tier2_box021_review_after_target_gate"
-    elif obj == "box022":
-        tier = "tier3_box022_needs_raw_contact"
-    elif obj == "box026":
-        tier = "tier4_box026_deprioritized"
-    else:
-        tier = "tier5_other_review"
-
+    tier = route_bucket(target, row, d2)
     risk, note = risk_label(row, d2)
     return round(score, 3), tier, risk, note
 
@@ -150,9 +169,22 @@ def build_rows(old_root: Path, task_root: Path) -> list[dict[str, Any]]:
         obj = str(row.get("object_key", ""))
         d2 = d2_idx.get((row["sequence"], row["person"]))
         include = False
-        if d2 and d2.get("stage1_decision") == "raw_contact_pass" and obj in {"box004", "box021", "box026"}:
+        volume_ratio, max_extent, _aspect = geometry_features(row)
+        in_medium_box_range = 0.75 <= volume_ratio <= 3.50 and max_extent <= 0.70
+        in_missing_raw_review_range = 2.00 <= volume_ratio <= 2.60 and 0.55 <= max_extent <= 0.75
+        if (
+            obj.startswith("box")
+            and d2
+            and d2.get("stage1_decision") == "raw_contact_pass"
+            and in_medium_box_range
+            and not str(row.get("action", "")).startswith("pass")
+        ):
             include = True
-        if obj == "box022" and row.get("stage0_v2_decision") == "stage0_boundary_review_to_stage1":
+        if (
+            obj.startswith("box")
+            and row.get("stage0_v2_decision") == "stage0_boundary_review_to_stage1"
+            and in_missing_raw_review_range
+        ):
             include = True
         if not include:
             continue
@@ -196,11 +228,11 @@ def build_rows(old_root: Path, task_root: Path) -> list[dict[str, Any]]:
 
     tier_order = {
         "tier0_known_work": 0,
-        "tier1_box004_priority": 1,
-        "tier1_box004_extra": 2,
-        "tier2_box021_review_after_target_gate": 3,
-        "tier3_box022_needs_raw_contact": 4,
-        "tier4_box026_deprioritized": 5,
+        "tier1_worklike_priority": 1,
+        "tier1_worklike_extra": 2,
+        "tier2_target_posture_gate_review": 3,
+        "tier3_missing_raw_contact_long_edge_review": 4,
+        "tier4_large_reach_dynamics_holdout": 5,
         "tier5_other_review": 6,
     }
     rows.sort(key=lambda r: (tier_order.get(r["tier"], 99), -float(r["score"]), r["target_task"]))
@@ -241,7 +273,7 @@ def write_summary(path: Path, rows: list[dict[str, Any]], box004_rows: list[dict
         "",
         f"- Candidate rows: `{len(rows)}`",
         f"- Box004 priority Stage2b rows: `{len(box004_rows)}`",
-        "- Score is geometry/raw-contact only; source-scene readiness and object-history route are not numeric score terms.",
+        "- Score is geometry/raw-contact only; source-scene readiness and object key are not numeric score terms.",
         "- Rows are sorted by execution tier first, then score; `rank` is therefore queue rank, not pure score rank.",
         "",
         "Tier counts:",
@@ -270,9 +302,9 @@ def write_summary(path: Path, rows: list[dict[str, Any]], box004_rows: list[dict
             "",
             "## Interpretation",
             "",
-            "- `tier1_box004_priority` is the only batch to run immediately.",
-            "- `tier2_box021_review_after_target_gate` is held for a later target/posture-gated route because D003/Box021 has repeated CEM failures.",
-            "- `tier4_box026_deprioritized` remains in the bank for traceability but is not a first-batch data source after E092/E094 failures.",
+            "- `tier1_worklike_priority` is the only new batch to run immediately.",
+            "- `tier2_target_posture_gate_review` is held for target/posture-gated review before CEM.",
+            "- `tier4_large_reach_dynamics_holdout` remains in the bank for traceability but is not a first-batch data source after large-box E092/E094 failures.",
         ]
     )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -294,7 +326,7 @@ def main() -> None:
         write_tsv(root / "worklike_candidate_bank.tsv", rows, fields)
         write_json(root / "worklike_candidate_bank.json", rows)
 
-    box004 = [row for row in rows if row["target_task"] in BOX004_PRIORITY]
+    box004 = [row for row in rows if row["target_task"] in FIRST_BATCH_TARGETS]
     case_fields = [
         "# enabled",
         "date",
@@ -309,15 +341,16 @@ def main() -> None:
         "data_id",
         "mask_slug",
     ]
-    box004_cases = pipeline_rows(rows, BOX004_PRIORITY)
+    box004_cases = pipeline_rows(rows, FIRST_BATCH_TARGETS)
     for path in (
         out_root / "cases_e095_box004_priority_pipeline.tsv",
         args.v2_root / "inputs/cases_e095_box004_priority_pipeline.tsv",
     ):
         write_tsv(path, box004_cases, case_fields)
 
-    box021_targets = {row["target_task"] for row in rows if row["tier"] == "tier2_box021_review_after_target_gate"}
-    write_tsv(out_root / "cases_e095_box021_review_disabled.tsv", pipeline_rows(rows, box021_targets, 0), case_fields)
+    posture_review_targets = {row["target_task"] for row in rows if row["tier"] == "tier2_target_posture_gate_review"}
+    posture_review_rows = pipeline_rows(rows, posture_review_targets, 0)
+    write_tsv(out_root / "cases_e095_target_posture_gate_review_disabled.tsv", posture_review_rows, case_fields)
 
     write_summary(out_root / "summary.md", rows, box004)
     write_summary(v2_out / "summary.md", rows, box004)
@@ -326,12 +359,12 @@ def main() -> None:
         {
             "rows": len(rows),
             "tier_counts": dict(Counter(row["tier"] for row in rows)),
-            "box004_priority_targets": [row["target_task"] for row in box004],
+            "first_batch_targets": [row["target_task"] for row in box004],
             "box004_case_file": str(args.v2_root / "inputs/cases_e095_box004_priority_pipeline.tsv"),
         },
     )
     print(f"Wrote {len(rows)} candidates")
-    print(f"Wrote {len(box004_cases)} box004 priority cases")
+    print(f"Wrote {len(box004_cases)} first-batch worklike cases")
     print(args.v2_root / "inputs/cases_e095_box004_priority_pipeline.tsv")
 
 

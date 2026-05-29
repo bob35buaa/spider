@@ -15,9 +15,9 @@ E092/E094 给出一个清楚分界：
 | Claim | 验证方式 |
 |---|---|
 | C1: `data_construction_v2` 里还有未跑的 box004-like 候选 | 从 D001/D002 全量 inventory 重建 candidate bank，不能只看 E091 硬编码的 3 个对象 |
-| C2: Box026 失败经验能转成筛选规则 | 对大体积、长边、Box026、low-support/inside 历史 reject 做降权或延后 |
-| C3: 至少生成一批可直接进入 Stage2b 的 box004 priority case | 输出 `cases_e095_box004_priority_pipeline.tsv`，先跑不带 fingertip hack 的 OmniRetarget/SPIDER 预处理 |
-| C4: 备选候选需要分层而不是混跑 | box004 priority、box021 review、Box022 needs raw-contact、Box026 deprioritized 分开记录 |
+| C2: 大箱失败经验能转成筛选规则 | 对大体积、长边、low-support/inside 历史 reject 做 feature-based 延后；不按 object key 直接加权/降权 |
+| C3: 至少生成一批可直接进入 Stage2b 的 first-batch worklike case | 输出 `cases_e095_box004_priority_pipeline.tsv`（历史文件名），先跑不带 fingertip hack 的 OmniRetarget/SPIDER 预处理 |
+| C4: 备选候选需要分层而不是混跑 | worklike priority、target/posture gate、missing raw-contact long-edge review、large-reach dynamics holdout 分开记录 |
 
 ## Scoring Rules
 
@@ -27,11 +27,11 @@ E092/E094 给出一个清楚分界：
 2. D002 raw-contact pass，特别是 both-hand active 高、longest-run 高。
 3. source scene template 是否存在只作为 pipeline readiness，不进入 worklike score；缺失时应补齐，而不是降低候选质量分。
 4. recent failures 不进入数值 score，只进入实验队列/风险标签：
-   - Box026：体积约 box004 `2.8x`，E092/E094 已证明 raw-contact pass 不能预测 dynamics work，默认放入 `deprioritized` 队列。
-   - Box021：小于 Box026，但 D003/E082-E090 多次 full CEM 失败，保留为 `review_after_target_gate` 队列，不进入第一批。
-   - Box022：未跑 D002 raw-contact，且长边约 `0.667m`，先放入 `needs_raw_contact` 队列。
+   - `large_reach_dynamics_holdout`：max edge / volume ratio 明显偏大，且已有大箱 full CEM 失败经验，必须走 separate repair route。
+   - `target_posture_gate_review`：medium-large 几何或 aspect 较高，即使 raw-contact pass，也先做 target/posture gate，不进入第一批。
+   - `missing_raw_contact_long_edge_review`：缺 D002 raw-contact 且长边偏大，先补 raw-contact/reach review。
 
-备注：`score` 应只包含几何尺寸和 raw-contact 强度，不对特定 object key 做数值加权/降权；object key 只用于记录已知 positive / known-failure history 的实验 route。
+备注：`score` 只包含几何尺寸和 raw-contact 强度；`source_scene_exists` 不加分，object key 不做数值加权/降权。object key 只保留在表里做 traceability；执行队列的 tier 必须由 feature/risk route 解释。
 
 ## Execution
 
@@ -41,7 +41,7 @@ E092/E094 给出一个清楚分界：
    - `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/results/e095_worklike_candidates/`
    - `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/inputs/cases_e095_box004_priority_pipeline.tsv`
 3. 为 `box004_person1` 补 source scene template。
-4. 跑第一批 box004 priority Stage2b：
+4. 跑第一批 first-batch worklike Stage2b：
    - `e091_box004_20231003_2_083_p1`
    - `e091_box004_20231003_2_082_p1`
    - `e091_box004_20231003_2_082_p2`
@@ -52,13 +52,13 @@ E092/E094 给出一个清楚分界：
 | 项 | 标准 |
 |---|---|
 | candidate bank | TSV/JSON/MD 均生成，包含 all raw-contact-pass boxes 和 review rows |
-| first-batch case file | 只启用 box004 priority 新 case，不启用 Box026 |
+| first-batch case file | 只启用 worklike priority 新 case，不启用 large-reach holdout |
 | template | `box004_person1/scene.xml` 可被 MuJoCo load |
 | Stage2b | 新 case 至少有 retargeted/trimmed NPZ；SPIDER `verify_summary.json` 通过 |
 | visual | OmniRetarget keyframes/timeline/mp4 非空 |
 
 ## Stop Rules
 
-- 如果 box004 priority retarget 出现 CVXPY infeasible，先记录，不扩大到 box021/Box022。
-- 如果 box004 priority 全部预处理通过，下一轮再选 2-3 条跑 SPIDER full CEM。
-- Box026 不进入第一批；除非后续专门做 Box026 posture/target repair。
+- 如果 first-batch retarget 出现 CVXPY infeasible，先记录，不扩大到 target/posture gate 或 missing raw-contact review。
+- 如果 first-batch worklike 全部预处理通过，下一轮再选 2-3 条跑 SPIDER full CEM。
+- large-reach dynamics holdout 不进入第一批；除非后续专门做 posture/target repair。
