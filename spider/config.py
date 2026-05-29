@@ -475,6 +475,11 @@ class Config:
     rerun_spawn: bool = False
     save_video: bool = True
     video_output_path: str = ""  # custom video output path; empty = default (output_dir/visualization_mjwp_act.mp4)
+    video_camera: str = "front"  # named MuJoCo camera; if missing or "auto", use full-body free camera
+    video_auto_camera_min_distance: float = 3.8
+    video_auto_camera_distance_scale: float = 3.0
+    video_auto_camera_azimuth: float = 135.0
+    video_auto_camera_elevation: float = -22.0
     warmstart_qpos_path: str = ""  # path to .npz containing qpos_snap + snap_mask; if set, replaces qpos_ref slices in intent window (E058+ Path B-CEM)
     save_info: bool = True
     save_rerun: bool = False

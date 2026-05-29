@@ -1412,3 +1412,11 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已实现并运行 `workspace/core4d/scripts/E094/render_projection_mujoco.py`：5 个 full-body keyframe sheet 和 5 个 mp4 已生成，`ffprobe` 检查均为 `960x720`、`48` 帧。
 - [x] 已启动 high subagent `019e722f-e771-7f20-a401-01266edbda42` 复核 projection 可视化，报告目标路径 `workspace/core4d/results/E094/handbox_target_projection/visual_review/high_subagent_projection_review.md`。
 - [x] CEM scaffold 已建好但尚未启动：`build_cem_tasks.py` 生成 3 个 E094 override/variants；`train_E094_handbox_proj_cem.sh`、`run_E094_remote.sh`、`pull_E094_remote_results.sh`、`eval_E094_cem.py` 均已通过静态检查。
+### 2026-05-29 13:36 CST - E094 MuJoCo video camera audit/fix
+
+- User observed MuJoCo videos only show the upper body. I traced the CEM video path to `spider.viewers.render_image()`: it requested a named `front` camera, but the E091/E094 scene XMLs only define `track`/`track2`; the old exception fallback used camera id 0 (`track`), a pelvis-attached camera that can frame only the torso/upper body.
+- Patched `spider/viewers/__init__.py` so missing `front` (or `video_camera: auto`) uses a free camera computed from current sim/ref body positions, with config knobs added in `spider/config.py` and `examples/config/default.yaml`.
+- Verification: `python -m py_compile spider/viewers/__init__.py spider/config.py` passed, and `workspace/core4d/results/E094/camera_audit/auto_video_camera_test.png` shows full-body ref/sim framing on `e091_box004_20231003_2_083_p2/scene_act.xml`.
+- Patched `workspace/core4d/scripts/train/train_E094_handbox_proj_cem.sh` to pass `video_camera=auto` for future E094 smoke/full launches.
+- Added `workspace/core4d/scripts/E094/rerender_cem_autocam.py` so completed E094 CEM rollouts can be re-rendered as `*_autocam.mp4` from `trajectory_mjwp_act.npz` + `config_act.yaml` without rerunning CEM. Static compile passed; pre-completion dry run correctly skipped missing NPZ.
+- Running E094 full CEM was not stopped. Current active local session continues; remote P2/P3 logs continue advancing. Since those jobs started before this patch, their in-run mp4s may still use the old camera and should be re-rendered from saved trajectories after completion.

@@ -65,6 +65,7 @@ run_one() {
       +override="$override" \
       task="$task" \
       +use_torch_compile=false \
+      video_camera=auto \
       max_num_iterations="${SMOKE_MAX_NUM_ITERATIONS:-4}" \
       output_dir="$out_dir" \
       video_output_path="$RESULTS/${variant}_${STAGE}.mp4" \
@@ -74,6 +75,7 @@ run_one() {
       +override="$override" \
       task="$task" \
       +use_torch_compile=false \
+      video_camera=auto \
       output_dir="$out_dir" \
       video_output_path="$RESULTS/${variant}_${STAGE}.mp4" \
       > "$LOGS/${variant}_${STAGE}.log" 2>&1

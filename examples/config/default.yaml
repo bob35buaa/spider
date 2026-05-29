@@ -76,6 +76,11 @@ show_viewer: true
 viewer: mujoco-rerun # "mujoco" | "rerun" | "viser" | "isaac"
 rerun_spawn: true
 save_video: true
+video_camera: front # if missing in XML or "auto", use a full-body free camera
+video_auto_camera_min_distance: 3.8
+video_auto_camera_distance_scale: 3.0
+video_auto_camera_azimuth: 135.0
+video_auto_camera_elevation: -22.0
 save_rerun: false
 save_metrics: true
 save_info: true

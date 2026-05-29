@@ -259,6 +259,65 @@ def setup_renderer(config: Config, mj_model: mujoco.MjModel):
     return renderer
 
 
+def _auto_video_camera(
+    config: Config,
+    mj_model: mujoco.MjModel,
+    mj_data: mujoco.MjData,
+    mj_data_ref: mujoco.MjData,
+) -> mujoco.MjvCamera:
+    pts = []
+    for data in (mj_data, mj_data_ref):
+        if data is not None and data.xpos.shape[0] > 1:
+            pts.append(data.xpos[1:].copy())
+    if pts:
+        all_pts = np.concatenate(pts, axis=0)
+        all_pts = all_pts[np.isfinite(all_pts).all(axis=1)]
+    else:
+        all_pts = np.empty((0, 3), dtype=np.float64)
+
+    if all_pts.size:
+        lo = all_pts.min(axis=0)
+        hi = all_pts.max(axis=0)
+        center = (lo + hi) * 0.5
+        span = np.maximum(hi - lo, 1e-6)
+        radius = max(
+            0.5 * float(np.linalg.norm(span[:2])),
+            0.5 * float(span[2]) * 1.7,
+            1.0,
+        )
+    else:
+        center = np.array([0.0, 0.0, 0.8], dtype=np.float64)
+        radius = 1.0
+
+    cam = mujoco.MjvCamera()
+    mujoco.mjv_defaultFreeCamera(mj_model, cam)
+    cam.type = int(mujoco.mjtCamera.mjCAMERA_FREE)
+    cam.lookat[:] = center
+    cam.distance = max(
+        float(getattr(config, "video_auto_camera_min_distance", 3.8)),
+        radius * float(getattr(config, "video_auto_camera_distance_scale", 3.0)),
+    )
+    cam.azimuth = float(getattr(config, "video_auto_camera_azimuth", 135.0))
+    cam.elevation = float(getattr(config, "video_auto_camera_elevation", -22.0))
+    return cam
+
+
+def _video_camera(
+    config: Config,
+    mj_model: mujoco.MjModel,
+    mj_data: mujoco.MjData,
+    mj_data_ref: mujoco.MjData,
+) -> str | mujoco.MjvCamera:
+    camera_name = str(getattr(config, "video_camera", "front") or "auto")
+    if camera_name.lower() != "auto":
+        camera_id = mujoco.mj_name2id(
+            mj_model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name
+        )
+        if camera_id >= 0:
+            return camera_name
+    return _auto_video_camera(config, mj_model, mj_data, mj_data_ref)
+
+
 def render_image(
     config: Config,
     renderer: mujoco.Renderer,
@@ -270,12 +329,12 @@ def render_image(
     mujoco.mjv_defaultOption(options)
     options.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
 
-    # render sim
     mujoco.mj_forward(mj_model, mj_data)
-    try:
-        renderer.update_scene(mj_data, "front", options)
-    except Exception:
-        renderer.update_scene(mj_data, 0, options)
+    mujoco.mj_forward(mj_model, mj_data_ref)
+    camera = _video_camera(config, mj_model, mj_data, mj_data_ref)
+
+    # render sim
+    renderer.update_scene(mj_data, camera=camera, scene_option=options)
     sim_image = renderer.render()
     # add text named "sim"
     cv2.putText(
@@ -288,11 +347,7 @@ def render_image(
         2,
     )
     # render ref
-    mujoco.mj_forward(mj_model, mj_data_ref)
-    try:
-        renderer.update_scene(mj_data_ref, "front")
-    except Exception:
-        renderer.update_scene(mj_data_ref, 0)
+    renderer.update_scene(mj_data_ref, camera=camera)
     ref_image = renderer.render()
     # add text named "ref"
     cv2.putText(
