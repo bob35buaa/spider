@@ -28,10 +28,12 @@ E095 的目标不是继续修 Box026，而是把 E092/E094 的失败经验带回
 |---|---|
 | box004 / box023-like 尺寸 | 优先；接近 E092/E094 已 WORK 的 small/medium box pattern |
 | D002 raw-contact pass | 加分；尤其 both-hand active 和 longest-run |
-| source scene template 已存在 | 加分；缺失时只在可安全补齐时启用 |
-| Box026 | 降权到 `tier4_box026_deprioritized`；E092/E094 已证明 raw-contact pass 不能预测 dynamics work |
-| box021 | 保留为 `tier2_box021_review_after_target_gate`；历史 D003/Box021 多次 CEM 失败，不能直接混入第一批 |
-| Box022 | `tier3_box022_needs_raw_contact`；长边更大且缺 D002 raw-contact evidence |
+| source scene template 已存在 | 不加分；只作为 pipeline readiness，缺失时补齐 |
+| Box026 | 不直接扣 score；放入 `tier4_box026_deprioritized` 实验队列，因为 E092/E094 已证明 raw-contact pass 不能预测 dynamics work |
+| box021 | 不直接扣 score；放入 `tier2_box021_review_after_target_gate`，因为历史 D003/Box021 多次 CEM 失败，不能直接混入第一批 |
+| Box022 | 不直接扣 score；放入 `tier3_box022_needs_raw_contact`，因为长边更大且缺 D002 raw-contact evidence |
+
+2026-05-29 用户反馈后已修正口径：`score` 只包含几何尺寸和 raw-contact 强度，不再包含 source-scene readiness，也不对特定 object key 做数值加权/降权；Box026/box021/Box022 只影响实验 route / risk label。候选表里的 `rank` 是 execution queue rank，按 tier 优先排序，不是纯 score rank；例如部分 box021 行的 object-agnostic score 会高过 `box004_082`，但仍因历史 CEM 失败进入 review queue。
 
 候选库输出：
 

@@ -90,7 +90,7 @@ def risk_label(row: dict[str, Any], d2: dict[str, Any] | None) -> tuple[str, str
     return "generic_review", "not matched to known positive pattern"
 
 
-def score_row(row: dict[str, Any], d2: dict[str, Any] | None, task_root: Path) -> tuple[float, str, str, str]:
+def score_row(row: dict[str, Any], d2: dict[str, Any] | None) -> tuple[float, str, str, str]:
     target = planned_target(row)
     obj = str(row["object_key"])
     volume_ratio = as_float(row.get("size_vs_box023_volume_ratio"), 999.0)
@@ -108,27 +108,18 @@ def score_row(row: dict[str, Any], d2: dict[str, Any] | None, task_root: Path) -
     raw_score = as_float(d2.get("stage1_raw_contact_score") if d2 else "", -20.0)
     both = as_float(d2.get("target_both_active_frac_3cm") if d2 else "", 0.0)
     longest = as_float(d2.get("target_both_longest_run_active_frac_3cm") if d2 else "", 0.0)
-    source_task, source_ready = source_scene_task(obj, str(row["person"]), task_root)
 
     # box004/box023-like: close to box004 volume ratio 1.138, not just "between box023 and box025".
     size_score = 25.0 * clamp(1.0 - abs(volume_ratio - 1.138) / 1.15)
     raw_component = 0.35 * clamp(raw_score, 0.0, 100.0)
     contact_component = 18.0 * clamp(both) + 10.0 * clamp(longest)
-    source_component = 4.0 if source_ready else 0.0
     long_extent_penalty = max(0.0, max_extent - 0.50) * 90.0
     aspect_penalty = max(0.0, aspect - 1.8) * 12.0
 
-    score = size_score + raw_component + contact_component + source_component
+    # Score is object-agnostic and excludes pipeline readiness.
+    # Object/failure history is captured only by tier/risk_label.
+    score = size_score + raw_component + contact_component
     score -= long_extent_penalty + aspect_penalty
-
-    if obj == "box004":
-        score += 18.0
-    elif obj == "box021":
-        score -= 8.0
-    elif obj == "box026":
-        score -= 42.0
-    elif obj == "box022":
-        score -= 28.0
 
     if target in KNOWN_WORK:
         tier = "tier0_known_work"
@@ -168,7 +159,7 @@ def build_rows(old_root: Path, task_root: Path) -> list[dict[str, Any]]:
 
         target = planned_target(row)
         source_task, source_ready = source_scene_task(obj, str(row["person"]), task_root)
-        score, tier, risk, note = score_row(row, d2, task_root)
+        score, tier, risk, note = score_row(row, d2)
         rows.append(
             {
                 "rank": 0,
@@ -250,6 +241,8 @@ def write_summary(path: Path, rows: list[dict[str, Any]], box004_rows: list[dict
         "",
         f"- Candidate rows: `{len(rows)}`",
         f"- Box004 priority Stage2b rows: `{len(box004_rows)}`",
+        "- Score is geometry/raw-contact only; source-scene readiness and object-history route are not numeric score terms.",
+        "- Rows are sorted by execution tier first, then score; `rank` is therefore queue rank, not pure score rank.",
         "",
         "Tier counts:",
         "",

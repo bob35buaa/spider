@@ -25,11 +25,13 @@ E092/E094 给出一个清楚分界：
 
 1. `box004` / box023-like 尺寸：体积接近 box004，长边不过大，无 Box026 reach risk。
 2. D002 raw-contact pass，特别是 both-hand active 高、longest-run 高。
-3. source scene template 已存在或可以安全补齐。
-4. recent failures 降权：
-   - Box026：体积约 box004 `2.8x`，E092/E094 已证明 raw-contact pass 不能预测 dynamics work，默认 `deprioritized`。
-   - Box021：小于 Box026，但 D003/E082-E090 多次 full CEM 失败，保留为 `review_after_target_gate`，不进入第一批。
-   - Box022：未跑 D002 raw-contact，且长边约 `0.667m`，先不直接 Stage2b。
+3. source scene template 是否存在只作为 pipeline readiness，不进入 worklike score；缺失时应补齐，而不是降低候选质量分。
+4. recent failures 不进入数值 score，只进入实验队列/风险标签：
+   - Box026：体积约 box004 `2.8x`，E092/E094 已证明 raw-contact pass 不能预测 dynamics work，默认放入 `deprioritized` 队列。
+   - Box021：小于 Box026，但 D003/E082-E090 多次 full CEM 失败，保留为 `review_after_target_gate` 队列，不进入第一批。
+   - Box022：未跑 D002 raw-contact，且长边约 `0.667m`，先放入 `needs_raw_contact` 队列。
+
+备注：`score` 应只包含几何尺寸和 raw-contact 强度，不对特定 object key 做数值加权/降权；object key 只用于记录已知 positive / known-failure history 的实验 route。
 
 ## Execution
 

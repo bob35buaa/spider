@@ -1459,3 +1459,9 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - Generated OmniRetarget visual summary (`5/5` available MP4s, `15/15` PNGs nonblank), raw-contact visual summary (`11/11` PNGs nonblank), and D005b visual QC for the two passed box004 cases (`2/2` pass, `6/6` PNGs nonblank).
 - Created E095 scene snapshot at `workspace/core4d/results/E095/scene_snapshot/` for `box004_person1`, `083_p1`, and `082_p1`.
 - Wrote official log `workspace/core4d/log/117_E095_worklike_data_mining_results.md` and updated tracker with E095. Next recommended step is SPIDER full CEM on `083_p1` and `082_p1`, with `083_p2` as known-WORK control; only full-CEM WORK sequences should enter Holosoma RL.
+
+### 2026-05-29 16:12 CST - E095 scoring clarification after user feedback
+
+- User correctly pointed out that `source_scene_exists` should not be a worklike bonus because source scene templates are easy to fill in. Updated `mine_worklike_candidates.py` so score excludes source-scene readiness.
+- Also removed object-key numeric bonuses/penalties from score. The current score is geometry/raw-contact only; Box026/box021/Box022 affect only execution `tier` / `risk_label`, not numerical score.
+- Re-generated `workspace/core4d/results/E095/worklike_candidate_mining/` and v2 copied summaries. First-batch scores changed to `083_p1=87.998`, `082_p1=79.582`, `082_p2=70.283`; `rank` is now explicitly documented as execution queue rank, not pure score rank.
