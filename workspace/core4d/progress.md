@@ -1537,3 +1537,22 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - User asked to rerun E096 with the correct CORE4D 3cm contact mask, named E096b, using local GPU0 + remote GPU0 and not killing existing RL processes.
 - Wrote plan `workspace/core4d/plan/103_E096b_box004_mask_on_full_cem_plan.md`.
 - Added E096b scripts to build mask-on derived tasks, run local/remote full CEM, and pull remote results. E096b keeps E096's CEM/safety/scene setup and changes only `contact_hdmi_mask_source/path` to the correct per-case `core4d_3cm` mask.
+
+### 2026-05-29 19:06 CST - E096b full CEM launched
+
+- Built E096b P1/P2 derived tasks and overrides. Both derived scenes validate with `npair=49`, object mass `5kg`, and E083-style leg+upper object pairs.
+- Committed and pushed scaffold commit `459b76a`.
+- Started local tmux `E096b_local_cem` for P1 and remote tmux `E096b_remote_cem` in `/home/xiayb/pHRI_workspace/spider_e096b_run` for P2. Did not kill or stop existing RL sessions.
+- Logs confirm mask-on behavior: P1 loaded `E078 core4d_3cm` mask active L/R `61.8%/61.0%`; P2 loaded `E078 core4d_3cm` mask active L/R `55.2%/56.0%`.
+
+### 2026-05-29 19:21 CST - E096b P1 local complete, P2 remote running
+
+- Local P1 `E096bP1_box004_083_p1_mask_cem` completed full CEM in `900.565s`, wrote trajectory/MP4 and local eval. P1 status `WORK`: contact `55.9%`, obj mean/max `0.007/0.018m`, pelvis `0.639m`, head/upper/LH/RH floor all `0%`.
+- Remote P2 is still running on GPU0; latest observed progress `sim_steps=82/218`, no errors.
+
+### 2026-05-29 20:05 CST - E096b mask-on full CEM complete
+
+- Pulled remote GPU0 results for `E096bP2_box004_082_p1_mask_cem` and reran unified local eval. P2 completed in `2723.981s` and is `WORK`: contact `54.1%`, obj mean/max `0.011/0.034m`, pelvis `0.642m`, head/upper/LH/RH floor all `0%`.
+- Unified E096b summary is saved at `workspace/core4d/results/E096b/cem/full/full_eval_summary.{md,csv,json}`. Both P1/P2 are `advance_to_rl=true`.
+- Generated frame sheets under `workspace/core4d/results/E096b/visual_review/frame_sheets/` and wrote manual visual review `workspace/core4d/results/E096b/visual_review/manual_visual_review.md`; visual review supports both `WORK` decisions.
+- Wrote official log `workspace/core4d/log/119_E096b_box004_mask_on_full_cem_results.md` and updated `workspace/core4d/EXPERIMENT_TRACKER.md`. E096b confirms the E096 box004 positive result is robust after switching from fallback mask to CORE4D raw 3cm mask.

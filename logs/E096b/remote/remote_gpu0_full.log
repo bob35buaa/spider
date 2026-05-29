@@ -1,0 +1,11 @@
+[19:05:52] === E096b scene snapshot full ===
+[19:05:52] === E096b full E096bP2_box004_082_p1_mask_cem task=e091_box004_20231003_2_082_p1_e096b_mask_cem GPU=0 ===
+[19:51:25] === E096b full E096bP2_box004_082_p1_mask_cem done ===
+================================================================================================================================
+variant                          case               T    cont  obj_mean  obj_max    pelv    head   upper      LH      RH   status
+--------------------------------------------------------------------------------------------------------------------------------
+E096bP2_box004_082_p1_mask_cem   box004_082_p1    109   54.1%    0.011m   0.034m  0.642m    0.0%    0.0%    0.0%    0.0%     WORK
+wrote workspace/core4d/results/E096b/cem/full/full_eval_summary.json
+wrote workspace/core4d/results/E096b/cem/full/full_eval_summary.csv
+wrote workspace/core4d/results/E096b/cem/full/full_eval_summary.md
+=== E096b CEM remote-gpu0 full done ===

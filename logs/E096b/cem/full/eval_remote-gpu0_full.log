@@ -1,0 +1,7 @@
+================================================================================================================================
+variant                          case               T    cont  obj_mean  obj_max    pelv    head   upper      LH      RH   status
+--------------------------------------------------------------------------------------------------------------------------------
+E096bP2_box004_082_p1_mask_cem   box004_082_p1    109   54.1%    0.011m   0.034m  0.642m    0.0%    0.0%    0.0%    0.0%     WORK
+wrote workspace/core4d/results/E096b/cem/full/full_eval_summary.json
+wrote workspace/core4d/results/E096b/cem/full/full_eval_summary.csv
+wrote workspace/core4d/results/E096b/cem/full/full_eval_summary.md
