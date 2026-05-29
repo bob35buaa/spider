@@ -28,10 +28,15 @@ python workspace/core4d/scripts/E093/audit_contact_geometry.py \
 python workspace/core4d/scripts/E093/render_contact_geometry_mujoco.py \
   --manifest workspace/core4d/results/E093/contact_geometry/case_manifest.tsv \
   --points workspace/core4d/results/E093/contact_geometry/per_frame_points.csv \
+  --camera auto \
+  --width 960 \
+  --height 720 \
   --video-frames 48
 ```
 
 说明：raw contact target 从 raw mesh/person vertices 重新生成。`--sample-count 6000` 是下限；脚本优先使用各 `audit_summary_3cm.json` 里的 sample_count，当前实际 sample_count 为已有 audit 的配置，最多 capped 到 `30000`。
+
+MuJoCo 可视化在用户指出“只能看到机器人上半身”后已纠偏：旧脚本默认使用 scene XML 里的 `track2` 命名相机，画面确实会裁掉腿/脚。当前 `render_contact_geometry_mujoco.py` 默认改为 `--camera auto`，每个 case 先扫多帧 qpos、机器人 body、object collision box 和 contact marker 的世界坐标，再生成固定 full-body free camera，避免视频内相机抖动，同时完整保留机器人、脚部、箱子和接触 marker。
 
 ## 结果路径
 
@@ -46,6 +51,7 @@ python workspace/core4d/scripts/E093/render_contact_geometry_mujoco.py \
 | timeline visuals | `workspace/core4d/results/E093/contact_geometry/visuals/timeline/` |
 | dashboard | `workspace/core4d/results/E093/contact_geometry/visuals/dashboard/` |
 | MuJoCo keyframes/videos | `workspace/core4d/results/E093/contact_geometry/visuals/mujoco/` |
+| MuJoCo video QC frames | `workspace/core4d/results/E093/contact_geometry/visuals/mujoco/video_qc/` |
 | high review | `workspace/core4d/results/E093/contact_geometry/visual_review/high_subagent_review.md` |
 
 可视化完整性：
@@ -56,8 +62,9 @@ python workspace/core4d/scripts/E093/render_contact_geometry_mujoco.py \
 | summary rows | `14` |
 | per-frame rows | `1466` |
 | object-local/timeline/dashboard PNG | `16/16` nonblank |
-| MuJoCo keyframe sheets | `7/7` nonblank |
-| MuJoCo mp4 decode | `7/7` PASS |
+| MuJoCo keyframe sheets | `7/7` nonblank, auto full-body camera |
+| MuJoCo mp4 decode | `7/7` PASS, each `960x720`, `48` frames |
+| MuJoCo video QC frames | `2/2` extracted and visually checked (`box023_p2`, `box026_039_p2`) |
 
 ## 关键指标
 

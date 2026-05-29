@@ -1389,3 +1389,10 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已写正式 log `workspace/core4d/log/115_E093_contact_target_geometry_audit_results.md`，Claims C1-C5 已逐条判定。
 - [x] 已更新 `workspace/core4d/EXPERIMENT_TRACKER.md`：新增 E093 行；同时修正 E092 行，明确 smoke-only stop 作废、Stage A full C1 WORK / C2-C3 FAIL。
 - [x] 已给 `workspace/core4d/log/114_E092_three_case_spider_dynamic_and_omniretarget_rl_results.md` 添加 0.0 纠偏说明，记录 Stage A full CEM 结果和旧判定作废。
+
+## 2026-05-29 13:50 CST: E093 MuJoCo 相机纠偏
+
+- [x] 用户指出 MuJoCo 视频只能看到机器人上半身；复核旧 `box023_p2` keyframe sheet 后确认旧默认 `--camera track2` 会裁掉腿/脚，不适合判断接触和支撑。
+- [x] 已修改 `workspace/core4d/scripts/E093/render_contact_geometry_mujoco.py`：默认相机从 `track2` 改为 `auto`，每个 case 用多帧 qpos、机器人 body、object collision box、contact marker 计算固定 full-body free camera；默认输出分辨率提升到 `960x720`，manifest 记录 lookat/distance/span。
+- [x] 已重渲 `workspace/core4d/results/E093/contact_geometry/visuals/mujoco/` 下 7 张 keyframe sheets 和 7 个 mp4；`ffprobe` 检查为 `7/7` 视频 `960x720`、`48` 帧。
+- [x] 已用 `video-frames` skill 抽查视频中段帧：`video_qc/box023_p2_f24.png` 和 `video_qc/box026_039_p2_f24.png`，视觉确认完整机器人、脚部、箱子和 marker 均在画面内。
