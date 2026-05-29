@@ -1,0 +1,80 @@
+{
+  "gate": {
+    "max_ik_inside_box_frac": 0.1,
+    "min_ik_signed_dist_to_face": 0.03,
+    "max_wrist_below_pelvis_gap": 0.3,
+    "min_pelvis_z_min": 0.6,
+    "min_trajectory_T": 80,
+    "min_support_face_frac_either_hand": 0.3
+  },
+  "results": {
+    "e091_box004_20231003_2_083_p1": {
+      "task": "e091_box004_20231003_2_083_p1",
+      "T": 102,
+      "pelvis_z_min": 0.6641047957186397,
+      "object_half_extents_m": [
+        0.174,
+        0.132,
+        0.224
+      ],
+      "L": {
+        "inside_box_frac": 0.0,
+        "signed_dist_mean_m": 0.17009312671978294,
+        "signed_dist_min_m": 0.018619049326689535,
+        "top_face_frac": 0.6176470588235294,
+        "legacy_local_z_face_frac": 0.38235294117647056,
+        "support_face_frac": 0.6176470588235294,
+        "wrist_below_pelvis_gap_m": 0.19742795862763599,
+        "wrist_world_z_mean_m": 0.5520281469623438,
+        "wrist_world_z_min_m": 0.29506874669562194
+      },
+      "R": {
+        "inside_box_frac": 0.0,
+        "signed_dist_mean_m": 0.16538189910340093,
+        "signed_dist_min_m": 0.017241042265546014,
+        "top_face_frac": 0.5098039215686274,
+        "legacy_local_z_face_frac": 0.0,
+        "support_face_frac": 0.5098039215686274,
+        "wrist_below_pelvis_gap_m": 0.20516378118313397,
+        "wrist_world_z_mean_m": 0.5442923244068458,
+        "wrist_world_z_min_m": 0.2960380652849854
+      },
+      "gate_pass": true,
+      "gate_reject_reasons": []
+    },
+    "e091_box004_20231003_2_082_p1": {
+      "task": "e091_box004_20231003_2_082_p1",
+      "T": 109,
+      "pelvis_z_min": 0.6509941188926195,
+      "object_half_extents_m": [
+        0.174,
+        0.132,
+        0.224
+      ],
+      "L": {
+        "inside_box_frac": 0.0,
+        "signed_dist_mean_m": 0.19526700587846885,
+        "signed_dist_min_m": 0.013298932588814122,
+        "top_face_frac": 0.44036697247706424,
+        "legacy_local_z_face_frac": 0.44036697247706424,
+        "support_face_frac": 0.44036697247706424,
+        "wrist_below_pelvis_gap_m": 0.17669809645923315,
+        "wrist_world_z_mean_m": 0.5601382666829895,
+        "wrist_world_z_min_m": 0.21931886339394047
+      },
+      "R": {
+        "inside_box_frac": 0.0,
+        "signed_dist_mean_m": 0.17139370170160145,
+        "signed_dist_min_m": 0.004272015099423709,
+        "top_face_frac": 0.47706422018348627,
+        "legacy_local_z_face_frac": 0.0,
+        "support_face_frac": 0.47706422018348627,
+        "wrist_below_pelvis_gap_m": 0.16926503594016382,
+        "wrist_world_z_mean_m": 0.5675713272020586,
+        "wrist_world_z_min_m": 0.2475920715555255
+      },
+      "gate_pass": true,
+      "gate_reject_reasons": []
+    }
+  }
+}

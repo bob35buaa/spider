@@ -1445,3 +1445,17 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 
 - Responded to user questions on how much `adaptive_support` changed box004 contact target and how final E094 CEM compares against E092. Computed box004 per-frame deltas from `workspace/core4d/results/E094/handbox_target_projection/per_frame_projection.csv`: only 2/210 hand-frames changed (left frame 16 by 0.129m, right frame 86 by 0.340m), mean over all hand-frames 0.00224m, p90 0m.
 - Updated `workspace/core4d/log/116_E094_g1_handbox_target_projection_results.md` with section 4.1 and section 6.1. Comparison uses E092 full CEM summary (`workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.csv`), not the earlier smoke/paired comparison. Key deltas: C1 remains WORK with near-identical metrics; C2 contact/object improve strongly but posture still fails; C3 slightly worsens and remains FAIL.
+
+### 2026-05-29 15:30 CST - E095 worklike data mining started
+
+- User requested more worklike candidates beyond `box004_083_p2`, incorporating Box026 failure lessons. Restored latest E091-E094 context and audited Holosoma `data_construction_v2` plus old D001/D002 inventory.
+- Key pool facts: v2 medium manifest has 80 rows but only three selected objects (`box004`, `Box026`, `Box022`); old D002 raw-contact pass rows also include many `box021` cases. Box026 is now explicitly treated as deprioritized after E092/E094 failures; box004 remains first-batch positive pattern; box021 is review-only after target/posture gate; Box022 needs raw-contact/reach review.
+- Added plan `workspace/core4d/plan/101_E095_worklike_data_mining_plan.md` and candidate miner `workspace/core4d/scripts/E095/mine_worklike_candidates.py`.
+
+### 2026-05-29 15:58 CST - E095 first-batch preprocessing and logging complete
+
+- Ran E095 candidate miner and wrote `32` candidates under `workspace/core4d/results/E095/worklike_candidate_mining/`; first batch is `3` box004 priority cases, while Box026 is kept only as `tier4_box026_deprioritized`.
+- Added `box004_person1` source scene template and ran Stage2b with `REPLACE_WRIST_WITH_FINGERTIP=0`. `e091_box004_20231003_2_083_p1` and `e091_box004_20231003_2_082_p1` passed OmniRetarget/SPIDER verify; `e091_box004_20231003_2_082_p2` failed OmniRetarget with `RuntimeError: CVXPY solve failed: infeasible`.
+- Generated OmniRetarget visual summary (`5/5` available MP4s, `15/15` PNGs nonblank), raw-contact visual summary (`11/11` PNGs nonblank), and D005b visual QC for the two passed box004 cases (`2/2` pass, `6/6` PNGs nonblank).
+- Created E095 scene snapshot at `workspace/core4d/results/E095/scene_snapshot/` for `box004_person1`, `083_p1`, and `082_p1`.
+- Wrote official log `workspace/core4d/log/117_E095_worklike_data_mining_results.md` and updated tracker with E095. Next recommended step is SPIDER full CEM on `083_p1` and `082_p1`, with `083_p2` as known-WORK control; only full-CEM WORK sequences should enter Holosoma RL.

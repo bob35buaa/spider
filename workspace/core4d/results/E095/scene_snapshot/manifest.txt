@@ -1,0 +1,15 @@
+# Scene snapshot for E095
+# Captured: 2026-05-29T15:56:49+08:00
+# Git HEAD: 50c06fc (exp/core4d-collab-retarget)
+
+case                             file                       size  sha256
+box004_person1                   scene.xml                 30344  7b1291509eb99dc24943ed69d88d2f128548603505b831ca182bb25a211968ee
+box004_person1                   task_info.json             1104  81c1d2784b8ef8dcdd7810e98bb02c1079de50baede53880ae8ec4082915beb7
+e091_box004_20231003_2_083_p1    scene.xml                 30392  0b5c0e79e6f15aef0944817db1175f1b7c9275ca5fa5a4c90a52aef6400ff1b5
+e091_box004_20231003_2_083_p1    scene_act.xml             31261  9fb37eed8d09a8a800e32db99bd5df9249a481672315cb7dc3b0f8775acd5e83
+e091_box004_20231003_2_083_p1    scene_act_meta.json          27  8a7721efaa78f204293f777175b4e421eff824d45cb20c1296be39d8db4d1a94
+e091_box004_20231003_2_083_p1    task_info.json              767  56b7f56c89a90dfe27a858b4d220bef4b5982d5aad52c1b4e0ae814977e8d42d
+e091_box004_20231003_2_082_p1    scene.xml                 30391  e24ef94a0745b9029a61873db4958fbb569f3662a168d27798c15c687e3880a1
+e091_box004_20231003_2_082_p1    scene_act.xml             31260  3d256c228ad0a96f39be106851935025e3b6f341d16edb54c111e423fac41d96
+e091_box004_20231003_2_082_p1    scene_act_meta.json          27  9382ff8f41360573fc8089515e4c4680ab5da29f4a73863139d49055924187b0
+e091_box004_20231003_2_082_p1    task_info.json              762  8b560ef534581037e35d756f5dba3ea36200165d9f1b3b355e7f7f2382743d66
