@@ -1345,3 +1345,47 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 可视化产物已齐：6 个 smoke mp4 均存在，60 张 keyframe jpg 非空；已用 ffmpeg 生成 `workspace/core4d/results/E092/visual_review/contact_sheets/*_sheet.jpg` 供 high subagent 视觉复核。
 - [x] high subagent `019e6fc7-1fa9-7442-af87-b56c8f376236` 已完成 6 条 smoke 视频 contact sheet 复核：视觉确认量化失败模式真实存在，C1/C3 明显 pelvis collapse，C3 右手/右臂贴地，C2 低髋/半跪/压箱；spider_dyn 与 rl_from_omni 无有意义视觉差异。
 - [x] 已按 plan 决策：跳过 Stage A full、Stage B `rl_from_spider` 和 Stage C main；正式 log 写入 `workspace/core4d/log/114_E092_three_case_spider_dynamic_and_omniretarget_rl_results.md`，plan 98、tracker 和 comparison artifacts 已更新。
+
+## 2026-05-29 11:00 CST: E092 执行纠偏 - 补跑 Stage A full CEM
+
+- [x] 用户指出“只跑 smoke 不能支撑 SPIDER dynamic 结论”。复核后确认此前按 smoke gate 直接停止 full 过于保守：4-iter smoke 只能作为 preflight/早期失败信号，不能替代 full CEM 收敛验证。
+- [x] 已启动 Stage A `spider_dyn full` 三卡补跑：本地 GPU0 跑 C1；远程 clean clone `/home/xiayb/pHRI_workspace/spider_e092_run` 的 tmux session `E092_spider_dyn_full` 中 GPU0 跑 C2、GPU1 跑 C3。
+- [ ] 待 full 完成后回收 `pull_E092_remote_results.sh spider-dyn-full`，统一 eval，生成 full keyframes/contact sheets；E092 log/tracker/plan 需修正为 full 结果为准，并明确 smoke-only 停止结论作废。
+
+## 2026-05-29 12:05 CST: E092 Stage A full CEM 回收完成
+
+- [x] 已回收远程 full CEM 结果：`REMOTE_REPO=/home/xiayb/pHRI_workspace/spider_e092_run bash workspace/core4d/scripts/pull_E092_remote_results.sh spider-dyn-full`。
+- [x] 本地统一 eval 已覆盖 `workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.{json,csv,md}`：C1 `E092D1_box004_083_p2_dyn` 达到 `WORK`（pelvis `0.663m`、contact `64.8%`、obj mean/max `0.006/0.019m`、head/upper/hand-floor 全 `0%`）；C2 FAIL（pelvis `0.083m`）；C3 FAIL（pelvis `0.177m`、RH floor `17.1%`）。
+- [x] full 产物齐：3 个 `trajectory_mjwp_act.npz`、3 个 mp4、30 张 keyframes，keyframes 非空。下一步应以 C1 full `WORK` 作为 Stage B `rl_from_spider` 的唯一候选输入；此前 smoke-only 停止结论作废。
+
+## 2026-05-29 12:25 CST: E092 C1 vs C2/C3 初步机制分析
+
+- [x] 尺寸/质量核查：E092 三条 object mass 均为 `5kg`；Box026 不是旧 D003 Box021 的 `29.632kg` 异常。collision friction 也一致为 `1 0.005 0.0001`，因此不是材质/摩擦参数主导。
+- [x] 尺寸对比：box004 `0.348 x 0.264 x 0.447m`，box023 `0.306 x 0.314 x 0.353m`，属于相近 small/medium pattern；Box026 `0.629 x 0.394 x 0.469m`，体积 `0.116m^3`，约为 box004 `2.8x`、box023 `3.4x`。
+- [x] contact target 口径：E092 继承 E085/E089 的 `contact_hdmi_dynamic_target=true`，并在 override 中设 `contact_hdmi_target_source=ref_fk`、`contact_hdmi_target_uses_eef_offset=true`。日志确认三条均为 `E040 dynamic target ... source=ref_fk, uses_eef_offset=True`；不是固定 object-local 点，而是 per-frame wrist+EEF offset target。
+- [x] 几何差异：C1 D005b pass，inside `0/0%`，support either `42.9%`；C2 主要 reject 是 support only `19.5%`，大部分手目标落在 `local -z` / 非支撑面；C3 support 较高但 R-inside `12.2%`，full 中 RH floor 仍 `17.1%`。初步判断 C2 的参考接触面随时间/面切换并非根本“固定 target”问题，而是可支撑面占比低 + Box026 尺寸/reach 导致 CEM 用低髋姿态追目标。
+
+## 2026-05-29 12:55 CST: E093 contact geometry audit 启动
+
+- [x] 已按用户要求把下一步定义为 E093：在 CEM/RL 前深究 `wrist_yaw_link + 5cm`、raw contact、sphere、历史 3-box、Holosoma handbox 的几何关系。
+- [x] 已恢复 tracker/latest plan/log/progress，并确认当前 E093 尚未落盘；工作树仍有 E092 full-correction 的本地改动和未跟踪 `workspace/exp_diagnostic/my_thoughts.md`，后者不纳入提交。
+- [x] 已读取 Holosoma handbox 参考日志 `workspace/v2/log/44_r084_r086_box023_handbox_stagec_first_pass.md`，关键参数为 `main_mesh_collision_handbox_m5.urdf`、`left/right_handbox_link`、handbox fixed joint 约 `wrist + [0.1074, +/-0.0116, 0.0102]`，box size 约 `[0.1418, 0.0766, 0.1165]`。
+- [x] 已写入计划 `workspace/core4d/plan/99_E093_contact_target_geometry_audit_plan.md`：覆盖 `box023_person2`、`box025_person2`、`box004`、`box021_person1`、`d003_box021_20231018_029_p2`、两条 `box026`，要求输出 raw/wrist/sphere/3-box/handbox 指标、object-local 可视化、MuJoCo 可视化和 high subagent review。
+
+## 2026-05-29 13:18 CST: E093 脚本与首轮可视化完成
+
+- [x] 已新增 `workspace/core4d/scripts/E093/build_contact_geometry_manifest.py`，并生成 `workspace/core4d/results/E093/contact_geometry/case_manifest.tsv`；7/7 case ready。
+- [x] 已新增 `workspace/core4d/scripts/E093/audit_contact_geometry.py`：复用 E085 raw surface target 逻辑，从 raw mesh/person vertices 重新生成 raw contact centroid，和 `wrist+5cm`、sphere、3-box、handbox 做统一 object-local 对比。
+- [x] 已新增 `workspace/core4d/scripts/E093/render_contact_geometry_mujoco.py`：在 MuJoCo reference qpos 上叠加 raw/wrist/sphere/handbox/3-box marker，输出 keyframe sheet 和 mp4。
+- [x] 静态检查通过：`python -m py_compile` 覆盖 3 个 E093 脚本，`git diff --check` 干净。
+- [x] 首轮全量诊断已跑通：`geometry_summary.{csv,json,md}` 14 行（7 case × 2 hands），`per_frame_points.csv` 1466 行，object-local/timeline/dashboard PNG `16/16` nonblank。
+- [x] MuJoCo 可视化已跑通：7 张 keyframe sheet 非空（std 0.12-0.17），7 个 mp4 均通过 `ffmpeg -v error -i ... -f null -` 解码检查。
+- [x] 首轮关键数值：`wrist+5cm -> raw` 在 box004/box023 约 `21-28cm`，D003 box021 约 `26-32cm`，Box026 约 `49-64cm`，box025 约 `58-64cm`；这说明 `wrist+5cm` 不是小误差 proxy，尤其 Box026/Box025 是大偏移。
+
+## 2026-05-29 13:42 CST: E093 结果记录完成
+
+- [x] high-reasoning subagent `019e720f-83fb-7193-a7a2-3924ab7d8527` 已完成 E093 可视化复核；只读检查 summary、dashboard、object-local overlay、timeline、MuJoCo keyframes。
+- [x] 已写入复核报告 `workspace/core4d/results/E093/contact_geometry/visual_review/high_subagent_review.md`。结论：handbox 14/14 行相对最接近 raw，但仍不能修复 raw target 与 retargeted hand region 错面；Box026/D003 应优先修 target face assignment。
+- [x] 已写正式 log `workspace/core4d/log/115_E093_contact_target_geometry_audit_results.md`，Claims C1-C5 已逐条判定。
+- [x] 已更新 `workspace/core4d/EXPERIMENT_TRACKER.md`：新增 E093 行；同时修正 E092 行，明确 smoke-only stop 作废、Stage A full C1 WORK / C2-C3 FAIL。
+- [x] 已给 `workspace/core4d/log/114_E092_three_case_spider_dynamic_and_omniretarget_rl_results.md` 添加 0.0 纠偏说明，记录 Stage A full CEM 结果和旧判定作废。

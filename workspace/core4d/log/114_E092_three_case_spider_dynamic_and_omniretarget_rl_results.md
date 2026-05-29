@@ -4,7 +4,28 @@
 
 计划：`workspace/core4d/plan/98_E092_three_case_spider_dynamic_and_omniretarget_rl_plan.md`
 
-状态：`FAIL / smoke-gated stop`
+状态：`CORRECTED / Stage A full CEM shows C1 WORK`
+
+## 0.0 2026-05-29 纠偏说明
+
+本日志最初的 `FAIL / smoke-gated stop` 结论过于保守。用户指出 smoke 不能替代 full CEM 后，已补跑 Stage A `spider_dyn full` 三卡 full CEM，并回收统一评估。
+
+纠偏后的 Stage A full 结果：
+
+| variant | case | full result | T | contact | obj mean/max | pelvis min | head | upper | LH/RH floor |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `E092D1_box004_083_p2_dyn` | C1 box004 | **WORK** | 105 | 64.8% | `0.006/0.019m` | `0.663m` | 0.0% | 0.0% | `0.0/0.0%` |
+| `E092D2_box026_039_p2_dyn` | C2 box026 | FAIL | 123 | 33.3% | `0.009/0.042m` | `0.083m` | 0.0% | 0.0% | `0.0/0.0%` |
+| `E092D3_box026_135_p2_dyn` | C3 box026 | FAIL | 82 | 57.3% | `0.008/0.041m` | `0.177m` | 0.0% | 0.0% | `0.0/17.1%` |
+
+Full 结果路径：
+
+- `workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.{json,csv,md}`
+- 3 个 `trajectory_mjwp_act.npz`
+- 3 个 full mp4
+- 30 张 full keyframes
+
+因此本文第 3 节末尾“没有 smoke PASS/REVIEW+，因此不跑 Stage A full”的旧判定已作废。C1 应作为后续 Stage B / RL-from-SPIDER 的唯一候选输入；C2/C3 暂不进入 RL。当前后续优先级已转为 E093 contact geometry audit，解释 C1 为什么 work 而 C2/C3 失败。
 
 ## 0. 执行说明
 
