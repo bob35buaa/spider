@@ -1,0 +1,37 @@
+[
+  {
+    "T": 136,
+    "case_id": "box023_p2",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E094/handbox_target_projection/targets/box023_p2_box023_person2_adaptive_support_targets.npz",
+    "task": "box023_person2"
+  },
+  {
+    "T": 105,
+    "case_id": "box004_083_p2",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E094/handbox_target_projection/targets/box004_083_p2_e091_box004_20231003_2_083_p2_adaptive_support_targets.npz",
+    "task": "e091_box004_20231003_2_083_p2"
+  },
+  {
+    "T": 75,
+    "case_id": "box021_d003_029_p2",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E094/handbox_target_projection/targets/box021_d003_029_p2_d003_box021_20231018_029_p2_adaptive_support_targets.npz",
+    "task": "d003_box021_20231018_029_p2"
+  },
+  {
+    "T": 123,
+    "case_id": "box026_039_p2",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E094/handbox_target_projection/targets/box026_039_p2_e091_box026_20231018_039_p2_adaptive_support_targets.npz",
+    "task": "e091_box026_20231018_039_p2"
+  },
+  {
+    "T": 82,
+    "case_id": "box026_135_p2",
+    "reward_mode": "adaptive_support",
+    "target_npz": "workspace/core4d/results/E094/handbox_target_projection/targets/box026_135_p2_e091_box026_20231020_135_p2_adaptive_support_targets.npz",
+    "task": "e091_box026_20231020_135_p2"
+  }
+]

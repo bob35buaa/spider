@@ -1396,3 +1396,19 @@ converted 层 `person1/person2` 的 object pose 完全一致，但 retarget/SPID
 - [x] 已修改 `workspace/core4d/scripts/E093/render_contact_geometry_mujoco.py`：默认相机从 `track2` 改为 `auto`，每个 case 用多帧 qpos、机器人 body、object collision box、contact marker 计算固定 full-body free camera；默认输出分辨率提升到 `960x720`，manifest 记录 lookat/distance/span。
 - [x] 已重渲 `workspace/core4d/results/E093/contact_geometry/visuals/mujoco/` 下 7 张 keyframe sheets 和 7 个 mp4；`ffprobe` 检查为 `7/7` 视频 `960x720`、`48` 帧。
 - [x] 已用 `video-frames` skill 抽查视频中段帧：`video_qc/box023_p2_f24.png` 和 `video_qc/box026_039_p2_f24.png`，视觉确认完整机器人、脚部、箱子和 marker 均在画面内。
+
+## 2026-05-29 13:55 CST: E094 启动 - handbox-aware target projection
+
+- [x] 已按 `experiment-planning-zh` 恢复 E093 log/plan、E092 脚本和远程执行规范；当前工作树仅有用户未跟踪文件 `workspace/exp_diagnostic/my_thoughts.md`。
+- [x] 关键代码入口确认：`examples/run_mjwp.py` 已支持 `contact_hdmi_target_source=external`，外部 NPZ 通过 `spider_contact_target_object_local` / `eval_contact_target_object_local` 提供 `(T,2,3)` object-local target；reward 仍用 `wrist + contact_hdmi_eef_offset` 追 target。因此 E094 可以先生成外部 target 与可视化，不需要先改 MJWP reward 内核。
+- [x] E092 三 case 的 CEM 任务与 split 可复用：C1 本地、C2 远程 GPU0、C3 远程 GPU1；若 E094 kinematic gate 通过，再按本地+远程三卡 full CEM 叠加运行，不 kill 现有 RL 进程。
+
+## 2026-05-29 14:05 CST: E094 projection gate 与脚本 scaffold
+
+- [x] 已落盘计划 `workspace/core4d/plan/100_E094_g1_handbox_target_projection_plan.md`。
+- [x] 已实现并运行 `workspace/core4d/scripts/E094/build_handbox_target_projection.py`。首版 `handbox_compensated` 与直接 `support_patch` 都会把 guard/reward target 拉动过大或判定 inside，已保留为 `workspace/core4d/results/E094/handbox_target_projection_{compensated_initial,support_patch_initial}/`，不进入 CEM。
+- [x] 当前候选改为 `adaptive_support`：非 raw-active 帧保留旧 ref-FK target；raw-active 帧仅在旧 target inside、非 support 且离 raw >`0.30m` 时投到 support face。结果目录 `workspace/core4d/results/E094/handbox_target_projection/`，5 case、10 summary rows、1042 per-frame rows、10 张 2D PNG 非空。
+- [x] adaptive gate 结果：box023/box004 guards PASS 且 reward delta p90 `0`; D003 box021 PASS；Box026 两条 inside 降到 `0%`、support 提升到 `~96-100%`，但 reward delta p90 `0.36-0.63m`，标记 REVIEW/high-risk。
+- [x] 已实现并运行 `workspace/core4d/scripts/E094/render_projection_mujoco.py`：5 个 full-body keyframe sheet 和 5 个 mp4 已生成，`ffprobe` 检查均为 `960x720`、`48` 帧。
+- [x] 已启动 high subagent `019e722f-e771-7f20-a401-01266edbda42` 复核 projection 可视化，报告目标路径 `workspace/core4d/results/E094/handbox_target_projection/visual_review/high_subagent_projection_review.md`。
+- [x] CEM scaffold 已建好但尚未启动：`build_cem_tasks.py` 生成 3 个 E094 override/variants；`train_E094_handbox_proj_cem.sh`、`run_E094_remote.sh`、`pull_E094_remote_results.sh`、`eval_E094_cem.py` 均已通过静态检查。
