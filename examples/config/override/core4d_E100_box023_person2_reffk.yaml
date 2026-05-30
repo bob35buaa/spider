@@ -1,0 +1,12 @@
+# @package _global_
+# E100: box023_p2 守门反向 A/B baseline — ref_fk (spider 默认动态 target).
+# 与 fingertip 版的差异：source=ref_fk, 无 NPZ.
+defaults:
+  - core4d_E084C_box023_p2_semantic_guard
+  - _self_
+
+task: box023_person2_upperobj_e083
+contact_hdmi_dynamic_target: true
+contact_hdmi_target_source: ref_fk
+contact_hdmi_target_path: ""
+contact_hdmi_target_uses_eef_offset: false

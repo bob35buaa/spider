@@ -1,0 +1,14 @@
+# @package _global_
+# E100: box023_p2 守门反向 case，使用 E099 fingertip vote 重做 target。
+# 守门期望：R hand vote 从 palm +x 翻到 finger +z，但 swap Δ 仅 1.5cm (per E100 target_gap_summary)，
+# 应该不影响 rollout 主要行为（contact frac / pelvis_min Δ ≤ 5pp / 2cm）。
+defaults:
+  - core4d_E084C_box023_p2_semantic_guard
+  - _self_
+
+task: box023_person2_upperobj_e083
+contact_hdmi_dynamic_target: true
+contact_hdmi_target_source: external
+contact_hdmi_target_path: workspace/core4d/results/E100/fingertip_targets/box023_person2/spider_contact_target_object_local.npz
+contact_hdmi_target_time_axis: auto
+contact_hdmi_target_uses_eef_offset: false

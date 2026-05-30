@@ -1,0 +1,25 @@
+{
+  "case": "box025_person2",
+  "T": 124,
+  "half": [
+    0.3768,
+    0.3778,
+    0.4692
+  ],
+  "vote_L": "+z",
+  "vote_R": "+z",
+  "palm_vote_L": "+z",
+  "palm_vote_R": "+z",
+  "face_changed_L": false,
+  "face_changed_R": false,
+  "delta_palm_mean_L_m": 0.04944508943670158,
+  "delta_palm_max_L_m": 0.16906593966155675,
+  "delta_palm_mean_R_m": 0.038193401263213494,
+  "delta_palm_max_R_m": 0.14317484736115366,
+  "delta_swap_mean_L_m": 0.0,
+  "delta_swap_max_L_m": 0.0,
+  "delta_swap_mean_R_m": 0.0,
+  "delta_swap_max_R_m": 0.0,
+  "active_L_frac": 1.0,
+  "active_R_frac": 1.0
+}

@@ -1,0 +1,25 @@
+{
+  "case": "e091_box004_20231003_2_083_p2",
+  "T": 105,
+  "half": [
+    0.173952,
+    0.131777,
+    0.223595
+  ],
+  "vote_L": "+x",
+  "vote_R": "-x",
+  "palm_vote_L": "+x",
+  "palm_vote_R": "-z",
+  "face_changed_L": false,
+  "face_changed_R": true,
+  "delta_palm_mean_L_m": 0.1948332133109613,
+  "delta_palm_max_L_m": 0.8308468456777294,
+  "delta_palm_mean_R_m": 0.19414577614138595,
+  "delta_palm_max_R_m": 0.611864344856196,
+  "delta_swap_mean_L_m": 0.0,
+  "delta_swap_max_L_m": 0.0,
+  "delta_swap_mean_R_m": 0.044656117250226085,
+  "delta_swap_max_R_m": 0.08969916503242292,
+  "active_L_frac": 1.0,
+  "active_R_frac": 1.0
+}
