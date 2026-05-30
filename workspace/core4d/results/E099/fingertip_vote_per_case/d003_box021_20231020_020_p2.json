@@ -1,0 +1,44 @@
+{
+  "case": "d003_box021_20231020_020_p2",
+  "status": "ok",
+  "T": 126,
+  "half": [
+    0.1596,
+    0.2089,
+    0.2647
+  ],
+  "half_source": "scene.xml",
+  "obj_name": "Box021",
+  "date_seq_person": "20231020/020/person2",
+  "L": {
+    "hand": "L",
+    "total_frames": 126,
+    "contact_frames": 69,
+    "vote_face": "-x",
+    "vote_frac": 0.927536231884058,
+    "counts_close": {
+      "+z": 5,
+      "-x": 64
+    },
+    "counts_far": {
+      "+y": 55,
+      "+z": 2
+    }
+  },
+  "R": {
+    "hand": "R",
+    "total_frames": 126,
+    "contact_frames": 60,
+    "vote_face": "+x",
+    "vote_frac": 0.9666666666666667,
+    "counts_close": {
+      "+x": 58,
+      "+z": 2
+    },
+    "counts_far": {
+      "+y": 55,
+      "+x": 4,
+      "+z": 7
+    }
+  }
+}

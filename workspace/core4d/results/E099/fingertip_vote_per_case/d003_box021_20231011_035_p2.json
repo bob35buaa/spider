@@ -1,0 +1,43 @@
+{
+  "case": "d003_box021_20231011_035_p2",
+  "status": "ok",
+  "T": 182,
+  "half": [
+    0.1596,
+    0.2089,
+    0.2647
+  ],
+  "half_source": "scene.xml",
+  "obj_name": "Box021",
+  "date_seq_person": "20231011/035/person2",
+  "L": {
+    "hand": "L",
+    "total_frames": 182,
+    "contact_frames": 96,
+    "vote_face": "+x",
+    "vote_frac": 1.0,
+    "counts_close": {
+      "+x": 96
+    },
+    "counts_far": {
+      "+y": 74,
+      "+x": 8,
+      "-z": 4
+    }
+  },
+  "R": {
+    "hand": "R",
+    "total_frames": 182,
+    "contact_frames": 16,
+    "vote_face": "-x",
+    "vote_frac": 1.0,
+    "counts_close": {
+      "-x": 16
+    },
+    "counts_far": {
+      "+y": 72,
+      "-x": 91,
+      "-z": 3
+    }
+  }
+}
