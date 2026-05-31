@@ -1,23 +1,59 @@
 {
-  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box021_person1/scene.xml",
-  "source_qpos": "workspace/core4d/results/E079/holosoma_box021_person2/trimmed/20231018-030-person2-Box021_with_obj_original.npz",
-  "task": "box021_person2",
-  "data_id": "0",
-  "date": "20231018",
-  "seq": "030",
-  "person": "person2",
-  "object_name": "Box021",
-  "object_model_rel": "box/box021_m.obj",
-  "object_body_name": "object",
+  "asset_path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/assets/objects/box021/box021_m.obj",
+  "base_scene": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "base_template": "box023_person1",
+  "clean_robot_inertial_source": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "contact_site_ids": [
+    11,
+    15
+  ],
+  "contact_site_names": [
+    "contact_left_hand",
+    "contact_right_hand"
+  ],
+  "diaginertia": [
+    0.14247807052201283,
+    0.1678971264966203,
+    0.10197550840251283
+  ],
+  "e103_rebuilt": true,
+  "extents_m": [
+    0.39099037999999997,
+    0.30309692,
+    0.50007962
+  ],
+  "half_extents_m": [
+    0.19549518999999999,
+    0.15154846,
+    0.25003981
+  ],
+  "inertia_formula": "box: Ixx=m/12*(y^2+z^2), Iyy=m/12*(x^2+z^2), Izz=m/12*(x^2+y^2)",
+  "mass_kg": 5.0,
+  "mesh_sha256": "330a0d7247f48ac5bf30626b5efe7430c6ef375f1befd232298c7f77993d6e09",
+  "mujoco_load_ok": true,
+  "nq": 43,
+  "nu": 29,
+  "nv": 41,
   "object_initial_pos": [
-    0.4552226960659027,
-    0.4106321632862091,
-    0.15126892924308777
+    0.155,
+    -0.124,
+    0.31
   ],
   "object_initial_quat": [
-    0.7066185474395752,
-    0.7067623138427734,
-    -0.026256617158651352,
-    -0.022087080404162407
-  ]
+    1.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "object_key": "box021",
+  "object_mass_policy": "assumed_uniform_5kg_E103_no_real_mass_source",
+  "object_model_rel": "box/box021_m.obj",
+  "object_name": "Box021",
+  "person": "person2",
+  "raw_object_mesh": "/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real/object_models/box/box021_m.obj",
+  "runtime_artifact_policy": "old trajectory/scene_act artifacts were moved to E103 pre_rebuild snapshot or stale runtime artifact archive",
+  "scene_act_policy": "not generated for canonical source template; regenerate after target trajectory_kinematic.npz is produced",
+  "snapshot_before_rebuild": "/home/ubuntu/Workspace/spider/workspace/core4d/results/E103/pre_rebuild_scene_snapshot/box021_person2",
+  "source_template_pose_policy": "neutral_placeholder_from_box023_person1; target scenes must be patched from trimmed qpos first frame",
+  "task": "box021_person2"
 }

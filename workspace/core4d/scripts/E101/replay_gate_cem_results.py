@@ -45,6 +45,11 @@ def metrics_from_traj(traj_npz: Path, scene_xml: Path) -> dict:
                 qpos = qa
     if qpos is None:
         return {"status": "no_qpos", "keys": info_keys}
+    if qpos.ndim == 3 and qpos.shape[1] == 2:
+        # SPIDER rollout convention: [:,0,:] = sim, [:,1,:] = ref.
+        qpos = qpos[:, 0, :]
+    if qpos.ndim != 2:
+        return {"status": "bad_qpos_shape", "qpos_shape": list(qpos.shape)}
 
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
     # pelvis body

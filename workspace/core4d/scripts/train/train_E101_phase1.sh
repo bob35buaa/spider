@@ -5,8 +5,9 @@
 #   GPU0 seed0: 18029_p2 (E082-E088 反复 FAIL, H1 主战场)
 #   GPU0 seed1: 035_p2   (E090 S1 FAIL, pelvis 0.134m)
 #
-# Face-changed 测试 (face_changed_R: -z→-x):
-#   GPU1 seed0/1: box004_083_p2 (E091 SMOKE FAIL / E094 P1 FAIL)
+# Face-changed 测试:
+#   GPU1 seed0/1: box004_083_p2 (face_changed_R: -z→-x)
+#   GPU0 seed0/1: 030_p1 (face_changed_R: +z→+x)
 #
 # Full CEM default (max_num_iterations=32, num_samples=1024)；预计 ~1-2.5h per run
 # 双卡并行 → ~3-5h total
@@ -29,6 +30,10 @@ run_one() {
   local gpu=$5
   local out_dir="$RESULTS/${variant}_seed${seed}_outdir"
   local log="$LOGS/${variant}_seed${seed}.log"
+  if [ -f "$RESULTS/${variant}_seed${seed}.npz" ] && [ -f "$RESULTS/${variant}_seed${seed}.mp4" ]; then
+    echo "[$(date '+%H:%M:%S')] === SKIP existing ${variant} seed${seed} ==="
+    return 0
+  fi
   mkdir -p "$out_dir"
   echo "[$(date '+%H:%M:%S')] === GPU${gpu} seed${seed} ${variant} task=${task} ==="
   CUDA_VISIBLE_DEVICES=$gpu MUJOCO_GL=egl PYTHONUNBUFFERED=1 $PY -u examples/run_mjwp.py \
@@ -55,6 +60,12 @@ run_one() {
           "core4d_E101_d003_box021_20231011_035_p2_fingertip" \
           "d003_box021_20231011_035_p2_upperobj_e083" \
           0 0
+  for seed in 0 1; do
+    run_one "E101P1_box021_030_p1_fingertip" \
+            "core4d_E101_d003_box021_20231018_030_p1_fingertip" \
+            "d003_box021_20231018_030_p1" \
+            "$seed" 0
+  done
 ) &
 GPU0_PID=$!
 

@@ -133,8 +133,8 @@
     <mesh name="right_wrist_pitch_link" file="right_wrist_pitch_link.STL" />
     <mesh name="right_wrist_yaw_link" file="right_wrist_yaw_link.STL" />
     <mesh name="right_rubber_hand" file="right_rubber_hand.STL" />
-    <mesh name="box021" file="../../../../../example_datasets/processed/core4d/assets/objects/box021/box021_m.obj" scale="1 1 1" />
-    <material name="box_material" rgba="0.6 0.4 0.2 1" />
+    <mesh name="box026" file="../../../../../example_datasets/processed/core4d/assets/objects/box026/box026_m.obj" scale="1 1 1" />
+    <material name="box026_material" rgba="0.35 0.52 0.74 1" />
   </asset>
   <worldbody>
     <light pos="0 0 5" dir="0 0 -1" type="directional" />
@@ -337,9 +337,10 @@
       </body>
     </body>
     <body name="object" pos="0.155 -0.124 0.310">
-      <joint name="object_pos_x" type="slide" axis="1 0 0" armature="0.01" damping="100" /><joint name="object_pos_y" type="slide" axis="0 1 0" armature="0.01" damping="100" /><joint name="object_pos_z" type="slide" axis="0 0 1" armature="0.01" damping="100" /><joint name="object_rot_y" type="hinge" axis="0 1 0" armature="0.01" damping="20" /><joint name="object_rot_x" type="hinge" axis="1 0 0" armature="0.01" damping="20" /><joint name="object_rot_z" type="hinge" axis="0 0 1" armature="0.01" damping="20" /><inertial pos="0 0 0" mass="5.0" diaginertia="0.15 0.15 0.1" />
-      <geom name="object_visual" type="mesh" mesh="box021" material="box_material" group="2" contype="0" conaffinity="0" />
-      <geom name="object_collision" type="box" size="0.1596 0.2089 0.2647" rgba="0.6 0.4 0.2 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <freejoint name="object_joint" />
+      <inertial pos="0 0 0" mass="5.000" diaginertia="0.15648257 0.25647531 0.22968026" />
+      <geom name="object_visual" type="mesh" mesh="box026" material="box026_material" group="2" contype="0" conaffinity="0" />
+      <geom name="object_collision" type="box" size="0.314487 0.197247 0.234485" rgba="0.35 0.52 0.74 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
       <site name="trace_object" size="0.02" rgba="0 0 1 1" />
     </body>
   </worldbody>
@@ -373,7 +374,7 @@
     <position class="wrist_roll" name="right_wrist_roll_joint" joint="right_wrist_roll_joint" />
     <position class="wrist_pitch" name="right_wrist_pitch_joint" joint="right_wrist_pitch_joint" />
     <position class="wrist_yaw" name="right_wrist_yaw_joint" joint="right_wrist_yaw_joint" />
-  <position name="object_pos_x" joint="object_pos_x" kp="0" kv="0" /><position name="object_pos_y" joint="object_pos_y" kp="0" kv="0" /><position name="object_pos_z" joint="object_pos_z" kp="0" kv="0" /><position name="object_rot_y" joint="object_rot_y" kp="0" kv="0" /><position name="object_rot_x" joint="object_rot_x" kp="0" kv="0" /><position name="object_rot_z" joint="object_rot_z" kp="0" kv="0" /></actuator>
+  </actuator>
   <contact>
     <pair name="left_foot_floor0" geom1="lf0" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
     <pair name="left_foot_floor1" geom1="lf1" geom2="floor" solref="0.008 1" friction="1 1" condim="3" />
