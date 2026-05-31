@@ -1,0 +1,14 @@
+# @package _global_
+# E101 Phase 1 typical case 2: e091_box004_20231003_2_083_p2
+# face_changed_R: palm -z → fingertip -x; 期望 fingertip target 让 R hand 抓到 -x 侧面
+# 此 case 在 E091 是 SMOKE FAIL；E094 P1 是 FAIL；现在测 fingertip target 能否突破
+defaults:
+  - core4d_E094P1_box004_083_p2_hbproj
+  - _self_
+
+task: e091_box004_20231003_2_083_p2_e092_dyn
+contact_hdmi_dynamic_target: true
+contact_hdmi_target_source: external
+contact_hdmi_target_path: workspace/core4d/results/E100/fingertip_targets/e091_box004_20231003_2_083_p2/spider_contact_target_object_local.npz
+contact_hdmi_target_time_axis: auto
+contact_hdmi_target_uses_eef_offset: false

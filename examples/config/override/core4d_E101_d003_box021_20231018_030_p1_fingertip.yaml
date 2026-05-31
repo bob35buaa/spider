@@ -1,0 +1,15 @@
+# @package _global_
+# E101 Phase 1 typical case 1: d003_box021_20231018_030_p1
+# face_changed_R: palm +z → fingertip +x; 期望 fingertip target 让 R hand 抓到 +x 侧面
+# 沿用 18029_p2 的 E084C semantic stack (相同 box021 family, 同 reward 配方)
+defaults:
+  - core4d_E084C_d003_box021_20231018_029_p2_semantic
+  - _self_
+
+task: d003_box021_20231018_030_p1
+contact_hdmi_dynamic_target: true
+contact_hdmi_target_source: external
+contact_hdmi_target_path: workspace/core4d/results/E100/fingertip_targets/d003_box021_20231018_030_p1/spider_contact_target_object_local.npz
+contact_hdmi_target_time_axis: auto
+contact_hdmi_target_uses_eef_offset: false
+# 030_p1 没有 E085 raw-target 也没有 E084 mask；保持 mask 为 E084 默认
