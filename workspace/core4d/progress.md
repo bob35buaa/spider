@@ -257,3 +257,316 @@ E101 按 plan stop-loss 收尾：box021 D003 0/4 WORK，Phase 2 不启动。
 - [x] 更新 `log/131_E104_d002_multithreshold_remine_results.md`、`results/E104/d002_multithreshold_candidate_comparison.md`、`EXPERIMENT_TRACKER.md`。
 
 - [x] 修正 mining summary 文案：`candidate_legacy_risk_needs_visual` 是候选但不是 executable，summary 改为 `Candidate rows` 后重跑 3cm/5cm mining 和 candidate REVIEW。
+
+## E105 planning — Box026 clean-scene full CEM rerun
+
+- [x] 用户确认：E103 template/inertial bug 使旧 Box026 full CEM 结论不可信，下一步先重跑历史已跑过的 Box026 case，而不是直接扩到 E104 新候选。
+- [x] 创建计划：`workspace/core4d/plan/112_E105_box026_clean_scene_full_cem_rerun_plan.md`
+- [x] 对齐历史 primary full-CEM rerun matrix：
+  - `E092D2_box026_039_p2_dyn` -> `E105R1_box026_039_p2_ref_fk_clean`
+  - `E092D3_box026_135_p2_dyn` -> `E105R2_box026_135_p2_ref_fk_clean`
+  - `E094P2_box026_039_p2_hbproj` -> `E105A1_box026_039_p2_adaptive_clean`
+  - `E094P3_box026_135_p2_hbproj` -> `E105A2_box026_135_p2_adaptive_clean`
+- [x] 计划明确不复用旧 `_e092_dyn` / `_e092_omni` derived task；预检查显示这些旧派生 task 仍有 polluted robot inertial。E105 将从 E103 clean target 新建：
+  - `e091_box026_20231018_039_p2_e105_clean`
+  - `e091_box026_20231020_135_p2_e105_clean`
+- [x] 计划要求 CEM 前先过 clean-scene gate：source template、source target、E105 derived task inertial audit clean，qpos 与 E103 verified qpos 对齐，`scene_act` MuJoCo load 维度正确。
+- [x] 计划的并行执行拆分：本地先跑 `039_p2 adaptive`，远程 GPU0/GPU1 并行跑两个 ref-fk，wave2 补 `135_p2 adaptive`。
+- [x] 计划输出：数值对比表 `results/E105/comparison/box026_clean_vs_old_comparison.{csv,md}`，以及 old-vs-new keyframes/timeline/REVIEW 可视化；`results/E105/` 仍不纳入 git。
+
+## E105 planning update — add E101-style fingertip ablation + pre-CEM visual gate
+
+- [x] 根据用户反馈更新 `workspace/core4d/plan/112_E105_box026_clean_scene_full_cem_rerun_plan.md`：E105 从 4 个 historical primary rerun 扩展为 6 个实验。
+- [x] 新增 E101-style secondary ablation：
+  - `E105F1_box026_039_p2_fingertip_clean`
+  - `E105F2_box026_135_p2_fingertip_clean`
+- [x] 明确三条路线区别：
+  - `ref_fk_clean` 对齐 E092；
+  - `adaptive_clean` 对齐 E094；
+  - `fingertip_clean` 对齐 E100/E101 fingertip-aware external target，但历史 E101 没有 Box026 full CEM，所以作为 secondary ablation。
+- [x] 并行计划改为 3 卡两轮：
+  - wave1：local GPU0 跑 `E105A1`，remote GPU0/1 跑 `E105R1/R2`；
+  - wave2：local GPU0 跑 `E105F1`，remote GPU0/1 跑 `E105A2/F2`。
+- [x] 新增 CEM 前硬 gate：每个 variant 先渲染 MuJoCo clean derived task replay + target overlay/keyframe sheet，再用 medium subagent 写 `results/E105/pre_cem_visual_review/{variant}/REVIEW.md`；只有 `PASS/PASS_WITH_NOTES` 才允许启动对应 full CEM。
+- [x] 计划中新增 `build_e105_fingertip_targets.py`、`render_pre_cem_mujoco_replays.py`、`pre_cem_visual_gate.tsv` 等 E105 产物路径。
+
+## E105 implementation start
+
+- [x] 新增 E105 执行脚本骨架：
+  - `workspace/core4d/scripts/E105/e105_common.py`
+  - `workspace/core4d/scripts/E105/build_box026_historical_manifest.py`
+  - `workspace/core4d/scripts/E105/build_box026_clean_tasks.py`
+  - `workspace/core4d/scripts/E105/build_e105_adaptive_targets.py`
+  - `workspace/core4d/scripts/E105/build_e105_fingertip_targets.py`
+  - `workspace/core4d/scripts/E105/render_pre_cem_mujoco_replays.py`
+  - `workspace/core4d/scripts/eval/eval_E105_box026_clean_cem.py`
+  - `workspace/core4d/scripts/train/train_E105_box026_clean_full.sh`
+  - `workspace/core4d/scripts/run_E105_remote.sh`
+  - `workspace/core4d/scripts/pull_E105_remote_results.sh`
+- [x] `py_compile` 已通过；训练/远程/拉取脚本已 chmod executable。
+- [x] 执行 E105 Phase 0/1/2 non-CEM steps：
+  - historical manifest: `workspace/core4d/results/E105/box026_historical_full_cem_manifest.tsv`，4 条 old Box026 full-CEM 对齐记录。
+  - clean tasks: `e091_box026_20231018_039_p2_e105_clean`、`e091_box026_20231020_135_p2_e105_clean`，qpos shape 分别 `[123,43]` / `[82,43]`。
+  - clean preflight: `workspace/core4d/results/E105/clean_scene_preflight.tsv`；E105 derived/source tasks PASS，旧 `_e092_dyn/_e092_omni` 明确 `INVALIDATED_OLD_DERIVED`。
+  - variants/overrides: `workspace/core4d/scripts/E105/variants.tsv` 和 6 个 `examples/config/override/core4d_E105*.yaml`。
+  - adaptive targets: `workspace/core4d/results/E105/adaptive_targets/`，2 cases / 4 hand rows / 4 nonblank PNG。
+  - fingertip targets: `workspace/core4d/results/E105/fingertip_targets/`，2 rows summary，target metadata 含 source scene/trajectory/vote SHA256。
+  - pre-CEM visuals: `workspace/core4d/results/E105/pre_cem_visual_gate.tsv`，6/6 rows 生成 kinematic replay MP4、kinematic sheet、target sheet，当前等待 medium subagent review。
+- [x] medium subagent pre-CEM review 完成：6/6 variants 均为 `PASS_WITH_NOTES`，`pre_cem_visual_gate.tsv` 已更新为 `PASS_WITH_NOTES`。
+- [x] 已按远程执行规则将 E105 必需代码、overrides、E105 clean derived tasks、E105 adaptive/fingertip targets、pre-CEM review 文件同步到 `spider-remote:/home/xiayb/pHRI_workspace/spider`；未依赖远程 git pull，避免覆盖远程已有 dirty worktree。
+- [x] wave1 已按“已有 GPU 程序不 kill，直接叠加跑”的用户要求启动：
+  - local GPU0: `E105A1_box026_039_p2_adaptive_clean`，PID `1059161`，log `logs/E105/launch/local_wave1_20260601_013512.log`。
+  - remote tmux retry2: `e105_wave1_retry2_20260601_013712`，remote GPU0/1 跑 `E105R1/R2`。
+- [x] 远程启动前两次暴露数据同步问题并已修复：
+  - 缺 `core4d_E089A_box021_person1_upperobj` override 依赖链 -> 已同步 E089/E088/E087/E085/E084/e074/e073/e071/e062/e041 configs。
+  - 缺 `example_datasets/processed/core4d/assets/objects/box026/box026_m.obj` -> 已同步 Box026 asset。
+- [ ] wave1 运行中状态：
+  - local `E105A1_box026_039_p2_adaptive_clean`: 正常推进到约 `226/246` sim steps，尚未落最终 NPZ/MP4。
+  - remote `E105R1_box026_039_p2_ref_fk_clean`: 正常推进到约 `166/246` sim steps。
+  - remote `E105R2_box026_135_p2_ref_fk_clean`: 已完成，已落 `trajectory_mjwp_act.npz`、variant `.npz`、MP4、keyframes；final object tracking error `pos=0.1626, quat=0.0707`。
+- [x] 修正 E105 remote runner：远程只负责 CEM 产物，不再自动跑 E105 eval（`E105_SKIP_EVAL=1`）；最终 6 个结果拉回本地后统一 eval。原因：远程旧环境缺 `workspace/core4d/scripts/eval/eval_E090.py`，导致 R2 完成后 wrapper eval traceback，但 CEM 输出本身已落盘。
+- [x] 本地 wave1 `E105A1_box026_039_p2_adaptive_clean` 完成，已落 root `.npz`、outdir `trajectory_mjwp_act.npz`、MP4、keyframes；final object tracking error `pos=0.2807, quat=0.1508`。
+- [x] A1 本地 eval 已写出，单项 `work_status=WORK`：contact `78.0%`，obj mean/max `0.010/0.045m`，pelvis min `0.703m`，head/upper/floor safety `0%`。这只是 interim 结果，最终会在 6/6 拉齐后统一重跑 eval。
+- [x] 新增 `workspace/core4d/scripts/E105/render_box026_clean_comparison.py`，用于最终生成 E105 old-vs-new sheets、per-variant contact/object/pelvis timeline PNG、`visuals/box026_clean_rerun/REVIEW.md`；`py_compile` 已通过。
+- [x] remote wave1 `E105R1_box026_039_p2_ref_fk_clean` 已完成；`E105R2` 已完成。
+- [x] 为提高 GPU 利用率，E105 调度改为 sliding window（最多 3 个 E105 CEM 并行）：R1 继续跑 remote GPU0，同时启动 wave2 的 local F1 和 remote GPU1 F2。
+  - local F1: PID `1147975`, launch log `logs/E105/launch/local_wave2_F1_20260601_015535.log`
+  - remote F2: tmux `e105_wave2_gpu1_F2_20260601_015535`, wrapper log `logs/E105/remote/remote_gpu1_wave2_F2_full.log`
+  - remote GPU0 的 A2 等 R1 完成后启动。
+- [x] F1 第一次本地 `nohup` 启动异常早退且 CEM log 为空；已用 `single` 模式前台重启，当前正常加载 fingertip external target 并推进（初始检查到 `12/246` sim steps）。
+- [x] remote wave1 `E105R1_box026_039_p2_ref_fk_clean` 完成并落盘；final object tracking error `pos=0.1798, quat=0.1173`。
+- [x] remote GPU0 剩余 `E105A2_box026_135_p2_adaptive_clean` 已完成：tmux `e105_wave2_gpu0_A2_20260601_020042`，wrapper log `logs/E105/remote/remote_gpu0_wave2_A2_full.log`。
+- [x] local F1、remote F2、remote A2 均已完成并拉回本地。
+- [x] 6/6 E105 CEM 全部完成并拉回本地；每个 variant 均有 root NPZ、outdir `trajectory_mjwp_act.npz`、MP4、10 张 keyframes、config。
+- [x] 统一 full eval 完成并补入 E098 replay gate：4/6 `WORK` under strict gate。关键结果：
+  - `E105R1/R2` ref-fk clean：WORK；contact `76.4/62.2%`，pelvis min `0.704/0.655m`，replay gate PASS。
+  - `E105A1` adaptive clean：WORK；contact `78.0%`，pelvis min `0.703m`，lie `11.4%`。
+  - `E105A2` adaptive clean：FAIL only by replay body-on-box gate；contact `30.5%`，pelvis min `0.672m`，lie `30.5% >= 30%`。旧 E094P3 的 low pelvis/RH-floor 模式已消失。
+  - `E105F1` fingertip clean：FAIL only by replay body-on-box gate；contact `82.1%`，pelvis min `0.709m`，lie `30.1% >= 30%`。
+  - `E105F2` fingertip clean：WORK；contact `61.0%`，pelvis min `0.656m`，replay gate PASS。
+- [x] 生成并校验 E105 visual package：`workspace/core4d/results/E105/visuals/box026_clean_rerun/REVIEW.md`，6 张 old-vs-new sheet + 6 张 timeline PNG 均非空；REVIEW 已反映 A2/F1 严格 FAIL。
+
+## E105 metric supplement — E026/E081 lower-body proxy
+
+- [x] 用户指出 E105 指标缺腿部接触/干涉项；已参考 `workspace/core4d_collab_retarget/log/26_E026_full_eval_results.md` 和 `workspace/core4d/scripts/eval/eval_E081.py`，把 E026/E081 leg-box SDF proxy 接入 `workspace/core4d/scripts/eval/eval_E105_box026_clean_cem.py`。
+- [x] 新增输出：`legobj_timeseries_{variant}.csv`、`leg_box_interference_frac/pct`、`leg_object_contact_frac`、`leg_box_sdf_min_m`、`leg_box_sdf_argmin`、`lowerbody_strict_pass`、`work_status_lowerbody_strict`。
+- [x] 重跑 E105 full eval + visual REVIEW。结果：upper-body/replay 口径仍为 4/6 WORK，但 E026/E081 lower-body strict proxy 为 0/6；leg interference 分别为 R1/R2/A1/A2/F1/F2 = `25.2/15.9/60.2/9.8/27.6/18.3%`，全部高于 5% 阈值。
+- [x] 更新 log 132、EXPERIMENT_TRACKER、visual REVIEW 和 comparison。结论修正：E105 可推翻旧 polluted scene 上的 Box026 失败解释，但不能作为 RL-ready positive；后续 Box026 候选必须把 lower-body/object interference 纳入硬指标。
+
+## E106 planning start — Box026 30-candidate 3-card batch
+
+- [x] 已按 `experiment-planning-zh` 恢复 E105/E104 上下文，并确认 E104 3cm Box026 candidate 共 30 条：2 条 `candidate_legacy_risk_needs_visual` + 28 条 `candidate_executable`。
+- [x] 当前数据 readiness 检查发现：30 条中只有 4 条已有 SPIDER task，只有 2 条已有 Holosoma/OmniRetarget `retargeted/trimmed` 输出；因此 E106 不能直接启动 30 条 CEM，必须先补 data_construction_v2 pipeline。
+- [x] 新增计划 `workspace/core4d/plan/113_E106_box026_30candidate_ref_fk_batch_plan.md`：E106 primary route 固定为 E105R-style `ref_fk_clean`，单路线 30 run；本地 GPU0 跑 ranks 1-10，远程 GPU0 跑 11-20，远程 GPU1 跑 21-30；先跑 CEM 不评测，全部回收后统一 eval。
+- [x] 新增 E106 脚本：
+  - `workspace/core4d/scripts/E106/e106_common.py`
+  - `workspace/core4d/scripts/E106/build_e106_box026_manifest.py`
+  - `workspace/core4d/scripts/E106/build_e106_clean_tasks.py`
+  - `workspace/core4d/scripts/E106/render_pre_cem_replays.py`
+  - `workspace/core4d/scripts/run_E106_data_preprocess.sh`
+  - `workspace/core4d/scripts/train/train_E106_box026_candidate_batch.sh`
+  - `workspace/core4d/scripts/run_E106_remote.sh`
+  - `workspace/core4d/scripts/pull_E106_remote_results.sh`
+  - `workspace/core4d/scripts/eval/eval_E106_box026_candidate_batch.py`
+- [x] `py_compile` 和 `bash -n` 已通过；E106 scripts 已 chmod executable。
+- [x] 执行 `build_e106_box026_manifest.py`，输出：
+  - frozen candidates: `workspace/core4d/scripts/E106/candidates.tsv`，30 rows；
+  - readiness: `workspace/core4d/results/E106/data_readiness.tsv`；
+  - pipeline case file: `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/inputs/cases_e106_box026_30candidate_pipeline.tsv`；
+  - summary: `workspace/core4d/results/E106/manifest_summary.md`。
+- [x] readiness 收紧为 CEM 必须同时有 source scene + Holosoma retargeted + Holosoma trimmed + SPIDER qpos；当前 `ready_for_cem=2/30`，`ready_for_clean_task=4/30`，pipeline enabled rows `28`。
+- [x] 试跑 clean-task builder：当前可建 4 条 `_e106_clean` derived task 和 override，另外 26 条因缺 SPIDER trajectory 被跳过；训练脚本默认要求 `variants.tsv` 满 30 行，否则拒绝启动 CEM。
+- [x] 更新 `EXPERIMENT_TRACKER.md` 添加 E106 planning/Phase0 row。当前尚未启动 data preprocess 或 CEM。
+- [x] 已启动 E106 Phase 0 data preprocess tmux：`e106_data_preprocess_20260601_053937`。
+  - log: `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/logs/stage2b_medium_20260601_053937.log`
+  - 命令入口：`bash workspace/core4d/scripts/run_E106_data_preprocess.sh`
+  - case file: `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction_v2/inputs/cases_e106_box026_30candidate_pipeline.tsv`
+  - `e091_box026_20231018_041_p2` 已完成到 SPIDER verify，`trimmed_qpos_matches_spider_qpos=true`，qpos shape `[60,43]`。
+  - `e091_box026_20231018_044_p2` 已完成到 SPIDER verify，`trimmed_qpos_matches_spider_qpos=true`，qpos shape `[109,43]`。
+  - 当前正在跑第三条 `e091_box026_20231020_134_p1` OmniRetarget；没有 kill 任何已有 RL/CEM 进程。
+  - 当前粗略计数：30 pipeline rows / 28 enabled；Holosoma retargeted+trimmed `4/30`；SPIDER trajectory `6/30`。
+
+## E106 Phase0 preprocess failure/resume
+
+- [x] Phase0 第一轮在 `e091_box026_20231020_137_p2` 失败并停止；日志 traceback：`RuntimeError: CVXPY solve failed: infeasible`，发生在 OmniRetarget 第一帧。
+- [x] 已记录失败到 `workspace/core4d/results/E106/preprocess_failures.tsv`，不静默删除候选；后续 CEM 只对 ready variants 启动，该 row 留作 preprocess failure。
+- [x] 更新 `build_e106_box026_manifest.py`：读取 `preprocess_failures.tsv`，readiness 标记 `preprocess_failed=True`，pipeline case file 对失败 row 设置 `enabled=0`。
+- [x] 更新 `train_E106_box026_candidate_batch.sh`：CEM 前 variants 数量要求改为 `30 - preprocess_failures`，避免因真实 preprocess infeasible 永久阻塞可运行批次。
+- [x] 重新生成 manifest：当前 `ready_for_cem=7/30`，`preprocess_failures=1`，pipeline enabled rows `22`。
+- [x] 已启动 Phase0 resume tmux：`e106_data_preprocess_resume_20260601_054330`，继续补剩余 22 条；不会重复已完成 rows，不会重跑失败 row。
+- [x] resume 继续推进：当前 ready all-inputs 约 `10/30`，已新增完成 `138_p1`、`138_p2`、`139_p1`；正在跑 `139_p2`。失败仍只有 `137_p2` 一条。
+- [x] resume 继续推进：当前 ready all-inputs `14/30`，已新增完成 `139_p2`、`20231023_138_p1`、`20231023_139_p1`、`20231023_137_p1`；失败仍只有 `137_p2` 一条。
+- [x] Phase0 第二个 preprocess failure：`e091_box026_20231018_043_p2` 在 OmniRetarget 约 `80/95` 帧处 `RuntimeError: CVXPY solve failed: infeasible`。
+- [x] 已追加到 `workspace/core4d/results/E106/preprocess_failures.tsv`，重新生成 manifest 后：`ready_for_cem=14/30`，`preprocess_failures=2`，剩余 pipeline enabled rows `14`，下一条从 `e091_box026_20231018_042_p2` 开始。
+- [x] 已启动 Phase0 第二次 resume tmux：`e106_data_preprocess_resume2_20260601_055054`。
+- [x] 第二次 resume 继续推进：当前 ready all-inputs `17/30`，新增完成 `042_p2`、`038_p2`、`141_p2`；正在处理 `20231023_139_p2`。失败仍为 `137_p2`、`043_p2` 两条。
+- [x] 第二次 resume 继续推进：当前 ready all-inputs `23/30`，新增完成 `20231023_139_p2`、`133_p2`、`135_p1`、`133_p1`、`042_p1`、`039_p1`；当前正在处理长序列 `20231023_141_p2`。失败仍为两条。
+
+## E106 execution update — Phase0 complete and clean-task gate fix
+
+- [x] 2026-06-01 checked active preprocess sessions: no `e106_data_preprocess*` tmux session remains running; did not kill or interrupt any existing RL/CEM process.
+- [x] Phase0 data readiness now has `28/30` candidates with Holosoma/OmniRetarget `retargeted + trimmed` output and SPIDER `trajectory_kinematic.npz`.
+- [x] Two rows remain explicit preprocess rejects, both already recorded in `results/E106/preprocess_failures.tsv`: `e091_box026_20231020_137_p2` and `e091_box026_20231018_043_p2`, both `RuntimeError: CVXPY solve failed: infeasible` in OmniRetarget.
+- [x] Patched `workspace/core4d/scripts/E106/build_e106_clean_tasks.py` so `--require-all-ready` expects `30 - preprocess_failures` runnable tasks and treats registered preprocess failures as intentional skips, while still failing on any unexpected missing source task.
+
+## E106 execution update — 28 runnable clean tasks built
+
+- [x] Re-ran `build_e106_box026_manifest.py` after Phase0: manifest now reports `ready_for_clean_task=28/30`, `ready_for_cem=28/30`, `pipeline enabled rows=0`, `preprocess failures=2`.
+- [x] Rebuilt clean derived tasks with `build_e106_clean_tasks.py --force --require-all-ready`; produced `workspace/core4d/scripts/E106/variants.tsv` with `28` runnable variants.
+- [x] Split after excluding failed preprocess rows: `local-gpu0=9`, `remote-gpu0=9`, `remote-gpu1=10`. This preserves the intended 3-card batch layout with roughly 10 serial cases per GPU.
+- [x] Clean-task validation passed for all 28 built rows: source qpos copied exactly, `scene.xml` is `nq=43,nv=41,nu=29`, `scene_act.xml` is `nq=42,nv=41,nu=35`, robot inertial pollution flag is false, and required leg/upper-body object collision pairs are present.
+
+## E106 execution update — pre-CEM visuals and snapshot guard
+
+- [x] Rendered E106 pre-CEM MuJoCo replay package for all `28` runnable variants: `workspace/core4d/results/E106/pre_cem_visual_gate.tsv`, with 28 non-empty MP4 files and 28 non-empty kinematic sheets.
+- [x] Started a medium worker subagent to inspect the 28 E106 visual packages and update `workspace/core4d/results/E106/pre_cem_visual_review/{variant}/REVIEW.md`; CEM remains blocked until each launched variant has PASS/PASS_WITH_NOTES.
+- [x] Patched `workspace/core4d/scripts/train/train_E106_box026_candidate_batch.sh` so `single`, `local`, `remote-gpu0`, and `remote-gpu1` modes snapshot their derived clean task scenes via `snapshot_scenes.sh E106 ...` before running CEM.
+
+- [x] Added `workspace/core4d/scripts/sync_E106_remote.sh` to rsync E106 scripts, overrides, Box026 asset, 28 clean derived tasks, manifest/readiness/failure tables, and pre-CEM review files to `spider-remote` without git pull.
+
+- [x] Medium worker completed E106 visual gate: `28/28 PASS_WITH_NOTES`, `0 FAIL_PRE_CEM_VISUAL`; runnable variants are all `E106B01`-`E106B30` except preprocess-failed `E106B08` and `E106B16`.
+- [x] Removed the noisy final `done` line from E106 train script `list` mode so split lists are machine-consumable.
+
+## E106 execution update — remote sync correction
+
+- [x] Pre-launch remote gate check caught sync-path bug: `train_E106_box026_candidate_batch.sh` had been copied to `workspace/core4d/scripts/` root while `run_E106_remote.sh` expects `workspace/core4d/scripts/train/`.
+- [x] Patched `sync_E106_remote.sh` to sync the train script into `workspace/core4d/scripts/train/`; CEM had not been launched yet, so no run was wasted.
+
+## E106 execution update — full CEM launched
+
+- [x] Launched local full CEM queue in tmux `e106_local_full_20260601_060745`: `local-gpu0` split, 9 variants, first variant `E106B01_box026_20231018_039_p2_ref_fk_clean` started on local GPU0.
+- [x] Launched remote full CEM queue in tmux `e106_remote_full_20260601_060745`: remote wrapper started `remote-gpu0` (9 variants, first `E106B11`) and `remote-gpu1` (10 variants, first `E106B21`).
+- [x] Confirmed run scripts executed `snapshot_scenes.sh E106 ...` before first CEM command on local and remote. Existing RL/GPU processes were not killed; E106 is stacked on current GPU usage as requested.
+
+## E106 eval implementation update
+
+- [x] Replaced E106 eval placeholder with actual post-run evaluator: it now blocks until selected root NPZ/MP4/outdir trajectory outputs exist, then computes E090 object/safety metrics, E098 replay gate, and E105/E026/E081 lower-body leg-object strict proxy.
+- [x] Eval outputs will include `full_eval_summary.{json,csv,md}`, per-variant `legobj_timeseries_*.csv`, and `preprocess_rejects.csv` for the two OmniRetarget failures.
+
+- [x] Re-ran local `snapshot_scenes.sh E106` for all 28 runnable derived tasks after noticing remote GPU0/GPU1 snapshot concurrently write the same remote manifest; local `results/E106/scene_snapshot` now contains 28 case directories and a fresh manifest.
+
+- [x] Patched `run_E106_remote.sh` for future reruns: remote wrapper now snapshots both remote splits once before launching GPU0/GPU1 children, then sets `E106_SKIP_SCENE_SNAPSHOT=1` in child train processes to avoid concurrent writes to the same snapshot manifest.
+
+## E106 monitoring — first wave in progress
+
+- [x] 2026-06-01 06:11 checked three queues: local tmux `e106_local_full_20260601_060745` running `E106B01` (~38/246 sim steps); remote wrapper `e106_remote_full_20260601_060745` running GPU0 `E106B11` (~32/162) and GPU1 `E106B21` (~30/196).
+- [x] No root NPZ/MP4 outputs yet, expected because all three are still on first full-CEM case. GPU usage remains stacked with existing processes: local ~16GB/32GB, remote ~15GB/49GB per GPU.
+
+- [x] 2026-06-01 06:15 monitor: local first case `E106B01` progressed to ~58/246 sim steps; still no outputs, expected mid-run. One remote SSH monitor attempt reset during key exchange, treated as monitor failure only; no process was killed.
+
+- [x] Updated E106 tracker row from Phase0 pending to full-CEM running: 28 runnable / 2 preprocess rejects, 28/28 pre-CEM visual PASS_WITH_NOTES, three serial queues launched (9/9/10) with eval deferred until all outputs are collected.
+
+- [x] 2026-06-01 06:26 monitor: three queues still healthy. Local `E106B01` ~126/246; remote GPU0 `E106B11` ~106/162; remote GPU1 `E106B21` ~102/196. No NPZ/MP4 outputs yet because all queues remain on first case.
+
+- [x] 2026-06-01 06:41 monitor: remote GPU0 completed first case `E106B11` and wrote root NPZ + MP4; final object tracking error `pos=0.1677, quat=0.2976`. Remote GPU0 automatically started next serial case `E106B12`, confirming split serialization works. Remote GPU1 `E106B21` ~184/196 and local `E106B01` ~222/246 are still running.
+
+- [x] 2026-06-01 06:52 monitor: serialization confirmed on all three queues. Local completed `E106B01` (final obj error pos=0.1781, quat=0.1302) and started `E106B02`; remote GPU0 completed `E106B11` and is running `E106B12`; remote GPU1 completed `E106B21` (final obj error pos=0.0447, quat=0.4328) and is running `E106B22`. Current completed root outputs: local 1, remote 2.
+
+## E106 automation update — wait/pull/eval guard
+
+- [x] Added `workspace/core4d/scripts/wait_pull_eval_E106.sh`: waits until local and remote E106 tmux queues are both gone, pulls remote outputs, checks expected NPZ/MP4 count against `variants.tsv`, then runs the unified E106 eval exactly once.
+- [x] The wait script does not evaluate while CEM queues are still running, preserving the requested “先都跑一下，不评测；等都跑完了，再回收结果评测” workflow.
+
+- [x] Launched local monitor tmux `e106_wait_pull_eval_20260601_065413`; initial guard log shows `local_running=1 remote_running=1 local_npz=1 remote_npz=2`, so it is waiting and will not eval until both queues finish.
+
+- [x] 2026-06-01 07:09 monitor: remote GPU0 completed `E106B12` (final obj error pos=0.2506, quat=0.1865) and started `E106B13`; remote count now 3 root outputs. Local `E106B02` ~154/164 and remote GPU1 `E106B22` ~154/164 are still running. Wait/pull/eval monitor still reports both queues active, so no eval has run.
+
+- [x] 2026-06-01 07:15 monitor: local completed `E106B02` (final obj error pos=0.1667, quat=0.0726) and started `E106B03`; remote GPU1 completed `E106B22` (final obj error pos=0.1577, quat=0.1392) and started `E106B23`. Current root outputs: local 2, remote 4, total observed 6/28 before pull.
+
+- [x] 2026-06-01 07:16 monitoring hardening: patched `wait_pull_eval_E106.sh` to treat transient remote SSH failures as `remote_running=1` and require two consecutive reachable all-done checks before pulling/eval. This prevents accidental early pull/eval if remote SSH resets while CEM is still running.
+
+- [x] Restarted only the E106 wait/pull/eval monitor tmux with hardened remote-check logic: killed old monitor `e106_wait_pull_eval_20260601_065413`, started `e106_wait_pull_eval_20260601_071633`. The first check saw a transient remote SSH reset and correctly kept `remote_running=1`; no pull/eval was triggered.
+
+- [x] 2026-06-01 07:18 monitor: local queue still healthy on `E106B03` (~44/120). Remote manual SSH status checks reset during key exchange twice; this is treated as monitor connectivity failure only, not CEM failure. Hardened wait monitor keeps `remote_running=1` on remote SSH failure and will not pull/eval early.
+
+- [x] 2026-06-01 07:21 monitor retry: remote SSH recovered; remote tmux still running. Local `E106B03` ~68/120; remote GPU0 `E106B13` ~96/258; remote GPU1 `E106B23` ~58/192. Completed outputs remain local 2 + remote 4 = 6/28.
+
+- [x] 2026-06-01 07:36 monitor: local completed `E106B03` (final obj error pos=0.2880, quat=0.3126) and started `E106B04`; local outputs now 3. Remote GPU0 `E106B13` ~176/258 and remote GPU1 `E106B23` ~160/192; remote outputs remain 4. Total observed completed before pull: 7/28. Hardened wait monitor is still waiting and has not pulled/evaled.
+
+- [x] 2026-06-01 07:47 monitor: remote GPU1 completed `E106B23` (final obj error pos=0.0726, quat=0.3556) and started `E106B24`; remote outputs now 5. Local `E106B04` ~118/218; remote GPU0 `E106B13` ~224/258. Total observed completed before pull: local 3 + remote 5 = 8/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 07:50 monitor: local tmux `e106_local_full_20260601_060745`, remote tmux `e106_remote_full_20260601_060745`, and wait monitor `e106_wait_pull_eval_20260601_071633` are all still running. Current root outputs remain local 3 NPZ/MP4 and remote 5 NPZ/MP4. Active cases are local `E106B04` (~136/218), remote GPU0 `E106B13` (~246/258), and remote GPU1 `E106B24` (~46/118). No eval outputs exist yet, as intended.
+
+- [x] 2026-06-01 08:02 monitor: local and remote E106 queues still running; wait monitor still active and has not pulled/evaled. Remote GPU0 completed `E106B13` (final obj error pos=0.2011, quat=0.2461) and started `E106B14`; remote outputs now 6. Local `E106B04` is ~202/218 and remote GPU1 `E106B24` is ~102/118, both close to finishing. Total observed completed before pull: local 3 + remote 6 = 9/28.
+
+- [x] 2026-06-01 08:12 monitor: local completed `E106B04` (final obj error pos=0.1856, quat=1.3160) and started `E106B05` (~56/204); remote GPU1 completed `E106B24` (final obj error pos=0.2700, quat=0.2036) and started `E106B25`. Remote GPU0 is on `E106B14`; `B14/B25` logs are newly created and not yet at `sim_steps` in the sampled tail. Current root outputs: local 4 + remote 7 = 11/28. Wait monitor remains active; no eval outputs yet.
+
+- [x] 2026-06-01 08:23 monitor: no new root outputs since 08:12; counts remain local 4 + remote 7 = 11/28. Local `E106B05` is running (~116/204). Remote `E106B14` and `E106B25` are confirmed healthy after inspecting logs and processes: `B14` ~164/284 on remote GPU0, `B25` ~116/236 on remote GPU1. Earlier `startup/no sim_steps` was a monitor parser issue from SSH heredoc regex escaping, not an experiment stall. Existing remote RL Python processes remain untouched.
+
+- [x] 2026-06-01 08:34 monitor: still no new root outputs; counts remain local 4 + remote 7 = 11/28. Progress is healthy: local `E106B05` ~174/204, remote GPU0 `E106B14` ~222/284, remote GPU1 `E106B25` ~166/236. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 08:45 monitor: local completed `E106B05` (final obj error pos=0.1335, quat=0.0621) and started `E106B06` (~46/214); local outputs now 5. Remote outputs remain 7, but remote GPU0 `E106B14` is ~274/284 and remote GPU1 `E106B25` is ~234/236, both nearly complete. Total observed completed before pull: 12/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 08:50 monitor: remote completed `E106B14` (final obj error pos=0.1242, quat=0.1760) and `E106B25` (final obj error pos=0.1669, quat=0.1556); remote outputs now 9. Remote GPU0 started `E106B15` (~38/180) and remote GPU1 started `E106B26` (~38/216). Local `E106B06` is ~82/214. Total observed completed before pull: local 5 + remote 9 = 14/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:02 monitor: no new root outputs since 08:50; counts remain local 5 + remote 9 = 14/28. Progress remains healthy: local `E106B06` ~152/214, remote GPU0 `E106B15` ~98/180, remote GPU1 `E106B26` ~96/216. Remote E106 wrapper and both Python CEM processes are still running. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:13 monitor: still no new root outputs; counts remain local 5 + remote 9 = 14/28. Local `E106B06` is at ~210/214 and near completion. Remote GPU0 `E106B15` is ~152/180; remote GPU1 `E106B26` is ~148/216. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:17 monitor: local completed `E106B06` (final obj error pos=0.0616, quat=0.1216) and started `E106B07` (~28/140); local outputs now 6. Remote outputs remain 9, with GPU0 `E106B15` near completion (~172/180) and GPU1 `E106B26` ~174/216. Total observed completed before pull: local 6 + remote 9 = 15/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:23 monitor: remote completed `E106B15` (final obj error pos=0.1357, quat=0.0876) and `E106B26` (final obj error pos=0.1046, quat=0.2166); remote outputs now verified as 11 NPZ/11 MP4. Remote GPU0 started `E106B17` (~30/150; `E106B16` is the registered preprocess failure and skipped), and remote GPU1 started `E106B27` (~12/170). Local `E106B07` is ~58/140. Total observed completed before pull: local 6 + remote 11 = 17/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:33 monitor: no new outputs since 09:23; counts remain local 6 + remote 11 = 17/28. Local `E106B07` is ~116/140, remote GPU0 `E106B17` is ~86/150, and remote GPU1 `E106B27` is ~70/170. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:44 monitor: local completed `E106B07` (final obj error pos=0.1258, quat=0.0532) and started `E106B09` (~44/168; `E106B08` is registered preprocess failure and skipped); local outputs now 7. Remote outputs remain 11, with GPU0 `E106B17` ~136/150 and GPU1 `E106B27` ~120/170. Total observed completed before pull: local 7 + remote 11 = 18/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:49 monitor: remote GPU0 completed `E106B17` (final obj error pos=0.1344, quat=0.0964) and started `E106B18` (~24/226); remote outputs now 12. Remote GPU1 `E106B27` is ~148/170. Local `E106B09` is ~80/168. Total observed completed before pull: local 7 + remote 12 = 19/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 09:55 monitor: remote GPU1 completed `E106B27` (final obj error pos=0.1114, quat=0.0826) and started `E106B28` (~18/208); remote outputs now 13. Remote GPU0 `E106B18` is ~50/226. Local `E106B09` is ~110/168. Total observed completed before pull: local 7 + remote 13 = 20/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 10:06 monitor: local completed `E106B09` (final obj error pos=0.1816, quat=0.3981) and started local final case `E106B10` (~16/176); local outputs now 8. Remote outputs remain 13, with GPU0 `E106B18` ~104/226 and GPU1 `E106B28` ~74/208. Total observed completed before pull: local 8 + remote 13 = 21/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 10:16 monitor: no new outputs since 10:06; counts remain local 8 + remote 13 = 21/28. Active cases continue normally: local final `E106B10` ~88/176, remote GPU0 `E106B18` ~158/226, remote GPU1 `E106B28` ~124/208. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 10:27 monitor: no new outputs since 10:06; counts remain local 8 + remote 13 = 21/28. Active cases are near completion: local final `E106B10` ~146/176, remote GPU0 `E106B18` ~220/226, remote GPU1 `E106B28` ~176/208. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 10:31 monitor: local final case `E106B10` completed (final obj error pos=0.0680, quat=0.2163); local split is now complete with 9 NPZ/9 MP4 and local CEM tmux exited naturally. Remote GPU0 completed `E106B18` (final obj error pos=0.1137, quat=1.4529) and started `E106B19`; remote outputs now 14. Remote GPU1 remains on `E106B28`. Total observed completed before pull: local 9 + remote 14 = 23/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 10:42 monitor: local remains complete with 9 NPZ/9 MP4. Remote GPU1 completed `E106B28` (final obj error pos=0.1374, quat=1.6823) and started `E106B29` (~74/162); remote outputs now 15. Remote GPU0 is running `E106B19` (~86/168). Total observed completed before pull: local 9 + remote 15 = 24/28. Wait monitor correctly reports `local_running=0 remote_running=1` and has not pulled/evaled.
+
+- [x] 2026-06-01 10:53 monitor: no new remote outputs since 10:42; counts remain local 9 + remote 15 = 24/28. Remote active cases are healthy and near completion: GPU0 `E106B19` ~144/168, GPU1 `E106B29` ~130/162. Remote wrapper and both E106 Python processes are still running. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 10:59 monitor: remote GPU0 completed `E106B19` (final obj error pos=0.1070, quat=0.0760) and started `E106B20` (~18/282); remote outputs now 16. Remote GPU1 `E106B29` is near completion (~158/162). Total observed completed before pull: local 9 + remote 16 = 25/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 11:02 monitor: remote GPU1 completed `E106B29` (final obj error pos=0.2775, quat=0.2429) and started remote final case `E106B30` (~28/192); remote outputs now 17. Remote GPU0 final case `E106B20` is ~36/282. Total observed completed before pull: local 9 + remote 17 = 26/28. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 11:14 monitor: no new outputs since 11:02; counts remain local 9 + remote 17 = 26/28. Remote final cases are healthy: GPU0 `E106B20` ~90/282, GPU1 `E106B30` ~80/192. Remote wrapper and both E106 Python processes are still running. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 11:24 monitor: no new outputs since 11:02; counts remain local 9 + remote 17 = 26/28. Remote final cases are still progressing normally: GPU0 `E106B20` ~152/282, GPU1 `E106B30` ~150/192. Remote wrapper remains running; wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 11:35 monitor: remote GPU1 final case `E106B30` completed (final obj error pos=0.2295, quat=1.5114); remote outputs now 18 NPZ/18 MP4. Only `E106B20` remains active on remote GPU0, progressing at ~214/282. Local remains complete with 9 NPZ/9 MP4. Wait monitor remains active and has not pulled/evaled.
+
+- [x] 2026-06-01 11:45 monitor: only `E106B20` remains active; remote outputs still 18 NPZ/18 MP4. `E106B20` progressed to ~268/282 and remote tmux is still running, so wait monitor correctly has not pulled/evaled.
+
+- [x] 2026-06-01 11:52 monitor: remote final case `E106B20` completed at 11:48 (final obj error pos=0.1738, quat=0.2750); remote outputs now 19 NPZ/19 MP4 and remote GPU0 wrapper exited. All 28 runnable CEM cases are now complete before pull/eval: local 9 + remote 19. Waiting for hardened wait monitor's consecutive all-done checks before automatic pull/eval.
+
+- [x] 2026-06-01 12:07 E106 auto pull/eval completed: hardened wait monitor pulled remote results after all CEM finished, verified `28/28` root NPZ and `28/28` MP4, then ran unified eval. Outputs written: `full_eval_summary.{json,csv,md}`, `preprocess_rejects.csv`, and 28 `legobj_timeseries_*.csv`.
+- [x] 2026-06-01 12:15 E106 result interpretation written to `workspace/core4d/log/133_E106_box026_30candidate_ref_fk_batch_results.md` and tracker updated. Summary: `28/30` runnable, `2/30` OmniRetarget infeasible preprocess rejects, upper-body WORK `15/28`, lower-body strict pass `7/28`, final RL strict positives `4/28` (`E106B05`, `E106B15`, `E106B22`, `E106B27`).
+
+## E107 planning — Box021 clean reconstruction gate
+
+- [x] 创建计划：`workspace/core4d/plan/114_E107_box021_clean_reconstruction_gate_plan.md`
+- [x] 确认 E103 后 Box021 状态：`box021_person1/2` source template clean，但 D003/E101 Box021 target 与 CEM 结果均在 template bug 修复前，不能当 hard label。
+- [x] 确认 D003 Box021 输入池：15 个 case-person；13 个 D003 preprocess pass，2 个 OmniRetarget infeasible。E107 只重建 13 个 pass rows，2 个失败 rows 保留为 `preprocess_infeasible`。
+- [x] 实现 `workspace/core4d/scripts/E107/build_box021_clean_gate.py`
+- [x] 运行 clean reconstruction + 3cm/5cm gate：15 rows；13 `cem_ready`，2 `preprocess_infeasible`。
+- [x] 13/13 rebuilt targets 校验通过：qpos match、scene `nq=43,nv=41,nu=29`、scene_act `nq=42,nv=41,nu=35`、无 `29.632` robot inertial、collision pairs 完整。
+- [x] 生成 replay 可视化：`workspace/core4d/results/E107/visuals/box021_clean_replay/REVIEW.md`，13 sheet + 13 MP4；抽查 `030_p2` 视频 `960x720@24fps`、75 frames。
+- [x] 写 E107 log：`workspace/core4d/log/134_E107_box021_clean_reconstruction_gate_results.md`
+
+## E107 Phase 2 — selected-4 full CEM
+
+- [x] 读取 `workspace/core4d/results/E107/selected_case_to_cem.json`：4 个 selected id，均可映射到已存在的 `{id_without_e107}_e107_clean` task。
+- [x] 创建计划：`workspace/core4d/plan/115_E107_box021_selected4_full_cem_plan.md`
+- [x] 生成 selected-4 variants/overrides/preflight：
+  - `workspace/core4d/scripts/E107/selected4_variants.tsv`
+  - `workspace/core4d/results/E107/selected4_clean_task_preflight.tsv`
+  - 4 个 `examples/config/override/core4d_E107C*.yaml`
+  - 4/4 validation_ok；scene/scene_act clean；leg/upper collision pairs complete。
+- [x] 生成 pre-CEM replay，并用 medium subagent 审查：4/4 `PASS_WITH_NOTES`；MP4 帧数匹配 `143/129/133/75`，无 `_e092_` 路径污染。
+- [x] 首次尝试启动本地 C01 与远程 GPU1 C03；均在启动阶段失败，错误为 `KeyError: 'qvel is not a file in the archive'`。根因：E107 clean reconstruction 只保存了 `qpos`，没有复制旧 D003 trajectory 的 `qvel/ctrl/contact/contact_pos`；这是执行链路/数据构造 bug，不是 CEM 失败。
+- [x] 修复 `workspace/core4d/scripts/E107/build_box021_clean_gate.py`：重建 clean target 时复制旧 D003 trajectory NPZ 的全部 arrays，而不是只保存 `qpos`。
+- [x] 本地 1 卡 + 远程 2 卡启动 full CEM；远程 GPU0 被已有 R134 训练占用后，改为本地 GPU0 跑 C01→C02、远程 GPU1 跑 C03→C04，停止 remote-gpu0 wait 队列避免重复。
+- [x] 回收结果、评估、写 E107 Phase 2 log：4/4 full CEM 完成，4 NPZ + 4 MP4 + eval summary 完整；strict positive 仅 `E107C02_box021_20231011_035_p1_ref_fk_clean`。结果见 `workspace/core4d/log/135_E107_box021_selected4_full_cem_results.md`
+- [x] 按用户要求修订 E107 eval 口径：`pelvis_tilt_end` 只作为 diagnostic，不参与 replay pass/fail；同时 E107 `work_status` 不再使用 source duration gate。重跑 eval 后 `C04` 从 replay/upper FAIL 修正为 upper/replay WORK，但 lower-body strict 仍 FAIL；strict positive 仍仅 `C02`。
