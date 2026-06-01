@@ -64,6 +64,40 @@ def read_template_index(path: Path | None) -> dict[str, dict[str, str]]:
     return {row["source_scene_task"]: row for row in read_tsv(path) if row.get("source_scene_task")}
 
 
+def apply_template_reviews(
+    template_index: dict[str, dict[str, str]],
+    paths: list[Path] | None,
+) -> dict[str, dict[str, str]]:
+    out = {key: value.copy() for key, value in template_index.items()}
+    for path in paths or []:
+        if not path.is_file():
+            continue
+        for review in read_tsv(path):
+            task = review.get("source_scene_task", "")
+            if not task or review.get("review_decision") != "approve_clean":
+                continue
+            row = out.get(task, {}).copy()
+            row.update(
+                {
+                    "source_scene_task": task,
+                    "object_key": review.get("object_key", row.get("object_key", "")),
+                    "object_category": review.get("object_category", row.get("object_category", "")),
+                    "person": review.get("person", row.get("person", "")),
+                    "scene_xml": review.get("proxy_scene_xml", row.get("scene_xml", "")),
+                    "template_status": "clean_reviewed",
+                    "recommended_action": "review_approved_clean_template",
+                    "template_adapter": row.get("template_adapter", "nonbox_review_override"),
+                    "proxy_template": row.get("proxy_template", "True"),
+                    "collision_policy": review.get("approved_collision_policy", row.get("collision_policy", "")),
+                    "notes": "review_approved;reviewer="
+                    + review.get("reviewer", "")
+                    + (";" + review.get("review_notes", "") if review.get("review_notes") else ""),
+                }
+            )
+            out[task] = row
+    return out
+
+
 def read_route_diagnostic_index(paths: list[Path] | None) -> dict[tuple[str, str], dict[str, str]]:
     out: dict[tuple[str, str], dict[str, str]] = {}
     for path in paths or []:
@@ -131,7 +165,7 @@ def stage2b_decision(
         return "stage2b_hold_raw_contact_not_pass", "raw contact is not pass", 0
     if template is None:
         return "stage2b_template_unknown", "template backlog/audit row missing", 0
-    if template.get("template_status") != "clean":
+    if template.get("template_status") not in {"clean", "clean_reviewed"}:
         return f"stage2b_template_{template.get('template_status', 'not_clean')}", "source template is not clean", 0
     if target_variant_id == "fingertip_aware":
         route_decision, route_notes = fingertip_route_decision(route_diag)
@@ -424,6 +458,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-contact-tsv", type=Path, required=True)
     parser.add_argument("--template-backlog-tsv", type=Path, required=True)
+    parser.add_argument("--template-review-tsv", type=Path, action="append", default=[])
     parser.add_argument("--retarget-variant-registry", type=Path, required=True)
     parser.add_argument("--retarget-variant-id", required=True)
     parser.add_argument("--target-variant-id", default="ref_fk")
@@ -458,7 +493,7 @@ def main() -> int:
     rows, pipeline_cases = build_rows(
         raw_rows=read_tsv(args.raw_contact_tsv),
         inventory_index=read_inventory_index(args.inventory_tsv),
-        template_index=read_template_index(args.template_backlog_tsv),
+        template_index=apply_template_reviews(read_template_index(args.template_backlog_tsv), args.template_review_tsv),
         route_diag_index=read_route_diagnostic_index(args.route_diagnostic_tsv),
         variant=variant,
         target_variant_id=args.target_variant_id,

@@ -37,6 +37,7 @@ FINGERTIP_IDS = {
     "left": np.array([5361, 4933, 5058, 5169, 5286], dtype=np.int64),
     "right": np.array([8079, 7669, 7794, 7905, 8022], dtype=np.int64),
 }
+NONBOX_FIRST_PASS_CATEGORIES = {"bucket", "board", "stick"}
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,20 @@ def row_matches_queue(row: dict[str, str], queue: str) -> bool:
             "target_medium_between_box023_and_box025",
             "near_box025_large_review",
         }
+    if queue == "selected-medium-nonbox":
+        return (
+            object_category in NONBOX_FIRST_PASS_CATEGORIES
+            and size_band == "target_medium_between_box023_and_box025"
+            and action_family == "main_move_obs0"
+            and row.get("motion_quality", "") == "motion_pass"
+        )
+    if queue == "review-medium-nonbox":
+        return (
+            object_category != "box"
+            and size_band == "target_medium_between_box023_and_box025"
+            and action_family == "main_move_obs0"
+            and row.get("motion_quality", "") == "motion_pass"
+        )
     if queue == "box-object":
         return object_category == "box"
     if queue == "object-key":
@@ -499,6 +514,9 @@ def write_threshold_outputs(rows: list[dict[str, Any]], out_dir: Path, threshold
         "decision_counts": dict(Counter(row["raw_contact_decision"] for row in rows)),
         "decision_group_counts": dict(Counter(row["raw_contact_decision_group"] for row in rows)),
         "object_counts": dict(Counter(row["object_key"] for row in rows)),
+        "object_category_counts": dict(Counter(row["object_category"] for row in rows)),
+        "nonbox_category_counts": dict(Counter(row["object_category"] for row in rows if row["object_category"] != "box")),
+        "nonbox_candidate_counts": dict(Counter(row["raw_contact_decision"] for row in rows if row["object_category"] != "box")),
         "route_counts": dict(Counter(row["stage2_route"] for row in rows)),
     }
     write_json(out_dir / f"raw_contact_summary_{label}.json", sanitize(summary))
@@ -522,6 +540,13 @@ def markdown_summary(summary: dict[str, Any], rows: list[dict[str, Any]]) -> str
     ]
     for key, count in summary["decision_counts"].items():
         lines.append(f"| `{key}` | {count} |")
+    if summary.get("nonbox_category_counts"):
+        lines.extend(["", "## non-box category counts", "", "| category | count |", "|---|---:|"])
+        for key, count in summary["nonbox_category_counts"].items():
+            lines.append(f"| `{key}` | {count} |")
+        lines.extend(["", "## non-box decision counts", "", "| decision | count |", "|---|---:|"])
+        for key, count in summary["nonbox_candidate_counts"].items():
+            lines.append(f"| `{key}` | {count} |")
     lines.extend(["", "## top rows", "", "| score | decision | case | target both | target L/R | partner any | notes |", "|---:|---|---|---:|---|---:|---|"])
     for row in rows[:30]:
         lines.append(
@@ -536,7 +561,21 @@ def main() -> None:
     parser.add_argument("--core4d-raw-root", type=Path, default=None)
     parser.add_argument("--inventory-tsv", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument("--queue", default="clean", choices=("clean", "stage1-input", "selected-medium-box", "box-object", "object-key", "review-main-box", "rebuilt-box-family"))
+    parser.add_argument(
+        "--queue",
+        default="clean",
+        choices=(
+            "clean",
+            "stage1-input",
+            "selected-medium-box",
+            "selected-medium-nonbox",
+            "review-medium-nonbox",
+            "box-object",
+            "object-key",
+            "review-main-box",
+            "rebuilt-box-family",
+        ),
+    )
     parser.add_argument("--object-keys", default="", help="comma-separated object keys for queue narrowing or queue=object-key")
     parser.add_argument("--thresholds-m", default="0.03,0.05")
     parser.add_argument("--max-case-persons", type=int, default=None)
@@ -583,6 +622,8 @@ def main() -> None:
         "thresholds_m": list(thresholds_m),
         "selected_case_person": len(selected_rows),
         "unique_sequences": len(candidates),
+        "selected_nonbox_case_person": sum(1 for row in selected_rows if row.get("object_category") != "box"),
+        "selected_nonbox_category_counts": dict(Counter(row.get("object_category", "") for row in selected_rows if row.get("object_category") != "box")),
         "summaries": summaries,
         "note": "3cm/5cm outputs are separate candidate sets; threshold is a geometric proxy, not GT contact.",
     }

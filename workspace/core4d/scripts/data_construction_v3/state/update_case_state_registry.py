@@ -89,6 +89,8 @@ DEFAULT_ROW = {
     "schema_version": SCHEMA_VERSION,
 }
 
+TEMPLATE_CLEAN_STATUSES = {"clean", "clean_reviewed"}
+
 
 def row_key(row: dict[str, str]) -> tuple[str, str, str]:
     return (
@@ -153,7 +155,7 @@ def current_decision_from_registry(row: dict[str, str]) -> str:
     if (
         row.get("retarget_variant_id") not in {"", "shared"}
         and row.get("stage2b_status") == "not_run"
-        and row.get("template_status") == "clean"
+        and row.get("template_status") in TEMPLATE_CLEAN_STATUSES
         and (row.get("raw_contact_3cm_status") in {"pass", "review"} or row.get("raw_contact_5cm_status") in {"pass", "review"})
     ):
         return "STAGE2B_READY"
@@ -357,6 +359,54 @@ def registry_rows_from_template_backlog(
     return incoming
 
 
+def review_template_status(decision: str) -> str:
+    if decision == "approve_clean":
+        return "clean_reviewed"
+    if decision == "reject":
+        return "audit_fail"
+    return "manual_review_required"
+
+
+def registry_rows_from_template_review(
+    review_rows: list[dict[str, str]],
+    existing_rows: list[dict[str, str]],
+    evidence_root: str,
+    source_ref: str | None,
+) -> list[dict[str, str]]:
+    by_task = {row.get("source_scene_task", ""): row for row in review_rows}
+    incoming: list[dict[str, str]] = []
+    for existing in existing_rows:
+        norm = normalize_row(existing)
+        object_key = norm.get("object_key", "")
+        person = norm.get("person", "")
+        if not object_key or person not in {"person1", "person2"}:
+            continue
+        task = f"{object_key}_{person}"
+        review = by_task.get(task)
+        if not review:
+            continue
+        decision = review.get("review_decision", "")
+        status = review_template_status(decision)
+        notes = [
+            f"nonbox_template_review={decision or 'missing_decision'}",
+            f"reviewer={review.get('reviewer', '')}",
+            review.get("review_notes", ""),
+            f"collision_policy={review.get('approved_collision_policy', '')}",
+            f"mass_policy={review.get('approved_mass_policy', '')}",
+        ]
+        reg = {
+            **norm,
+            "template_status": status,
+            "evidence_root": evidence_root or norm.get("evidence_root", ""),
+            "source_type": "v3_run",
+            "source_ref": source_ref or "S2_nonbox_template_review",
+            "notes": ",".join(part for part in notes if part),
+        }
+        reg["current_decision"] = current_decision_from_registry(reg)
+        incoming.append(normalize_row(reg))
+    return incoming
+
+
 def registry_rows_from_stage2b_manifest(
     rows: list[dict[str, str]],
     existing_rows: list[dict[str, str]],
@@ -540,6 +590,7 @@ def main() -> None:
     parser.add_argument("--from-inventory-tsv", type=Path, default=None)
     parser.add_argument("--from-raw-contact-tsv", type=Path, default=None)
     parser.add_argument("--from-template-backlog-tsv", type=Path, default=None)
+    parser.add_argument("--from-template-review-tsv", type=Path, default=None)
     parser.add_argument("--from-stage2b-manifest-tsv", type=Path, default=None)
     parser.add_argument("--from-target-gate-manifest-tsv", type=Path, default=None)
     parser.add_argument("--from-visual-qc-manifest-tsv", type=Path, default=None)
@@ -571,6 +622,15 @@ def main() -> None:
         incoming.extend(
             registry_rows_from_template_backlog(
                 read_tsv(args.from_template_backlog_tsv),
+                existing + incoming,
+                args.evidence_root,
+                args.source_ref,
+            )
+        )
+    if args.from_template_review_tsv:
+        incoming.extend(
+            registry_rows_from_template_review(
+                read_tsv(args.from_template_review_tsv),
                 existing + incoming,
                 args.evidence_root,
                 args.source_ref,

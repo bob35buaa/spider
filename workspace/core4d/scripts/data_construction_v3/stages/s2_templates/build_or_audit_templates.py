@@ -30,6 +30,7 @@ from geometry import aabb_extents, load_obj_vertices
 PERSONS = ("person1", "person2")
 POLLUTED_MASS = 29.632
 DEFAULT_MASS_KG = 5.0
+NONBOX_PROXY_CATEGORIES = {"bucket", "board", "stick"}
 
 
 def person_from_row(row: dict[str, str]) -> str:
@@ -298,6 +299,84 @@ def build_box_scene_xml(
     return re.sub(r'    <body name="object"[\s\S]*?    </body>\n  </worldbody>', object_body, scene, count=1)
 
 
+def object_collision_geoms(
+    object_key: str,
+    category: str,
+    half_extents: np.ndarray,
+    rgba: str = "0.40 0.50 0.60 0.3",
+) -> tuple[str, str]:
+    if category == "bucket":
+        wall = max(0.005, min(float(np.min(half_extents[:2])) * 0.08, 0.025))
+        hz = float(half_extents[2])
+        hx = float(half_extents[0])
+        hy = float(half_extents[1])
+        geoms = [
+            (
+                f'      <geom name="object_collision" type="box" '
+                f'pos="0 0 {-hz + wall / 2.0:.6f}" size="{fmt([hx, hy, wall / 2.0], 6)}" '
+                f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />'
+            ),
+            (
+                f'      <geom name="object_collision_bucket_xneg" type="box" '
+                f'pos="{-hx + wall / 2.0:.6f} 0 0" size="{fmt([wall / 2.0, hy, hz], 6)}" '
+                f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />'
+            ),
+            (
+                f'      <geom name="object_collision_bucket_xpos" type="box" '
+                f'pos="{hx - wall / 2.0:.6f} 0 0" size="{fmt([wall / 2.0, hy, hz], 6)}" '
+                f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />'
+            ),
+            (
+                f'      <geom name="object_collision_bucket_yneg" type="box" '
+                f'pos="0 {-hy + wall / 2.0:.6f} 0" size="{fmt([hx, wall / 2.0, hz], 6)}" '
+                f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />'
+            ),
+            (
+                f'      <geom name="object_collision_bucket_ypos" type="box" '
+                f'pos="0 {hy - wall / 2.0:.6f} 0" size="{fmt([hx, wall / 2.0, hz], 6)}" '
+                f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />'
+            ),
+        ]
+        return "\n".join(geoms), "bucket_wall_proxy_aabb"
+    return (
+        f'      <geom name="object_collision" type="box" size="{fmt(half_extents, 6)}" '
+        f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />',
+        "mesh_aabb_box_proxy",
+    )
+
+
+def build_object_proxy_scene_xml(
+    base_text: str,
+    object_key: str,
+    category: str,
+    half_extents: np.ndarray,
+    mass: float,
+    mesh_file_attr: str,
+    robot_meshdir_attr: str | None = None,
+) -> tuple[str, str]:
+    mesh_file = f'    <mesh name="{object_key}" file="{mesh_file_attr}" scale="1 1 1" />'
+    material = f'    <material name="{object_key}_material" rgba="0.40 0.50 0.60 1" />'
+    scene = re.sub(r'    <mesh name="box023" file="[^"]+" scale="[^"]+" />', mesh_file, base_text, count=1)
+    scene = re.sub(r'    <material name="box_material" rgba="[^"]+" />', material, scene, count=1)
+    if robot_meshdir_attr is not None:
+        scene = re.sub(r'meshdir="[^"]+"', f'meshdir="{robot_meshdir_attr}"', scene, count=1)
+    pos = read_base_object_pos(base_text)
+    inertia = box_inertia(mass, half_extents)
+    collision_geoms, collision_policy = object_collision_geoms(object_key, category, half_extents)
+    object_body = (
+        f'    <body name="object" pos="{pos}">\n'
+        f'      <freejoint name="object_joint" />\n'
+        f'      <inertial pos="0 0 0" mass="{mass:.3f}" diaginertia="{fmt(inertia, 8)}" />\n'
+        f'      <geom name="object_visual" type="mesh" mesh="{object_key}" material="{object_key}_material" '
+        f'group="2" contype="0" conaffinity="0" />\n'
+        f'{collision_geoms}\n'
+        f'      <site name="trace_object" size="0.02" rgba="0 0 1 1" />\n'
+        f'    </body>\n'
+        f'  </worldbody>'
+    )
+    return re.sub(r'    <body name="object"[\s\S]*?    </body>\n  </worldbody>', object_body, scene, count=1), collision_policy
+
+
 def write_task_info(
     task: str,
     object_key: str,
@@ -309,6 +388,10 @@ def write_task_info(
     half_extents: np.ndarray,
     mass: float,
     build_mode: str,
+    object_category: str = "box",
+    proxy_template: bool = False,
+    manual_review_required: bool = False,
+    collision_policy: str = "mesh_aabb_box",
 ) -> None:
     info = {
         "task": task,
@@ -317,6 +400,7 @@ def write_task_info(
         "base_scene": str(base_scene),
         "clean_robot_inertial_source": str(base_scene),
         "object_key": object_key,
+        "object_category": object_category,
         "person": person,
         "raw_object_mesh": str(raw_mesh),
         "asset_path": str(asset_mesh),
@@ -324,6 +408,9 @@ def write_task_info(
         "extents_m": (half_extents * 2.0).tolist(),
         "half_extents_m": half_extents.tolist(),
         "mass_kg": mass,
+        "proxy_template": proxy_template,
+        "manual_review_required": manual_review_required,
+        "collision_policy": collision_policy,
         "object_mass_policy": "assumed_uniform_5kg_v3_no_real_mass_source",
         "diaginertia": box_inertia(mass, half_extents).tolist(),
         "inertia_formula": "box: Ixx=m/12*(y^2+z^2), Iyy=m/12*(x^2+z^2), Izz=m/12*(x^2+y^2)",
@@ -406,6 +493,100 @@ def build_missing_box_template(
     return row
 
 
+def build_missing_nonbox_proxy_template(
+    *,
+    spider_repo: Path,
+    raw_root: Path,
+    scene_root: Path,
+    asset_root: Path,
+    base_scene: Path,
+    task: str,
+    object_key: str,
+    object_category: str,
+    person: str,
+    mass: float,
+    apply: bool,
+    overwrite: bool,
+) -> dict[str, str]:
+    raw_mesh = raw_root / "object_models" / object_category / f"{object_key}_m.obj"
+    asset_mesh = asset_root / object_key / f"{object_key}_m.obj"
+    task_dir = scene_root / task
+    scene_path = task_dir / "scene.xml"
+    row = {
+        "task": task,
+        "object_key": object_key,
+        "object_category": object_category,
+        "person": person,
+        "raw_mesh": str(raw_mesh),
+        "asset_mesh": str(asset_mesh),
+        "scene_xml": str(scene_path),
+        "template_adapter": "nonbox_proxy_aabb_review",
+        "collision_policy": "",
+        "proxy_template": "True",
+        "build_action": "dry_run",
+        "build_status": "not_run",
+        "build_error": "",
+    }
+    try:
+        if object_category not in NONBOX_PROXY_CATEGORIES:
+            row.update({"template_adapter": "manual_complex_shape", "build_status": "manual_review_required"})
+            return row
+        if not raw_mesh.is_file():
+            raise FileNotFoundError(f"raw non-box mesh missing: {raw_mesh}")
+        if scene_path.exists() and not overwrite:
+            row.update({"build_action": "skip_existing", "build_status": "review_required"})
+            return row
+        half_extents = parse_obj_extents(raw_mesh) / 2.0
+        default_scene_root = spider_repo / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+        default_asset_root = spider_repo / "example_datasets/processed/core4d/assets/objects"
+        if scene_root == default_scene_root.resolve() and asset_root == default_asset_root.resolve():
+            mesh_file_attr = f"../../../../../example_datasets/processed/core4d/assets/objects/{object_key}/{object_key}_m.obj"
+            robot_meshdir_attr = None
+        else:
+            mesh_file_attr = str(asset_mesh)
+            robot_meshdir_attr = str(spider_repo / "spider/assets/robots/unitree_g1/meshes")
+        scene_xml, collision_policy = build_object_proxy_scene_xml(
+            base_scene.read_text(encoding="utf-8"),
+            object_key,
+            object_category,
+            half_extents,
+            mass,
+            mesh_file_attr,
+            robot_meshdir_attr,
+        )
+        row["collision_policy"] = collision_policy
+        if apply:
+            asset_mesh.parent.mkdir(parents=True, exist_ok=True)
+            if not asset_mesh.exists() or overwrite:
+                shutil.copy2(raw_mesh, asset_mesh)
+            task_dir.mkdir(parents=True, exist_ok=True)
+            scene_path.write_text(scene_xml, encoding="utf-8")
+            write_task_info(
+                task,
+                object_key,
+                person,
+                raw_mesh,
+                asset_mesh,
+                task_dir,
+                base_scene,
+                half_extents,
+                mass,
+                "apply_proxy_review",
+                object_category=object_category,
+                proxy_template=True,
+                manual_review_required=True,
+                collision_policy=collision_policy,
+            )
+            audit = audit_scene(scene_path, spider_repo)
+            status = "review_required" if audit.get("mujoco_load_ok") == "True" else "error"
+            row.update({"build_action": "created_or_overwritten", "build_status": status})
+        else:
+            row.update({"build_action": "would_create_proxy", "build_status": "dry_run_review_required"})
+    except Exception as exc:  # noqa: BLE001
+        row.update({"build_status": "error", "build_error": f"{type(exc).__name__}: {exc}"})
+    return row
+
+
 def required_templates_from_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     by_task: dict[str, dict[str, str]] = {}
     support: dict[str, list[str]] = defaultdict(list)
@@ -446,6 +627,12 @@ def template_decision(required: dict[str, str], audit: dict[str, str], build: di
         decision = "manual_review_required"
         action = "manual_template_review_required"
         notes.append("non_box_template_not_auto_released")
+        if build:
+            adapter = build.get("template_adapter", "")
+            if adapter:
+                notes.append(f"template_adapter={adapter}")
+            if build.get("proxy_template"):
+                notes.append("proxy_template_review_required")
     elif not scene_exists:
         decision = "backlog"
         action = "build_box_source_template"
@@ -454,7 +641,7 @@ def template_decision(required: dict[str, str], audit: dict[str, str], build: di
         action = "fix_or_rebuild_template"
     if build:
         notes.append(f"build_status={build.get('build_status','')}")
-        if build.get("build_status") == "clean":
+        if category == "box" and build.get("build_status") == "clean":
             decision = "clean"
             action = "built_clean_template"
     return {
@@ -478,6 +665,9 @@ def template_decision(required: dict[str, str], audit: dict[str, str], build: di
         "object_collision_half_extents_m": audit.get("object_collision_half_extents_m", ""),
         "expected_collision_half_extents_m": audit.get("expected_collision_half_extents_m", ""),
         "collision_max_rel_error": audit.get("collision_max_rel_error", ""),
+        "template_adapter": build.get("template_adapter", "box_aabb") if build else ("box_aabb" if category == "box" else "manual_complex_shape"),
+        "proxy_template": build.get("proxy_template", "False") if build else "False",
+        "collision_policy": build.get("collision_policy", audit.get("geometry_policy", "")) if build else audit.get("geometry_policy", ""),
         "build_status": build.get("build_status", "") if build else "",
         "build_action": build.get("build_action", "") if build else "",
         "build_error": build.get("build_error", "") if build else "",
@@ -557,6 +747,23 @@ def main() -> None:
                     base_scene=base_scene,
                     task=task,
                     object_key=item["object_key"],
+                    person=item["person"],
+                    mass=args.mass_kg,
+                    apply=args.apply_build,
+                    overwrite=args.overwrite_existing,
+                )
+                build_rows.append(build)
+                build_by_task[task] = build
+            elif item["object_category"] in NONBOX_PROXY_CATEGORIES and (not scene.exists() or args.overwrite_existing):
+                build = build_missing_nonbox_proxy_template(
+                    spider_repo=spider_repo,
+                    raw_root=raw_root.expanduser().resolve() if raw_root else Path(""),
+                    scene_root=scene_root,
+                    asset_root=asset_root,
+                    base_scene=base_scene,
+                    task=task,
+                    object_key=item["object_key"],
+                    object_category=item["object_category"],
                     person=item["person"],
                     mass=args.mass_kg,
                     apply=args.apply_build,

@@ -83,6 +83,9 @@ class TemplateBuilderResult(ExtensionResult):
     source_scene_task: str = ""
     scene_xml: str = ""
     task_info_json: str = ""
+    template_adapter: str = ""
+    proxy_template: str = "False"
+    collision_policy: str = ""
 
 
 @dataclass
@@ -141,7 +144,15 @@ def self_test() -> None:
             trimmed_npz="/tmp/trimmed.npz",
             params_json=stable_json({"replace_wrist_with_fingertip": False}),
         ),
-        TemplateBuilderResult(case_id="case", decision="review", status="review", source_scene_task="box004_person1"),
+        TemplateBuilderResult(
+            case_id="case",
+            decision="review",
+            status="review",
+            source_scene_task="bucket007_person1",
+            template_adapter="nonbox_proxy_aabb_review",
+            proxy_template="True",
+            collision_policy="bucket_wall_proxy_aabb",
+        ),
         TargetGateResult(case_id="case", decision="reject", status="reject", failure_mode="target_gate_exception"),
         VisualizerResult(case_id="case", decision="pass", status="pass", video_path="/tmp/a.mp4", sheet_path="/tmp/a.png"),
     ]

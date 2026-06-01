@@ -38,7 +38,17 @@ bucket、desk、chair 等非 box 不能自动放行。必须人工审查：
 - hand/object contact proxy 是否可解释；
 - 是否需要多个 collision geom 或非 box proxy。
 
-非 box 的 `template_status` 默认应为 `manual_review_required`，直到审查通过。
+非 box 的 `template_status` 默认应为 `manual_review_required`，直到审查通过。v3 允许生成 review 用 proxy template，但不能仅凭 proxy 生成或 MuJoCo load 成功自动置为 clean。
+
+当前 proxy adapter：
+
+| adapter | 类别 | collision policy | 默认状态 |
+|---|---|---|---|
+| `nonbox_proxy_aabb_review` | bucket | `bucket_wall_proxy_aabb`：底面 + 四侧壁 box geoms | `manual_review_required` |
+| `nonbox_proxy_aabb_review` | board/stick | `mesh_aabb_box_proxy` | `manual_review_required` |
+| `manual_complex_shape` | desk/chair | 不自动构建 | `manual_review_required` |
+
+审查通过后，必须通过 `nonbox_template_review.tsv` 显式写入 `template_status=clean_reviewed`。`clean_reviewed` 才能进入 Stage2b。
 
 ## 硬失败
 

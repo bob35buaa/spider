@@ -444,6 +444,8 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
             ]
             if args.execute_stage2b:
                 s3_cmd.extend(["--execute", "--allow-legacy-stage2b-wrapper"])
+            for path in args.template_review_tsv:
+                s3_cmd.extend(["--template-review-tsv", str(path)])
             for path in route_diagnostic_tsvs:
                 s3_cmd.extend(["--route-diagnostic-tsv", str(path)])
             commands.append(run_command(s3_cmd, cwd=spider_repo))
@@ -701,6 +703,7 @@ def main() -> int:
     parser.add_argument("--retarget-variant-id", action="append", default=None)
     parser.add_argument("--target-variant-id", action="append", default=None)
     parser.add_argument("--route-diagnostic-tsv", type=Path, action="append", default=[])
+    parser.add_argument("--template-review-tsv", type=Path, action="append", default=[])
     parser.add_argument("--build-fingertip-route-diagnostics", action="store_true")
     parser.add_argument("--fingertip-face-stats", type=Path, default=Path("workspace/core4d/results/E099/fingertip_face_stats.tsv"))
     parser.add_argument("--palm-face-stats", type=Path, default=Path("workspace/core4d/results/E099/palm_face_stats.tsv"))
@@ -759,6 +762,7 @@ def main() -> int:
         "retarget_variant_id": args.retarget_variant_id,
         "target_variant_id": args.target_variant_id,
         "route_diagnostic_tsv": [str(path) for path in args.route_diagnostic_tsv],
+        "template_review_tsv": [str(path) for path in args.template_review_tsv],
         "build_fingertip_route_diagnostics": args.build_fingertip_route_diagnostics,
         "fingertip_face_stats": str(args.fingertip_face_stats),
         "palm_face_stats": str(args.palm_face_stats),

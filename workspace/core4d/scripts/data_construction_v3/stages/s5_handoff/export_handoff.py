@@ -75,7 +75,7 @@ def classify_candidate(row: dict[str, str]) -> tuple[str, str]:
         return "REVIEW", "machine target gate pass; visual QC pending or review"
     if retarget_variant not in {"", "shared"} and stage2b == "pass":
         return "REVIEW", "Stage2b pass; target gate not complete"
-    if retarget_variant not in {"", "shared"} and template == "clean" and (raw3 in {"pass", "review"} or raw5 in {"pass", "review"}):
+    if retarget_variant not in {"", "shared"} and template in {"clean", "clean_reviewed"} and (raw3 in {"pass", "review"} or raw5 in {"pass", "review"}):
         return "STAGE2B_READY", "ready to run Stage2b for this variant"
     if raw3 in {"pass", "review"} or raw5 in {"pass", "review"}:
         return "RAW_CONTACT_READY", "raw contact ready; template/variant stages pending"

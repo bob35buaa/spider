@@ -1,0 +1,5 @@
+# E108 runnable non-box bucket004 variants after S4 visual QC.
+# ordinal	variant	case_id	derived_task	person_idx	split	source_scene_task	visual_qc_decision
+1	E108B01_bucket004_20231003_1_012_p1_ref_fk_nonbox	bucket004_20231003_1_012_p1	dcv3_omnirt_v1_ref_fk_bucket004_20231003_1_012_p1	0	local-gpu0	bucket004_person1	pass
+2	E108B02_bucket004_20231002_022_p1_ref_fk_nonbox	bucket004_20231002_022_p1	dcv3_omnirt_v1_ref_fk_bucket004_20231002_022_p1	0	remote-gpu0	bucket004_person1	pass
+3	E108B03_bucket004_20231002_021_p1_ref_fk_nonbox	bucket004_20231002_021_p1	dcv3_omnirt_v1_ref_fk_bucket004_20231002_021_p1	0	remote-gpu1	bucket004_person1	pass

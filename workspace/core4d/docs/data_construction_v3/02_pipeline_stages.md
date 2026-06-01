@@ -163,7 +163,7 @@ workspace/core4d/scripts/data_construction_v3/stages/s2_templates/build_or_audit
   --apply-build
 ```
 
-`--apply-build` 只自动处理 `object_category=box` 的缺失模板。非 box 输出 `manual_review_required`，不能自动进入 Stage2b。
+`--apply-build` 自动处理 `object_category=box` 的缺失模板。非 box 只允许生成 review 用 proxy template：bucket 使用 `bucket_wall_proxy_aabb`，board/stick 使用 `mesh_aabb_box_proxy`。这些 proxy 即使 MuJoCo load 成功，也保持 `template_status=manual_review_required`，不能自动进入 Stage2b。
 
 source template 可视化包入口：
 
@@ -183,6 +183,18 @@ workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_templat
 - `template_visual_review/template_visual_manifest.tsv/json`：source template visual sheet/mp4 的生成状态；
 - `template_visual_review/template_visual_summary.json/md`：source template visual review 分布；
 - `template_summary.{json,md}`：状态分布与非 clean 列表。
+
+非 box 通过审查后，用 review TSV 显式覆盖 registry：
+
+```bash
+workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
+  --registry-dir "$RUN_DIR/registries" \
+  --from-template-review-tsv "$RUN_DIR/stage_s2_templates/nonbox_template_review.tsv" \
+  --evidence-root "$RUN_DIR/stage_s2_templates" \
+  --source-ref S2_nonbox_template_review
+```
+
+只有 `review_decision=approve_clean` 会写入 `template_status=clean_reviewed`，从而允许进入 S3。
 
 ## S3: 按 variant 重定向
 

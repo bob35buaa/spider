@@ -175,11 +175,27 @@ S2 当前脚本输出：
 `update_case_state_registry.py --from-template-backlog-tsv` 会把 matching `(object_key, person)` 的 case rows 更新为：
 
 - `template_status=clean`
+- `template_status=clean_reviewed`
 - `template_status=backlog`
 - `template_status=audit_fail`
 - `template_status=manual_review_required`
 
 其中 `manual_review_required` 主要用于非 box 物体，不能自动进入 Stage2b。
+`clean_reviewed` 主要用于非 box proxy template 审查通过后的显式放行状态；它和 `clean` 一样可进入 S3，但 provenance 必须来自 review manifest。
+
+非 box review TSV 字段：
+
+| 字段 | 说明 |
+|---|---|
+| `source_scene_task` | 例如 `bucket007_person1` |
+| `object_key` / `person` / `object_category` | source template 身份 |
+| `proxy_scene_xml` | 被审查的 proxy scene |
+| `review_decision` | `approve_clean` / `reject` / `needs_manual_edit` |
+| `reviewer` | `human` / `subagent` / `scripted_audit` |
+| `review_notes` | 审查结论 |
+| `approved_collision_policy` | 审批后的 collision policy |
+| `approved_mass_policy` | 审批后的 mass/inertia policy |
+| `evidence_video` / `evidence_sheet` | 可视化证据路径 |
 
 S3 当前脚本输出：
 

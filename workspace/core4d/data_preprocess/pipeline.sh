@@ -158,6 +158,62 @@ sync_generated_object_model() {
   fi
 }
 
+ensure_g1_object_xml() {
+  local object_name=$1
+  local models_dir="$HOLOSOMA_DIR/src/holosoma_retargeting/holosoma_retargeting/models"
+  local g1_dir="$models_dir/g1"
+  local target_xml="$g1_dir/g1_29dof_w_${object_name}.xml"
+  if [ -f "$target_xml" ]; then
+    return 0
+  fi
+  local seed
+  case "$object_name" in
+    bucket*) seed="bucket001" ;;
+    board*) seed="board007" ;;
+    stick*) seed="stick003" ;;
+    desk*) seed="desk005" ;;
+    chair*) seed="chair006" ;;
+    box*) seed="box004" ;;
+    *) echo "missing g1 object XML and no template seed for $object_name" >&2; return 1 ;;
+  esac
+  local seed_xml="$g1_dir/g1_29dof_w_${seed}.xml"
+  if [ ! -f "$seed_xml" ]; then
+    echo "missing g1 object XML seed: $seed_xml" >&2
+    return 1
+  fi
+  if [ ! -f "$models_dir/$object_name/$object_name.obj" ]; then
+    echo "missing generated object mesh for g1 XML: $models_dir/$object_name/$object_name.obj" >&2
+    return 1
+  fi
+  echo "+ generate missing g1 object XML: $target_xml from seed $seed"
+  if [ "$DRY_RUN" -eq 0 ]; then
+    "$PYTHON_BIN" - "$seed_xml" "$target_xml" "$seed" "$object_name" <<'PY'
+from pathlib import Path
+import sys
+
+seed_xml = Path(sys.argv[1])
+target_xml = Path(sys.argv[2])
+seed = sys.argv[3]
+name = sys.argv[4]
+
+text = seed_xml.read_text(encoding="utf-8")
+for old, new in [
+    (seed, name),
+    (seed.capitalize(), name.capitalize()),
+    (seed.upper(), name.upper()),
+]:
+    text = text.replace(old, new)
+target_xml.write_text(text, encoding="utf-8")
+PY
+    "$PYTHON_BIN" - "$target_xml" <<'PY'
+import sys
+import mujoco
+
+mujoco.MjModel.from_xml_path(sys.argv[1])
+PY
+  fi
+}
+
 is_auto_value() {
   case "$1" in
     auto|-|-1) return 0 ;;
@@ -246,6 +302,7 @@ process_case() {
       echo "skip convert: $converted_dir/${task_name}.npz exists"
     fi
     sync_generated_object_model "$object_name"
+    ensure_g1_object_xml "$object_name"
 
     if [ "$FORCE" -eq 1 ] || [ ! -f "$retargeted_npz" ]; then
       echo "+ source $HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
