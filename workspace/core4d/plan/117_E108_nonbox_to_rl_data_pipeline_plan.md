@@ -174,7 +174,7 @@ nonbox_template_review.tsv
 
 执行策略：
 
-- 只允许 CEM strict pass 的非 box case 进入 RL；
+- 只允许 CEM strict pass 或有明确 nonbox-aware visual override 的非 box case 进入 RL；
 - 如果已有 RL 脚本可复用，则写固定本地脚本，不在 log 里裸写命令；
 - 首轮只跑 smoke 或短训，不做大规模训练。
 
@@ -260,7 +260,18 @@ workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.p
 | `bucket004_20231002_021_p1` | `DOWNSTREAM_CEM_FAIL` | lower-body/bucket interference，`leg_box_interference_frac=31.0%` |
 | `bucket004_20231003_1_013_p1` | `REJECT_VISUAL_QC` | 初始 bucket 离地/离机器人远，后续物体飞起跳变 |
 
-Holosoma RL 入口已定位到 v3 handbox PPO 路线，但 E108 没有直接启动 RL smoke：bucket004 仍缺严格匹配的 Holosoma motion export 与 handbox reward/config。下一步应单独实现 `bucket004` 的 `_mj_w_obj_w_partner.npz` 导出和 Holosoma bucket004 config，而不是复用 bucket005 配置硬套。
+补充 Phase 6 后，Holosoma 侧新增 bucket004 专用 motion export、handbox reward/config 与固定训练脚本。`bucket004_20231003_1_012_p1` 已完成 no-partner RL smoke：
+
+| 项目 | 结果 |
+|---|---|
+| run id | `E108B01-smoke` |
+| config | `exp:g1-29dof-wbt-w-object-e108-bucket004-handbox-v4-3` |
+| 规模 | `2` iterations, `64` envs |
+| total timesteps | `3072` |
+| checkpoint | `/home/ubuntu/Workspace/holosoma/logs/core4d_e108_bucket004_handbox_v4_3_smoke/20260601_204343-e108b01_bucket004_handbox_v4_3_smoke-locomotion/model_00001.pt` |
+| S6 结论 | `DOWNSTREAM_RL_PASS` |
+
+`bucket004_20231002_022_p1` 保持 `DOWNSTREAM_CEM_PASS / rl_status=not_run`，可作为后续完整 RL 或第二条 smoke 候选；`bucket004_20231002_021_p1` 和 `013_p1` 不进入 RL。
 
 ## 风险和边界
 

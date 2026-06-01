@@ -1,3 +1,14 @@
+# E108 Progress — 2026-06-02
+
+## 非 box bucket004 进入 RL smoke
+
+- [x] `bucket004_person1` template 经 high subagent review 后置为 `clean_reviewed`，4 条 5cm pass case 完成 Stage2b + target gate。
+- [x] 3 条 visual QC pass case 完成 full CEM；`012_p1`、`022_p1` 经 bucket-aware visual review 判定可作为 RL smoke 候选，`021_p1` 因 lower-body/bucket interference 拒绝。
+- [x] Holosoma 侧新增 bucket004 motion export、bucket004 handbox reward/config 与固定训练脚本，避免复用 bucket005 尺寸或伪造 partner motion。
+- [x] `bucket004_20231003_1_012_p1` 完成 no-partner RL smoke：`2` iterations, `64` envs, total timesteps `3072`，保存 checkpoint `model_00001.pt`。
+- [x] S6 downstream evidence 已更新：`012_p1` 为 `DOWNSTREAM_RL_PASS`，`022_p1` 保持 `DOWNSTREAM_CEM_PASS / rl_status=not_run`，`021_p1` 为 `DOWNSTREAM_CEM_FAIL`，`013_p1` 为 visual QC reject。
+- [x] 证据目录：`/tmp/core4d_dcv3_E108_nonbox/downstream_evidence_bucket004_person1_rl_smoke/`；registry：`/tmp/core4d_dcv3_E108_nonbox/registry_bucket004_person1_final/`。
+
 # E101 Progress — 2026-05-31
 
 ## Data construction v3 固化补充 — 2026-06-01

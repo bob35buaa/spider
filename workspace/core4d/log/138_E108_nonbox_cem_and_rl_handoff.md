@@ -56,10 +56,16 @@
 
 ## S6 状态管理
 
-S6 证据目录：
+初始 CEM 证据目录：
 
 ```text
 /tmp/core4d_dcv3_E108_nonbox/downstream_evidence_bucket004_person1/
+```
+
+补充 RL smoke 后的证据目录：
+
+```text
+/tmp/core4d_dcv3_E108_nonbox/downstream_evidence_bucket004_person1_rl_smoke/
 ```
 
 registry 目录：
@@ -68,32 +74,57 @@ registry 目录：
 /tmp/core4d_dcv3_E108_nonbox/registry_bucket004_person1_final/
 ```
 
-最终 registry 为 8 行：3 个 `omnirt_v1/ref_fk` CEM rows、3 个 shared raw rows、1 个 visual reject row、1 个 shared reject-case raw row。
+最终 registry 为 8 行：4 个 `omnirt_v1/ref_fk` rows、4 个 shared raw rows。S6 只记录 CEM/RL 下游证据，不反向改写 raw contact、template、Stage2b、target gate 或 visual QC。
 
-| case | variant | current decision | CEM | downstream decision | failure mode |
-|---|---|---|---|---|---|
-| `bucket004_20231003_1_012_p1` | `omnirt_v1/ref_fk` | `VISUAL_QC_PASS` | pass | `DOWNSTREAM_CEM_PASS` | `bucket_aware_visual_cem_pass` |
-| `bucket004_20231002_022_p1` | `omnirt_v1/ref_fk` | `VISUAL_QC_PASS` | pass | `DOWNSTREAM_CEM_PASS` | `bucket_aware_visual_cem_pass` |
-| `bucket004_20231002_021_p1` | `omnirt_v1/ref_fk` | `VISUAL_QC_PASS` | fail | `DOWNSTREAM_CEM_FAIL` | `lowerbody_bucket_interference` |
-| `bucket004_20231003_1_013_p1` | `omnirt_v1/ref_fk` | `REJECT_VISUAL_QC` | not_run | empty | visual QC reject |
+| case | variant | current decision | CEM | RL | downstream decision | failure mode |
+|---|---|---|---|---|---|---|
+| `bucket004_20231003_1_012_p1` | `omnirt_v1/ref_fk` | `VISUAL_QC_PASS` | pass | pass | `DOWNSTREAM_RL_PASS` | `bucket_aware_visual_cem_pass` |
+| `bucket004_20231002_022_p1` | `omnirt_v1/ref_fk` | `VISUAL_QC_PASS` | pass | not_run | `DOWNSTREAM_CEM_PASS` | `bucket_aware_visual_cem_pass` |
+| `bucket004_20231002_021_p1` | `omnirt_v1/ref_fk` | `VISUAL_QC_PASS` | fail | not_run | `DOWNSTREAM_CEM_FAIL` | `lowerbody_bucket_interference` |
+| `bucket004_20231003_1_013_p1` | `omnirt_v1/ref_fk` | `REJECT_VISUAL_QC` | not_run | not_run | empty | visual QC reject |
 
 ## RL 入口判断
 
-Holosoma 侧可复用的训练入口是 v3 handbox PPO 路线，例如：
+Holosoma 侧新增了 bucket004 专用 RL export、reward/config 与固定训练入口，不复用 bucket005 的尺寸参数，也不伪造 partner motion。
+
+新增代码：
 
 ```text
-/home/ubuntu/Workspace/holosoma/workspace/v3/scripts/train/train_core4d_r103_bucket005_from_scratch.sh
-/home/ubuntu/Workspace/holosoma/workspace/v3/scripts/train/train_core4d_r119_r121_box021_omnirt_threecase.sh
+/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction/scripts/export_e108_bucket004_rl.py
+/home/ubuntu/Workspace/holosoma/workspace/v3/scripts/train/train_core4d_e108_bucket004_nonbox.sh
 ```
 
-但 E108 不能直接把 bucket004 CEM 输出喂给 RL，原因是：
+Holosoma 配置：
 
-1. Holosoma `MotionLoader` 需要 `_mj_w_obj_w_partner.npz` 格式，包含 `joint_pos/body_pos_w/object_pos_w/body_names/joint_names` 等字段；
-2. E108 CEM 输出是 SPIDER `trajectory_mjwp_act.npz`，`scene_act.xml` 中 object 为 `pos_x/pos_y/pos_z/rot_z/rot_y/rot_x` actuated joints，不是 Holosoma 直接读取的 motion 格式；
-3. Holosoma 已有 `bucket005` reward/config，但没有严格匹配 `bucket004` half-extents 的 handbox reward/config；
-4. 用 `bucket005` 配置硬套 `bucket004` 会污染“能进入 RL”的结论。
+```text
+exp:g1-29dof-wbt-w-object-e108-bucket004-handbox-v4-3
+```
 
-所以 E108 的阶段性结论是：数据构建到 S6 已产生 2 条 bucket-aware CEM-pass 的 RL smoke 候选；真正启动 Holosoma RL 前，需要新增 bucket004 RL export + bucket004 handbox config。该工作应作为下一步独立实验，不能在 E108 中伪装完成。
+关键约束：
+
+- `MotionConfig.ignore_partner=True`，`partner_urdf_path=None`；
+- motion export 从 E108 CEM 的 SPIDER `scene_act`/trajectory 转成 Holosoma `_mj_w_obj.npz`；
+- `bucket004` handbox half-extents 使用 mesh AABB `0.161566625 / 0.231058755 / 0.15230013m`；
+- smoke 仅证明 RL 入口可启动，不等价于完整训练收敛。
+
+已导出两条 CEM-pass motion：
+
+| case | export |
+|---|---|
+| `bucket004_20231003_1_012_p1` | `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction/results/e108_bucket004_rl/exports/E108B01_bucket004_20231003_1_012_p1_mj_w_obj.npz` |
+| `bucket004_20231002_022_p1` | `/home/ubuntu/Workspace/holosoma/workspace/v3/data_construction/results/e108_bucket004_rl/exports/E108B02_bucket004_20231002_022_p1_mj_w_obj.npz` |
+
+已对 `bucket004_20231003_1_012_p1` 启动 RL smoke：
+
+| 项目 | 结果 |
+|---|---|
+| run id | `E108B01-smoke` |
+| 规模 | `2` iterations, `64` envs |
+| 状态 | pass |
+| total timesteps | `3072` |
+| final mean reward | `1.87` |
+| checkpoint | `/home/ubuntu/Workspace/holosoma/logs/core4d_e108_bucket004_handbox_v4_3_smoke/20260601_204343-e108b01_bucket004_handbox_v4_3_smoke-locomotion/model_00001.pt` |
+| train log | `/home/ubuntu/Workspace/holosoma/logs/core4d_e108_bucket004_handbox_v4_3_smoke/e108b01_bucket004_handbox_v4_3_smoke_train.log` |
 
 ## Claims 验证
 
@@ -103,13 +134,13 @@ Holosoma 侧可复用的训练入口是 v3 handbox PPO 路线，例如：
 | C2 非 box proxy template 只生成 review | 通过：9 个 bucket proxy 均 load/render pass，但默认 `manual_review_required` |
 | C3 review override 后进入 Stage2b/target gate/S5 | 通过：`bucket004_person1` 4 条进入 Stage2b，3 条 `HANDOFF_READY` |
 | C4 至少 1 个非 box case 形成 RL-ready handoff | 部分通过：2 条 bucket-aware CEM pass；原始 box strict 因 bucket `lie_on_box` false positive 失败 |
-| C5 RL smoke 启动 | 未执行：缺 bucket004 Holosoma export/config，下一步单独实现 |
+| C5 RL smoke 启动 | 通过：`bucket004_20231003_1_012_p1` 完成 Holosoma no-partner smoke，写回 S6 `DOWNSTREAM_RL_PASS` |
 
 ## 结论
 
-E108 证明 v3 数据管线已经可以从原始 CORE4D 自动挖掘非 box bucket 候选，经 template review 后进入 Stage2b、target gate、visual QC、full CEM，并把下游证据写回 S6 registry。
+E108 证明 v3 数据管线已经可以从原始 CORE4D 自动挖掘非 box bucket 候选，经 template review 后进入 Stage2b、target gate、visual QC、full CEM，并把下游证据写回 S6 registry。补充 RL smoke 后，至少 1 条非 box case 已经进入 Holosoma RL 阶段并保存 checkpoint。
 
-当前可进入下一步 RL export/config 的候选是：
+当前可继续做完整 RL 训练的候选是：
 
 ```text
 bucket004_20231003_1_012_p1
