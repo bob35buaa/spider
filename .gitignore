@@ -200,6 +200,7 @@ MUJOCO_LOG.TXT
 MJDATA.TXT
 .DS_Store
 outputs/
+workspace/v3/data_construction_v3_runs/
 
 submitit/
 example_datasets/

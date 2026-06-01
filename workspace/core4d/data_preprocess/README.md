@@ -60,6 +60,7 @@ box023/E077 当前同步使用下面的 FPS 口径：
 | `SMPLX_MODEL_DIR` | 外部绝对路径 | 本机默认 `/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/smplx`；换机器时覆盖 |
 | `RESULT_ROOT` | 项目内相对路径 | `workspace/core4d/results/data_preprocess` |
 | `PYTHON_BIN` | 项目内相对路径或绝对路径 | `.venv/bin/python` |
+| `RETARGET_PYTHON_BIN` | 绝对路径，可选 | OmniRetarget/hsretargeting Python；未设置时 source retargeting env 后使用 `$CONDA_PREFIX/bin/python` |
 | `REF_FPS` | 标量 | `30.0` |
 | `EVAL_FPS` | 标量 | `50.0` |
 | `TRIM_MODE` | 字符串 | `holosoma` |
@@ -67,7 +68,7 @@ box023/E077 当前同步使用下面的 FPS 口径：
 需要的环境：
 
 - 当前 repo 的 Python 环境。默认使用 `.venv/bin/python`；如果需要其它解释器，可以覆盖 `PYTHON_BIN`。
-- Holosoma repo，并且存在 `scripts/source_retargeting_setup.sh`。
+- Holosoma repo，并且存在 `scripts/source_retargeting_setup.sh`。retargeting 阶段会使用 `$CONDA_PREFIX/bin/python` 或显式 `RETARGET_PYTHON_BIN`，避免外层 SPIDER `.venv` 抢占 `python`。
 - CORE4D raw 数据和 object mesh。
 - SMPL-X model 文件。
 - Python 依赖：`numpy`, `trimesh`, `scipy`, `mujoco` 等。

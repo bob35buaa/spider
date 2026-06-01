@@ -10,6 +10,7 @@ CORE4D_REAL_ROOT="${CORE4D_REAL_ROOT:-/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/
 SMPLX_MODEL_DIR="${SMPLX_MODEL_DIR:-/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/smplx}"
 RESULT_ROOT="${RESULT_ROOT:-workspace/core4d/results/data_preprocess}"
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
+RETARGET_PYTHON_BIN="${RETARGET_PYTHON_BIN:-}"
 REF_FPS="${REF_FPS:-30.0}"
 EVAL_FPS="${EVAL_FPS:-50.0}"
 TRIM_MODE="${TRIM_MODE:-holosoma}"
@@ -37,7 +38,7 @@ Options:
 
 Environment overrides:
   HOLOSOMA_DIR, CORE4D_REAL_ROOT, SMPLX_MODEL_DIR, RESULT_ROOT, PYTHON_BIN,
-  REF_FPS, EVAL_FPS, TRIM_MODE, REPLACE_WRIST_WITH_FINGERTIP, REPO
+  RETARGET_PYTHON_BIN, REF_FPS, EVAL_FPS, TRIM_MODE, REPLACE_WRIST_WITH_FINGERTIP, REPO
 
 External absolute paths:
   HOLOSOMA_DIR       Absolute path to the Holosoma repo.
@@ -132,6 +133,16 @@ repo_path() {
     /*) printf "%s\n" "$path" ;;
     *) printf "%s/%s\n" "$REPO" "$path" ;;
   esac
+}
+
+retarget_python() {
+  if [ -n "${RETARGET_PYTHON_BIN:-}" ]; then
+    printf "%s\n" "$RETARGET_PYTHON_BIN"
+  elif [ -n "${CONDA_PREFIX:-}" ] && [ -x "$CONDA_PREFIX/bin/python" ]; then
+    printf "%s\n" "$CONDA_PREFIX/bin/python"
+  else
+    command -v python
+  fi
 }
 
 sync_generated_object_model() {
@@ -229,6 +240,7 @@ process_case() {
       if [ "$REPLACE_WRIST_WITH_FINGERTIP" = "1" ]; then
         convert_args+=(--replace_wrist_with_fingertip)
       fi
+      convert_args[0]="$(retarget_python)"
       run_cmd "${convert_args[@]}"
     else
       echo "skip convert: $converted_dir/${task_name}.npz exists"
@@ -243,7 +255,7 @@ process_case() {
       fi
       (
         cd "$HOLOSOMA_DIR/src/holosoma_retargeting/holosoma_retargeting"
-        run_cmd python examples/robot_retarget.py \
+        run_cmd "$(retarget_python)" examples/robot_retarget.py \
           --data_path "$converted_abs" \
           --task-type object_interaction \
           --task-name "$task_name" \
@@ -263,7 +275,7 @@ process_case() {
             # shellcheck disable=SC1090
             source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
           fi
-          run_cmd python "$HOLOSOMA_DIR/workspace/pipeline/trim_no_contact.py" \
+          run_cmd "$(retarget_python)" "$HOLOSOMA_DIR/workspace/pipeline/trim_no_contact.py" \
             --input_dir "$retargeted_abs" \
             --output_dir "$trimmed_abs"
           ;;
