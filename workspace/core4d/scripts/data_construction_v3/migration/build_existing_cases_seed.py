@@ -307,6 +307,40 @@ def row_from_e107_gate(row: dict[str, str], source_tsv: Path) -> dict[str, str]:
     return finalize(out)
 
 
+def persistent_e108_path(value: str) -> str:
+    if not value:
+        return ""
+    return rel(value.replace("/tmp/core4d_dcv3_E108_nonbox", "workspace/core4d/results/E108"))
+
+
+def row_from_e108_registry(row: dict[str, str], source_tsv: Path) -> dict[str, str]:
+    out = normalize_row(row)
+    for field in [
+        "downstream_evidence_root",
+        "cem_result_npz",
+        "cem_video",
+        "cem_metrics_ref",
+        "evidence_root",
+        "source_ref",
+    ]:
+        out[field] = persistent_e108_path(out.get(field, ""))
+    out.update(
+        {
+            "source_type": "historical_seed",
+            "source_ref": rel(source_tsv),
+            "schema_version": SCHEMA_VERSION,
+            "updated_at": timestamp(),
+        }
+    )
+    if out.get("downstream_decision") == "DOWNSTREAM_NOT_RUN":
+        out["downstream_decision"] = ""
+    if out.get("retarget_variant_id") == "omnirt_v1":
+        out["notes"] = "E108_nonbox_bucket004; " + out.get("notes", "")
+    norm = normalize_row(out)
+    norm["current_decision"] = current_decision_from_registry(norm)
+    return norm
+
+
 def build_rows(repo: Path) -> list[dict[str, str]]:
     sources: list[tuple[str, Path, str]] = [
         ("E092_box004_ref_fk", repo / "workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.csv", "box004_only"),
@@ -352,6 +386,14 @@ def build_rows(repo: Path) -> list[dict[str, str]]:
         for row in read_rows(e107_gate, delimiter="\t"):
             built = row_from_e107_gate(row, e107_gate)
             by_key.setdefault(row_key(built), built)
+
+    e108_registry = repo / "workspace/core4d/results/E108/registry_bucket004_person1_final/case_state_registry.tsv"
+    if e108_registry.is_file():
+        for row in read_rows(e108_registry, delimiter="\t"):
+            if row.get("retarget_variant_id") != "omnirt_v1":
+                continue
+            built = row_from_e108_registry(row, e108_registry)
+            by_key[row_key(built)] = built
 
     return sorted(by_key.values(), key=lambda row: (row["object_key"], row["case_id"], row["target_variant_id"]))
 
@@ -412,6 +454,7 @@ def main() -> int:
         "E105_box026_clean": "included_nonduplicate_routes; duplicated ref_fk superseded by E106",
         "E106_box026_clean_batch": "included",
         "E107_box021_gate_and_selected4": "included",
+        "E108_nonbox_bucket004": "included; 1 RL smoke pass, 1 CEM pass, 1 CEM fail, 1 visual reject",
         "E079_E080_E081_box023_box025": "included_as_legacy_cem_cache; E081 leg-object rows supersede E079/E080 person2 rows",
         "pre_E103_box021_box026": "excluded_invalidated_by_template_inertial_bug",
     }

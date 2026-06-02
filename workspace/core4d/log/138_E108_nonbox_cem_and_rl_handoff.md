@@ -59,19 +59,19 @@
 初始 CEM 证据目录：
 
 ```text
-/tmp/core4d_dcv3_E108_nonbox/downstream_evidence_bucket004_person1/
+workspace/core4d/results/E108/downstream_evidence_bucket004_person1/
 ```
 
 补充 RL smoke 后的证据目录：
 
 ```text
-/tmp/core4d_dcv3_E108_nonbox/downstream_evidence_bucket004_person1_rl_smoke/
+workspace/core4d/results/E108/downstream_evidence_bucket004_person1_rl_smoke/
 ```
 
 registry 目录：
 
 ```text
-/tmp/core4d_dcv3_E108_nonbox/registry_bucket004_person1_final/
+workspace/core4d/results/E108/registry_bucket004_person1_final/
 ```
 
 最终 registry 为 8 行：4 个 `omnirt_v1/ref_fk` rows、4 个 shared raw rows。S6 只记录 CEM/RL 下游证据，不反向改写 raw contact、template、Stage2b、target gate 或 visual QC。

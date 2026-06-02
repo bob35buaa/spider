@@ -213,7 +213,7 @@ object_category: bucket/board/stick
 workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
   --mode full-from-raw \
   --run-id E108_nonbox_candidate_mining \
-  --run-root /tmp/core4d_dcv3_E108_nonbox \
+  --run-root workspace/core4d/results/E108 \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
   --smplx-model-dir "$SMPLX_MODEL_DIR" \
   --queue selected-medium-nonbox \
@@ -226,9 +226,9 @@ template proxy 只生成 review，不进入 Stage2b：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s2_templates/build_or_audit_templates.py \
-  --input-tsv /tmp/core4d_dcv3_E108_nonbox/E108_nonbox_candidate_mining/stage_s1_raw_contact/raw_contact/raw_contact_pass_5cm.tsv \
+  --input-tsv workspace/core4d/results/E108/E108_nonbox_candidate_mining/stage_s1_raw_contact/raw_contact/raw_contact_pass_5cm.tsv \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --out-dir /tmp/core4d_dcv3_E108_nonbox/template_proxy_review \
+  --out-dir workspace/core4d/results/E108/template_proxy_review \
   --apply-build
 ```
 
@@ -236,9 +236,9 @@ review 后进入 Stage2b：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
-  --registry-dir /tmp/core4d_dcv3_E108_nonbox/registry_after_review \
-  --input-tsv /tmp/core4d_dcv3_E108_nonbox/E108_nonbox_candidate_mining/registries/case_state_registry.tsv \
-  --from-template-review-tsv /tmp/core4d_dcv3_E108_nonbox/nonbox_template_review.tsv
+  --registry-dir workspace/core4d/results/E108/registry_after_review \
+  --input-tsv workspace/core4d/results/E108/E108_nonbox_candidate_mining/registries/case_state_registry.tsv \
+  --from-template-review-tsv workspace/core4d/results/E108/nonbox_template_review.tsv
 ```
 
 具体参数需在实现 `--from-template-review-tsv` 后落地。

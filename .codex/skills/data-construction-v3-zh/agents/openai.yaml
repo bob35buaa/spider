@@ -1,0 +1,3 @@
+interface:
+  display_name: "Core4D 数据构建 v3"
+  short_description: "执行和维护 Core4D data_construction_v3 管线、状态表和结果归档"
