@@ -1,3 +1,20 @@
+# E109 Progress — 2026-06-02
+
+## Spider vs OmniRetarget fair-eval 实验启动
+
+- [x] 按 `experiment-planning-zh` 读取 `EXPERIMENT_TRACKER.md`、最新 plan/log/progress，确认 E108 已完成，E109 可作为新的独立评测实验。
+- [x] 检查 `workspace/core4d/data_construction_v3/existing_cases.tsv`：1931 行，其中 `cem_status=pass` 12 条、`rl_status=pass` 1 条，可作为 Spider CEM/RL seed bank。
+- [x] 检查 E026/E105/E106/E107/E108 输入格式：E026 有 method-level 历史对比；E105-E108 CEM summary 有 `npz_path`、`scene_xml`、`contact_frac_*_8cm`、`leg_box_*`、`pelvis_*` 等可导入字段。
+- [x] 创建计划：`workspace/core4d/plan/118_E109_spider_vs_omniretarget_fair_eval_plan.md`。核心要求：脚本放 `workspace/core4d/scripts/eval_omni_vs_spider/`，输出放 `workspace/core4d/results/E109/fair_eval/`，依赖阈值指标至少输出 `3cm/5cm/8cm` 三档，并显式标记 self-ref 指标不能作为公平胜负。
+- [x] 新增可复用脚本：`workspace/core4d/scripts/eval_omni_vs_spider/`，包含 case bank 构建、多阈值 proxy 指标计算、method/object/threshold summary 和 E109 默认入口。
+- [x] 运行 `run_E109_fair_eval.sh`：输出 `workspace/core4d/results/E109/fair_eval/`，共 129 行 case bank；E026=76、E105-E108 CEM summary=41、`existing_cases.tsv` Spider CEM/RL pass=12。
+- [x] 修正评测口径：E026 历史行统一 `fair_metric_scope=diagnostic_only / fair_metric_ready=False`；E108 旧 `/tmp` artifact path 自动归一到 `workspace/core4d/results/E108/s6_downstream/cem/full/`。
+- [x] 输出三档阈值 summary：3cm/5cm/8cm；deep penetration 阈值为 `-0.02m`，fall pelvis 阈值为 `0.45m`。
+- [x] medium subagent 旁路审查完成：确认覆盖范围和阈值输出，要求在正式 log 明确 self-ref/method-ref caveat、OmniRetarget 缺同口径 geometry proxy、当前不是最终 raw-GT 表。
+- [x] 写结果 log：`workspace/core4d/log/139_E109_spider_vs_omniretarget_fair_eval_results.md`，并更新 `EXPERIMENT_TRACKER.md`。
+- [x] 用户确认后续评测 case 集合只使用 `workspace/core4d/data_construction_v3/existing_cases.tsv` 中 `cem_status=pass` 的 Spider case；新增 `run_existing_cases_only_eval.sh` 默认入口，输出 `results/E109/fair_eval_existing_cases_only/`，当前 12/12 行均来自 existing_cases 且 `cem_status=pass`。
+- [x] 新增完整 OmniRetarget vs Spider 配对对比生成器：`build_existing_cases_comparison.py`。输出 `results/E109/omni_vs_spider_existing_cases/`，包含 Markdown 摘要、Markdown 全字段逐 case 表、xlsx、TSV、指标定义和覆盖 warnings。当前 12/12 existing CEM pass case 均有 OmniRetarget 轨迹与 Spider CEM summary 覆盖，warnings 为 0。
+
 # E108 Progress — 2026-06-02
 
 ## 非 box bucket004 进入 RL smoke
@@ -701,3 +718,5 @@ E101 按 plan stop-loss 收尾：box021 D003 0/4 WORK，Phase 2 不启动。
 - [x] E108 Phase 4-5 执行完成：把 `bucket004_person1` 落到真实 source scene root 后，high subagent template review `APPROVE_CLEAN`；4 条 `bucket004/person1` 5cm rows 均 Stage2b execute + target gate pass。visual QC 通过 3 条（`012_p1`、`022_p1`、`021_p1`），拒绝 1 条（`013_p1` 初始 bucket 离地且后续跳变）。本地 1 卡 + 远程 2 卡完成 3 条 full CEM，输出在 `workspace/core4d/results/E108/cem/full/`。
 - [x] E108 S6 evidence 完成：`012_p1`、`022_p1` 原始 box-era strict 因 `lie_on_box` fail，但 high CEM visual review 判定为 bucket 上沿/桶壁 false positive 且 lower-body pass，S6 写入 `DOWNSTREAM_CEM_PASS / bucket_aware_visual_cem_pass`；`021_p1` 因 `leg_box_interference_frac=31.0%` 写入 `DOWNSTREAM_CEM_FAIL / lowerbody_bucket_interference`。canonical registry `workspace/core4d/results/E108/registry_bucket004_person1_final/` 为 8 rows，无孤立 fake variant。log: `workspace/core4d/log/138_E108_nonbox_cem_and_rl_handoff.md`。
 - [x] E108 RL 入口复核：Holosoma 可复用入口是 v3 handbox PPO 路线（如 R103 bucket005、R119-R121 box021），但 bucket004 不能直接用 CEM `trajectory_mjwp_act.npz` 或 bucket005 config 进入 RL；下一步需单独实现 bucket004 `_mj_w_obj_w_partner.npz` export 与 bucket004 handbox reward/config。E108 不伪造 RL smoke 完成。
+- [x] 2026-06-02 E109 统一 replay 评测补齐：针对 Spider vs OmniRetarget 旧表大量指标缺失的问题，新增 `workspace/core4d/scripts/eval_omni_vs_spider/unified_replay_eval.py`。它只使用 `existing_cases.tsv` 中 `cem_status=pass` 的 12 条 case，对 OmniRetarget 与 Spider CEM qpos 分别用对应 scene 做 MuJoCo replay，统一重算 pelvis/fall、EEF 3cm/5cm/8cm、hand/leg/body SDF near/penetration、physics contact、object motion 等指标；Spider CEM 特有 `obj_err` 保留为单方法诊断，不给 OmniRetarget 硬填。历史对齐校验共 87 项、mismatch=0，确认新 evaluator 能复现已有历史指标后再补齐缺失 case。输出：`workspace/core4d/results/E109/unified_replay_eval/`。
+- [x] 2026-06-02 E109 汇报表收口：保留旧 11-case strict 主表不覆盖；新增 `build_expanded_24_work_eval.py` 输出 24-case work 扩展表（11 strict + 13 ref_fk upper-WORK/non-strict）；新增 `build_filtered_20_work_xlsx.py` 输出 xlsx-only 20-case 汇报表，按用户删除列表过滤 `bucket004_20231003_1_012_p1`、`e091_box026_20231020_134_p1`、`e091_box026_20231020_141_p2`、`e091_box026_20231023_139_p2`。表内补齐 `EEF 12/15cm`、`hand_geom_near_*`、`hand_geom_penetration`、`hand_object_physics_contact`，PPT sheet 使用 `手geom12cm↑` 与 `手物理接触↑`，逐 case 表按 Spider 相对 OmniRetarget 明显好/差打绿/红色。README 已更新最新入口和指标口径。
