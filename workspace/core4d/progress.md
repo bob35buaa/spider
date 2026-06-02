@@ -8,7 +8,7 @@
 - [x] `bucket004_20231003_1_012_p1` 完成 no-partner RL smoke：`2` iterations, `64` envs, total timesteps `3072`，保存 checkpoint `model_00001.pt`。
 - [x] S6 downstream evidence 已更新：`012_p1` 为 `DOWNSTREAM_RL_PASS`，`022_p1` 保持 `DOWNSTREAM_CEM_PASS / rl_status=not_run`，`021_p1` 为 `DOWNSTREAM_CEM_FAIL`，`013_p1` 为 visual QC reject。
 - [x] 证据目录：`workspace/core4d/results/E108/downstream_evidence_bucket004_person1_rl_smoke/`；registry：`workspace/core4d/results/E108/registry_bucket004_person1_final/`。
-- [x] 已纳入 verified seed：`workspace/core4d/data_construction_v3/existing_cases.tsv` 从 57 行更新到 61 行，新增 4 条 `bucket004` E108 rows（1 RL smoke pass、1 CEM pass、1 CEM fail、1 visual reject），所有 E108 evidence path 指向 `workspace/core4d/results/E108/` 持久目录。
+- [x] 已纳入 verified seed：`workspace/core4d/data_construction_v3/existing_cases.tsv` 从 57 行更新到 1931 行，新增 E108 candidate mining 全量状态缓存和最终 bucket004 registry。包含 raw inventory reject、raw contact reject、template backlog/audit reject、RAW_CONTACT_READY、CEM pass/fail、RL smoke pass、visual QC reject；所有 E108 evidence path 指向 `workspace/core4d/results/E108/` 持久目录。
 
 # E101 Progress — 2026-05-31
 

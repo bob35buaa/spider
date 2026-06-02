@@ -341,6 +341,10 @@ def row_from_e108_registry(row: dict[str, str], source_tsv: Path) -> dict[str, s
     return norm
 
 
+def prefixed_note(prefix: str, note: str) -> str:
+    return f"{prefix}; {note}" if note else prefix
+
+
 def build_rows(repo: Path) -> list[dict[str, str]]:
     sources: list[tuple[str, Path, str]] = [
         ("E092_box004_ref_fk", repo / "workspace/core4d/results/E092/spider_dyn/full/full_eval_summary.csv", "box004_only"),
@@ -387,11 +391,17 @@ def build_rows(repo: Path) -> list[dict[str, str]]:
             built = row_from_e107_gate(row, e107_gate)
             by_key.setdefault(row_key(built), built)
 
+    e108_candidate_registry = repo / "workspace/core4d/results/E108/E108_nonbox_candidate_mining_smoke/registries/case_state_registry.tsv"
+    if e108_candidate_registry.is_file():
+        for row in read_rows(e108_candidate_registry, delimiter="\t"):
+            built = row_from_e108_registry(row, e108_candidate_registry)
+            if built.get("retarget_variant_id") == "shared":
+                built["notes"] = prefixed_note("E108_nonbox_candidate_mining", built.get("notes", ""))
+            by_key[row_key(built)] = built
+
     e108_registry = repo / "workspace/core4d/results/E108/registry_bucket004_person1_final/case_state_registry.tsv"
     if e108_registry.is_file():
         for row in read_rows(e108_registry, delimiter="\t"):
-            if row.get("retarget_variant_id") != "omnirt_v1":
-                continue
             built = row_from_e108_registry(row, e108_registry)
             by_key[row_key(built)] = built
 
@@ -454,7 +464,8 @@ def main() -> int:
         "E105_box026_clean": "included_nonduplicate_routes; duplicated ref_fk superseded by E106",
         "E106_box026_clean_batch": "included",
         "E107_box021_gate_and_selected4": "included",
-        "E108_nonbox_bucket004": "included; 1 RL smoke pass, 1 CEM pass, 1 CEM fail, 1 visual reject",
+        "E108_nonbox_candidate_mining": "included_full_candidate_state_cache; final bucket004 registry supersedes matching rows",
+        "E108_nonbox_bucket004": "included_final_registry; 1 RL smoke pass, 1 CEM pass, 1 CEM fail, 1 visual reject",
         "E079_E080_E081_box023_box025": "included_as_legacy_cem_cache; E081 leg-object rows supersede E079/E080 person2 rows",
         "pre_E103_box021_box026": "excluded_invalidated_by_template_inertial_bug",
     }
