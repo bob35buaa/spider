@@ -27,6 +27,7 @@ v3 不要求运行结果进 git。可复现性来自配置、manifest、git sha�
 - source template 重新 build/audit 或从 v3 clean template registry 读取；
 - Stage2b 按 retarget variant × target route 执行；
 - S4/S5 manifest 完整；
+- S6 若已有 CEM 结果，必须生成 `s6_downstream/rl_export/rl_export_input.tsv` 作为 RL 导出的路径索引；
 - registry 更新。
 
 ## `resume-from-summary`
@@ -188,11 +189,13 @@ workspace/core4d/scripts/data_construction_v3/qa/verify_reproducibility.py \
 输出：
 
 ```text
-stage_s5_handoff/reproducibility/reproducibility_report.json
-stage_s5_handoff/reproducibility/reproducibility_report.md
+s5_handoff/reproducibility/reproducibility_report.json
+s5_handoff/reproducibility/reproducibility_report.md
 ```
 
 `status=pass` 才说明该 run 具备基本的 resume/复查条件。这个检查不证明 CEM/RL 已成功；S6 存在时，只证明下游证据被规范记录且能和 registry/handoff 对齐。若 run 内存在 `visual_qc_render_manifest.tsv`，自检还会检查 render error 以及 pass row 的 MP4/sheet 是否存在且非空。
+
+若 run 内存在 `s6_downstream/rl_export/rl_export_input.tsv`，自检会额外检查 `RL_EXPORT_READY` rows 的 `scene_act`、`trajectory` 和 `cem_result_npz` 是否存在且非空。RL 端不得通过扫描 CEM 目录自行决定输入。
 
 ## 已有真实历史结果 seed
 

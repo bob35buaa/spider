@@ -145,6 +145,27 @@ adapter 规则：
 - `target_variant_id=adaptive/fingertip_aware/future external`：写 `contact_hdmi_target_source=external`，必须校验 `target_npz` path、sha256、shape 和 finite 值；
 - adapter 只做配置导出与校验，不改变 registry 中 raw/template/Stage2b/gate/visual QC 的事实状态。
 
+## RL export adapter
+
+CEM 到 RL motion export 的交接通过 `export_rl_inputs.py` 固化为 adapter。RL 导出脚本不得自行扫描 CEM 目录或按 case 拼 `scene_act` 路径。
+
+输入：
+
+- `s5_handoff/handoff_manifest.tsv`
+- S6 CEM `downstream_evidence_manifest.tsv`
+
+输出：
+
+- `s6_downstream/rl_export/rl_export_input.tsv/json`
+- `s6_downstream/rl_export/rl_export_summary.json/md`
+
+adapter 规则：
+
+- 只把 `handoff_decision=HANDOFF_READY/HANDOFF_REVIEW_VISUAL_QC`、`target_gate_status=pass`、`visual_qc_status=pass`、`cem_status=pass` 且必需文件存在的 rows 标成 `RL_EXPORT_READY`；
+- `RL_EXPORT_READY` row 必须同时带 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`；
+- CEM fail rows 标成 `SKIP_CEM_FAIL`，CEM 未跑 rows 标成 `WAIT_CEM_NOT_RUN`，非 handoff rows 标成 `SKIP_NOT_HANDOFF_READY`；
+- adapter 不回写 S5，不改变 registry 中的数据构建事实。
+
 ## 原则
 
 - 接口先保证 schema 稳定，不做过度抽象；

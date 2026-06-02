@@ -43,10 +43,10 @@ workspace/core4d/scripts/data_construction_v3/
 运行结果放机器本地 run root：
 
 ```text
-${DATA_CONSTRUCTION_RUN_ROOT:-${HOLOSOMA_REPO}/workspace/v3/data_construction_v3_runs}/<run_id>/
+workspace/core4d/results/<run_id>/
 ```
 
-运行结果、NPZ、MP4、CSV、可视化不进 git。进入 git 的是文档、wrapper、schema、registry 工具和小型配置。
+正式 Core4D 数据构建实验使用 `workspace/core4d/results/E###/`。临时 smoke 可以显式改 `--run-root`，但任务结束前若要保留结果，必须整理回 `workspace/core4d/results/E###/` 的 canonical layout。运行结果、NPZ、MP4、CSV、可视化不进 git。进入 git 的是文档、wrapper、schema、registry 工具和小型配置。
 
 ## 阶段总览
 
@@ -84,7 +84,7 @@ workspace/core4d/scripts/data_construction_v3/orchestration/init_workspace.sh <r
 
 初始化会生成：
 
-- `stage_s0_environment/environment_check.{json,md}`
+- `s0_environment/environment_check.{json,md}`
 - `registries/retarget_variant_registry.{tsv,json}`
 - `registries/case_state_registry.{tsv,json}`
 
@@ -141,7 +141,7 @@ workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
   --retarget-variant-id omnirt_v1 \
   --target-variant-id ref_fk \
   --target-variant-id fingertip_aware \
-  --route-diagnostic-tsv "$RUN_DIR/stage_s1_raw_contact/fingertip_route_diagnostics.tsv"
+  --route-diagnostic-tsv "$RUN_DIR/s1_raw_contact/fingertip_route_diagnostics.tsv"
 ```
 
 基于已有 E099/E100/E101 产物构建 route diagnostic manifest 的入口是：
@@ -150,8 +150,8 @@ workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
 STAGE2B_CONTACT_LABEL=3cm
 
 workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/build_fingertip_route_diagnostics.py \
-  --input-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
-  --out-dir "$RUN_DIR/stage_s1_raw_contact/fingertip_route_diagnostics"
+  --input-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --out-dir "$RUN_DIR/s1_raw_contact/fingertip_route_diagnostics"
 ```
 
 也可以在 `run_pipeline.py` 中显式开启：
@@ -177,12 +177,12 @@ RUN_DIR="${DATA_CONSTRUCTION_RUN_ROOT}/<run_id>"
 
 workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/build_inventory.py \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --out-dir "$RUN_DIR/stage_s1_raw_contact/inventory"
+  --out-dir "$RUN_DIR/s1_raw_contact/inventory"
 
 workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/run_raw_contact.py \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --inventory-tsv "$RUN_DIR/stage_s1_raw_contact/inventory/inventory.tsv" \
-  --out-dir "$RUN_DIR/stage_s1_raw_contact/raw_contact" \
+  --inventory-tsv "$RUN_DIR/s1_raw_contact/inventory/inventory.tsv" \
+  --out-dir "$RUN_DIR/s1_raw_contact/raw_contact" \
   --queue selected-medium-box \
   --thresholds-m 0.03,0.05
 ```
@@ -194,20 +194,20 @@ workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/run_raw_cont
 ```bash
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-inventory-tsv "$RUN_DIR/stage_s1_raw_contact/inventory/inventory.tsv" \
-  --evidence-root "$RUN_DIR/stage_s1_raw_contact/inventory"
+  --from-inventory-tsv "$RUN_DIR/s1_raw_contact/inventory/inventory.tsv" \
+  --evidence-root "$RUN_DIR/s1_raw_contact/inventory"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-raw-contact-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_candidates_3cm.tsv" \
+  --from-raw-contact-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_candidates_3cm.tsv" \
   --raw-contact-label 3cm \
-  --evidence-root "$RUN_DIR/stage_s1_raw_contact/raw_contact"
+  --evidence-root "$RUN_DIR/s1_raw_contact/raw_contact"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-raw-contact-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_candidates_5cm.tsv" \
+  --from-raw-contact-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_candidates_5cm.tsv" \
   --raw-contact-label 5cm \
-  --evidence-root "$RUN_DIR/stage_s1_raw_contact/raw_contact"
+  --evidence-root "$RUN_DIR/s1_raw_contact/raw_contact"
 ```
 
 S2 审计 source template backlog：
@@ -216,40 +216,40 @@ S2 审计 source template backlog：
 STAGE2B_CONTACT_LABEL=3cm
 
 workspace/core4d/scripts/data_construction_v3/stages/s2_templates/build_or_audit_templates.py \
-  --input-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --input-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --out-dir "$RUN_DIR/stage_s2_templates"
+  --out-dir "$RUN_DIR/s2_templates"
 ```
 
 默认只审计，不会写 scene。确认需要自动补 box template 时显式加 `--apply-build`；非 box 永远只进入人工审查。
-`run_pipeline.py` 会在 S2 后自动生成 `stage_s2_templates/template_visual_review/`，里面包含 source template 的 MP4/sheet 和 render manifest；手动跑阶段时也可以单独执行：
+`run_pipeline.py` 会在 S2 后自动生成 `s2_templates/template_visual_review/`，里面包含 source template 的 MP4/sheet 和 render manifest；手动跑阶段时也可以单独执行：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_template_review_package.py \
-  --template-backlog-tsv "$RUN_DIR/stage_s2_templates/template_backlog.tsv" \
-  --out-dir "$RUN_DIR/stage_s2_templates/template_visual_review"
+  --template-backlog-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
+  --out-dir "$RUN_DIR/s2_templates/template_visual_review"
 ```
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-template-backlog-tsv "$RUN_DIR/stage_s2_templates/template_backlog.tsv" \
-  --evidence-root "$RUN_DIR/stage_s2_templates"
+  --from-template-backlog-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
+  --evidence-root "$RUN_DIR/s2_templates"
 ```
 
 S3 生成按 retarget variant × target route 分叉的 Stage2b 队列。默认只生成 manifest 和 dry-run 脚本，不执行旧 pipeline：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s3_retarget/run_stage2b.py \
-  --raw-contact-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
-  --template-backlog-tsv "$RUN_DIR/stage_s2_templates/template_backlog.tsv" \
+  --raw-contact-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --template-backlog-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
   --retarget-variant-registry "$RUN_DIR/registries/retarget_variant_registry.tsv" \
   --retarget-variant-id omnirt_v1 \
   --target-variant-id ref_fk \
-  --inventory-tsv "$RUN_DIR/stage_s1_raw_contact/inventory/inventory.tsv" \
+  --inventory-tsv "$RUN_DIR/s1_raw_contact/inventory/inventory.tsv" \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
   --smplx-model-dir "$SMPLX_MODEL_DIR" \
-  --out-dir "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk"
+  --out-dir "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk"
 ```
 
 `stage2b_manifest` 会显式记录每条 row 的 `converted_npz`、`omniretarget_output_npz`、`trimmed_npz`、`spider_trajectory`、`contact_mask_npz` 和 `verify_summary`。其中 `omniretarget_output_npz` 是 OmniRetarget 算法输出，不是 SPIDER 转换后的 trajectory。
@@ -267,21 +267,21 @@ workspace/core4d/scripts/data_construction_v3/stages/s3_retarget/run_stage2b.py 
 ```bash
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-stage2b-manifest-tsv "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
-  --evidence-root "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk"
+  --from-stage2b-manifest-tsv "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
+  --evidence-root "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk"
 ```
 
 S4 运行机器 target gate，并保留 visual QC 为独立状态：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/run_target_gate.py \
-  --stage2b-manifest-tsv "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk"
+  --stage2b-manifest-tsv "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --evidence-root "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk"
+  --from-target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --evidence-root "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk"
 ```
 
 如果 Stage2b 还没有实际执行，S4 会明确输出 `target_gate_status=not_run` 和 `failure_mode=stage2b_outputs_missing`，不会伪造 pass。
@@ -290,18 +290,18 @@ workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.p
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/render_visual_qc_package.py \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render"
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render"
 
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/make_visual_qc.py \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --review-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/manual_visual_review.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --review-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/manual_visual_review.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-visual-qc-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc/visual_qc_manifest.tsv" \
-  --evidence-root "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
+  --from-visual-qc-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc/visual_qc_manifest.tsv" \
+  --evidence-root "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
 ```
 
 S5 导出 candidate bank 和 handoff manifest：
@@ -309,9 +309,9 @@ S5 导出 candidate bank 和 handoff manifest：
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s5_handoff/export_handoff.py \
   --case-state-registry "$RUN_DIR/registries/case_state_registry.tsv" \
-  --stage2b-manifest-tsv "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s5_handoff"
+  --stage2b-manifest-tsv "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --out-dir "$RUN_DIR/s5_handoff"
 ```
 
 输出 `candidate_bank`、`handoff_manifest`、`rejected_manifest` 和 summary。`handoff_manifest` 默认只包含可交接或待运行的 rows；reject rows 单独进 `rejected_manifest`。
@@ -320,8 +320,8 @@ S5 同时可以导出 CEM override 配置：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s5_handoff/export_cem_overrides.py \
-  --handoff-manifest-tsv "$RUN_DIR/stage_s5_handoff/handoff_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s5_handoff/cem_overrides"
+  --handoff-manifest-tsv "$RUN_DIR/s5_handoff/handoff_manifest.tsv" \
+  --out-dir "$RUN_DIR/s5_handoff/cem_overrides"
 ```
 
 `ref_fk` route 写成 `contact_hdmi_target_source=ref_fk`；`adaptive` / `fingertip_aware` route 必须带外部 target NPZ，并在导出时校验 target 文件、sha256、shape 和有限值。这个步骤只生成下游 CEM 可消费配置，不改变 S1-S5 的数据构建判定。
@@ -330,18 +330,35 @@ S6 记录 CEM/RL 下游证据：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s6_downstream/record_downstream_evidence.py \
-  --handoff-manifest-tsv "$RUN_DIR/stage_s5_handoff/handoff_manifest.tsv" \
-  --evidence-tsv "$RUN_DIR/stage_s6_downstream/manual_or_eval_results.tsv" \
-  --evidence-root "$RUN_DIR/stage_s6_downstream" \
-  --out-dir "$RUN_DIR/stage_s6_downstream"
+  --handoff-manifest-tsv "$RUN_DIR/s5_handoff/handoff_manifest.tsv" \
+  --evidence-tsv "$RUN_DIR/s6_downstream/manual_or_eval_results.tsv" \
+  --evidence-root "$RUN_DIR/s6_downstream" \
+  --out-dir "$RUN_DIR/s6_downstream"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-downstream-evidence-tsv "$RUN_DIR/stage_s6_downstream/downstream_evidence_manifest.tsv" \
-  --evidence-root "$RUN_DIR/stage_s6_downstream"
+  --from-downstream-evidence-tsv "$RUN_DIR/s6_downstream/downstream_evidence_manifest.tsv" \
+  --evidence-root "$RUN_DIR/s6_downstream"
 ```
 
 S6 只更新 `cem_status`、`rl_status` 和 `downstream_*` 证据字段，不改变 S5 的数据构建 pass/reject 语义。
+
+RL motion export 先生成 S5/S6 join manifest：
+
+```bash
+workspace/core4d/scripts/data_construction_v3/stages/s6_downstream/export_rl_inputs.py \
+  --handoff-manifest-tsv "$RUN_DIR/s5_handoff/handoff_manifest.tsv" \
+  --cem-evidence-tsv "$RUN_DIR/s6_downstream/downstream_evidence_manifest.tsv" \
+  --out-dir "$RUN_DIR/s6_downstream/rl_export"
+```
+
+下游 RL 导出只读：
+
+```text
+$RUN_DIR/s6_downstream/rl_export/rl_export_input.tsv
+```
+
+并只消费 `rl_export_decision=RL_EXPORT_READY` 的 rows。这个 TSV 同时包含 `scene_act`、`trajectory`、`contact_mask` 和 `cem_result_npz`，避免 RL 脚本重新猜路径。
 
 S5 后建议跑一次 run 级可复现性检查：
 
@@ -352,8 +369,8 @@ workspace/core4d/scripts/data_construction_v3/qa/verify_reproducibility.py \
 
 该检查会验证 `config_hash`、`run_manifest` 命令返回码、registry evidence、S1-S5 关键 manifest 和 schema version。若 run 内存在 visual QC render manifest，还会检查 `render_error`、pass gate 未渲染、以及 pass row 的 MP4/keyframe sheet 是否存在且非空。输出：
 
-- `stage_s5_handoff/reproducibility/reproducibility_report.json`
-- `stage_s5_handoff/reproducibility/reproducibility_report.md`
+- `s5_handoff/reproducibility/reproducibility_report.json`
+- `s5_handoff/reproducibility/reproducibility_report.md`
 
 代码库级 release audit 不依赖 CORE4D raw data，可先在新机器上检查 v3 入口、文档、legacy 隔离、默认 route、fingertip contract 和 CEM override adapter 是否齐全：
 

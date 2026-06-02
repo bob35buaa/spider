@@ -384,7 +384,7 @@ def main() -> None:
     args = parser.parse_args()
 
     variants_file = args.variants_file or repo_path_from_env("VARIANTS_FILE", DEFAULT_VARIANTS)
-    results_dir = args.results_dir or repo_path_from_env("RESULTS", REPO / f"workspace/core4d/results/E108/cem/{args.stage}")
+    results_dir = args.results_dir or repo_path_from_env("RESULTS", REPO / f"workspace/core4d/results/E108/s6_downstream/cem/{args.stage}")
     variants = read_variants(variants_file)
     selected = args.variants or list(variants)
     results: dict[str, dict[str, Any]] = {}

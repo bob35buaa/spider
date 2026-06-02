@@ -59,22 +59,32 @@
 初始 CEM 证据目录：
 
 ```text
-workspace/core4d/results/E108/downstream_evidence_bucket004_person1/
+workspace/core4d/results/E108/s6_downstream/evidence/cem/
 ```
 
 补充 RL smoke 后的证据目录：
 
 ```text
-workspace/core4d/results/E108/downstream_evidence_bucket004_person1_rl_smoke/
+workspace/core4d/results/E108/s6_downstream/evidence/rl_smoke/
 ```
 
 registry 目录：
 
 ```text
-workspace/core4d/results/E108/registry_bucket004_person1_final/
+workspace/core4d/results/E108/registries/
 ```
 
 最终 registry 为 8 行：4 个 `omnirt_v1/ref_fk` rows、4 个 shared raw rows。S6 只记录 CEM/RL 下游证据，不反向改写 raw contact、template、Stage2b、target gate 或 visual QC。
+
+路径整理说明：E108 结果已整理为 `s0_environment/` 到 `s6_downstream/` 的 canonical layout；整理前的 `downstream_evidence_bucket004_person1*`、`registry_bucket004_person1_*` 等目录保留在 `workspace/core4d/results/E108/archive_legacy/`，不再作为默认入口。
+
+RL 导出输入已改为 S6 join manifest：
+
+```text
+workspace/core4d/results/E108/s6_downstream/rl_export/rl_export_input.tsv
+```
+
+该表由 `s5_handoff/handoff_manifest.tsv` 和 `s6_downstream/evidence/cem/downstream_evidence_manifest.tsv` join 生成。E108 当前 `RL_EXPORT_READY` 为 `bucket004_20231003_1_012_p1` 和 `bucket004_20231002_022_p1`；`bucket004_20231002_021_p1` 因 CEM fail 标为 `SKIP_CEM_FAIL`。
 
 | case | variant | current decision | CEM | RL | downstream decision | failure mode |
 |---|---|---|---|---|---|---|

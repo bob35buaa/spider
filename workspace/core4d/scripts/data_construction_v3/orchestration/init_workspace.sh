@@ -48,13 +48,13 @@ mkdir -p \
   "$RUN_DIR/config" \
   "$RUN_DIR/registries" \
   "$RUN_DIR/inputs" \
-  "$RUN_DIR/stage_s0_environment" \
-  "$RUN_DIR/stage_s1_raw_contact" \
-  "$RUN_DIR/stage_s2_templates" \
-  "$RUN_DIR/stage_s3_retarget" \
-  "$RUN_DIR/stage_s4_gate_visual_qc" \
-  "$RUN_DIR/stage_s5_handoff" \
-  "$RUN_DIR/stage_s6_downstream" \
+  "$RUN_DIR/s0_environment" \
+  "$RUN_DIR/s1_raw_contact" \
+  "$RUN_DIR/s2_templates" \
+  "$RUN_DIR/s3_retarget" \
+  "$RUN_DIR/s4_gate_visual_qc" \
+  "$RUN_DIR/s5_handoff" \
+  "$RUN_DIR/s6_downstream" \
   "$RUN_DIR/logs" \
   "$RUN_DIR/imported_snapshots"
 
@@ -62,7 +62,7 @@ python3 "$SCRIPT_ROOT/stages/s0_environment/check_environment.py" \
   --spider-repo "$SPIDER_REPO" \
   --holosoma-repo "$HOLOSOMA_REPO" \
   --run-root "$DATA_CONSTRUCTION_RUN_ROOT" \
-  --out-dir "$RUN_DIR/stage_s0_environment" \
+  --out-dir "$RUN_DIR/s0_environment" \
   "${CHECK_ARGS[@]}"
 
 python3 "$SCRIPT_ROOT/stages/s3_retarget/register_retarget_variant.py" \

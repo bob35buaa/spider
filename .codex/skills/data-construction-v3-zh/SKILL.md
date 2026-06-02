@@ -177,10 +177,16 @@ workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
 CEM 结果、MP4、summary、downstream evidence input 也归属于同一个实验目录，例如：
 
 ```text
-workspace/core4d/results/E108/cem/full/
-workspace/core4d/results/E108/downstream_evidence_*/
-workspace/core4d/results/E108/registry_*/
+workspace/core4d/results/E108/s5_handoff/handoff_manifest.tsv
+workspace/core4d/results/E108/s6_downstream/cem/full/
+workspace/core4d/results/E108/s6_downstream/evidence/
+workspace/core4d/results/E108/s6_downstream/rl_export/rl_export_input.tsv
+workspace/core4d/results/E108/registries/
 ```
+
+正式实验根目录必须按 `s0_environment/`、`s1_raw_contact/`、...、`s6_downstream/` 组织。整理前的 smoke/临时目录只能放在 `archive_legacy/`，不得作为新脚本默认输入。
+
+RL motion export 不直接扫描 CEM 目录，也不只读 S5 handoff。CEM evidence 产生后，必须用 `stages/s6_downstream/export_rl_inputs.py` 生成 `s6_downstream/rl_export/rl_export_input.tsv`；下游只消费其中 `rl_export_decision=RL_EXPORT_READY` 的 rows。该表必须同时带 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`cem_status`，以保证 RL 转换使用的 `scene_act` 与 CEM 所属 target case 对齐。
 
 Holosoma RL 输出可以留在 Holosoma 仓库自己的 `workspace/v3/data_construction/results/` 和 `logs/` 下，但 Core4D S6 registry 必须记录这些路径。
 

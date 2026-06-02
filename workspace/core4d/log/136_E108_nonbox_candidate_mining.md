@@ -47,8 +47,11 @@ workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
 输出：
 
 ```text
-workspace/core4d/results/E108/E108_nonbox_candidate_mining_smoke/
+workspace/core4d/results/E108/s1_raw_contact/
+workspace/core4d/results/E108/registries/case_state_registry_all_nonbox_candidates.tsv
 ```
+
+整理前的完整 smoke run 已归档到 `workspace/core4d/results/E108/archive_legacy/E108_nonbox_candidate_mining_smoke/`。
 
 ## 未 review 不放行验证
 
@@ -70,7 +73,7 @@ workspace/core4d/results/E108/E108_nonbox_candidate_mining_smoke/
 使用临时 scene/asset root 生成 9 个 bucket proxy：
 
 ```text
-workspace/core4d/results/E108/template_proxy_apply_smoke/
+workspace/core4d/results/E108/archive_legacy/template_proxy_apply_smoke/
 ```
 
 结果：
@@ -91,13 +94,13 @@ high subagent 只读审查结论：`PASS`。审查确认 `template_backlog.tsv`�
 构造一个 review TSV，仅 approve `bucket004_person1`：
 
 ```text
-workspace/core4d/results/E108/nonbox_template_review_smoke.tsv
+workspace/core4d/results/E108/archive_legacy/nonbox_template_review_smoke.tsv
 ```
 
 然后 dry-run S3：
 
 ```text
-workspace/core4d/results/E108/stage2b_review_smoke/
+workspace/core4d/results/E108/archive_legacy/stage2b_review_smoke/
 ```
 
 结果：

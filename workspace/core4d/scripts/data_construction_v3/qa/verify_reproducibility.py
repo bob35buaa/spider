@@ -31,7 +31,7 @@ STATUS_FIELDS = [
 ]
 
 OPTIONAL_STAGE_DIRS = [
-    "stage_s1_raw_contact/fingertip_route_diagnostics",
+    "s1_raw_contact/fingertip_route_diagnostics",
     "imported_snapshots/resume_inputs",
 ]
 
@@ -167,7 +167,7 @@ def check_imported_snapshots(run_dir: Path, mode: str, errors: list[str], warnin
 
 def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: list[str]) -> dict[str, Any]:
     summary: dict[str, Any] = {}
-    inventory = run_dir / "stage_s1_raw_contact/inventory/inventory.tsv"
+    inventory = run_dir / "s1_raw_contact/inventory/inventory.tsv"
     require_raw_stages = mode != "resume-from-summary"
     if not inventory.is_file() and require_raw_stages:
         errors.append(f"missing inventory.tsv: {inventory}")
@@ -177,7 +177,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         summary["inventory_rows"] = len(rows)
 
     for label in ("3cm", "5cm"):
-        candidates = run_dir / f"stage_s1_raw_contact/raw_contact/raw_contact_candidates_{label}.tsv"
+        candidates = run_dir / f"s1_raw_contact/raw_contact/raw_contact_candidates_{label}.tsv"
         if not candidates.is_file() and require_raw_stages:
             errors.append(f"missing raw contact candidates {label}: {candidates}")
         elif candidates.is_file():
@@ -185,7 +185,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
             check_schema_rows(rows, candidates, warnings)
             summary[f"raw_contact_candidates_{label}"] = len(rows)
 
-    template = run_dir / "stage_s2_templates/template_backlog.tsv"
+    template = run_dir / "s2_templates/template_backlog.tsv"
     if not template.is_file() and require_raw_stages:
         errors.append(f"missing template_backlog.tsv: {template}")
     elif template.is_file():
@@ -193,7 +193,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         check_schema_rows(rows, template, warnings)
         summary["template_rows"] = len(rows)
 
-    template_visual = run_dir / "stage_s2_templates/template_visual_review/template_visual_manifest.tsv"
+    template_visual = run_dir / "s2_templates/template_visual_review/template_visual_manifest.tsv"
     if template_visual.is_file():
         rows = read_tsv(template_visual)
         check_schema_rows(rows, template_visual, warnings)
@@ -221,7 +221,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         if missing_assets:
             errors.append(f"template visual assets missing/empty count={len(missing_assets)} sample={'; '.join(missing_assets[:20])}")
 
-    stage2b = sorted((run_dir / "stage_s3_retarget").rglob("stage2b_manifest_*.tsv"))
+    stage2b = sorted((run_dir / "s3_retarget").rglob("stage2b_manifest_*.tsv"))
     summary["stage2b_manifest_count"] = len(stage2b)
     for path in stage2b:
         rows = read_tsv(path)
@@ -259,7 +259,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         if missing_outputs:
             errors.append(f"{path} Stage2b pass outputs missing/empty count={len(missing_outputs)} sample={'; '.join(missing_outputs[:20])}")
 
-    gate = sorted((run_dir / "stage_s4_gate_visual_qc").rglob("target_gate_manifest.tsv"))
+    gate = sorted((run_dir / "s4_gate_visual_qc").rglob("target_gate_manifest.tsv"))
     summary["target_gate_manifest_count"] = len(gate)
     for path in gate:
         rows = read_tsv(path)
@@ -268,7 +268,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         if missing:
             errors.append(f"{path} missing required fields: {missing}")
 
-    visual_qc = sorted((run_dir / "stage_s4_gate_visual_qc").rglob("visual_qc_manifest.tsv"))
+    visual_qc = sorted((run_dir / "s4_gate_visual_qc").rglob("visual_qc_manifest.tsv"))
     summary["visual_qc_manifest_count"] = len(visual_qc)
     for path in visual_qc:
         rows = read_tsv(path)
@@ -277,7 +277,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         if missing:
             errors.append(f"{path} missing required fields: {missing}")
 
-    render_manifests = sorted((run_dir / "stage_s4_gate_visual_qc").rglob("visual_qc_render_manifest.tsv"))
+    render_manifests = sorted((run_dir / "s4_gate_visual_qc").rglob("visual_qc_render_manifest.tsv"))
     summary["visual_qc_render_manifest_count"] = len(render_manifests)
     render_status_counts: Counter[str] = Counter()
     missing_render_assets: list[str] = []
@@ -309,7 +309,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
     if missing_render_assets:
         errors.append(f"visual QC render assets missing/empty count={len(missing_render_assets)} sample={'; '.join(missing_render_assets[:20])}")
 
-    handoff = run_dir / "stage_s5_handoff/candidate_bank.tsv"
+    handoff = run_dir / "s5_handoff/candidate_bank.tsv"
     if not handoff.is_file():
         errors.append(f"missing candidate_bank.tsv: {handoff}")
     else:
@@ -317,7 +317,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
         check_schema_rows(rows, handoff, warnings)
         summary["candidate_bank_rows"] = len(rows)
 
-    cem_overrides = run_dir / "stage_s5_handoff/cem_overrides/cem_override_manifest.tsv"
+    cem_overrides = run_dir / "s5_handoff/cem_overrides/cem_override_manifest.tsv"
     if cem_overrides.is_file():
         rows = read_tsv(cem_overrides)
         check_schema_rows(rows, cem_overrides, warnings)
@@ -345,18 +345,49 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
             elif row.get("contact_target_sha256") and sha256_file(target) != row.get("contact_target_sha256"):
                 errors.append(f"cem override external target sha256 mismatch: {row.get('case_id', '')}:{target}")
 
-    downstream = run_dir / "stage_s6_downstream/downstream_evidence_manifest.tsv"
-    if downstream.is_file():
-        rows = read_tsv(downstream)
-        check_schema_rows(rows, downstream, warnings)
-        summary["downstream_evidence_rows"] = len(rows)
+    downstream_manifests = sorted((run_dir / "s6_downstream").rglob("downstream_evidence_manifest.tsv"))
+    if downstream_manifests:
+        total_rows = 0
+        for downstream in downstream_manifests:
+            rows = read_tsv(downstream)
+            check_schema_rows(rows, downstream, warnings)
+            total_rows += len(rows)
+            missing = [
+                field
+                for field in ["case_id", "retarget_variant_id", "target_variant_id", "cem_status", "rl_status", "downstream_decision"]
+                if rows and field not in rows[0]
+            ]
+            if missing:
+                errors.append(f"{downstream} missing required fields: {missing}")
+        summary["downstream_evidence_rows"] = total_rows
+        summary["downstream_evidence_manifests"] = len(downstream_manifests)
+
+    rl_export = run_dir / "s6_downstream/rl_export/rl_export_input.tsv"
+    if rl_export.is_file():
+        rows = read_tsv(rl_export)
+        check_schema_rows(rows, rl_export, warnings)
+        summary["rl_export_rows"] = len(rows)
+        summary["rl_export_decision_counts"] = dict(Counter(row.get("rl_export_decision", "") for row in rows))
         missing = [
             field
-            for field in ["case_id", "retarget_variant_id", "target_variant_id", "cem_status", "rl_status", "downstream_decision"]
+            for field in ["case_id", "retarget_variant_id", "target_variant_id", "scene_act", "trajectory", "cem_status", "cem_result_npz", "rl_export_decision"]
             if rows and field not in rows[0]
         ]
         if missing:
-            errors.append(f"{downstream} missing required fields: {missing}")
+            errors.append(f"{rl_export} missing required fields: {missing}")
+        repo = find_spider_repo()
+        missing_ready_assets = []
+        for row in rows:
+            if row.get("rl_export_decision") != "RL_EXPORT_READY":
+                continue
+            for field in ("scene_act", "trajectory", "cem_result_npz"):
+                asset = Path(row.get(field, "")).expanduser()
+                if not asset.is_absolute():
+                    asset = repo / asset
+                if not asset.is_file() or asset.stat().st_size <= 0:
+                    missing_ready_assets.append(f"{row.get('case_id', '')}:{field}={asset}")
+        if missing_ready_assets:
+            errors.append(f"RL export ready rows missing/empty assets count={len(missing_ready_assets)} sample={'; '.join(missing_ready_assets[:20])}")
 
     for rel in OPTIONAL_STAGE_DIRS:
         path = run_dir / rel
@@ -366,9 +397,10 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
 
 
 def check_manifest(run_dir: Path, errors: list[str], warnings: list[str]) -> dict[str, Any]:
-    config = load_json(run_dir / "config_resolved.json", errors)
-    manifest = load_json(run_dir / "run_manifest.json", errors)
-    load_json(run_dir / "git_state.json", errors)
+    s0_dir = run_dir / "s0_environment"
+    config = load_json(s0_dir / "config_resolved.json", errors)
+    manifest = load_json(s0_dir / "run_manifest.json", errors)
+    load_json(s0_dir / "git_state.json", errors)
     summary: dict[str, Any] = {}
     if isinstance(config, dict):
         expected = config.get("config_hash", "")
@@ -436,7 +468,7 @@ def main() -> int:
     args = parser.parse_args()
 
     run_dir = args.run_dir.expanduser().resolve()
-    out_dir = (args.out_dir or (run_dir / "stage_s5_handoff/reproducibility")).resolve()
+    out_dir = (args.out_dir or (run_dir / "s5_handoff/reproducibility")).resolve()
     errors: list[str] = []
     warnings: list[str] = []
     summary: dict[str, Any] = {}

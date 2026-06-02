@@ -47,19 +47,21 @@ v3 不负责同步 raw data，也不假设 raw data 存在于固定挂载点。
 默认：
 
 ```text
-${DATA_CONSTRUCTION_RUN_ROOT}/<run_id>/
+workspace/core4d/results/<run_id>/
   config_resolved.json
   run_manifest.json
   environment_check.json
   git_state.json
   registries/
   inputs/
-  stage_s1_raw_contact/
-  stage_s2_templates/
-  stage_s3_retarget/
-  stage_s4_gate_visual_qc/
-  stage_s5_handoff/
-  stage_s6_downstream/
+  s0_environment/
+  s1_raw_contact/
+  s2_templates/
+  s3_retarget/
+  s4_gate_visual_qc/
+  s5_handoff/
+  s6_downstream/
+  archive_legacy/        可选；只放整理前的旧路径，不作为新脚本默认输入
 ```
 
 `<run_id>` 应包含日期、模式和简短任务名，例如：
@@ -68,6 +70,8 @@ ${DATA_CONSTRUCTION_RUN_ROOT}/<run_id>/
 20260601_full_from_raw_medium_boxes
 20260601_resume_box026_ref_fk_batch
 ```
+
+正式实验建议使用 `E###` 作为 `<run_id>`，例如 `workspace/core4d/results/E108/`。临时 smoke 可以使用其它 run root，但需要保留的结果必须整理回同一个 `E###` 目录，并放入 `s0_environment/` 到 `s6_downstream/` 对应阶段目录。
 
 ## Registry 位置
 

@@ -26,6 +26,14 @@ def read_rows(path: Path, delimiter: str = ",") -> list[dict[str, str]]:
         return list(csv.DictReader(f, delimiter=delimiter))
 
 
+def first_existing(repo: Path, rel_paths: list[str]) -> Path:
+    for rel_path in rel_paths:
+        path = repo / rel_path
+        if path.is_file():
+            return path
+    return repo / rel_paths[0]
+
+
 def rel(path: Path | str) -> str:
     text = str(path)
     if not text:
@@ -391,7 +399,14 @@ def build_rows(repo: Path) -> list[dict[str, str]]:
             built = row_from_e107_gate(row, e107_gate)
             by_key.setdefault(row_key(built), built)
 
-    e108_candidate_registry = repo / "workspace/core4d/results/E108/E108_nonbox_candidate_mining_smoke/registries/case_state_registry.tsv"
+    e108_candidate_registry = first_existing(
+        repo,
+        [
+            "workspace/core4d/results/E108/registries/case_state_registry_all_nonbox_candidates.tsv",
+            "workspace/core4d/results/E108/archive_legacy/E108_nonbox_candidate_mining_smoke/registries/case_state_registry.tsv",
+            "workspace/core4d/results/E108/E108_nonbox_candidate_mining_smoke/registries/case_state_registry.tsv",
+        ],
+    )
     if e108_candidate_registry.is_file():
         for row in read_rows(e108_candidate_registry, delimiter="\t"):
             built = row_from_e108_registry(row, e108_candidate_registry)
@@ -399,7 +414,14 @@ def build_rows(repo: Path) -> list[dict[str, str]]:
                 built["notes"] = prefixed_note("E108_nonbox_candidate_mining", built.get("notes", ""))
             by_key[row_key(built)] = built
 
-    e108_registry = repo / "workspace/core4d/results/E108/registry_bucket004_person1_final/case_state_registry.tsv"
+    e108_registry = first_existing(
+        repo,
+        [
+            "workspace/core4d/results/E108/registries/case_state_registry.tsv",
+            "workspace/core4d/results/E108/archive_legacy/registry_bucket004_person1_final/case_state_registry.tsv",
+            "workspace/core4d/results/E108/registry_bucket004_person1_final/case_state_registry.tsv",
+        ],
+    )
     if e108_registry.is_file():
         for row in read_rows(e108_registry, delimiter="\t"):
             built = row_from_e108_registry(row, e108_registry)

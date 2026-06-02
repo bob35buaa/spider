@@ -195,8 +195,8 @@ workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/render_visual_qc_package.py \
-  --target-gate-manifest-tsv /tmp/core4d_dcv3_execute_stage2b_smoke/smoke_execute_stage2b_box004_r3/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv \
-  --out-dir /tmp/core4d_dcv3_execute_stage2b_smoke/smoke_execute_stage2b_box004_r3/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render \
+  --target-gate-manifest-tsv /tmp/core4d_dcv3_execute_stage2b_smoke/smoke_execute_stage2b_box004_r3/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv \
+  --out-dir /tmp/core4d_dcv3_execute_stage2b_smoke/smoke_execute_stage2b_box004_r3/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render \
   --max-video-frames 120 \
   --overwrite
 
@@ -239,8 +239,8 @@ workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py \
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/render_visual_qc_package.py \
-  --target-gate-manifest-tsv /tmp/core4d_dcv3_execute_stage2b_box026_smoke/smoke_execute_stage2b_box026_ref_fk_5cm/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv \
-  --out-dir /tmp/core4d_dcv3_execute_stage2b_box026_smoke/smoke_execute_stage2b_box026_ref_fk_5cm/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render \
+  --target-gate-manifest-tsv /tmp/core4d_dcv3_execute_stage2b_box026_smoke/smoke_execute_stage2b_box026_ref_fk_5cm/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv \
+  --out-dir /tmp/core4d_dcv3_execute_stage2b_box026_smoke/smoke_execute_stage2b_box026_ref_fk_5cm/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render \
   --max-video-frames 120 \
   --overwrite
 

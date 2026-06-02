@@ -57,12 +57,12 @@ S0 会同时检查 SPIDER 当前 Python 环境和 Holosoma retargeting 环境。
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/build_inventory.py \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --out-dir "$RUN_DIR/stage_s1_raw_contact/inventory"
+  --out-dir "$RUN_DIR/s1_raw_contact/inventory"
 
 workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/run_raw_contact.py \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --inventory-tsv "$RUN_DIR/stage_s1_raw_contact/inventory/inventory.tsv" \
-  --out-dir "$RUN_DIR/stage_s1_raw_contact/raw_contact" \
+  --inventory-tsv "$RUN_DIR/s1_raw_contact/inventory/inventory.tsv" \
+  --out-dir "$RUN_DIR/s1_raw_contact/raw_contact" \
   --queue selected-medium-box \
   --thresholds-m 0.03,0.05
 ```
@@ -88,8 +88,8 @@ workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/run_raw_cont
 STAGE2B_CONTACT_LABEL=3cm
 
 workspace/core4d/scripts/data_construction_v3/stages/s1_raw_contact/build_fingertip_route_diagnostics.py \
-  --input-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
-  --out-dir "$RUN_DIR/stage_s1_raw_contact/fingertip_route_diagnostics"
+  --input-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --out-dir "$RUN_DIR/s1_raw_contact/fingertip_route_diagnostics"
 ```
 
 输入：
@@ -148,18 +148,18 @@ E101 在这里按 route-level evidence 使用：box004 guard 证明 `fingertip_a
 STAGE2B_CONTACT_LABEL=3cm
 
 workspace/core4d/scripts/data_construction_v3/stages/s2_templates/build_or_audit_templates.py \
-  --input-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --input-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --out-dir "$RUN_DIR/stage_s2_templates"
+  --out-dir "$RUN_DIR/s2_templates"
 ```
 
 默认是只读审计。只有显式传入 `--apply-build` 时才会创建缺失的 box source template：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s2_templates/build_or_audit_templates.py \
-  --input-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --input-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
-  --out-dir "$RUN_DIR/stage_s2_templates" \
+  --out-dir "$RUN_DIR/s2_templates" \
   --apply-build
 ```
 
@@ -169,8 +169,8 @@ source template 可视化包入口：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_template_review_package.py \
-  --template-backlog-tsv "$RUN_DIR/stage_s2_templates/template_backlog.tsv" \
-  --out-dir "$RUN_DIR/stage_s2_templates/template_visual_review"
+  --template-backlog-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
+  --out-dir "$RUN_DIR/s2_templates/template_visual_review"
 ```
 
 `run_pipeline.py` 会在 S2 audit/build 后自动生成该 visual review package。缺 scene 的 backlog row 会明确标为 `not_rendered`；已有 scene 但 render 失败会进入 `render_error`，供 release review 和复现性自检定位。
@@ -189,8 +189,8 @@ workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_templat
 ```bash
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-template-review-tsv "$RUN_DIR/stage_s2_templates/nonbox_template_review.tsv" \
-  --evidence-root "$RUN_DIR/stage_s2_templates" \
+  --from-template-review-tsv "$RUN_DIR/s2_templates/nonbox_template_review.tsv" \
+  --evidence-root "$RUN_DIR/s2_templates" \
   --source-ref S2_nonbox_template_review
 ```
 
@@ -219,15 +219,15 @@ convert_core4d_to_omniretarget.py
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s3_retarget/run_stage2b.py \
-  --raw-contact-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
-  --template-backlog-tsv "$RUN_DIR/stage_s2_templates/template_backlog.tsv" \
+  --raw-contact-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --template-backlog-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
   --retarget-variant-registry "$RUN_DIR/registries/retarget_variant_registry.tsv" \
   --retarget-variant-id omnirt_v1 \
   --target-variant-id ref_fk \
-  --inventory-tsv "$RUN_DIR/stage_s1_raw_contact/inventory/inventory.tsv" \
+  --inventory-tsv "$RUN_DIR/s1_raw_contact/inventory/inventory.tsv" \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
   --smplx-model-dir "$SMPLX_MODEL_DIR" \
-  --out-dir "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk"
+  --out-dir "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk"
 ```
 
 该命令默认只生成：
@@ -253,16 +253,16 @@ workspace/core4d/scripts/data_construction_v3/stages/s3_retarget/run_stage2b.py 
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s3_retarget/run_stage2b.py \
-  --raw-contact-tsv "$RUN_DIR/stage_s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
-  --template-backlog-tsv "$RUN_DIR/stage_s2_templates/template_backlog.tsv" \
+  --raw-contact-tsv "$RUN_DIR/s1_raw_contact/raw_contact/raw_contact_pass_${STAGE2B_CONTACT_LABEL}.tsv" \
+  --template-backlog-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
   --retarget-variant-registry "$RUN_DIR/registries/retarget_variant_registry.tsv" \
   --retarget-variant-id omnirt_v1 \
   --target-variant-id fingertip_aware \
-  --route-diagnostic-tsv "$RUN_DIR/stage_s1_raw_contact/fingertip_route_diagnostics.tsv" \
-  --inventory-tsv "$RUN_DIR/stage_s1_raw_contact/inventory/inventory.tsv" \
+  --route-diagnostic-tsv "$RUN_DIR/s1_raw_contact/fingertip_route_diagnostics.tsv" \
+  --inventory-tsv "$RUN_DIR/s1_raw_contact/inventory/inventory.tsv" \
   --core4d-raw-root "$CORE4D_RAW_ROOT" \
   --smplx-model-dir "$SMPLX_MODEL_DIR" \
-  --out-dir "$RUN_DIR/stage_s3_retarget/omnirt_v1/fingertip_aware"
+  --out-dir "$RUN_DIR/s3_retarget/omnirt_v1/fingertip_aware"
 ```
 
 缺少该 manifest，或 manifest 中 `fingertip_vote_status` / `palm_vote_status` / `quat_audit_status` / `target_active_mask_status` / `e101_route_evidence_status` 任一未 pass 时，S3 输出 `stage2b_route_diagnostics_missing` 或 `stage2b_route_diagnostics_not_pass`，不会执行 Stage2b。
@@ -303,8 +303,8 @@ workspace/core4d/scripts/data_construction_v3/stages/s3_retarget/run_stage2b.py 
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/run_target_gate.py \
-  --stage2b-manifest-tsv "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk"
+  --stage2b-manifest-tsv "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk"
 ```
 
 输出：
@@ -328,8 +328,8 @@ Visual QC replay package 入口：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/render_visual_qc_package.py \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render"
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc_render"
 ```
 
 输出：
@@ -342,8 +342,8 @@ Visual QC manifest 入口：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/make_visual_qc.py \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
 ```
 
 默认行为：`target_gate_status=pass` 的 row 进入 `visual_qc_status=review`，表示待人工/LLM release review；未通过机器 gate 的 row 保持 `not_run`。`run_pipeline.py` 在 S4 target gate 后会自动生成这份默认 visual QC manifest 并同步 registry；人工/LLM 审查 TSV 可以后续再次导入覆盖。
@@ -352,14 +352,14 @@ workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/make_visu
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s4_gate_visual_qc/make_visual_qc.py \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --review-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/manual_visual_review.tsv" \
-  --out-dir "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --review-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/manual_visual_review.tsv" \
+  --out-dir "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-visual-qc-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc/visual_qc_manifest.tsv" \
-  --evidence-root "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
+  --from-visual-qc-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc/visual_qc_manifest.tsv" \
+  --evidence-root "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/visual_qc"
 ```
 
 `manual_visual_review.tsv` 最小字段：
@@ -388,9 +388,9 @@ S5 只表达数据和 target 是否可进入下游，不把 RL/CEM 失败反向�
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s5_handoff/export_handoff.py \
   --case-state-registry "$RUN_DIR/registries/case_state_registry.tsv" \
-  --stage2b-manifest-tsv "$RUN_DIR/stage_s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
-  --target-gate-manifest-tsv "$RUN_DIR/stage_s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s5_handoff"
+  --stage2b-manifest-tsv "$RUN_DIR/s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv" \
+  --target-gate-manifest-tsv "$RUN_DIR/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv" \
+  --out-dir "$RUN_DIR/s5_handoff"
 ```
 
 输出：
@@ -404,8 +404,8 @@ CEM override 导出入口：
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s5_handoff/export_cem_overrides.py \
-  --handoff-manifest-tsv "$RUN_DIR/stage_s5_handoff/handoff_manifest.tsv" \
-  --out-dir "$RUN_DIR/stage_s5_handoff/cem_overrides"
+  --handoff-manifest-tsv "$RUN_DIR/s5_handoff/handoff_manifest.tsv" \
+  --out-dir "$RUN_DIR/s5_handoff/cem_overrides"
 ```
 
 输出：
@@ -453,6 +453,7 @@ handoff 分类：
 - videos；
 - RL train/eval result；
 - downstream evidence row。
+- RL export input manifest。
 
 S6 只记录下游证据，不反向改变 S1-S5 的数据构建判定。也就是说，CEM/RL 失败可以形成 `DOWNSTREAM_*` 证据，但不能把 raw contact、template、Stage2b 或 target gate 改写成失败。
 
@@ -460,16 +461,32 @@ S6 只记录下游证据，不反向改变 S1-S5 的数据构建判定。也就�
 
 ```bash
 workspace/core4d/scripts/data_construction_v3/stages/s6_downstream/record_downstream_evidence.py \
-  --handoff-manifest-tsv "$RUN_DIR/stage_s5_handoff/handoff_manifest.tsv" \
-  --evidence-tsv "$RUN_DIR/stage_s6_downstream/manual_or_eval_results.tsv" \
-  --evidence-root "$RUN_DIR/stage_s6_downstream" \
-  --out-dir "$RUN_DIR/stage_s6_downstream"
+  --handoff-manifest-tsv "$RUN_DIR/s5_handoff/handoff_manifest.tsv" \
+  --evidence-tsv "$RUN_DIR/s6_downstream/manual_or_eval_results.tsv" \
+  --evidence-root "$RUN_DIR/s6_downstream" \
+  --out-dir "$RUN_DIR/s6_downstream"
 
 workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.py \
   --registry-dir "$RUN_DIR/registries" \
-  --from-downstream-evidence-tsv "$RUN_DIR/stage_s6_downstream/downstream_evidence_manifest.tsv" \
-  --evidence-root "$RUN_DIR/stage_s6_downstream"
+  --from-downstream-evidence-tsv "$RUN_DIR/s6_downstream/downstream_evidence_manifest.tsv" \
+  --evidence-root "$RUN_DIR/s6_downstream"
 ```
+
+RL motion export 不直接消费 S5，也不在脚本里猜 CEM npz。CEM 结果产生后，先生成 S6 join manifest：
+
+```bash
+workspace/core4d/scripts/data_construction_v3/stages/s6_downstream/export_rl_inputs.py \
+  --handoff-manifest-tsv "$RUN_DIR/s5_handoff/handoff_manifest.tsv" \
+  --cem-evidence-tsv "$RUN_DIR/s6_downstream/downstream_evidence_manifest.tsv" \
+  --out-dir "$RUN_DIR/s6_downstream/rl_export"
+```
+
+输出：
+
+- `rl_export_input.tsv/json`：S5 handoff 与 S6 CEM evidence 的 join 表，包含 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`cem_status` 和 `rl_export_decision`；
+- `rl_export_summary.json/md`：`RL_EXPORT_READY`、`SKIP_CEM_FAIL`、`WAIT_CEM_NOT_RUN` 等分布。
+
+下游 RL 导出只消费 `rl_export_input.tsv` 中 `rl_export_decision=RL_EXPORT_READY` 的 rows。S5 保持 CEM 前 handoff 语义，不写入 CEM 后验结果。
 
 `manual_or_eval_results.tsv` 最小字段：
 

@@ -632,7 +632,7 @@ def main() -> int:
                 "--case-state-registry",
                 str(matrix_registry / "case_state_registry.tsv"),
                 "--out-dir",
-                str(matrix_root / "stage_s5_handoff"),
+                str(matrix_root / "s5_handoff"),
             ],
         )
         add(
@@ -641,11 +641,11 @@ def main() -> int:
                 sys.executable,
                 py("record_downstream_evidence.py"),
                 "--handoff-manifest-tsv",
-                str(matrix_root / "stage_s5_handoff/handoff_manifest.tsv"),
+                str(matrix_root / "s5_handoff/handoff_manifest.tsv"),
                 "--evidence-tsv",
                 str(matrix_evidence),
                 "--out-dir",
-                str(matrix_root / "stage_s6_downstream"),
+                str(matrix_root / "s6_downstream"),
                 "--evidence-root",
                 str(matrix_root / "evidence"),
                 "--source-ref",
@@ -660,17 +660,17 @@ def main() -> int:
                 "--registry-dir",
                 str(matrix_registry),
                 "--from-downstream-evidence-tsv",
-                str(matrix_root / "stage_s6_downstream/downstream_evidence_manifest.tsv"),
+                str(matrix_root / "s6_downstream/downstream_evidence_manifest.tsv"),
                 "--evidence-root",
-                str(matrix_root / "stage_s6_downstream"),
+                str(matrix_root / "s6_downstream"),
                 "--source-ref",
                 "run_smoke_suite_state_matrix",
             ],
         )
         assert_state_matrix_pass(
             matrix_registry / "case_state_registry.tsv",
-            matrix_root / "stage_s5_handoff/handoff_summary.json",
-            matrix_root / "stage_s6_downstream/downstream_evidence_summary.json",
+            matrix_root / "s5_handoff/handoff_summary.json",
+            matrix_root / "s6_downstream/downstream_evidence_summary.json",
         )
         bad_resume = matrix_root / "bad_resume_registry.tsv"
         write_bad_resume_registry(bad_resume)
@@ -773,8 +773,8 @@ def main() -> int:
             add("verify_full_from_raw", [sys.executable, py("verify_reproducibility.py"), "--run-dir", str(full_dir)])
 
             registry = full_dir / "registries/case_state_registry.tsv"
-            stage2b = sorted((full_dir / "stage_s3_retarget").rglob("stage2b_manifest_*.tsv"))
-            target_gate = sorted((full_dir / "stage_s4_gate_visual_qc").rglob("target_gate_manifest.tsv"))
+            stage2b = sorted((full_dir / "s3_retarget").rglob("stage2b_manifest_*.tsv"))
+            target_gate = sorted((full_dir / "s4_gate_visual_qc").rglob("target_gate_manifest.tsv"))
             resume_cmd = [
                 sys.executable,
                 py("run_pipeline.py"),

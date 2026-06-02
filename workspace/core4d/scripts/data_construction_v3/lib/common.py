@@ -44,6 +44,7 @@ SCRIPT_RELATIVE_PATHS = {
     "run_target_gate.py": "stages/s4_gate_visual_qc/run_target_gate.py",
     "export_cem_overrides.py": "stages/s5_handoff/export_cem_overrides.py",
     "export_handoff.py": "stages/s5_handoff/export_handoff.py",
+    "export_rl_inputs.py": "stages/s6_downstream/export_rl_inputs.py",
     "record_downstream_evidence.py": "stages/s6_downstream/record_downstream_evidence.py",
     "import_legacy_snapshot.py": "migration/import_legacy_snapshot.py",
     "build_existing_cases_seed.py": "migration/build_existing_cases_seed.py",

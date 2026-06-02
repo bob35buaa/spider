@@ -41,6 +41,7 @@ REQUIRED_SCRIPTS = [
     "make_visual_qc.py",
     "export_handoff.py",
     "export_cem_overrides.py",
+    "export_rl_inputs.py",
     "record_downstream_evidence.py",
     "update_case_state_registry.py",
     "import_legacy_snapshot.py",
@@ -94,7 +95,7 @@ CHECKS: list[dict[str, str]] = [
     {
         "id": "pipeline_exports_cem_overrides",
         "path": "workspace/core4d/scripts/data_construction_v3/orchestration/run_pipeline.py",
-        "pattern": r"export_cem_overrides\.py.*stage_s5_handoff/cem_overrides",
+        "pattern": r"export_cem_overrides\.py.*s5_handoff/cem_overrides",
         "description": "S5 handoff exports CEM override configs",
     },
     {

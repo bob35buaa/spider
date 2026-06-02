@@ -67,14 +67,14 @@ def mkdirs(run_dir: Path) -> None:
         "config",
         "registries",
         "inputs",
-        "stage_s0_environment",
-        "stage_s1_raw_contact/inventory",
-        "stage_s1_raw_contact/raw_contact",
-        "stage_s2_templates",
-        "stage_s3_retarget",
-        "stage_s4_gate_visual_qc",
-        "stage_s5_handoff",
-        "stage_s6_downstream",
+        "s0_environment",
+        "s1_raw_contact/inventory",
+        "s1_raw_contact/raw_contact",
+        "s2_templates",
+        "s3_retarget",
+        "s4_gate_visual_qc",
+        "s5_handoff",
+        "s6_downstream",
         "logs",
         "imported_snapshots",
     ]:
@@ -217,7 +217,7 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
         "--run-root",
         str(run_root),
         "--out-dir",
-        str(run_dir / "stage_s0_environment"),
+        str(run_dir / "s0_environment"),
     ]
     if args.allow_missing_guard_scene:
         env_cmd.append("--allow-missing-guard-scene")
@@ -254,8 +254,8 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
     )
     stage_decisions["S0b_registries"] = "pass"
 
-    inv_dir = run_dir / "stage_s1_raw_contact/inventory"
-    raw_contact_dir = run_dir / "stage_s1_raw_contact/raw_contact"
+    inv_dir = run_dir / "s1_raw_contact/inventory"
+    raw_contact_dir = run_dir / "s1_raw_contact/raw_contact"
     commands.append(
         run_command(
             [
@@ -335,7 +335,7 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
             )
     stage_decisions["S1_raw_inventory_contact"] = "pass"
 
-    template_dir = run_dir / "stage_s2_templates"
+    template_dir = run_dir / "s2_templates"
     stage2b_contact_label = args.stage2b_contact_label
     stage2b_raw_contact_pass = raw_contact_dir / f"raw_contact_pass_{stage2b_contact_label}.tsv"
     if not stage2b_raw_contact_pass.is_file():
@@ -389,7 +389,7 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
 
     route_diagnostic_tsvs = list(args.route_diagnostic_tsv)
     if args.build_fingertip_route_diagnostics:
-        diag_dir = run_dir / "stage_s1_raw_contact/fingertip_route_diagnostics"
+        diag_dir = run_dir / "s1_raw_contact/fingertip_route_diagnostics"
         diag_cmd = [
             sys.executable,
             py("build_fingertip_route_diagnostics.py"),
@@ -419,7 +419,7 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
     for variant_id in args.retarget_variant_id:
         for target_variant_id in args.target_variant_id:
             run_slug = safe_id(f"{variant_id}_{target_variant_id}")
-            variant_dir = run_dir / "stage_s3_retarget" / variant_id / target_variant_id
+            variant_dir = run_dir / "s3_retarget" / variant_id / target_variant_id
             s3_cmd = [
                 sys.executable,
                 py("run_stage2b.py"),
@@ -469,7 +469,7 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
                 )
             )
 
-            gate_dir = run_dir / "stage_s4_gate_visual_qc" / variant_id / target_variant_id
+            gate_dir = run_dir / "s4_gate_visual_qc" / variant_id / target_variant_id
             commands.append(
                 run_command(
                     [
@@ -557,7 +557,7 @@ def run_export_handoff(
         "--case-state-registry",
         str(run_dir / "registries/case_state_registry.tsv"),
         "--out-dir",
-        str(run_dir / "stage_s5_handoff"),
+        str(run_dir / "s5_handoff"),
     ]
     for path in stage2b_manifests:
         if path.is_file():
@@ -572,9 +572,9 @@ def run_export_handoff(
                 sys.executable,
                 py("export_cem_overrides.py"),
                 "--handoff-manifest-tsv",
-                str(run_dir / "stage_s5_handoff/handoff_manifest.tsv"),
+                str(run_dir / "s5_handoff/handoff_manifest.tsv"),
                 "--out-dir",
-                str(run_dir / "stage_s5_handoff/cem_overrides"),
+                str(run_dir / "s5_handoff/cem_overrides"),
                 "--spider-repo",
                 str(spider_repo),
             ],

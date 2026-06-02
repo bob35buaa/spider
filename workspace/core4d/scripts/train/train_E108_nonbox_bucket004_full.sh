@@ -7,8 +7,8 @@ MODE="${1:-local}"       # list | local | remote-gpu0 | remote-gpu1 | single
 STAGE="${2:-full}"       # full | smoke
 GPU="${3:-0}"
 VARIANTS_FILE="${VARIANTS_FILE:-workspace/core4d/scripts/E108/nonbox_bucket004_variants.tsv}"
-RESULTS="${RESULTS:-workspace/core4d/results/E108/cem/${STAGE}}"
-LOGS="${LOGS:-logs/E108/cem/${STAGE}}"
+RESULTS="${RESULTS:-workspace/core4d/results/E108/s6_downstream/cem/${STAGE}}"
+LOGS="${LOGS:-workspace/core4d/results/E108/s6_downstream/cem/logs/${STAGE}}"
 mkdir -p "$RESULTS/keyframes" "$LOGS"
 
 if [ "$STAGE" != "smoke" ] && [ "$STAGE" != "full" ]; then

@@ -38,8 +38,8 @@ v3 的可复现性依赖 manifest，而不是依赖 results 进 git。每个阶�
 报告路径：
 
 ```text
-stage_s5_handoff/reproducibility/reproducibility_report.json
-stage_s5_handoff/reproducibility/reproducibility_report.md
+s5_handoff/reproducibility/reproducibility_report.json
+s5_handoff/reproducibility/reproducibility_report.md
 ```
 
 ## 导入 manifest
@@ -351,6 +351,42 @@ S5 当前脚本输出：
 - `diagnostic_contracts`
 
 S5 不修改 raw/template/Stage2b/gate 事实，只把已有 manifest 归并成下游可消费索引。
+
+S6 当前脚本输出：
+
+| 文件 | 说明 |
+|---|---|
+| `downstream_evidence_manifest.tsv/json` | CEM/RL 下游证据；按 `(case_id, retarget_variant_id, target_variant_id)` 对齐 S5 handoff。 |
+| `rl_export/rl_export_input.tsv/json` | RL motion export 的唯一输入索引，由 S5 handoff 与 S6 CEM evidence join 生成。 |
+| `rl_export/rl_export_summary.json/md` | RL export ready/skip/wait 分布。 |
+
+`rl_export_input.tsv` 必须包含：
+
+- `case_id`
+- `retarget_variant_id`
+- `target_variant_id`
+- `handoff_decision`
+- `target_gate_status`
+- `visual_qc_status`
+- `target_scene`
+- `trajectory`
+- `scene_act`
+- `contact_mask`
+- `stage2b_target_task`
+- `cem_status`
+- `cem_run_id`
+- `cem_result_npz`
+- `cem_video`
+- `cem_metrics_ref`
+- `downstream_decision`
+- `downstream_failure_mode`
+- `rl_export_decision`
+- `skip_reason`
+- `scene_act_exists`
+- `trajectory_exists`
+- `cem_result_exists`
+
+`rl_export_decision=RL_EXPORT_READY` 表示该 row 同时满足 S5 handoff ready、S4 gate/QC pass、CEM pass，并且 `scene_act`、`trajectory`、`cem_result_npz` 文件存在。RL 导出脚本只消费这些 rows。
 
 ## retarget variant 注册表
 
