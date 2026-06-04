@@ -146,7 +146,7 @@ def status_from_contact_decision(decision: str) -> str:
         return "pass"
     if decision == "raw_contact_review":
         return "review"
-    if decision in {"raw_contact_fail", "raw_contact_error"}:
+    if decision in {"raw_contact_fail", "raw_contact_error", "raw_contact_reject_motion"}:
         return "reject"
     return "not_run"
 

@@ -16,5 +16,7 @@
 可视化等输出到@@workspace/exp_diagnostic_v3/results
 
 ## 注意
-1. 不要改当前的代码，只是审查和进行下一步规划
-2. 合理使用subagent，避免污染主线
+1. 不要改当前spider的算法代码，只是审查和进行下一步规划
+2. 合理使用subagents，避免污染主线上下文
+3. 实验是在另外的机器上展开的，如果遇到找不到的路径，先试一下路径映射，相对路径应该是一样的, spider就是本项目，holosoma在@/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/holosoma
+4. 需要用下面的python运行：.venv/bin/python, 需要mujoco的时候： MUJOCO_GL=egl MUJOCO_EGL_DEVICE_ID=0 .venv/bin/python

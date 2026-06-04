@@ -29,6 +29,12 @@ from common import SCHEMA_VERSION, json_dumps, read_tsv, timestamp, write_json, 
 PERSONS = ("person1", "person2")
 HANDS = ("left", "right")
 DEFAULT_THRESHOLDS_M = (0.03, 0.05)
+# Motion-geometry hard gate (active-segment object trajectory). Sequences whose box
+# rotates too much or is not lifted enough are not a clean carry task and are rejected
+# before downstream (decision -> raw_contact_reject_motion). See
+# workspace/exp_diagnostic_v3/reverify_v3_report.md for the threshold derivation.
+MOTION_ROT_MAX_DEG = 45.0   # active-segment total rotation >= this -> reject
+MOTION_LIFT_MIN_M = 0.30    # active-segment lift <= this -> reject
 HAND_RANGES = {
     "left": np.arange(4700, 5500, dtype=np.int64),
     "right": np.arange(7500, 8150, dtype=np.int64),
@@ -200,6 +206,18 @@ def active_motion_mask(object_pos: np.ndarray) -> np.ndarray:
     return mask
 
 
+def object_rotation_active_deg(poses: np.ndarray, active_mask: np.ndarray) -> float:
+    """Geodesic rotation angle of the object from first to last active frame (deg)."""
+    idx = np.flatnonzero(active_mask)
+    if idx.size < 2:
+        return 0.0
+    r0 = poses[idx[0], :3, :3]
+    r1 = poses[idx[-1], :3, :3]
+    r_rel = r0.T @ r1
+    cos = (np.trace(r_rel) - 1.0) / 2.0
+    return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
+
+
 def compute_contact_proxy(
     core4d_root: Path,
     candidate: SequenceCandidate,
@@ -248,6 +266,7 @@ def compute_contact_proxy(
                             (center_world - poses[frame, :3, 3]) @ poses[frame, :3, :3]
                         ).astype(np.float32)
 
+    active_mask = active_motion_mask(object_pos)
     return {
         "candidate": candidate,
         "seq_dir": seq_dir,
@@ -257,7 +276,13 @@ def compute_contact_proxy(
         "object_xy_displacement_m": float(np.linalg.norm(object_pos[-1, :2] - object_pos[0, :2])),
         "object_z_min_m": float(object_pos[:, 2].min()),
         "object_z_max_m": float(object_pos[:, 2].max()),
-        "active_mask": active_motion_mask(object_pos),
+        "active_mask": active_mask,
+        "object_rotation_active_deg": object_rotation_active_deg(poses, active_mask),
+        "object_lift_active_m": (
+            float(object_pos[active_mask, 2].max() - object_pos[active_mask, 2].min())
+            if active_mask.any()
+            else 0.0
+        ),
         "min_dist_m": min_dist,
         "tip_min_dist_m": tip_min_dist,
         "vertex_count": vertex_count,
@@ -313,6 +338,8 @@ def metrics_for(result: dict[str, Any], person: str, threshold_index: int) -> di
 
 
 def route_after_raw_contact(decision: str, inventory_row: dict[str, str]) -> str:
+    if decision == "raw_contact_reject_motion":
+        return "hold_motion_geometry_failed"
     if decision == "raw_contact_fail":
         return "hold_raw_contact_failed"
     if decision == "raw_contact_error":
@@ -327,6 +354,7 @@ def decision_group(decision: str) -> str:
         return "进入下一轮"
     if decision == "raw_contact_review":
         return "边界/review"
+    # raw_contact_fail / raw_contact_error / raw_contact_reject_motion -> 抛弃/跳过
     return "抛弃/跳过"
 
 
@@ -362,6 +390,19 @@ def score_case_person(result: dict[str, Any], person: str, threshold_m: float, t
         notes.append("unbalanced_left_right_contact")
     if partner_any < 0.15:
         notes.append("weak_partner_support_proxy")
+
+    # Motion-geometry hard gate: a clean carry needs small object rotation and a real
+    # lift. Overrides the contact-config decision so dirty motion never reaches pass.
+    rotation_deg = float(result["object_rotation_active_deg"])
+    lift_m = float(result["object_lift_active_m"])
+    motion_fail_reasons: list[str] = []
+    if rotation_deg >= MOTION_ROT_MAX_DEG:
+        motion_fail_reasons.append(f"object_rotation_{rotation_deg:.0f}deg>=45")
+    if lift_m <= MOTION_LIFT_MIN_M:
+        motion_fail_reasons.append(f"object_lift_{lift_m:.2f}m<=0.30")
+    if motion_fail_reasons:
+        decision = "raw_contact_reject_motion"
+        notes.extend(motion_fail_reasons)
 
     threshold_metrics: dict[str, float] = {}
     thresholds = tuple(float(x) for x in result["thresholds_m"])
@@ -425,6 +466,9 @@ def score_case_person(result: dict[str, Any], person: str, threshold_m: float, t
         "object_xy_path_m": round(float(result["object_xy_path_m"]), 4),
         "object_z_min_m": round(float(result["object_z_min_m"]), 4),
         "object_z_max_m": round(float(result["object_z_max_m"]), 4),
+        "object_rotation_active_deg": round(rotation_deg, 2),
+        "object_lift_active_m": round(lift_m, 4),
+        "motion_quality_fail_reasons": ",".join(motion_fail_reasons),
         "sample_count": int(result["sample_count"]),
         "schema_version": SCHEMA_VERSION,
         "updated_at": timestamp(),
@@ -490,6 +534,9 @@ def error_rows(candidate: SequenceCandidate, message: str, threshold_m: float) -
                 "object_xy_path_m": inv.get("object_xy_path_m", ""),
                 "object_z_min_m": inv.get("object_z_min_m", ""),
                 "object_z_max_m": inv.get("object_z_max_m", ""),
+                "object_rotation_active_deg": "",
+                "object_lift_active_m": "",
+                "motion_quality_fail_reasons": "",
                 "sample_count": 0,
                 "schema_version": SCHEMA_VERSION,
                 "updated_at": timestamp(),

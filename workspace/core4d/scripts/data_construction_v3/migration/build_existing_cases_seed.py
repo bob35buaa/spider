@@ -292,7 +292,7 @@ def status_from_raw_decision(value: str) -> str:
         return "pass"
     if value == "raw_contact_review":
         return "review"
-    if value in {"raw_contact_fail", "raw_contact_error"}:
+    if value in {"raw_contact_fail", "raw_contact_error", "raw_contact_reject_motion"}:
         return "reject"
     return "not_run"
 
