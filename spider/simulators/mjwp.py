@@ -156,6 +156,41 @@ def _sample_gate_from_ref_mask(
     return mask.reshape(-1)[0].view(1).expand(num_samples)
 
 
+def _per_eef_mask_from_ref_mask(
+    mask,
+    num_samples: int,
+    num_eef: int,
+    device: str,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Convert scalar/per-EEF/per-sample masks to (num_samples, num_eef)."""
+    if not torch.is_tensor(mask):
+        mask = torch.tensor(mask, device=device, dtype=dtype)
+    else:
+        mask = mask.to(device=device, dtype=dtype)
+    if mask.ndim == 0:
+        return mask.view(1, 1).expand(num_samples, num_eef)
+    if mask.ndim == 1:
+        if mask.shape[0] == num_eef:
+            return mask.unsqueeze(0).expand(num_samples, num_eef)
+        if mask.shape[0] == num_samples:
+            return mask.unsqueeze(1).expand(num_samples, num_eef)
+        if mask.shape[0] == 1:
+            return mask.view(1, 1).expand(num_samples, num_eef)
+        return mask[0].view(1, 1).expand(num_samples, num_eef)
+    if mask.ndim == 2:
+        if mask.shape == (num_samples, num_eef):
+            return mask
+        if mask.shape[1] == num_eef:
+            return mask[0].unsqueeze(0).expand(num_samples, num_eef)
+        if mask.shape[0] == num_samples and mask.shape[1] == 1:
+            return mask.expand(num_samples, num_eef)
+        if mask.shape[1] == num_samples:
+            return mask.max(dim=0).values.unsqueeze(1).expand(num_samples, num_eef)
+        return mask.reshape(-1)[0].view(1, 1).expand(num_samples, num_eef)
+    return mask.reshape(-1)[0].view(1, 1).expand(num_samples, num_eef)
+
+
 # TODO: define update environment parameter kernel functions, combine them compile step, also add parameter to be modified into MJWPEnv
 
 # --
@@ -1166,6 +1201,7 @@ def get_reward(
 
     robot_object_penalty = torch.zeros(N, device=config.device)
     leg_object_penalty = torch.zeros(N, device=config.device)
+    leg_object_penalty_gate = torch.ones(N, device=config.device)
     hand_floor_penalty = torch.zeros(N, device=config.device)
     hand_object_deep_penalty = torch.zeros(N, device=config.device)
     object_lift_rew = torch.zeros(N, device=config.device)
@@ -1176,6 +1212,28 @@ def get_reward(
     object_clearance_rew = torch.zeros(N, device=config.device)
     object_clearance_penalty = torch.zeros(N, device=config.device)
     object_clearance_m = torch.zeros(N, device=config.device)
+    carry_corridor_rew = torch.zeros(N, device=config.device)
+    carry_corridor_gate = torch.ones(N, device=config.device)
+    carry_corridor_hand_score = torch.ones(N, device=config.device)
+    carry_corridor_clearance_score = torch.ones(N, device=config.device)
+    carry_corridor_pelvis_score = torch.ones(N, device=config.device)
+    carry_corridor_rot_score = torch.ones(N, device=config.device)
+    carry_corridor_leg_score = torch.ones(N, device=config.device)
+    hand_support_rew = torch.zeros(N, device=config.device)
+    hand_support_gate = torch.ones(N, device=config.device)
+    hand_support_sdf = torch.zeros(N, device=config.device)
+    hand_support_score = torch.ones(N, device=config.device)
+    nonhand_support_penalty = torch.zeros(N, device=config.device)
+    nonhand_support_gate = torch.ones(N, device=config.device)
+    nonhand_support_sdf = torch.zeros(N, device=config.device)
+    nonhand_support_violation = torch.zeros(N, device=config.device)
+    terminal_carry_gate_penalty = torch.zeros(N, device=config.device)
+    terminal_carry_gate_violation = torch.zeros(N, device=config.device)
+    terminal_carry_gate_valid = torch.ones(N, device=config.device)
+    terminal_carry_gate_pelvis_z = torch.zeros(N, device=config.device)
+    terminal_carry_gate_obj_rot_err = torch.zeros(N, device=config.device)
+    terminal_carry_gate_nonhand_sdf = torch.zeros(N, device=config.device)
+    terminal_carry_gate_hand_near_frac = torch.zeros(N, device=config.device)
     if (
         (config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids)
         or (config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids)
@@ -1191,6 +1249,12 @@ def get_reward(
         or (
             config.object_clearance_rew_scale > 0.0
             or config.object_clearance_penalty_scale > 0.0
+        )
+        or config.carry_corridor_rew_scale > 0.0
+        or (config.hand_support_rew_scale > 0.0 and config.hand_support_geom_ids)
+        or (
+            config.nonhand_support_penalty_scale > 0.0
+            and config.nonhand_support_penalty_geom_ids
         )
     ) and config.hand_approach_obj_half_extents:
         object_geom_id = mujoco.mj_name2id(
@@ -1220,6 +1284,44 @@ def get_reward(
                     half_ext=half_ext,
                 )
 
+            def support_gate(
+                source: str,
+                start_eval_time: float,
+                end_eval_time: float,
+                dtype: torch.dtype,
+            ) -> torch.Tensor:
+                if source == "always":
+                    return torch.ones(N, device=config.device, dtype=dtype)
+                valid_sources = {
+                    "contact_mask",
+                    "time_window",
+                    "contact_mask_time_window",
+                }
+                if source not in valid_sources:
+                    raise ValueError(f"Unsupported support gate source={source!r}")
+                gates = []
+                if source in {"contact_mask", "contact_mask_time_window"}:
+                    gates.append(
+                        _sample_gate_from_ref_mask(
+                            approach_mask_val,
+                            N,
+                            config.device,
+                            dtype,
+                        )
+                    )
+                if source in {"time_window", "contact_mask_time_window"}:
+                    time_arr = wp.to_torch(env.data_wp.time)
+                    gates.append(
+                        (
+                            (time_arr >= start_eval_time)
+                            & (time_arr <= end_eval_time)
+                        ).to(dtype)
+                    )
+                gate = torch.ones(N, device=config.device, dtype=dtype)
+                for g in gates:
+                    gate = gate * g
+                return gate
+
             if config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids:
                 robot_sdf = geom_box_sdf_min(config.robot_object_penalty_geom_ids)
                 deep_limit = (
@@ -1233,7 +1335,125 @@ def get_reward(
                 leg_hinge = torch.clamp(
                     config.leg_object_penalty_margin_m - leg_sdf, min=0.0
                 )
-                leg_object_penalty = -config.leg_object_penalty_scale * leg_hinge
+                gate_source = config.leg_object_penalty_gate_source
+                leg_object_penalty_gate = torch.ones_like(leg_hinge)
+                if gate_source != "always":
+                    valid_sources = {
+                        "contact_mask",
+                        "time_window",
+                        "contact_mask_time_window",
+                        "hand_target",
+                        "contact_mask_and_hand_target",
+                    }
+                    if gate_source not in valid_sources:
+                        raise ValueError(
+                            f"Unsupported leg_object_penalty_gate_source={gate_source!r}"
+                        )
+                    gates = []
+                    if gate_source in {
+                        "contact_mask",
+                        "contact_mask_time_window",
+                        "contact_mask_and_hand_target",
+                    }:
+                        gates.append(
+                            _sample_gate_from_ref_mask(
+                                approach_mask_val,
+                                N,
+                                config.device,
+                                leg_hinge.dtype,
+                            )
+                        )
+                    if gate_source in {"time_window", "contact_mask_time_window"}:
+                        time_arr = wp.to_torch(env.data_wp.time)
+                        gates.append(
+                            (
+                                (time_arr >= config.leg_object_penalty_start_eval_time)
+                                & (
+                                    time_arr
+                                    <= config.leg_object_penalty_end_eval_time
+                                )
+                            ).to(leg_hinge.dtype)
+                        )
+                    if gate_source in {"hand_target", "contact_mask_and_hand_target"}:
+                        obj_body_id = mujoco.mj_name2id(
+                            env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+                        )
+                        if obj_body_id == -1 or not config.hand_approach_body_ids:
+                            raise ValueError(
+                                "hand_target leg-object gate requires object body and hand_approach_body_ids"
+                            )
+                        if contact_target_dynamic is None and not (
+                            config.contact_hdmi_target_left
+                            and config.contact_hdmi_target_right
+                        ):
+                            raise ValueError(
+                                "hand_target leg-object gate requires dynamic or fixed contact_hdmi targets"
+                            )
+                        xpos_sim = wp.to_torch(env.data_wp.xpos)
+                        xquat_sim = wp.to_torch(env.data_wp.xquat)
+                        body_obj_pos = xpos_sim[:, obj_body_id]
+                        body_obj_quat = xquat_sim[:, obj_body_id]
+                        eef_offset = torch.tensor(
+                            config.contact_hdmi_eef_offset,
+                            device=config.device,
+                            dtype=leg_hinge.dtype,
+                        )
+                        if contact_target_dynamic is not None:
+                            targets = [
+                                contact_target_dynamic[ei].to(
+                                    device=config.device, dtype=leg_hinge.dtype
+                                )
+                                for ei in range(len(config.hand_approach_body_ids))
+                            ]
+                        else:
+                            targets = [
+                                torch.tensor(
+                                    config.contact_hdmi_target_left,
+                                    device=config.device,
+                                    dtype=leg_hinge.dtype,
+                                ),
+                                torch.tensor(
+                                    config.contact_hdmi_target_right,
+                                    device=config.device,
+                                    dtype=leg_hinge.dtype,
+                                ),
+                            ]
+                        dist_per_eef = []
+                        for bid, target_off in zip(
+                            config.hand_approach_body_ids, targets
+                        ):
+                            target_world = body_obj_pos + _lf_quat_apply(
+                                body_obj_quat, target_off.unsqueeze(0).expand(N, -1)
+                            )
+                            eef_pos = xpos_sim[:, bid]
+                            eef_quat = xquat_sim[:, bid]
+                            contact_point = eef_pos + _lf_quat_apply(
+                                eef_quat, eef_offset.unsqueeze(0).expand(N, -1)
+                            )
+                            dist_per_eef.append(
+                                (target_world - contact_point).norm(dim=-1)
+                            )
+                        dist_stack = torch.stack(dist_per_eef, dim=1)
+                        hand_success = (
+                            dist_stack
+                            <= config.leg_object_penalty_hand_target_threshold_m
+                        ).to(leg_hinge.dtype)
+                        if gate_source == "contact_mask_and_hand_target":
+                            hand_success = hand_success * _per_eef_mask_from_ref_mask(
+                                approach_mask_val,
+                                N,
+                                dist_stack.shape[1],
+                                config.device,
+                                leg_hinge.dtype,
+                            )
+                        gates.append(hand_success.max(dim=1).values)
+                    for gate in gates:
+                        leg_object_penalty_gate = leg_object_penalty_gate * gate
+                leg_object_penalty = (
+                    -config.leg_object_penalty_scale
+                    * leg_hinge
+                    * leg_object_penalty_gate
+                )
             if (
                 config.hand_object_deep_penalty_scale > 0.0
                 and config.hand_object_deep_penalty_geom_ids
@@ -1245,6 +1465,48 @@ def get_reward(
                 )
                 hand_object_deep_penalty = (
                     -config.hand_object_deep_penalty_scale * deep_hinge
+                )
+            if config.hand_support_rew_scale > 0.0 and config.hand_support_geom_ids:
+                hand_support_sdf = geom_box_sdf_min(config.hand_support_geom_ids)
+                hand_err = torch.clamp(
+                    torch.abs(hand_support_sdf) - config.hand_support_margin_m,
+                    min=0.0,
+                )
+                hand_support_score = torch.exp(
+                    -hand_err / max(float(config.hand_support_sigma), 1e-6)
+                )
+                hand_support_gate = support_gate(
+                    config.hand_support_gate_source,
+                    config.hand_support_start_eval_time,
+                    config.hand_support_end_eval_time,
+                    hand_support_score.dtype,
+                )
+                hand_support_rew = (
+                    config.hand_support_rew_scale
+                    * hand_support_score
+                    * hand_support_gate
+                )
+            if (
+                config.nonhand_support_penalty_scale > 0.0
+                and config.nonhand_support_penalty_geom_ids
+            ):
+                nonhand_support_sdf = geom_box_sdf_min(
+                    config.nonhand_support_penalty_geom_ids
+                )
+                nonhand_support_violation = torch.clamp(
+                    config.nonhand_support_penalty_margin_m - nonhand_support_sdf,
+                    min=0.0,
+                )
+                nonhand_support_gate = support_gate(
+                    config.nonhand_support_penalty_gate_source,
+                    config.nonhand_support_penalty_start_eval_time,
+                    config.nonhand_support_penalty_end_eval_time,
+                    nonhand_support_violation.dtype,
+                )
+                nonhand_support_penalty = (
+                    -config.nonhand_support_penalty_scale
+                    * nonhand_support_violation
+                    * nonhand_support_gate
                 )
             if config.cem_safety_gate_enabled and config.cem_safety_gate_geom_ids:
                 cem_gate_min_sdf = geom_box_sdf_min(config.cem_safety_gate_geom_ids)
@@ -1327,6 +1589,161 @@ def get_reward(
                         * (below + config.object_clearance_above_weight * above)
                         * window_gate
                     )
+            if config.carry_corridor_rew_scale > 0.0:
+                source = config.carry_corridor_gate_source
+                if source == "contact_mask":
+                    carry_corridor_gate = _sample_gate_from_ref_mask(
+                        approach_mask_val,
+                        N,
+                        config.device,
+                        geom_xpos.dtype,
+                    )
+                elif source == "time_window":
+                    time_arr = wp.to_torch(env.data_wp.time)
+                    carry_corridor_gate = (
+                        (time_arr >= config.carry_corridor_start_eval_time)
+                        & (time_arr <= config.carry_corridor_end_eval_time)
+                    ).to(geom_xpos.dtype)
+                elif source == "contact_mask_time_window":
+                    time_arr = wp.to_torch(env.data_wp.time)
+                    mask_gate = _sample_gate_from_ref_mask(
+                        approach_mask_val,
+                        N,
+                        config.device,
+                        geom_xpos.dtype,
+                    )
+                    time_gate = (
+                        (time_arr >= config.carry_corridor_start_eval_time)
+                        & (time_arr <= config.carry_corridor_end_eval_time)
+                    ).to(geom_xpos.dtype)
+                    carry_corridor_gate = mask_gate * time_gate
+                else:
+                    raise ValueError(
+                        f"Unsupported carry_corridor_gate_source={source!r}"
+                    )
+
+                obj_body_id = mujoco.mj_name2id(
+                    env.model_cpu, mujoco.mjtObj.mjOBJ_BODY, "object"
+                )
+                if obj_body_id == -1 or not config.hand_approach_body_ids:
+                    raise ValueError(
+                        "carry_corridor requires object body and hand_approach_body_ids"
+                    )
+                if contact_target_dynamic is None and not (
+                    config.contact_hdmi_target_left and config.contact_hdmi_target_right
+                ):
+                    raise ValueError(
+                        "carry_corridor requires dynamic or fixed contact_hdmi targets"
+                    )
+
+                xpos_sim = wp.to_torch(env.data_wp.xpos)
+                xquat_sim = wp.to_torch(env.data_wp.xquat)
+                body_obj_pos = xpos_sim[:, obj_body_id]
+                body_obj_quat = xquat_sim[:, obj_body_id]
+                eef_offset = torch.tensor(
+                    config.contact_hdmi_eef_offset,
+                    device=config.device,
+                    dtype=geom_xpos.dtype,
+                )
+                if contact_target_dynamic is not None:
+                    targets = [
+                        contact_target_dynamic[ei].to(
+                            device=config.device, dtype=geom_xpos.dtype
+                        )
+                        for ei in range(len(config.hand_approach_body_ids))
+                    ]
+                else:
+                    targets = [
+                        torch.tensor(
+                            config.contact_hdmi_target_left,
+                            device=config.device,
+                            dtype=geom_xpos.dtype,
+                        ),
+                        torch.tensor(
+                            config.contact_hdmi_target_right,
+                            device=config.device,
+                            dtype=geom_xpos.dtype,
+                        ),
+                    ]
+                dist_per_eef = []
+                for bid, target_off in zip(config.hand_approach_body_ids, targets):
+                    target_world = body_obj_pos + _lf_quat_apply(
+                        body_obj_quat, target_off.unsqueeze(0).expand(N, -1)
+                    )
+                    eef_pos = xpos_sim[:, bid]
+                    eef_quat = xquat_sim[:, bid]
+                    contact_point = eef_pos + _lf_quat_apply(
+                        eef_quat, eef_offset.unsqueeze(0).expand(N, -1)
+                    )
+                    dist_per_eef.append((target_world - contact_point).norm(dim=-1))
+                min_hand_dist = torch.stack(dist_per_eef, dim=1).min(dim=1).values
+                hand_excess = torch.clamp(
+                    min_hand_dist - config.carry_corridor_hand_target_threshold_m,
+                    min=0.0,
+                )
+                carry_corridor_hand_score = torch.exp(
+                    -hand_excess / max(float(config.carry_corridor_hand_sigma), 1e-6)
+                )
+
+                obj_half_z = float(config.hand_approach_obj_half_extents[2])
+                obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
+                clearance_m = obj_bottom - config.object_clearance_floor_z
+                clearance_below = torch.clamp(
+                    config.carry_corridor_clearance_min_m - clearance_m,
+                    min=0.0,
+                )
+                clearance_above = torch.clamp(
+                    clearance_m - config.carry_corridor_clearance_max_m,
+                    min=0.0,
+                )
+                clearance_err = clearance_below + clearance_above
+                carry_corridor_clearance_score = torch.exp(
+                    -clearance_err
+                    / max(float(config.carry_corridor_clearance_sigma), 1e-6)
+                )
+
+                pelvis_z = xpos_sim[:, 1, 2]
+                pelvis_err = torch.clamp(
+                    config.carry_corridor_pelvis_min_m - pelvis_z,
+                    min=0.0,
+                )
+                carry_corridor_pelvis_score = torch.exp(
+                    -pelvis_err / max(float(config.carry_corridor_pelvis_sigma), 1e-6)
+                )
+
+                if config.nq_obj == 7:
+                    obj_quat_sim = qpos_sim[:, -4:]
+                    obj_quat_ref = qpos_ref[-4:].unsqueeze(0).expand(N, -1)
+                    rot_err = quat_sub(obj_quat_sim, obj_quat_ref).norm(dim=-1)
+                else:
+                    rot_err = (qpos_sim[:, -3:] - qpos_ref[-3:].unsqueeze(0)).norm(
+                        dim=-1
+                    )
+                carry_corridor_rot_score = torch.exp(
+                    -rot_err / max(float(config.carry_corridor_rot_sigma), 1e-6)
+                )
+
+                if config.carry_corridor_leg_geom_ids:
+                    corridor_leg_sdf = geom_box_sdf_min(
+                        config.carry_corridor_leg_geom_ids
+                    )
+                    leg_excess = torch.clamp(
+                        config.carry_corridor_leg_margin_m - corridor_leg_sdf,
+                        min=0.0,
+                    )
+                    carry_corridor_leg_score = torch.exp(
+                        -leg_excess / max(float(config.carry_corridor_leg_sigma), 1e-6)
+                    )
+
+                carry_corridor_rew = (
+                    config.carry_corridor_rew_scale
+                    * carry_corridor_gate
+                    * carry_corridor_hand_score
+                    * carry_corridor_clearance_score
+                    * carry_corridor_pelvis_score
+                    * carry_corridor_rot_score
+                    * carry_corridor_leg_score
+                )
 
     if config.hand_floor_penalty_scale > 0.0 and config.hand_floor_penalty_geom_ids:
         geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
@@ -1363,6 +1780,9 @@ def get_reward(
         + object_floor_penalty
         + object_clearance_rew
         + object_clearance_penalty
+        + carry_corridor_rew
+        + hand_support_rew
+        + nonhand_support_penalty
     )
 
     # E034: stability penalty — penalize when pelvis z drops below threshold
@@ -1388,6 +1808,7 @@ def get_reward(
         "hold_contact_rew": hold_contact_rew,
         "robot_object_penalty": robot_object_penalty,
         "leg_object_penalty": leg_object_penalty,
+        "leg_object_penalty_gate": leg_object_penalty_gate,
         "hand_floor_penalty": hand_floor_penalty,
         "hand_object_deep_penalty": hand_object_deep_penalty,
         "object_lift_rew": object_lift_rew,
@@ -1398,8 +1819,151 @@ def get_reward(
         "object_clearance_rew": object_clearance_rew,
         "object_clearance_penalty": object_clearance_penalty,
         "object_clearance_m": object_clearance_m,
+        "carry_corridor_rew": carry_corridor_rew,
+        "carry_corridor_gate": carry_corridor_gate,
+        "carry_corridor_hand_score": carry_corridor_hand_score,
+        "carry_corridor_clearance_score": carry_corridor_clearance_score,
+        "carry_corridor_pelvis_score": carry_corridor_pelvis_score,
+        "carry_corridor_rot_score": carry_corridor_rot_score,
+        "carry_corridor_leg_score": carry_corridor_leg_score,
+        "hand_support_rew": hand_support_rew,
+        "hand_support_gate": hand_support_gate,
+        "hand_support_sdf": hand_support_sdf,
+        "hand_support_score": hand_support_score,
+        "nonhand_support_penalty": nonhand_support_penalty,
+        "nonhand_support_gate": nonhand_support_gate,
+        "nonhand_support_sdf": nonhand_support_sdf,
+        "nonhand_support_violation": nonhand_support_violation,
+        "terminal_carry_gate_penalty": terminal_carry_gate_penalty,
+        "terminal_carry_gate_violation": terminal_carry_gate_violation,
+        "terminal_carry_gate_valid": terminal_carry_gate_valid,
+        "terminal_carry_gate_pelvis_z": terminal_carry_gate_pelvis_z,
+        "terminal_carry_gate_obj_rot_err": terminal_carry_gate_obj_rot_err,
+        "terminal_carry_gate_nonhand_sdf": terminal_carry_gate_nonhand_sdf,
+        "terminal_carry_gate_hand_near_frac": terminal_carry_gate_hand_near_frac,
     }
     return reward, info
+
+
+def _terminal_carry_gate(
+    config: Config,
+    env: MJWPEnv,
+    qpos_ref: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    qpos_sim = wp.to_torch(env.data_wp.qpos)
+    geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+    N = qpos_sim.shape[0]
+    dtype = qpos_sim.dtype
+    zeros = torch.zeros(N, device=config.device, dtype=dtype)
+    ones = torch.ones(N, device=config.device, dtype=dtype)
+    out = {
+        "penalty": zeros,
+        "violation": zeros,
+        "valid": ones,
+        "pelvis_z": zeros,
+        "obj_rot_err": zeros,
+        "nonhand_sdf": zeros,
+        "hand_near_frac": zeros,
+    }
+    if not config.terminal_carry_gate_enabled:
+        return out
+
+    if config.terminal_carry_gate_mode not in {"soft", "hard", "hard_soft"}:
+        raise ValueError(
+            f"Unsupported terminal_carry_gate_mode={config.terminal_carry_gate_mode!r}"
+        )
+
+    pelvis_z = wp.to_torch(env.data_wp.xpos)[:, 1, 2]
+    pelvis_violation = torch.clamp(
+        config.terminal_carry_gate_pelvis_min_m - pelvis_z,
+        min=0.0,
+    )
+
+    if config.nq_obj == 7:
+        obj_rot_err = quat_sub(
+            qpos_sim[:, -4:],
+            qpos_ref[-4:].unsqueeze(0).expand(N, -1),
+        ).norm(dim=-1)
+    else:
+        obj_rot_err = (qpos_sim[:, -3:] - qpos_ref[-3:].unsqueeze(0)).norm(dim=-1)
+    rot_violation = torch.clamp(
+        obj_rot_err - config.terminal_carry_gate_obj_rot_max_rad,
+        min=0.0,
+    )
+
+    object_geom_id = mujoco.mj_name2id(
+        env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, "object_collision"
+    )
+    nonhand_sdf = torch.full((N,), float("inf"), device=config.device, dtype=dtype)
+    hand_near_frac = zeros
+    nonhand_violation = zeros
+    hand_violation = zeros
+    if object_geom_id != -1 and config.hand_approach_obj_half_extents:
+        geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
+            geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
+        )
+        half_ext = torch.tensor(
+            config.hand_approach_obj_half_extents,
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        if config.nonhand_support_penalty_geom_ids:
+            nonhand_sdf = _geom_box_sdf_min(
+                config,
+                env,
+                config.nonhand_support_penalty_geom_ids,
+                object_geom_id,
+                geom_xpos=geom_xpos,
+                geom_xmat=geom_xmat,
+                half_ext=half_ext,
+            )
+            nonhand_violation = torch.clamp(
+                config.terminal_carry_gate_nonhand_margin_m - nonhand_sdf,
+                min=0.0,
+            )
+        if config.hand_support_geom_ids:
+            hand_sdfs = []
+            for gid in config.hand_support_geom_ids:
+                hand_sdfs.append(
+                    _geom_box_sdf_min(
+                        config,
+                        env,
+                        [gid],
+                        object_geom_id,
+                        geom_xpos=geom_xpos,
+                        geom_xmat=geom_xmat,
+                        half_ext=half_ext,
+                    )
+                )
+            if hand_sdfs:
+                hand_sdf_stack = torch.stack(hand_sdfs, dim=1)
+                hand_near = (
+                    torch.abs(hand_sdf_stack)
+                    <= config.terminal_carry_gate_hand_near_margin_m
+                ).to(dtype)
+                hand_near_frac = hand_near.mean(dim=1)
+                hand_violation = torch.clamp(
+                    config.terminal_carry_gate_hand_min_near_frac - hand_near_frac,
+                    min=0.0,
+                )
+
+    violation = (
+        pelvis_violation
+        + rot_violation
+        + nonhand_violation
+        + hand_violation
+    )
+    valid = (violation <= 0.0).to(dtype)
+    penalty = -config.terminal_carry_gate_soft_scale * violation
+    return {
+        "penalty": penalty,
+        "violation": violation,
+        "valid": valid,
+        "pelvis_z": pelvis_z,
+        "obj_rot_err": obj_rot_err,
+        "nonhand_sdf": nonhand_sdf,
+        "hand_near_frac": hand_near_frac,
+    }
 
 
 def get_terminal_reward(
@@ -1430,6 +1994,32 @@ def get_terminal_reward(
 
     rew, info = get_reward(config, env, ref_slice)
     terminal_rew = config.terminal_rew_scale * rew
+    if config.terminal_carry_gate_enabled:
+        gate = _terminal_carry_gate(config, env, ref_slice[0])
+        mode = config.terminal_carry_gate_mode
+        if mode in {"soft", "hard_soft"}:
+            terminal_rew = terminal_rew + gate["penalty"]
+        info["terminal_carry_gate_penalty"] = gate["penalty"]
+        info["terminal_carry_gate_violation"] = gate["violation"]
+        info["terminal_carry_gate_valid"] = gate["valid"]
+        info["terminal_carry_gate_pelvis_z"] = gate["pelvis_z"]
+        info["terminal_carry_gate_obj_rot_err"] = gate["obj_rot_err"]
+        info["terminal_carry_gate_nonhand_sdf"] = gate["nonhand_sdf"]
+        info["terminal_carry_gate_hand_near_frac"] = gate["hand_near_frac"]
+        if mode in {"hard", "hard_soft"}:
+            min_sdf_from_terminal = (
+                config.cem_safety_gate_min_sdf_m - gate["violation"]
+            )
+            info["cem_gate_min_sdf"] = torch.minimum(
+                info["cem_gate_min_sdf"], min_sdf_from_terminal
+            )
+            info["cem_gate_violation_depth"] = torch.maximum(
+                info["cem_gate_violation_depth"], gate["violation"]
+            )
+            info["cem_gate_violation"] = torch.maximum(
+                info["cem_gate_violation"],
+                (gate["violation"] > 0.0).to(info["cem_gate_violation"].dtype),
+            )
     return terminal_rew, info
 
 

@@ -225,18 +225,28 @@ def compute_contact_proxy(
     min_dist = np.full((n_frames, 2, 2), np.nan, dtype=np.float32)
     tip_min_dist = np.full((n_frames, 2, 2), np.nan, dtype=np.float32)
     vertex_count = np.zeros((n_frames, 2, 2, len(thresholds_m)), dtype=np.int32)
+    centroid_world = np.full((n_frames, 2, 2, len(thresholds_m), 3), np.nan, dtype=np.float32)
+    centroid_object_local = np.full((n_frames, 2, 2, len(thresholds_m), 3), np.nan, dtype=np.float32)
     for frame in range(n_frames):
         obj_world = surface_points @ poses[frame, :3, :3].T + poses[frame, :3, 3]
         tree = cKDTree(obj_world)
         for pi, person in enumerate(PERSONS):
             vertices = people[person][frame]
             for hi, hand in enumerate(HANDS):
-                hand_dists, _ = tree.query(vertices[HAND_RANGES[hand]], k=1)
+                hand_vertices = vertices[HAND_RANGES[hand]]
+                hand_dists, _ = tree.query(hand_vertices, k=1)
                 tip_dists, _ = tree.query(vertices[FINGERTIP_IDS[hand]], k=1)
                 min_dist[frame, pi, hi] = float(hand_dists.min())
                 tip_min_dist[frame, pi, hi] = float(tip_dists.min())
                 for ti, threshold in enumerate(thresholds_m):
-                    vertex_count[frame, pi, hi, ti] = int((hand_dists < threshold).sum())
+                    close_vertices = hand_vertices[hand_dists < threshold]
+                    vertex_count[frame, pi, hi, ti] = int(close_vertices.shape[0])
+                    if close_vertices.size:
+                        center_world = close_vertices.mean(axis=0)
+                        centroid_world[frame, pi, hi, ti] = center_world.astype(np.float32)
+                        centroid_object_local[frame, pi, hi, ti] = (
+                            (center_world - poses[frame, :3, 3]) @ poses[frame, :3, :3]
+                        ).astype(np.float32)
 
     return {
         "candidate": candidate,
@@ -252,6 +262,8 @@ def compute_contact_proxy(
         "tip_min_dist_m": tip_min_dist,
         "vertex_count": vertex_count,
         "masks": vertex_count > 0,
+        "raw_contact_centroid_world": centroid_world,
+        "raw_contact_centroid_object_local": centroid_object_local,
         "thresholds_m": np.asarray(thresholds_m, dtype=np.float32),
         "sample_count": sample_count,
         "seed": seed,
@@ -292,6 +304,8 @@ def metrics_for(result: dict[str, Any], person: str, threshold_index: int) -> di
         "target_right_active_frac": fraction(target_right[active]),
         "target_any_active_frac": fraction(target_any[active]),
         "target_both_active_frac": fraction(target_both[active]),
+        "target_left_longest_run_active_frac": longest_run_fraction(target_left[active]),
+        "target_right_longest_run_active_frac": longest_run_fraction(target_right[active]),
         "target_both_longest_run_active_frac": longest_run_fraction(target_both[active]),
         "partner_any_active_frac": fraction(partner_any[active]),
         "partner_both_active_frac": fraction(partner_both[active]),
@@ -356,9 +370,23 @@ def score_case_person(result: dict[str, Any], person: str, threshold_m: float, t
             threshold_metrics[threshold_field(key, threshold)] = round(value, 4)
 
     label = threshold_label(threshold_m)
+    contact_mask_npz = str(result.get("contact_mask_npz", ""))
     return {
         "case_id": inv.get("case_id", f"{candidate.object_key}_{candidate.date}_{candidate.seq}_{person}"),
         "stage": "S1_raw_contact",
+        "contact_mask_npz": contact_mask_npz,
+        "contact_label": label,
+        "contact_person_idx": PERSONS.index(person),
+        "raw_frame_count": int(result["active_mask"].size),
+        "trimmed_frame_count": "",
+        "raw_to_trimmed_mapping_status": "missing_trimmed_mapping",
+        "left_active_frac": round(target_left, 4),
+        "right_active_frac": round(target_right, 4),
+        "both_active_frac": round(target_both, 4),
+        "left_longest_run_frac": round(current["target_left_longest_run_active_frac"], 4),
+        "right_longest_run_frac": round(current["target_right_longest_run_active_frac"], 4),
+        "both_longest_run_frac": round(longest, 4),
+        "contact_target_status": "raw_proxy_centroid_available",
         "contact_threshold_m": threshold_m,
         "contact_threshold_label": label,
         "sequence": candidate.sequence,
@@ -412,6 +440,19 @@ def error_rows(candidate: SequenceCandidate, message: str, threshold_m: float) -
             {
                 "case_id": inv.get("case_id", f"{candidate.object_key}_{candidate.date}_{candidate.seq}_{person}"),
                 "stage": "S1_raw_contact",
+                "contact_mask_npz": "",
+                "contact_label": label,
+                "contact_person_idx": PERSONS.index(person),
+                "raw_frame_count": 0,
+                "trimmed_frame_count": "",
+                "raw_to_trimmed_mapping_status": "raw_contact_error",
+                "left_active_frac": 0.0,
+                "right_active_frac": 0.0,
+                "both_active_frac": 0.0,
+                "left_longest_run_frac": 0.0,
+                "right_longest_run_frac": 0.0,
+                "both_longest_run_frac": 0.0,
+                "contact_target_status": "raw_contact_error",
                 "contact_threshold_m": threshold_m,
                 "contact_threshold_label": label,
                 "sequence": candidate.sequence,
@@ -457,7 +498,7 @@ def error_rows(candidate: SequenceCandidate, message: str, threshold_m: float) -
     return rows
 
 
-def save_sequence_npz(result: dict[str, Any], out_dir: Path) -> None:
+def save_sequence_npz(result: dict[str, Any], out_dir: Path) -> Path:
     candidate: SequenceCandidate = result["candidate"]
     slug = candidate.sequence.replace("/", "_")
     seq_dir = out_dir / "per_sequence" / f"{slug}_{candidate.object_key}"
@@ -474,10 +515,16 @@ def save_sequence_npz(result: dict[str, Any], out_dir: Path) -> None:
         "sample_count": np.asarray(result["sample_count"]),
         "seed": np.asarray(result["seed"]),
         "selected_persons": np.asarray(candidate.selected_persons),
+        "raw_to_trimmed_frame_index": np.full(result["active_mask"].shape, -1, dtype=np.int32),
     }
     for ti, threshold in enumerate(result["thresholds_m"]):
-        arrays[f"raw_contact_mask_{threshold_label(float(threshold))}"] = result["masks"][:, :, :, ti]
-    np.savez_compressed(seq_dir / "raw_contact_proxy.npz", **arrays)
+        label = threshold_label(float(threshold))
+        arrays[f"raw_contact_mask_{label}"] = result["masks"][:, :, :, ti]
+        arrays[f"raw_contact_centroid_world_{label}"] = result["raw_contact_centroid_world"][:, :, :, ti, :]
+        arrays[f"raw_contact_centroid_object_local_{label}"] = result["raw_contact_centroid_object_local"][:, :, :, ti, :]
+    path = seq_dir / "raw_contact_proxy.npz"
+    np.savez_compressed(path, **arrays)
+    return path
 
 
 def sanitize(value: Any) -> Any:
@@ -605,7 +652,7 @@ def main() -> None:
             for threshold in thresholds_m:
                 rows_by_threshold[threshold].extend(error_rows(candidate, f"{type(exc).__name__}: {exc}", threshold))
             continue
-        save_sequence_npz(result, out_dir)
+        result["contact_mask_npz"] = str(save_sequence_npz(result, out_dir))
         for ti, threshold in enumerate(thresholds_m):
             for person in candidate.selected_persons:
                 rows_by_threshold[threshold].append(score_case_person(result, person, threshold, ti))

@@ -28,7 +28,7 @@ def task_name(row: dict[str, str]) -> str:
     return f"{row['date']}-{row['seq']}-{row['person']}-{row['object_name']}_with_obj"
 
 
-def expected_paths(row: dict[str, str], spider_repo: Path, task_root: Path | None = None) -> dict[str, Path]:
+def expected_paths(row: dict[str, str], spider_repo: Path, task_root: Path | None = None) -> dict[str, Path | None]:
     result_root = Path(row["result_root"]).expanduser()
     target_task = row["target_task"]
     task = task_name(row)
@@ -37,7 +37,7 @@ def expected_paths(row: dict[str, str], spider_repo: Path, task_root: Path | Non
         "converted_npz": result_root / f"holosoma_{target_task}" / "converted" / f"{task}.npz",
         "retargeted_npz": result_root / f"holosoma_{target_task}" / "retargeted" / f"{task}_original.npz",
         "trimmed_npz": result_root / f"holosoma_{target_task}" / "trimmed" / f"{task}_original.npz",
-        "contact_mask_npz": result_root / "contact_masks" / row["mask_slug"] / "raw_contact_mask_3cm.npz",
+        "contact_mask_npz": Path(row["contact_mask_npz"]).expanduser() if row.get("contact_mask_npz") else None,
         "verify_summary": result_root / f"{target_task}_verify_summary.json",
         "target_scene": root / target_task / "scene.xml",
         "scene_act": root / target_task / "scene_act.xml",
@@ -83,10 +83,10 @@ def load_npz(path: Path) -> dict[str, Any]:
 
 def check_outputs(row: dict[str, str], spider_repo: Path, task_root: Path | None) -> dict[str, Any]:
     paths = expected_paths(row, spider_repo, task_root)
-    exists = {key: path.is_file() for key, path in paths.items()}
+    exists = {key: (path.is_file() if path is not None else False) for key, path in paths.items()}
     missing_required = [key for key in ("trimmed_npz", "target_scene", "scene_act", "trajectory") if not exists[key]]
     out: dict[str, Any] = {
-        "paths": {key: str(path) for key, path in paths.items()},
+        "paths": {key: str(path) if path is not None else "" for key, path in paths.items()},
         "exists": {key: str(value) for key, value in exists.items()},
         "missing_required": ",".join(missing_required),
     }
@@ -203,6 +203,26 @@ def build_rows(stage2b_rows: list[dict[str, str]], spider_repo: Path, task_root:
                 "trimmed_npz": gate.get("paths", {}).get("trimmed_npz", ""),
                 "retargeted_npz": gate.get("paths", {}).get("retargeted_npz", ""),
                 "contact_mask_npz": gate.get("paths", {}).get("contact_mask_npz", ""),
+                "contact_mask_label": row.get("contact_mask_label", row.get("raw_contact_threshold_label", "")),
+                "contact_mask_person_idx": row.get("contact_mask_person_idx", row.get("person_idx", "")),
+                "contact_mask_status": row.get("contact_mask_status", ""),
+                "contact_mask_time_axis": row.get("contact_mask_time_axis", ""),
+                "stage2b_contact_mask_npz_expected": row.get("stage2b_contact_mask_npz_expected", ""),
+                "raw_contact_artifact_npz": row.get("raw_contact_artifact_npz", ""),
+                "raw_contact_time_axis": row.get("raw_contact_time_axis", ""),
+                "raw_to_trimmed_mapping_status": row.get("raw_to_trimmed_mapping_status", ""),
+                "left_active_frac": row.get("left_active_frac", ""),
+                "right_active_frac": row.get("right_active_frac", ""),
+                "both_active_frac": row.get("both_active_frac", ""),
+                "left_longest_run_frac": row.get("left_longest_run_frac", ""),
+                "right_longest_run_frac": row.get("right_longest_run_frac", ""),
+                "both_longest_run_frac": row.get("both_longest_run_frac", ""),
+                "contact_target_status": row.get("contact_target_status", ""),
+                "contact_target_npz": row.get("contact_target_npz", row.get("target_npz", "")),
+                "contact_target_source": row.get("contact_target_source", ""),
+                "contact_target_frame": row.get("contact_target_frame", ""),
+                "contact_target_time_axis": row.get("contact_target_time_axis", ""),
+                "contact_route_diagnostic_ref": row.get("contact_route_diagnostic_ref", row.get("route_diagnostic_ref", "")),
                 "verify_summary": gate.get("paths", {}).get("verify_summary", ""),
                 "missing_required": gate.get("missing_required", ""),
                 "qpos_shape": gate.get("qpos_shape", ""),

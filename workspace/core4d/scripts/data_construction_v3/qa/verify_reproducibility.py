@@ -119,6 +119,34 @@ def check_registry(run_dir: Path, errors: list[str], warnings: list[str]) -> dic
     return summary
 
 
+def check_contact_npz(path_text: str, label: str, errors: list[str], context: str) -> None:
+    if not path_text:
+        errors.append(f"{context}: empty contact_mask_npz")
+        return
+    path = Path(path_text).expanduser()
+    if not path.is_file() or path.stat().st_size <= 0:
+        errors.append(f"{context}: missing/empty contact mask npz: {path}")
+        return
+    try:
+        import numpy as np
+
+        data = np.load(path, allow_pickle=True)
+        key = f"raw_contact_mask_{label}"
+        if key not in data:
+            errors.append(f"{context}: contact mask key missing: {key} in {path}")
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"{context}: contact mask npz load error {type(exc).__name__}: {path}")
+
+
+def check_nonempty_contact_paths(rows: list[dict[str, str]], path: Path, errors: list[str]) -> None:
+    for row in rows:
+        label = row.get("contact_mask_label") or row.get("raw_contact_threshold_label") or row.get("contact_label") or "3cm"
+        for field in ("contact_mask_npz", "raw_contact_artifact_npz", "contact_mask_path"):
+            value = row.get(field, "")
+            if value:
+                check_contact_npz(value, label, errors, f"{path}:{row.get('case_id', '')}:{field}")
+
+
 def check_imported_snapshots(run_dir: Path, mode: str, errors: list[str], warnings: list[str]) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     snapshot_root = run_dir / "imported_snapshots"
@@ -184,6 +212,27 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
             rows = read_tsv(candidates)
             check_schema_rows(rows, candidates, warnings)
             summary[f"raw_contact_candidates_{label}"] = len(rows)
+            required_contact_fields = [
+                "contact_mask_npz",
+                "contact_label",
+                "contact_person_idx",
+                "raw_frame_count",
+                "raw_to_trimmed_mapping_status",
+                "left_active_frac",
+                "right_active_frac",
+                "both_active_frac",
+                "left_longest_run_frac",
+                "right_longest_run_frac",
+                "both_longest_run_frac",
+                "contact_target_status",
+            ]
+            missing_contact_fields = [field for field in required_contact_fields if rows and field not in rows[0]]
+            if missing_contact_fields:
+                errors.append(f"{candidates} missing E111 contact fields: {missing_contact_fields}")
+            for row in rows:
+                if row.get("raw_contact_decision") not in {"raw_contact_pass", "raw_contact_review"}:
+                    continue
+                check_contact_npz(row.get("contact_mask_npz", ""), label, errors, f"{candidates}:{row.get('case_id', '')}")
 
     template = run_dir / "s2_templates/template_backlog.tsv"
     if not template.is_file() and require_raw_stages:
@@ -226,6 +275,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
     for path in stage2b:
         rows = read_tsv(path)
         check_schema_rows(rows, path, warnings)
+        check_nonempty_contact_paths(rows, path, errors)
         required = [
             "case_id",
             "retarget_variant_id",
@@ -264,6 +314,7 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
     for path in gate:
         rows = read_tsv(path)
         check_schema_rows(rows, path, warnings)
+        check_nonempty_contact_paths(rows, path, errors)
         missing = [field for field in ["case_id", "retarget_variant_id", "target_variant_id", "target_gate_status"] if field not in rows[0]] if rows else []
         if missing:
             errors.append(f"{path} missing required fields: {missing}")
@@ -315,7 +366,14 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
     else:
         rows = read_tsv(handoff)
         check_schema_rows(rows, handoff, warnings)
+        check_nonempty_contact_paths(rows, handoff, errors)
         summary["candidate_bank_rows"] = len(rows)
+
+    handoff_manifest = run_dir / "s5_handoff/handoff_manifest.tsv"
+    if handoff_manifest.is_file():
+        rows = read_tsv(handoff_manifest)
+        check_schema_rows(rows, handoff_manifest, warnings)
+        check_nonempty_contact_paths(rows, handoff_manifest, errors)
 
     cem_overrides = run_dir / "s5_handoff/cem_overrides/cem_override_manifest.tsv"
     if cem_overrides.is_file():
@@ -330,6 +388,13 @@ def check_stage_files(run_dir: Path, mode: str, errors: list[str], warnings: lis
             errors.append(f"{cem_overrides} missing required fields: {missing}")
         repo = find_spider_repo()
         for row in rows:
+            if row.get("contact_mask_path"):
+                check_contact_npz(
+                    row.get("contact_mask_path", ""),
+                    row.get("contact_mask_label", "") or "3cm",
+                    errors,
+                    f"{cem_overrides}:{row.get('case_id', '')}:contact_mask_path",
+                )
             if row.get("override_status") != "pass":
                 continue
             cfg = Path(row.get("override_config", "")).expanduser()

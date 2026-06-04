@@ -256,8 +256,25 @@ def build_rows(
         trimmed_npz = case_root / "trimmed" / f"{holosoma_task}_original.npz"
         spider_task_dir = spider_repo / "example_datasets/processed/core4d/unitree_g1/humanoid_object" / target_task
         spider_trajectory = spider_task_dir / "0/trajectory_kinematic.npz"
-        contact_mask_npz = result_root / "contact_masks" / mask_slug / "raw_contact_mask_3cm.npz"
+        stage2b_contact_mask_npz_expected = result_root / "contact_masks" / mask_slug / "raw_contact_mask_3cm.npz"
         verify_summary = result_root / f"{target_task}_verify_summary.json"
+        contact_label = row.get("contact_label") or row.get("contact_threshold_label", "")
+        contact_target_npz = route_diag.get("target_npz", "") if route_diag else ""
+        if target_variant_id == "ref_fk":
+            contact_target_source = "ref_fk"
+            contact_target_frame = "spider_fk"
+            contact_target_time_axis = "trimmed"
+            contact_target_status = "ref_fk_target"
+        elif contact_target_npz:
+            contact_target_source = target_variant_id
+            contact_target_frame = "object_local"
+            contact_target_time_axis = "trimmed"
+            contact_target_status = route_diag.get("target_active_mask_status", "") if route_diag else "external_target"
+        else:
+            contact_target_source = target_variant_id
+            contact_target_frame = ""
+            contact_target_time_axis = ""
+            contact_target_status = "missing_external_target"
         manifest_row = {
             "stage": "S3_stage2b",
             "case_id": row.get("case_id", ""),
@@ -282,6 +299,27 @@ def build_rows(
             "source_scene_xml": template.get("scene_xml", "") if template else "",
             "route_diagnostic_status": route_diagnostic_status,
             "route_diagnostic_ref": route_diag.get("route_diagnostic_ref", "") if route_diag else "",
+            "contact_mask_label": contact_label,
+            "contact_mask_person_idx": row.get("contact_person_idx", row.get("person_idx", "")),
+            "contact_mask_npz": "",
+            "contact_mask_status": "missing_trimmed_mask",
+            "contact_mask_time_axis": "",
+            "stage2b_contact_mask_npz_expected": str(stage2b_contact_mask_npz_expected),
+            "raw_contact_artifact_npz": row.get("contact_mask_npz", ""),
+            "raw_contact_time_axis": "raw_sequence",
+            "raw_to_trimmed_mapping_status": row.get("raw_to_trimmed_mapping_status", ""),
+            "left_active_frac": row.get("left_active_frac", row.get("target_left_active_frac", "")),
+            "right_active_frac": row.get("right_active_frac", row.get("target_right_active_frac", "")),
+            "both_active_frac": row.get("both_active_frac", row.get("target_both_active_frac", "")),
+            "left_longest_run_frac": row.get("left_longest_run_frac", ""),
+            "right_longest_run_frac": row.get("right_longest_run_frac", ""),
+            "both_longest_run_frac": row.get("both_longest_run_frac", row.get("target_both_longest_run_active_frac", "")),
+            "contact_target_status": contact_target_status,
+            "contact_target_npz": contact_target_npz,
+            "contact_target_source": contact_target_source,
+            "contact_target_frame": contact_target_frame,
+            "contact_target_time_axis": contact_target_time_axis,
+            "contact_route_diagnostic_ref": route_diag.get("route_diagnostic_ref", "") if route_diag else "",
             "fingertip_vote_status": route_diag.get("fingertip_vote_status", "") if route_diag else "",
             "palm_vote_status": route_diag.get("palm_vote_status", "") if route_diag else "",
             "quat_audit_status": route_diag.get("quat_audit_status", "") if route_diag else "",
@@ -309,7 +347,6 @@ def build_rows(
             "trimmed_npz": str(trimmed_npz),
             "spider_task_dir": str(spider_task_dir),
             "spider_trajectory": str(spider_trajectory),
-            "contact_mask_npz": str(contact_mask_npz),
             "verify_summary": str(verify_summary),
             "solver_family": variant.get("solver_family", ""),
             "solver_version": variant.get("solver_version", ""),
@@ -382,14 +419,16 @@ def refresh_executed_outputs(rows: list[dict[str, Any]]) -> int:
         "omniretarget_output_npz",
         "trimmed_npz",
         "spider_trajectory",
-        "contact_mask_npz",
         "verify_summary",
     ]
     missing_rows = 0
     for row in rows:
         if str(row.get("pipeline_enabled", "")) != "1":
             continue
+        contact_mask_path = Path(str(row.get("stage2b_contact_mask_npz_expected") or row.get("contact_mask_npz", "")))
         missing = [field for field in required_fields if not Path(str(row.get(field, ""))).is_file()]
+        if not contact_mask_path.is_file():
+            missing.append("contact_mask_npz")
         row["updated_at"] = timestamp()
         if missing:
             missing_rows += 1
@@ -400,6 +439,9 @@ def refresh_executed_outputs(rows: list[dict[str, Any]]) -> int:
             row["stage2b_status"] = "pass"
             row["failure_mode"] = ""
             row["decision_notes"] = "Stage2b execute completed and expected outputs exist"
+            row["contact_mask_npz"] = str(contact_mask_path)
+            row["contact_mask_status"] = "trimmed_mask_available"
+            row["contact_mask_time_axis"] = "trimmed_stage2b_output"
     return missing_rows
 
 

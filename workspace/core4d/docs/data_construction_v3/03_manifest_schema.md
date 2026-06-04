@@ -140,6 +140,21 @@ Manual seed TSV 可用 `write_manual_seed_template.py` 生成。它使用与 `ca
 
 对默认 `ref_fk` route，上述字段可为空或 diagnostic，不作为 hard gate。
 
+E111 起，S3/S4/S5 contact evidence propagation 字段：
+
+| 字段 | 说明 |
+|---|---|
+| `contact_mask_npz` | 当前已生成的下游 mask；Stage2b 未执行或未生成 trimmed mask 时必须为空。 |
+| `contact_mask_status` | `missing_trimmed_mask` / `trimmed_mask_available` / `raw_mask_available` 等 mask 状态。 |
+| `contact_mask_label` / `contact_mask_person_idx` / `contact_mask_time_axis` | mask 阈值、person index 和时间轴。 |
+| `stage2b_contact_mask_npz_expected` | Stage2b execute 后预期生成的 trimmed mask 路径；不是可消费 evidence。 |
+| `raw_contact_artifact_npz` / `raw_contact_time_axis` | S1 raw artifact 原始路径和时间轴。 |
+| `contact_mask_3cm_npz` / `contact_mask_5cm_npz` | registry/S5 中保留的 S1 per-threshold raw artifact 路径，避免 3cm/5cm 互相覆盖。 |
+| `raw_contact_3cm_artifact_npz` / `raw_contact_5cm_artifact_npz` | 与上面等价的 raw artifact provenance 字段。 |
+| `raw_to_trimmed_mapping_status` | raw 到 trimmed 的 mapping 状态。 |
+| `contact_target_npz` / `contact_target_source` / `contact_target_frame` / `contact_target_time_axis` | contact-aware target route 的目标路径与语义；`ref_fk` route 不得冒充 external target。 |
+| `contact_route_diagnostic_ref` | contact route 诊断证据。 |
+
 S1 当前脚本输出：
 
 | 文件 | 说明 |
@@ -152,6 +167,28 @@ S1 当前脚本输出：
 | `raw_contact_pass_5cm.tsv/json` | 5cm pass 子集。 |
 | `raw_contact_run_summary.json` | 同一 raw-contact run 的汇总。 |
 | `per_sequence/*/raw_contact_proxy.npz` | sequence-level 距离、vertex count、`raw_contact_mask_3cm` 和 `raw_contact_mask_5cm`。 |
+
+E111 起，S1 raw-contact TSV 还必须包含 contact evidence 字段：
+
+| 字段 | 说明 |
+|---|---|
+| `contact_mask_npz` | 对应 `per_sequence/*/raw_contact_proxy.npz`。 |
+| `contact_label` / `contact_person_idx` | 当前 row 使用的阈值与 person index。 |
+| `raw_frame_count` / `trimmed_frame_count` | raw frame 数；若尚无 Stage2b trimmed mapping，`trimmed_frame_count` 为空。 |
+| `raw_to_trimmed_mapping_status` | `missing_trimmed_mapping` 或后续 Stage2b/S6 写入的 mapping 状态。 |
+| `left_active_frac` / `right_active_frac` / `both_active_frac` | raw active window 上 per-hand/two-hand contact mask fraction。 |
+| `left_longest_run_frac` / `right_longest_run_frac` / `both_longest_run_frac` | raw active window 上最长连续 contact run fraction。 |
+| `contact_target_status` | raw proxy/contact target 可用状态；不能用该字段冒充 CEM 物理接触成功。 |
+
+对应 NPZ 除 `raw_contact_mask_3cm/5cm` 外，还包含：
+
+```text
+raw_contact_centroid_world_3cm
+raw_contact_centroid_world_5cm
+raw_contact_centroid_object_local_3cm
+raw_contact_centroid_object_local_5cm
+raw_to_trimmed_frame_index  # 缺 mapping 时为 -1
+```
 
 `config_resolved.json` 的 `stage2b_contact_label` 记录本轮 S2/S1b/S3 继续使用哪一档 pass 子集，允许值是 `3cm` 或 `5cm`。该字段不改变 S1 同时输出两档候选的要求。
 

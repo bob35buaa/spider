@@ -259,6 +259,16 @@ class Config:
     leg_object_penalty_margin_m: float = 0.02
     leg_object_penalty_geom_names: list[str] = field(default_factory=list)
     leg_object_penalty_geom_ids: list[int] = field(default_factory=list)
+    # E117: gate lower-body/object penalty so it can be enabled after the
+    # hand-object contact objective is active/satisfied instead of competing
+    # with contact acquisition throughout the whole rollout.
+    # Values: "always" | "contact_mask" | "time_window" |
+    # "contact_mask_time_window" | "hand_target" |
+    # "contact_mask_and_hand_target".
+    leg_object_penalty_gate_source: str = "always"
+    leg_object_penalty_start_eval_time: float = 0.0
+    leg_object_penalty_end_eval_time: float = 999.0
+    leg_object_penalty_hand_target_threshold_m: float = 0.06
     # E084: direct hand-floor and object support/lift shaping for unstable
     # box-lift cases. Disabled by default.
     hand_floor_penalty_scale: float = 0.0
@@ -310,6 +320,54 @@ class Config:
     object_clearance_gate_source: str = "contact_mask"
     object_clearance_start_eval_time: float = 0.0
     object_clearance_end_eval_time: float = 999.0
+    # E118: soft carry-state corridor. This rewards coherent hand contact,
+    # object clearance/orientation, pelvis height, and lower-body clearance as
+    # one coupled state instead of independent scalar terms.
+    carry_corridor_rew_scale: float = 0.0
+    carry_corridor_gate_source: str = "contact_mask"  # contact_mask | time_window | contact_mask_time_window
+    carry_corridor_start_eval_time: float = 0.0
+    carry_corridor_end_eval_time: float = 999.0
+    carry_corridor_hand_target_threshold_m: float = 0.02
+    carry_corridor_hand_sigma: float = 0.04
+    carry_corridor_clearance_min_m: float = 0.04
+    carry_corridor_clearance_max_m: float = 0.20
+    carry_corridor_clearance_sigma: float = 0.05
+    carry_corridor_pelvis_min_m: float = 0.60
+    carry_corridor_pelvis_sigma: float = 0.06
+    carry_corridor_rot_sigma: float = 0.40
+    carry_corridor_leg_margin_m: float = 0.02
+    carry_corridor_leg_sigma: float = 0.04
+    carry_corridor_leg_geom_names: list[str] = field(default_factory=list)
+    carry_corridor_leg_geom_ids: list[int] = field(default_factory=list)
+    # E120: object support decomposition. Reward true hand-supported
+    # near-zero contact while penalizing non-hand body/object support shortcuts.
+    hand_support_rew_scale: float = 0.0
+    hand_support_sigma: float = 0.015
+    hand_support_margin_m: float = 0.01
+    hand_support_gate_source: str = "contact_mask"  # always | contact_mask | time_window | contact_mask_time_window
+    hand_support_start_eval_time: float = 0.0
+    hand_support_end_eval_time: float = 999.0
+    hand_support_geom_names: list[str] = field(
+        default_factory=lambda: ["lh", "rh"]
+    )
+    hand_support_geom_ids: list[int] = field(default_factory=list)
+    nonhand_support_penalty_scale: float = 0.0
+    nonhand_support_penalty_margin_m: float = 0.02
+    nonhand_support_penalty_gate_source: str = "contact_mask"
+    nonhand_support_penalty_start_eval_time: float = 0.0
+    nonhand_support_penalty_end_eval_time: float = 999.0
+    nonhand_support_penalty_geom_names: list[str] = field(default_factory=list)
+    nonhand_support_penalty_geom_ids: list[int] = field(default_factory=list)
+    # E121: terminal carry-state semantic gate. When hard/hard_soft, terminal
+    # violation is folded into the existing CEM elite safety gate.
+    terminal_carry_gate_enabled: bool = False
+    terminal_carry_gate_mode: str = "soft"  # soft | hard | hard_soft
+    terminal_carry_gate_soft_scale: float = 5.0
+    terminal_carry_gate_pelvis_min_m: float = 0.60
+    terminal_carry_gate_obj_rot_max_rad: float = 0.55
+    terminal_carry_gate_nonhand_margin_m: float = 0.02
+    terminal_carry_gate_hand_near_margin_m: float = 0.02
+    terminal_carry_gate_hand_min_near_frac: float = 0.5
     # E035: local-frame body tracking (HDMI-style)
     use_local_frame_reward: bool = False
     local_frame_upper_ids: list[int] = field(
@@ -481,6 +539,7 @@ class Config:
     video_auto_camera_azimuth: float = 135.0
     video_auto_camera_elevation: float = -22.0
     warmstart_qpos_path: str = ""  # path to .npz containing qpos_snap + snap_mask; if set, replaces qpos_ref slices in intent window (E058+ Path B-CEM)
+    warmstart_update_ctrl_from_qpos: bool = False
     save_info: bool = True
     save_rerun: bool = False
     save_metrics: bool = True
@@ -921,6 +980,10 @@ def process_config(config: Config):
         or config.cem_safety_gate_enabled
         or config.object_clearance_rew_scale > 0.0
         or config.object_clearance_penalty_scale > 0.0
+        or config.carry_corridor_rew_scale > 0.0
+        or config.hand_support_rew_scale > 0.0
+        or config.nonhand_support_penalty_scale > 0.0
+        or config.terminal_carry_gate_enabled
     ) and config.simulator == "mjwp":
         resolved_ids = []
         for name in config.hand_approach_body_names:
@@ -986,6 +1049,20 @@ def process_config(config: Config):
             loguru.logger.info(
                 "Leg/object penalty: {} geoms resolved.", len(geom_ids)
             )
+        if config.carry_corridor_rew_scale > 0.0:
+            geom_ids = []
+            for name in config.carry_corridor_leg_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "carry_corridor_leg_geom_names: geom '{}' not found.", name
+                    )
+            config.carry_corridor_leg_geom_ids = geom_ids
+            loguru.logger.info(
+                "Carry corridor leg geoms: {} resolved.", len(geom_ids)
+            )
         if config.hand_floor_penalty_scale > 0.0:
             geom_ids = []
             for name in config.hand_floor_penalty_geom_names:
@@ -1014,6 +1091,36 @@ def process_config(config: Config):
             config.hand_object_deep_penalty_geom_ids = geom_ids
             loguru.logger.info(
                 "Hand/object deep penalty: {} geoms resolved.", len(geom_ids)
+            )
+        if config.hand_support_rew_scale > 0.0 or config.terminal_carry_gate_enabled:
+            geom_ids = []
+            for name in config.hand_support_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "hand_support_geom_names: geom '{}' not found.", name
+                    )
+            config.hand_support_geom_ids = geom_ids
+            loguru.logger.info("Hand support geoms: {} resolved.", len(geom_ids))
+        if (
+            config.nonhand_support_penalty_scale > 0.0
+            or config.terminal_carry_gate_enabled
+        ):
+            geom_ids = []
+            for name in config.nonhand_support_penalty_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "nonhand_support_penalty_geom_names: geom '{}' not found.",
+                        name,
+                    )
+            config.nonhand_support_penalty_geom_ids = geom_ids
+            loguru.logger.info(
+                "Non-hand support penalty geoms: {} resolved.", len(geom_ids)
             )
         if config.cem_safety_gate_enabled:
             geom_ids = []

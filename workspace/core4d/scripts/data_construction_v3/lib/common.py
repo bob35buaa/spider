@@ -46,6 +46,7 @@ SCRIPT_RELATIVE_PATHS = {
     "export_handoff.py": "stages/s5_handoff/export_handoff.py",
     "export_rl_inputs.py": "stages/s6_downstream/export_rl_inputs.py",
     "record_downstream_evidence.py": "stages/s6_downstream/record_downstream_evidence.py",
+    "evaluate_contact_alignment.py": "stages/s6_downstream/evaluate_contact_alignment.py",
     "import_legacy_snapshot.py": "migration/import_legacy_snapshot.py",
     "build_existing_cases_seed.py": "migration/build_existing_cases_seed.py",
     "update_case_state_registry.py": "state/update_case_state_registry.py",

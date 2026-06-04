@@ -427,7 +427,16 @@ def run_sbto(
     mj_data.time = 0.0
     sync_env(config, env, mj_data)
 
-    step_info = {"qpos": [], "qvel": [], "time": [], "ctrl": []}
+    step_info = {
+        "qpos": [],
+        "qvel": [],
+        "time": [],
+        "ctrl": [],
+        "qpos_ref": [],
+        "qvel_ref": [],
+        "time_ref": [],
+        "ctrl_ref": [],
+    }
     for step_idx in range(total_steps):
         ctrl_step = full_ctrls[step_idx]
         step_env(config, env, ctrl_step)
@@ -435,13 +444,18 @@ def run_sbto(
         mj_data.qvel[:] = get_qvel(config, env)[0].detach().cpu().numpy()
         mj_data.ctrl[:] = ctrl_step.detach().cpu().numpy()
         mj_data.time += config.sim_dt
+        ref_idx = min(step_idx, qpos_ref.shape[0] - 1)
         step_info["qpos"].append(mj_data.qpos.copy())
         step_info["qvel"].append(mj_data.qvel.copy())
+        ref_ctrl = ctrl_ref[min(step_idx, ctrl_ref.shape[0] - 1)].detach().cpu().numpy()
         step_info["time"].append(mj_data.time)
         step_info["ctrl"].append(mj_data.ctrl.copy())
+        step_info["qpos_ref"].append(qpos_ref[ref_idx].detach().cpu().numpy())
+        step_info["qvel_ref"].append(qvel_ref[ref_idx].detach().cpu().numpy())
+        step_info["time_ref"].append(mj_data.time)
+        step_info["ctrl_ref"].append(ref_ctrl)
         if config.save_video and renderer is not None:
             if step_idx % int(np.round(config.render_dt / config.sim_dt)) == 0:
-                ref_idx = min(step_idx, qpos_ref.shape[0] - 1)
                 mj_data_ref.qpos[:] = qpos_ref[ref_idx].detach().cpu().numpy()
                 image = render_image(config, renderer, mj_model, mj_data, mj_data_ref)
                 images.append(image)
@@ -496,6 +510,26 @@ def main(config: Config):
             f"warmstart shape mismatch after interp: {qpos_snap_i.shape} vs {qpos_ref.shape}"
         snap_mask_b = snap_mask_i > 0.5
         qpos_ref = torch.where(snap_mask_b.unsqueeze(-1), qpos_snap_i, qpos_ref)
+        if config.warmstart_update_ctrl_from_qpos:
+            if config.embodiment_type != "humanoid_object":
+                raise ValueError(
+                    "warmstart_update_ctrl_from_qpos currently supports humanoid_object only"
+                )
+            robot_ctrl_dim = min(
+                ctrl_ref.shape[1],
+                max(int(config.nu) - max(int(config.object_action_dims), 0), 0),
+                max(qpos_ref.shape[1] - 7, 0),
+            )
+            if robot_ctrl_dim <= 0:
+                raise ValueError(
+                    "warmstart_update_ctrl_from_qpos could not infer robot control dimension"
+                )
+            ctrl_snap = qpos_snap_i[:, 7 : 7 + robot_ctrl_dim]
+            ctrl_ref[:, :robot_ctrl_dim] = torch.where(
+                snap_mask_b.unsqueeze(-1),
+                ctrl_snap,
+                ctrl_ref[:, :robot_ctrl_dim],
+            )
         n_replaced = int(snap_mask_b.sum().item())
         loguru.logger.info(
             f"[E058 warmstart] {config.warmstart_qpos_path}: replaced {n_replaced}/{qpos_ref.shape[0]} frames of qpos_ref"
