@@ -163,7 +163,13 @@ workspace/core4d/scripts/data_construction_v3/stages/s2_templates/build_or_audit
   --apply-build
 ```
 
-`--apply-build` 自动处理 `object_category=box` 的缺失模板。非 box 只允许生成 review 用 proxy template：bucket 使用 `bucket_wall_proxy_aabb`，board/stick 使用 `mesh_aabb_box_proxy`。这些 proxy 即使 MuJoCo load 成功，也保持 `template_status=manual_review_required`，不能自动进入 Stage2b。
+`--apply-build` 自动处理 `object_category=box` 的缺失模板。非 box 只允许生成 review 用 proxy template：
+
+- bucket 使用 `bucket_wall_proxy_aabb`；
+- board/stick 使用 `mesh_aabb_box_proxy`；
+- desk/chair 使用 tight surface voxel multi-box proxy：`desk_surface_voxel_multibox_proxy_draft` / `chair_surface_voxel_multibox_proxy_draft`。
+
+desk/chair proxy 不是语义桌/椅模板；它从 OBJ 表面 voxelization 生成一组局部 AABB boxes，避免把圆面三脚凳、侧板/U 型架、非标准 chair 强行套成标准桌椅。所有非 box proxy 即使 MuJoCo load 成功，也保持 `template_status=manual_review_required`，不能自动进入 Stage2b。
 
 source template 可视化包入口：
 
@@ -173,7 +179,20 @@ workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_templat
   --out-dir "$RUN_DIR/s2_templates/template_visual_review"
 ```
 
-`run_pipeline.py` 会在 S2 audit/build 后自动生成该 visual review package。缺 scene 的 backlog row 会明确标为 `not_rendered`；已有 scene 但 render 失败会进入 `render_error`，供 release review 和复现性自检定位。
+非 box proxy review 还应生成 mesh/collision overlay。通用入口：
+
+```bash
+workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_template_mesh_collision_review_package.py \
+  --input-tsv "$RUN_DIR/s2_templates/template_backlog.tsv" \
+  --out-dir "$RUN_DIR/s2_templates/template_mesh_collision_review" \
+  --render-statuses manual_review_required \
+  --object-only \
+  --overwrite
+```
+
+`--object-only` 会隐藏机器人，只保留 real mesh、collision proxy、mesh+collision 三栏，适合检查 desk/chair surface voxel proxy 是否贴合 mesh、是否明显外扩、是否套错拓扑。
+
+`run_pipeline.py` 会在 S2 audit/build 后自动生成 orbit visual review package 和 `--object-only` mesh/collision review package。缺 scene 的 backlog row 会明确标为 `not_rendered`；已有 scene 但 render 失败会进入 `render_error`，供 release review 和复现性自检定位。
 
 输出：
 
@@ -182,6 +201,7 @@ workspace/core4d/scripts/data_construction_v3/stages/s2_templates/render_templat
 - `template_build.tsv/json`：本次 build/dry-run 记录；
 - `template_visual_review/template_visual_manifest.tsv/json`：source template visual sheet/mp4 的生成状态；
 - `template_visual_review/template_visual_summary.json/md`：source template visual review 分布；
+- `template_mesh_collision_review/template_mesh_collision_review_manifest.tsv/json`：source mesh/collision overlay review；
 - `template_summary.{json,md}`：状态分布与非 clean 列表。
 
 非 box 通过审查后，用 review TSV 显式覆盖 registry：

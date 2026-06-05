@@ -107,7 +107,9 @@ Box 类：
 - template 可生成 reviewable proxy。
 - 未经显式人工或 subagent review，不能直接置为 `clean`。
 - 通过 review 后用 `clean_reviewed` 或等价状态进入 S3。
-- bucket/board/stick 可优先做 proxy；desk/chair 默认复杂形状，需要人工审查。
+- bucket/board/stick 可优先做 proxy；desk/chair 使用 tight surface voxel multi-box review proxy，而不是标准桌/椅语义模板。
+- desk/chair proxy 规范：从 OBJ 表面 voxelization 生成 `object_collision` + `object_collision_voxel_*` 多个 local AABB boxes；默认 policy 为 `desk_surface_voxel_multibox_proxy_draft` / `chair_surface_voxel_multibox_proxy_draft`；必须保持 `manual_review_required`，不能仅凭 MuJoCo load 或 render pass 自动 release。
+- desk/chair review evidence 必须包含 mesh/collision overlay 或 object-only mesh/collision sheet；用 `stages/s2_templates/render_template_mesh_collision_review_package.py --object-only` 生成；确认 proxy 没有明显大一圈、没有套错物体拓扑、没有把圆面三脚凳/侧板 U 架/非标准 chair 误建成标准桌椅。
 
 已知 template 风险：
 

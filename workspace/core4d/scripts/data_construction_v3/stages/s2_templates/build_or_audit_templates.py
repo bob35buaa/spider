@@ -30,7 +30,8 @@ from geometry import aabb_extents, load_obj_vertices
 PERSONS = ("person1", "person2")
 POLLUTED_MASS = 29.632
 DEFAULT_MASS_KG = 5.0
-NONBOX_PROXY_CATEGORIES = {"bucket", "board", "stick"}
+NONBOX_PROXY_CATEGORIES = {"bucket", "board", "stick", "desk", "chair"}
+SURFACE_VOXEL_PROXY_CATEGORIES = {"desk", "chair"}
 
 
 def person_from_row(row: dict[str, str]) -> str:
@@ -299,12 +300,109 @@ def build_box_scene_xml(
     return re.sub(r'    <body name="object"[\s\S]*?    </body>\n  </worldbody>', object_body, scene, count=1)
 
 
+def geom_box_xml(
+    name: str,
+    pos: np.ndarray | list[float],
+    size: np.ndarray | list[float],
+    rgba: str = "0.40 0.50 0.60 0.3",
+) -> str:
+    return (
+        f'      <geom name="{name}" type="box" pos="{fmt(pos, 6)}" size="{fmt(size, 6)}" '
+        f'rgba="{rgba}" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />'
+    )
+
+
+def merge_occupied_voxels(
+    occupied: np.ndarray,
+    pitch: np.ndarray,
+    transform: np.ndarray,
+    max_boxes: int,
+) -> tuple[list[tuple[np.ndarray, np.ndarray]], int]:
+    occ = occupied.copy()
+    boxes: list[tuple[np.ndarray, np.ndarray]] = []
+    pitch = np.asarray(pitch, dtype=np.float64)
+    origin = transform[:3, 3].astype(np.float64)
+    axes_order = sorted(range(3), key=lambda axis: occ.shape[axis], reverse=True)
+    while bool(occ.any()) and len(boxes) < max_boxes:
+        start = np.argwhere(occ)[0]
+        lo = start.copy()
+        hi = start.copy()
+        grown = True
+        while grown:
+            grown = False
+            best: tuple[int, np.ndarray] | None = None
+            best_gain = 0
+            for axis in axes_order:
+                candidate = hi.copy()
+                candidate[axis] += 1
+                if candidate[axis] >= occ.shape[axis]:
+                    continue
+                slab = [slice(lo[dim], hi[dim] + 1) for dim in range(3)]
+                slab[axis] = slice(candidate[axis], candidate[axis] + 1)
+                if bool(occ[tuple(slab)].all()):
+                    gain = int(np.prod([hi[dim] - lo[dim] + 1 for dim in range(3) if dim != axis]))
+                    if gain > best_gain:
+                        best = (axis, candidate)
+                        best_gain = gain
+            if best is not None:
+                axis, candidate = best
+                hi[axis] = candidate[axis]
+                grown = True
+        block = tuple(slice(lo[dim], hi[dim] + 1) for dim in range(3))
+        occ[block] = False
+        center = origin + ((lo + hi) / 2.0) * pitch
+        half_size = ((hi - lo + 1) / 2.0) * pitch
+        boxes.append((center, half_size))
+    boxes.sort(key=lambda item: float(np.prod(item[1])), reverse=True)
+    return boxes, int(occ.sum())
+
+
+def surface_voxel_collision_geoms(
+    mesh_path: Path,
+    category: str,
+    rgba: str = "0.40 0.50 0.60 0.3",
+    target_cells: int = 26,
+    max_boxes: int = 180,
+) -> tuple[str, str]:
+    try:
+        import trimesh
+    except ImportError as exc:
+        raise RuntimeError("desk/chair surface voxel proxy requires trimesh") from exc
+
+    mesh = trimesh.load_mesh(mesh_path, process=False)
+    max_extent = float(np.max(mesh.extents))
+    if not np.isfinite(max_extent) or max_extent <= 0:
+        raise ValueError(f"invalid mesh extent for voxel proxy: {mesh_path}")
+    voxels = mesh.voxelized(max_extent / float(target_cells))
+    boxes, left_unmerged = merge_occupied_voxels(
+        voxels.matrix.astype(bool),
+        np.asarray(voxels.pitch, dtype=np.float64),
+        np.asarray(voxels.transform, dtype=np.float64),
+        max_boxes=max_boxes,
+    )
+    if left_unmerged:
+        raise ValueError(f"voxel proxy exceeded max_boxes={max_boxes}; left_unmerged={left_unmerged}")
+    geoms = []
+    pitch = np.asarray(voxels.pitch, dtype=np.float64)
+    for idx, (center, half_size) in enumerate(boxes):
+        shrink = np.minimum(pitch * 0.12, half_size * 0.25)
+        half_size = np.maximum(half_size - shrink, pitch * 0.22)
+        name = "object_collision" if idx == 0 else f"object_collision_voxel_{idx:03d}"
+        geoms.append(geom_box_xml(name, center, half_size, rgba=rgba))
+    return "\n".join(geoms), f"{category}_surface_voxel_multibox_proxy_draft"
+
+
 def object_collision_geoms(
     object_key: str,
     category: str,
     half_extents: np.ndarray,
+    mesh_path: Path | None = None,
     rgba: str = "0.40 0.50 0.60 0.3",
 ) -> tuple[str, str]:
+    if category in SURFACE_VOXEL_PROXY_CATEGORIES:
+        if mesh_path is None:
+            raise ValueError(f"{category} surface voxel proxy requires mesh_path")
+        return surface_voxel_collision_geoms(mesh_path, category, rgba=rgba)
     if category == "bucket":
         wall = max(0.005, min(float(np.min(half_extents[:2])) * 0.08, 0.025))
         hz = float(half_extents[2])
@@ -352,6 +450,7 @@ def build_object_proxy_scene_xml(
     half_extents: np.ndarray,
     mass: float,
     mesh_file_attr: str,
+    mesh_path: Path | None = None,
     robot_meshdir_attr: str | None = None,
 ) -> tuple[str, str]:
     mesh_file = f'    <mesh name="{object_key}" file="{mesh_file_attr}" scale="1 1 1" />'
@@ -362,7 +461,7 @@ def build_object_proxy_scene_xml(
         scene = re.sub(r'meshdir="[^"]+"', f'meshdir="{robot_meshdir_attr}"', scene, count=1)
     pos = read_base_object_pos(base_text)
     inertia = box_inertia(mass, half_extents)
-    collision_geoms, collision_policy = object_collision_geoms(object_key, category, half_extents)
+    collision_geoms, collision_policy = object_collision_geoms(object_key, category, half_extents, mesh_path=mesh_path)
     object_body = (
         f'    <body name="object" pos="{pos}">\n'
         f'      <freejoint name="object_joint" />\n'
@@ -520,7 +619,7 @@ def build_missing_nonbox_proxy_template(
         "raw_mesh": str(raw_mesh),
         "asset_mesh": str(asset_mesh),
         "scene_xml": str(scene_path),
-        "template_adapter": "nonbox_proxy_aabb_review",
+        "template_adapter": "nonbox_surface_voxel_review" if object_category in SURFACE_VOXEL_PROXY_CATEGORIES else "nonbox_proxy_aabb_review",
         "collision_policy": "",
         "proxy_template": "True",
         "build_action": "dry_run",
@@ -552,6 +651,7 @@ def build_missing_nonbox_proxy_template(
             half_extents,
             mass,
             mesh_file_attr,
+            raw_mesh,
             robot_meshdir_attr,
         )
         row["collision_policy"] = collision_policy
@@ -712,7 +812,7 @@ def main() -> None:
     parser.add_argument("--asset-root", type=Path, default=None)
     parser.add_argument("--base-scene", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument("--apply-build", action="store_true", help="create missing box templates")
+    parser.add_argument("--apply-build", action="store_true", help="create missing box templates and review-only non-box proxy templates")
     parser.add_argument("--overwrite-existing", action="store_true", help="allow replacing existing scene.xml")
     parser.add_argument("--mass-kg", type=float, default=DEFAULT_MASS_KG)
     args = parser.parse_args()

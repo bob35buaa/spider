@@ -46,7 +46,33 @@ bucket、desk、chair 等非 box 不能自动放行。必须人工审查：
 |---|---|---|---|
 | `nonbox_proxy_aabb_review` | bucket | `bucket_wall_proxy_aabb`：底面 + 四侧壁 box geoms | `manual_review_required` |
 | `nonbox_proxy_aabb_review` | board/stick | `mesh_aabb_box_proxy` | `manual_review_required` |
-| `manual_complex_shape` | desk/chair | 不自动构建 | `manual_review_required` |
+| `nonbox_surface_voxel_review` | desk/chair | `desk_surface_voxel_multibox_proxy_draft` / `chair_surface_voxel_multibox_proxy_draft`：OBJ 表面 voxelization 后合并成多 box proxy | `manual_review_required` |
+
+### desk/chair surface voxel proxy
+
+desk/chair 在 CORE4D 中不是稳定语义类别：同一个 `desk` 类可能包含侧板/U 型架、小圆几/三脚凳、管架等形态；`chair` 也可能不是标准 seat/back/legs 拓扑。因此 v3 不再用“标准桌/椅”语义模板自动构建 collision。
+
+缺失 desk/chair source template 时，S2 可生成 review-only surface voxel proxy：
+
+1. 读取 raw OBJ mesh，保持 object-local frame，不对 mesh 做自动旋转。
+2. 用 `trimesh.voxelized()` 对 mesh 表面 voxelize。
+3. 将 occupied surface voxels 贪心合并成一组 local AABB box geoms。
+4. 使用较高分辨率 `target_cells=26` 和轻微 inward shrink，避免 collision 比 mesh 明显大一圈。
+5. 输出 `object_collision` + `object_collision_voxel_*` 多个 box geoms。
+
+该 proxy 的目标是生成可审查、可加载、比单 AABB 更贴近 mesh 的碰撞草稿；它不是最终人工语义建模，也不能自动 release。通过 review 前必须保持：
+
+```text
+template_status=manual_review_required
+proxy_template=True
+manual_review_required=True
+```
+
+review package 必须至少包含：
+
+- source template orbit sheet/mp4；
+- mesh/collision overlay 或 object-only mesh/collision sheet，可由 `render_template_mesh_collision_review_package.py --object-only` 生成；
+- `nonbox_template_review.tsv` 中的显式 `review_decision=approve_clean` 才能进入 `clean_reviewed`。
 
 审查通过后，必须通过 `nonbox_template_review.tsv` 显式写入 `template_status=clean_reviewed`。`clean_reviewed` 才能进入 Stage2b。
 

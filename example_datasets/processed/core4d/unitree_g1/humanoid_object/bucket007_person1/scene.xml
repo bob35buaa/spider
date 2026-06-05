@@ -134,7 +134,7 @@
     <mesh name="right_wrist_yaw_link" file="right_wrist_yaw_link.STL" />
     <mesh name="right_rubber_hand" file="right_rubber_hand.STL" />
     <mesh name="bucket007" file="../../../../../example_datasets/processed/core4d/assets/objects/bucket007/bucket007_m.obj" scale="1 1 1" />
-    <material name="bucket_material" rgba="0.4 0.5 0.6 1" />
+    <material name="bucket007_material" rgba="0.40 0.50 0.60 1" />
   </asset>
   <worldbody>
     <light pos="0 0 5" dir="0 0 -1" type="directional" />
@@ -336,11 +336,15 @@
         </body>
       </body>
     </body>
-    <body name="object" pos="-0.3343 0.2816 0.1261" quat="0.706196 0.079266 -0.703498 -0.009713">
+    <body name="object" pos="0.155 -0.124 0.310">
       <freejoint name="object_joint" />
-      <inertial pos="0 0 0" mass="2.0" diaginertia="0.03 0.04 0.03" />
-      <geom name="object_visual" type="mesh" mesh="bucket007" material="bucket_material" group="2" contype="0" conaffinity="0" />
-      <geom name="object_collision" type="box" size="0.2880 0.2997 0.3440" rgba="0.4 0.5 0.6 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <inertial pos="0 0 0" mass="2.000" diaginertia="0.10901105 0.10390275 0.10468122" />
+      <geom name="object_visual" type="mesh" mesh="bucket007" material="bucket007_material" group="2" contype="0" conaffinity="0" />
+      <geom name="object_collision" type="box" pos="0 0 -0.273980" size="0.273276 0.286953 0.010931" rgba="0.40 0.50 0.60 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_bucket_xneg" type="box" pos="-0.262345 0 0" size="0.010931 0.286953 0.284911" rgba="0.40 0.50 0.60 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_bucket_xpos" type="box" pos="0.262345 0 0" size="0.010931 0.286953 0.284911" rgba="0.40 0.50 0.60 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_bucket_yneg" type="box" pos="0 -0.276022 0" size="0.273276 0.010931 0.284911" rgba="0.40 0.50 0.60 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_bucket_ypos" type="box" pos="0 0.276022 0" size="0.273276 0.010931 0.284911" rgba="0.40 0.50 0.60 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
       <site name="trace_object" size="0.02" rgba="0 0 1 1" />
     </body>
   </worldbody>

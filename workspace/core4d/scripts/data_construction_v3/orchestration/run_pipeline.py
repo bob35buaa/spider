@@ -384,8 +384,27 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
             cwd=spider_repo,
         )
     )
+    template_mesh_collision_dir = template_dir / "template_mesh_collision_review"
+    commands.append(
+        run_command(
+            [
+                sys.executable,
+                py("render_template_mesh_collision_review_package.py"),
+                "--input-tsv",
+                str(template_dir / "template_backlog.tsv"),
+                "--out-dir",
+                str(template_mesh_collision_dir),
+                "--render-statuses",
+                "manual_review_required",
+                "--object-only",
+                "--overwrite",
+            ],
+            cwd=spider_repo,
+        )
+    )
     stage_decisions["S2_templates"] = "pass"
     stage_decisions["S2_template_visual_review"] = "pass"
+    stage_decisions["S2_template_mesh_collision_review"] = "pass"
 
     route_diagnostic_tsvs = list(args.route_diagnostic_tsv)
     if args.build_fingertip_route_diagnostics:
