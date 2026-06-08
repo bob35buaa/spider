@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""Build E145 raw_mask_ref_fk CEM-ready variants from S5 handoff."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import re
+import shutil
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+
+REPO = Path(__file__).resolve().parents[4]
+DEFAULT_RUN_ROOT = REPO / "workspace/core4d/results/E145/full_nonbox_to_rl_ready"
+SCRIPT_ROOT = REPO / "workspace/core4d/scripts/E145"
+VARIANTS_TSV = SCRIPT_ROOT / "variants.tsv"
+OVERRIDE_ROOT = REPO / "examples/config/override"
+OBJECT_ASSET_ROOT = REPO / "example_datasets/processed/core4d/assets/objects"
+BASE_OVERRIDE = "core4d_E089A_box021_person1_upperobj"
+
+FIELDS = [
+    "ordinal",
+    "variant",
+    "case_id",
+    "object_key",
+    "object_category",
+    "person",
+    "person_idx",
+    "split",
+    "ablation",
+    "retarget_variant_id",
+    "target_variant_id",
+    "derived_task",
+    "target_scene",
+    "trajectory",
+    "scene_act",
+    "mask_path",
+    "mask_kind",
+    "override",
+    "object_asset",
+    "remote_sync_key",
+    "handoff_decision",
+    "candidate_decision",
+    "raw_contact_threshold_label",
+    "run_status",
+]
+
+
+def read_tsv(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as f:
+        lines = [line for line in f if line.strip() and not line.startswith("#")]
+    if not lines:
+        return []
+    return list(csv.DictReader(lines, delimiter="\t"))
+
+
+def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str], comment: str | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        if comment:
+            f.write(f"# {comment}\n")
+        writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field, "") for field in fields})
+
+
+def write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def safe_id(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_]+", "_", text).strip("_")
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
+def repo_path(path_text: str) -> Path:
+    path = Path(path_text)
+    return path if path.is_absolute() else REPO / path
+
+
+def file_ok(path_text: str) -> bool:
+    return bool(path_text) and repo_path(path_text).is_file()
+
+
+def split_for_index(index: int) -> str:
+    return ["local-gpu0", "remote-gpu0", "remote-gpu1"][index % 3]
+
+
+def object_asset(object_key: str) -> str:
+    candidates = [
+        OBJECT_ASSET_ROOT / object_key / f"{object_key}_m.obj",
+        OBJECT_ASSET_ROOT / object_key / f"{object_key}.obj",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return rel(path)
+    return rel(candidates[0])
+
+
+def object_category(object_key: str, fallback: str = "") -> str:
+    if fallback:
+        return fallback
+    key = object_key.lower()
+    for category in ("bucket", "chair", "desk"):
+        if key.startswith(category):
+            return category
+    return ""
+
+
+def localize_mask(source_mask: str, run_root: Path, case_id: str) -> str:
+    src = repo_path(source_mask)
+    dst = run_root / "contact_masks" / safe_id(case_id) / "raw_contact_mask_3cm.npz"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_file() and src.resolve() != dst.resolve():
+        shutil.copy2(src, dst)
+    return rel(dst)
+
+
+def validate_mask(path_text: str, person_idx: str) -> tuple[bool, str, str]:
+    if not path_text:
+        return False, "missing_contact_mask", ""
+    path = repo_path(path_text)
+    if not path.is_file():
+        return False, "contact_mask_missing", ""
+    try:
+        data = np.load(path, allow_pickle=True)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"contact_mask_load_error:{type(exc).__name__}", ""
+    accepted = ["eval_contact_mask_3cm", "spider_contact_mask_3cm", "raw_contact_mask_3cm", "contact_mask_3cm"]
+    key = next((item for item in accepted if item in data.files), "")
+    if not key:
+        return False, "contact_mask_3cm_key_missing", ""
+    arr = np.asarray(data[key])
+    if arr.ndim == 3 and arr.shape[2] == 2:
+        try:
+            idx = int(person_idx)
+        except ValueError:
+            idx = 0
+        if idx >= arr.shape[1]:
+            return False, f"{key}_person_idx_out_of_range:{arr.shape}", key
+    return True, "", key
+
+
+def write_override(variant: str, task: str, mask_path: str, person_idx: str) -> Path:
+    path = OVERRIDE_ROOT / f"core4d_{variant}.yaml"
+    content = f"""# @package _global_
+# Auto-generated by workspace/core4d/scripts/E145/build_full_nonbox_raw_mask_ref_fk_cem_ready.py.
+# E145 full-nonbox raw_mask_ref_fk; variant={variant}.
+defaults:
+  - {BASE_OVERRIDE}
+  - _self_
+
+task: {task}
+
+contact_hdmi_target_source: ref_fk
+contact_hdmi_target_path: ""
+contact_hdmi_target_uses_eef_offset: true
+contact_hdmi_gain: 5.0
+contact_hdmi_mask_source: "core4d_3cm"
+contact_hdmi_mask_path: "{mask_path}"
+contact_hdmi_mask_person_idx: {person_idx}
+contact_hdmi_mask_time_axis: auto
+
+hold_contact_rew_scale: 0.0
+hold_contact_sigma: 0.05
+hold_contact_start_eval_time: 0.0
+hold_contact_end_eval_time: 0.0
+hold_contact_require_ref_contact: true
+
+video_camera: auto
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def ready_handoff_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    out = [
+        row
+        for row in rows
+        if row.get("handoff_decision") == "HANDOFF_READY"
+        and row.get("target_gate_status") == "pass"
+        and row.get("visual_qc_status") == "pass"
+        and row.get("target_variant_id", "ref_fk") == "ref_fk"
+        and row.get("retarget_variant_id") == "omnirt_v1"
+    ]
+    out.sort(
+        key=lambda row: (
+            object_category(row.get("object_key", ""), row.get("object_category", "")),
+            row.get("object_key", ""),
+            row.get("case_id", ""),
+            row.get("person", ""),
+        )
+    )
+    return out
+
+
+def build(rows: list[dict[str, str]], run_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    variants: list[dict[str, Any]] = []
+    preflight: list[dict[str, Any]] = []
+    for idx, row in enumerate(ready_handoff_rows(rows), start=1):
+        case_id = row["case_id"]
+        variant = f"E145_{safe_id(case_id)}_raw_mask_ref_fk"
+        task = row.get("stage2b_target_task") or row.get("target_task") or case_id
+        source_mask = row.get("contact_mask") or row.get("contact_mask_npz", "")
+        mask_path = localize_mask(source_mask, run_root, case_id) if source_mask else ""
+        override = write_override(variant, task, mask_path, row.get("person_idx", "0"))
+        asset = object_asset(row.get("object_key", ""))
+        category = object_category(row.get("object_key", ""), row.get("object_category", ""))
+        item = {
+            "ordinal": idx,
+            "variant": variant,
+            "case_id": case_id,
+            "object_key": row.get("object_key", ""),
+            "object_category": category,
+            "person": row.get("person", ""),
+            "person_idx": row.get("person_idx", ""),
+            "split": split_for_index(idx - 1),
+            "ablation": "raw_mask_ref_fk",
+            "retarget_variant_id": row.get("retarget_variant_id", ""),
+            "target_variant_id": row.get("target_variant_id", ""),
+            "derived_task": task,
+            "target_scene": row.get("target_scene", ""),
+            "trajectory": row.get("trajectory", ""),
+            "scene_act": row.get("scene_act", ""),
+            "mask_path": mask_path,
+            "mask_kind": "s5_contact_mask_3cm",
+            "override": rel(override),
+            "object_asset": asset,
+            "remote_sync_key": f"assets/objects/{row.get('object_key', '')}",
+            "handoff_decision": row.get("handoff_decision", ""),
+            "candidate_decision": row.get("candidate_decision", ""),
+            "raw_contact_threshold_label": row.get("raw_contact_threshold_label", ""),
+            "run_status": "to_run",
+        }
+        mask_ok, mask_failure, mask_key = validate_mask(mask_path, row.get("person_idx", "0"))
+        checks = {
+            **item,
+            "target_scene_exists": file_ok(item["target_scene"]),
+            "trajectory_exists": file_ok(item["trajectory"]),
+            "scene_act_exists": file_ok(item["scene_act"]),
+            "source_mask_path": source_mask,
+            "source_mask_exists": file_ok(source_mask),
+            "contact_mask_exists": file_ok(mask_path),
+            "contact_mask_valid": mask_ok,
+            "contact_mask_failure": mask_failure,
+            "contact_mask_key": mask_key,
+            "override_exists": repo_path(item["override"]).is_file(),
+            "object_asset_exists": file_ok(asset),
+            "remote_sync_path_derivable": bool(item["remote_sync_key"]),
+        }
+        checks["preflight_ok"] = all(
+            checks[key]
+            for key in [
+                "target_scene_exists",
+                "trajectory_exists",
+                "scene_act_exists",
+                "source_mask_exists",
+                "contact_mask_exists",
+                "contact_mask_valid",
+                "override_exists",
+                "object_asset_exists",
+                "remote_sync_path_derivable",
+            ]
+        )
+        variants.append(item)
+        preflight.append(checks)
+    return variants, preflight
+
+
+def markdown_summary(summary: dict[str, Any], rows: list[dict[str, Any]]) -> str:
+    lines = [
+        "# E145 Raw-Mask Ref-FK CEM-Ready Summary",
+        "",
+        f"- run_root: `{summary['run_root']}`",
+        f"- handoff_tsv: `{summary['handoff_tsv']}`",
+        f"- CEM-ready variants: `{summary['variant_rows']}`",
+        "",
+        "## split counts",
+        "",
+        "| split | count |",
+        "|---|---:|",
+    ]
+    for key, count in summary["split_counts"].items():
+        lines.append(f"| `{key}` | {count} |")
+    lines.extend(["", "## variants", "", "| variant | split | case | object | task |", "|---|---|---|---|---|"])
+    for row in rows:
+        lines.append(f"| `{row['variant']}` | `{row['split']}` | `{row['case_id']}` | `{row['object_key']}` | `{row['derived_task']}` |")
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-root", type=Path, default=DEFAULT_RUN_ROOT)
+    parser.add_argument("--handoff-tsv", type=Path, default=None)
+    args = parser.parse_args()
+
+    run_root = args.run_root if args.run_root.is_absolute() else REPO / args.run_root
+    handoff_tsv = args.handoff_tsv or run_root / "s5_handoff/handoff_manifest.tsv"
+    rows = read_tsv(handoff_tsv)
+    variants, preflight = build(rows, run_root)
+    keep = {Path(row["override"]).name for row in variants}
+    for path in OVERRIDE_ROOT.glob("core4d_E145_*_raw_mask_ref_fk.yaml"):
+        if path.name not in keep:
+            path.unlink()
+    write_tsv(run_root / "cem_ready/raw_mask_ref_fk_cem_ready.tsv", variants, FIELDS, "E145 raw_mask_ref_fk CEM-ready rows")
+    preflight_fields = sorted({key for row in preflight for key in row}) if preflight else FIELDS
+    write_tsv(
+        run_root / "cem_ready/raw_mask_ref_fk_cem_ready_preflight.tsv",
+        preflight,
+        preflight_fields,
+        "E145 raw_mask_ref_fk CEM-ready preflight",
+    )
+    write_tsv(VARIANTS_TSV, variants, FIELDS, "E145 raw_mask_ref_fk full CEM variants")
+    summary = {
+        "run_root": rel(run_root),
+        "handoff_tsv": rel(handoff_tsv),
+        "variant_rows": len(variants),
+        "category_counts": dict(Counter(row["object_category"] for row in variants)),
+        "split_counts": dict(Counter(row["split"] for row in variants)),
+        "preflight_ok_counts": dict(Counter(str(row.get("preflight_ok", "")) for row in preflight)),
+        "variants_tsv": rel(VARIANTS_TSV),
+        "cem_ready_tsv": rel(run_root / "cem_ready/raw_mask_ref_fk_cem_ready.tsv"),
+    }
+    write_json(run_root / "cem_ready/raw_mask_ref_fk_cem_ready_summary.json", summary)
+    (run_root / "cem_ready/raw_mask_ref_fk_cem_ready_summary.md").write_text(markdown_summary(summary, variants), encoding="utf-8")
+    print(json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False))
+    if any(not row.get("preflight_ok") for row in preflight):
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
