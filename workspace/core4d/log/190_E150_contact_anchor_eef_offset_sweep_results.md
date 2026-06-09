@@ -148,6 +148,39 @@ Forward-moving the shared `contact_hdmi_eef_offset` from 0.05 to 0.08 or 0.11 do
 
 The contact-anchor diagnosis remains plausible as a mechanism, but a pure scalar x-offset is too blunt. The next useful direction should be route B style: reward/eval should reason about rubber-hand surface geometry or multiple contact anchors, rather than pulling a single wrist-derived point farther forward.
 
+## Post-hoc verification: why route A is mathematically inert (2026-06-09)
+
+After the flat result, we asked the deeper question: was the `contact_hdmi` reward even responsive to `eef_offset` during CEM? Rather than re-run GPU, we recomputed the reward **offline on the already-executed trajectories**.
+
+Method (no simulation, deterministic):
+- For each of the 8 cases, load the off08 npz (`qpos` stores `[sim, ref]` for every frame) and the case's snapshot rubber scene.
+- Replicate `mjwp.py:1033-1044` exactly via MuJoCo FK: `target_world = obj_pos_sim + R(obj_quat_sim)·target_local`, where `target_local = R_obj_ref^T·((ref_wrist + R(ref_wrist_quat)·off) − obj_pos_ref)` (per `run_mjwp.py:1026-1038`, `target_uses_eef_offset=True`); `contact_point = sim_wrist + R(sim_wrist_quat)·off`; `pos_rew = exp(−‖target_world − contact_point‖/σ)`, σ=0.3.
+- Sweep `off ∈ {0.05, 0.08, 0.11}` on the **same fixed states** and measure how much the reward moves.
+
+Result — `contact_hdmi` pos_rew is nearly invariant to eef_offset:
+
+| case | rew@0.05 | rew@0.08 | rew@0.11 | Δ(0.05→0.11) | rel% | dist@.05 (cm) | dist@.11 (cm) | coupling ‖·‖₂ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| box021_035_p1 | 0.97689 | 0.97581 | 0.97458 | −0.00232 | −0.24% | 0.719 | 0.794 | 0.0282 |
+| box021_035_p2 | 0.97949 | 0.97888 | 0.97805 | −0.00143 | −0.15% | 0.629 | 0.674 | 0.0248 |
+| box021_029_p2 | 0.96872 | 0.96820 | 0.96729 | −0.00144 | −0.15% | 0.969 | 1.015 | 0.0476 |
+| box004_082_p1 | 0.96739 | 0.96693 | 0.96609 | −0.00130 | −0.13% | 1.011 | 1.051 | 0.0409 |
+| box004_083_p1 | 0.97446 | 0.97383 | 0.97299 | −0.00148 | −0.15% | 0.786 | 0.833 | 0.0304 |
+| box004_083_p2 | 0.96148 | 0.96034 | 0.95883 | −0.00265 | −0.28% | 1.203 | 1.291 | 0.0449 |
+| box023_person2 | 0.97012 | 0.96887 | 0.96735 | −0.00276 | −0.28% | 0.930 | 1.022 | 0.0409 |
+| box026_139_p1 | 0.97038 | 0.96893 | 0.96718 | −0.00320 | −0.33% | 0.913 | 1.018 | 0.0457 |
+| **MEAN(8)** | **0.97112** | **0.97022** | **0.96904** | **−0.00207** | **−0.21%** | **0.895** | **0.962** | **0.0379** |
+
+Worst-case relative reward change across all 8 cases: **0.33%**.
+
+Two findings:
+
+1. **eef_offset is mathematically inert for this reward.** `off` enters BOTH `target_world` (via ref FK) and `contact_point` (via sim FK), so the net offset term is `[R(sim_wrist) − R_obj_sim·R_obj_ref^T·R(sim... ref_wrist)]·off`. The coupling matrix's spectral norm averages **0.038**, so a 6 cm offset move (0.05→0.11) shifts the tracked distance by only ~0.7 mm — negligible against σ=30 cm. This is why route A's measured 5cm-contact delta (+0.001~+0.002) is in the noise: it is not "under-tuned", the lever is **orthogonal** to the reward. **Route A is falsified.**
+
+2. **The reward is already saturated (~0.97) yet hand contact stays low (5cm 0.46, physics 0.31).** The reward measures "replicate the reference wrist-to-object relative pose" and it *succeeds* (sub-cm distance, 0.97 pos_rew). But (a) the reference (OmniRetarget replay) hand is itself not on the box surface, and (b) the reward never reads the rubber-hand mesh or the box face. So **reward-perfect ≠ hand-on-box**. The ceiling is the reference's own contact quality, not the offset. This is the saturation paradox that motivates route B (read real hand↔box geometry, not a wrist-derived point).
+
+Verification was a pure offline recompute (no GPU, no scene/code change); reproduced across all 8 relaxed8 cases including the E143-mask case box021_029_p2.
+
 ## Validation
 
 - Manifest build: 24 rows = 8 off05 reuse + 16 to-run; split 8 off08 / 8 off11.
