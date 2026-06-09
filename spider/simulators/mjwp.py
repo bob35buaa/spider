@@ -27,6 +27,8 @@ import warp as wp
 from spider.config import Config
 from spider.math import quat_sub
 
+MESH_SDF_SAMPLE_COUNT = 800
+
 # Initialize Warp once per process
 try:
     wp.init()
@@ -97,37 +99,68 @@ def _geom_box_sdf_min(
 
     obj_pos = geom_xpos[:, object_geom_id]
     obj_mat = geom_xmat[:, object_geom_id]
-    centers = geom_xpos[:, geom_ids]
-    mats = geom_xmat[:, geom_ids]
-    axes = mats[:, :, :, 2]
-    radii = torch.tensor(
-        [float(env.model_cpu.geom_size[gid, 0]) for gid in geom_ids],
-        device=config.device,
-        dtype=geom_xpos.dtype,
-    )
-    half_lens = torch.tensor(
-        [
-            (
-                float(env.model_cpu.geom_size[gid, 1])
-                if int(env.model_cpu.geom_type[gid])
-                == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
-                else 0.0
-            )
-            for gid in geom_ids
-        ],
-        device=config.device,
-        dtype=geom_xpos.dtype,
-    )
-    samples = torch.stack((-half_lens, torch.zeros_like(half_lens), half_lens), dim=1)
-    points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(1, -1, 3, 1)
-    delta = points - obj_pos[:, None, None, :]
-    local = torch.einsum("nji,nkpj->nkpi", obj_mat, delta)
-    q = torch.abs(local) - half_ext.view(1, 1, 1, 3)
-    outside = torch.clamp(q, min=0.0).norm(dim=-1)
-    inside = torch.clamp(q.max(dim=-1).values, max=0.0)
-    sdf_points = outside + inside
-    sdf_geom = sdf_points.min(dim=2).values - radii.view(1, -1)
-    return sdf_geom.min(dim=1).values
+    mesh_type = int(mujoco.mjtGeom.mjGEOM_MESH)
+    mesh_ids = [
+        gid for gid in geom_ids if int(env.model_cpu.geom_type[gid]) == mesh_type
+    ]
+    primitive_ids = [gid for gid in geom_ids if gid not in mesh_ids]
+    candidates: list[torch.Tensor] = []
+
+    if primitive_ids:
+        centers = geom_xpos[:, primitive_ids]
+        mats = geom_xmat[:, primitive_ids]
+        axes = mats[:, :, :, 2]
+        radii = torch.tensor(
+            [float(env.model_cpu.geom_size[gid, 0]) for gid in primitive_ids],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        half_lens = torch.tensor(
+            [
+                (
+                    float(env.model_cpu.geom_size[gid, 1])
+                    if int(env.model_cpu.geom_type[gid])
+                    == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
+                    else 0.0
+                )
+                for gid in primitive_ids
+            ],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        samples = torch.stack(
+            (-half_lens, torch.zeros_like(half_lens), half_lens), dim=1
+        )
+        points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(1, -1, 3, 1)
+        delta = points - obj_pos[:, None, None, :]
+        local = torch.einsum("nji,nkpj->nkpi", obj_mat, delta)
+        q = torch.abs(local) - half_ext.view(1, 1, 1, 3)
+        outside = torch.clamp(q, min=0.0).norm(dim=-1)
+        inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+        sdf_points = outside + inside
+        sdf_geom = sdf_points.min(dim=2).values - radii.view(1, -1)
+        candidates.append(sdf_geom.min(dim=1).values)
+
+    for gid in mesh_ids:
+        mesh_id = int(env.model_cpu.geom_dataid[gid])
+        v0 = int(env.model_cpu.mesh_vertadr[mesh_id])
+        nv = int(env.model_cpu.mesh_vertnum[mesh_id])
+        verts_np = env.model_cpu.mesh_vert[v0 : v0 + nv].reshape(-1, 3)
+        if nv > MESH_SDF_SAMPLE_COUNT:
+            idx = np.linspace(0, nv - 1, MESH_SDF_SAMPLE_COUNT).astype(int)
+            verts_np = verts_np[idx]
+        verts = torch.tensor(verts_np, device=config.device, dtype=geom_xpos.dtype)
+        center = geom_xpos[:, gid]
+        mat = geom_xmat[:, gid]
+        points = center[:, None, :] + torch.einsum("nij,sj->nsi", mat, verts)
+        delta = points - obj_pos[:, None, :]
+        local = torch.einsum("nji,nsj->nsi", obj_mat, delta)
+        q = torch.abs(local) - half_ext.view(1, 1, 3)
+        outside = torch.clamp(q, min=0.0).norm(dim=-1)
+        inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+        candidates.append((outside + inside).min(dim=1).values)
+
+    return torch.stack(candidates, dim=1).min(dim=1).values
 
 
 def _sample_gate_from_ref_mask(
