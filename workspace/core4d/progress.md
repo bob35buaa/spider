@@ -1,5 +1,12 @@
 # E147 Progress — 2026-06-08
 
+## E150 contact anchor eef_offset sweep
+
+- [x] 2026-06-09 E150 上下文恢复：按 `experiment-planning-zh` 读取计划 `workspace/core4d/plan/158_E150_contact_anchor_eef_offset_sweep_plan.md`、remote execution 指南、tracker/progress。确认本轮是路线A纯 config sweep，不改 SPIDER reward/算法；benchmark 为 E149 relaxed8，0.05 baseline 复用 E148/E147 rubber，新增 0.08/0.11 共 16 个 CEM runs，远程 A6000 两卡并行。
+- [x] 2026-06-09 E150 固定入口初版落地：新增 `scripts/E150/build_eef_offset_sweep_manifest.py`、`scripts/train/train_E150_eef_offset_sweep.sh`、`scripts/run_E150_remote.sh`、`scripts/pull_E150_remote_results.sh`、`scripts/eval/eval_E150_eef_offset_sweep.py/.sh`。manifest build 通过：24 rows = 8 `reuse_e148` baseline + 16 `to_run`；anchors off05/off08/off11 各 8；split remote-gpu0/off08=8、remote-gpu1/off11=8。
+- [x] 2026-06-09 E150 static/pre-run eval 通过：`py_compile`、shell `bash -n`、`git diff --check` 通过；`eval_E150_eef_offset_sweep.sh full --allow-missing` 成功评估 8 条 off05 baseline，输出 `method_rows=8/delta_rows=0/missing=16`，证明 evaluator 能按 row 动态设置 `EEF_OFFSET`，当前等待 off08/off11 新 CEM 结果。
+- [x] 2026-06-09 E150 remote smoke 首轮诊断：远端 `E150_smoke_174912` 自然退出但只产出 2/16 root NPZ/MP4；已确认 `box021_035_p2` 的 off08/off11 smoke 成功且 `config_act.yaml` 分别写入 `contact_hdmi_eef_offset=[0.08,0,0]` / `[0.11,0,0]`。失败点是第二组 `box023_person2`：E148 manifest 的 E143 task 为 `box023_person2_legobj_e026_e081`，但复用的 E147 rubber override/sidecar 实际在 `box023_person2_legobj`，训练命令覆盖 task 后找不到 `scene_act_E147_rubber_hull.xml`。已修 `build_eef_offset_sweep_manifest.py`：E150 运行侧 `derived_task/target_scene/trajectory/base_scene_act` 从 `rubber_scene_act` 所在 task 目录派生，保证 off08/off11 与 off05 rubber baseline 同 task/scene。
+
 ## E148 e143 24-case rubber hand extension
 
 - [x] 2026-06-09 E149 clean benchmark 启动：根据用户提醒重新读取 E143 标注表 `E143_raw_mask_ref_fk_24case_omniretarget_comparison-anno.xlsx` 和 failure report；确认 E143 已建议不要用全部 24 case 做主 claim，而是用 clean6 (`box021_035_p1/p2`, `box021_029_p2`, `box004_083_p1/p2`, `box023_person2`) 和 relaxed8 (`clean6` + `box004_082_p1`, `box026_139_p1`)。新增 eval-only 计划 `workspace/core4d/plan/157_E149_e143_clean_rubber_benchmark_eval_plan.md` 和固定 eval 脚本；不启动 CEM/远程/RL。
