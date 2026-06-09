@@ -107,6 +107,33 @@ workspace/core4d/scripts/data_construction_v3/lib/interfaces.py
 - visual manifest；
 - optional review template。
 
+## HandCollisionAdapter 接口
+
+职责：在 S5/CEM handoff 时选择机器人手部碰撞体 scene variant。
+
+输入：
+
+- base `scene_act.xml`；
+- `hand_collision_variant_id`；
+- 可选 install dir；
+- patch 参数。
+
+输出：
+
+- `base_scene_act`；
+- `patched_scene_act`；
+- `installed_scene_act`；
+- `scene_name`；
+- `patch_params_json`；
+- MuJoCo load / geom type / rbound 验证结果。
+
+规则：
+
+- `sphere5cm` 是 no-op 默认值；
+- `rubber_hull` 使用 rubber hand visual mesh 的凸包碰撞体，`maxhullvert=64`；
+- adapter 只写 sidecar scene，不覆盖源 scene；
+- hand geom 名称仍为 `lh/rh`，保持 reward、contact pair 和 eval 引用稳定。
+
 ## Result 字段约定
 
 所有扩展 result 至少包含：
@@ -122,6 +149,8 @@ workspace/core4d/scripts/data_construction_v3/lib/interfaces.py
 - `updated_at`
 
 `RetargetAdapterResult` 还必须包含 `retarget_variant_id`、`target_variant_id`、`converted_npz`、`omniretarget_output_npz`、`trimmed_npz`、`params_json`。
+
+`HandCollisionAdapterResult` 还必须包含 `hand_collision_variant_id`、`base_scene_act`、`patched_scene_act`、`installed_scene_act`、`scene_name`、`patch_params_json`。
 
 ## CEM handoff adapter
 

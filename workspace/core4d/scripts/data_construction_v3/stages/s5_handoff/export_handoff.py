@@ -15,7 +15,7 @@ for _path in (SCRIPT_ROOT / "lib", SCRIPT_ROOT / "state", SCRIPT_ROOT):
         sys.path.insert(0, str(_path))
 from typing import Any
 
-from common import SCHEMA_VERSION, json_dumps, read_tsv, timestamp, write_json, write_tsv
+from common import DEFAULT_HAND_COLLISION_VARIANT_ID, SCHEMA_VERSION, json_dumps, read_tsv, timestamp, write_json, write_tsv
 
 
 def key(row: dict[str, str]) -> tuple[str, str, str]:
@@ -125,6 +125,7 @@ def build_rows(
             "person_idx": row.get("person_idx", ""),
             "retarget_variant_id": row.get("retarget_variant_id", ""),
             "target_variant_id": row.get("target_variant_id", ""),
+            "hand_collision_variant_id": row.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID) or DEFAULT_HAND_COLLISION_VARIANT_ID,
             "candidate_decision": decision,
             "decision_reason": reason,
             "handoff_decision": handoff,
@@ -292,10 +293,10 @@ def markdown_summary(summary: dict[str, Any], candidate_rows: list[dict[str, Any
     lines.extend(["", "## handoff decisions", "", "| decision | count |", "|---|---:|"])
     for key, count in summary["handoff_decision_counts"].items():
         lines.append(f"| `{key}` | {count} |")
-    lines.extend(["", "## handoff rows", "", "| handoff | case | variant | target | reason |", "|---|---|---|---|---|"])
+    lines.extend(["", "## handoff rows", "", "| handoff | case | retarget | target | hand collision | reason |", "|---|---|---|---|---|---|"])
     for row in handoff_rows[:50]:
         lines.append(
-            f"| `{row['handoff_decision']}` | `{row['case_id']}` | `{row['retarget_variant_id']}` | `{row['target_variant_id']}` | `{row['decision_reason']}` |"
+            f"| `{row['handoff_decision']}` | `{row['case_id']}` | `{row['retarget_variant_id']}` | `{row['target_variant_id']}` | `{row.get('hand_collision_variant_id', DEFAULT_HAND_COLLISION_VARIANT_ID)}` | `{row['decision_reason']}` |"
         )
     lines.extend(
         [

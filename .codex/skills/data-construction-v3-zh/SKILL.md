@@ -23,6 +23,7 @@ workspace/core4d/docs/data_construction_v3/08_retarget_variants.md
 workspace/core4d/docs/data_construction_v3/10_diagnostic_contracts.md
 workspace/core4d/docs/data_construction_v3/12_completion_audit.md
 workspace/core4d/docs/data_construction_v3/14_release_readiness.md
+workspace/core4d/docs/data_construction_v3/15_hand_collision_variants.md
 workspace/core4d/EXPERIMENT_TRACKER.md
 workspace/core4d/progress.md
 ```
@@ -65,7 +66,7 @@ S5  candidate bank + handoff manifest
 S6  CEM/RL downstream evidence
 ```
 
-S0-S2 可共享；S3 之后必须带 `retarget_variant_id` 和 `target_variant_id`。不同 variant/route 的输出不能互相覆盖。
+S0-S2 可共享；S3 之后必须带 `retarget_variant_id` 和 `target_variant_id`。S5/CEM 之后还可带 `hand_collision_variant_id`。不同 variant/route/collision 输出不能互相覆盖。
 
 ## 默认路线和 contract
 
@@ -90,6 +91,23 @@ OmniRetarget 参数必须显式版本化。至少区分：
 - `omnirt_v1 + REPLACE_WRIST_WITH_FINGERTIP`
 
 算法参数改变就是新 variant，不要覆盖旧结果。
+
+## 手部碰撞体 variant
+
+机器人手部碰撞体是 S5/CEM 的独立轴：
+
+```text
+hand_collision_variant_id=sphere5cm   # 默认旧行为
+hand_collision_variant_id=rubber_hull # rubber hand mesh convex hull
+```
+
+规则：
+
+- 该轴只改机器人侧 `lh/rh` hand collision geom，不改 OmniRetarget、不改 target route、不改物体侧 `collision_policy`。
+- registry 主键为 `(case_id, retarget_variant_id, target_variant_id, hand_collision_variant_id)`；旧 row 缺省 `sphere5cm`。
+- `rubber_hull` 必须通过 sidecar scene 注入，例如 `scene_act_E147_rubber_hull.xml`；禁止覆盖源 `scene_act.xml`。
+- adapter 入口是 `stages/s5_handoff/patch_hand_collision.py`；CEM override 通过 `scene_name=<sidecar basename>` 指向 sidecar。
+- rubber mesh 评估必须使用 mesh-aware SDF（采样 mesh 顶点或等价方法），不能只用 geom center/rbound 近似。
 
 ## Template 规则
 

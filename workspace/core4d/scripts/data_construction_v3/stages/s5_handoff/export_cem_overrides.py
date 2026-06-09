@@ -19,13 +19,14 @@ from typing import Any
 
 import numpy as np
 
-from common import SCHEMA_VERSION, find_spider_repo, json_dumps, read_tsv, sha256_file, timestamp, write_json, write_tsv
+from common import DEFAULT_HAND_COLLISION_VARIANT_ID, SCHEMA_VERSION, find_spider_repo, json_dumps, read_tsv, sha256_file, timestamp, write_json, write_tsv
 
 
 FIELDS = [
     "case_id",
     "retarget_variant_id",
     "target_variant_id",
+    "hand_collision_variant_id",
     "handoff_decision",
     "candidate_decision",
     "target_task",
@@ -45,6 +46,7 @@ FIELDS = [
     "contact_mask_label",
     "contact_mask_person_idx",
     "contact_mask_time_axis",
+    "scene_name",
     "base_override",
     "schema_version",
     "updated_at",
@@ -215,6 +217,8 @@ def write_override(
             "",
         ]
     )
+    if row.get("scene_name"):
+        lines.insert(-2, f"scene_name: {row['scene_name']}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -263,6 +267,7 @@ def build_rows(handoff_rows: list[dict[str, str]], out_dir: Path, repo: Path, ba
                 "case_id": row.get("case_id", ""),
                 "retarget_variant_id": row.get("retarget_variant_id", ""),
                 "target_variant_id": target_variant,
+                "hand_collision_variant_id": row.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID) or DEFAULT_HAND_COLLISION_VARIANT_ID,
                 "handoff_decision": row.get("handoff_decision", ""),
                 "candidate_decision": row.get("candidate_decision", ""),
                 "target_task": target_task,
@@ -282,6 +287,7 @@ def build_rows(handoff_rows: list[dict[str, str]], out_dir: Path, repo: Path, ba
                 "contact_mask_label": mask_label,
                 "contact_mask_person_idx": row.get("contact_mask_person_idx", row.get("person_idx", "")),
                 "contact_mask_time_axis": mask_time_axis,
+                "scene_name": row.get("scene_name", ""),
                 "base_override": base_override,
                 "schema_version": SCHEMA_VERSION,
                 "updated_at": timestamp(),

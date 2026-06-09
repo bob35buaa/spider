@@ -84,7 +84,7 @@ Manual seed TSV 可用 `write_manual_seed_template.py` 生成。它使用与 `ca
 
 ## case 状态注册表
 
-`case_state_registry` 是跨阶段状态表。S0-S2 可按 case 记录；S3 以后必须按 `(case_id, retarget_variant_id, target_variant_id)` 记录。
+`case_state_registry` 是跨阶段状态表。S0-S2 可按 case 记录；S3 以后必须按 `(case_id, retarget_variant_id, target_variant_id)` 记录；进入 S5/CEM 后，手部碰撞体是第三个正交 variant 轴，主键扩展为 `(case_id, retarget_variant_id, target_variant_id, hand_collision_variant_id)`。旧 row 缺省视为 `hand_collision_variant_id=sphere5cm`。
 
 核心字段：
 
@@ -102,6 +102,7 @@ Manual seed TSV 可用 `write_manual_seed_template.py` 生成。它使用与 `ca
 | `retarget_variant_id` | S3 之后必填；S0-S2 可用 `shared` |
 | `stage2b_status` | `pass` / `omniretarget_infeasible` / `preprocess_fail` / `not_run` |
 | `target_variant_id` | `ref_fk` / `adaptive` / `fingertip_aware` / future |
+| `hand_collision_variant_id` | S5/CEM 手部碰撞体轴；默认 `sphere5cm`，E147 使用 `rubber_hull`。它只改变机器人手碰撞几何，不改变 retarget 或 target route。 |
 | `target_gate_status` | `pass` / `review` / `reject` / `not_run` |
 | `visual_qc_status` | `pass` / `review` / `reject` / `not_run` |
 | `cem_status` | `pass` / `fail` / `not_run` / `not_required` |

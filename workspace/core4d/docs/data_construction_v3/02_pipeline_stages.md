@@ -398,10 +398,12 @@ workspace/core4d/scripts/data_construction_v3/state/update_case_state_registry.p
 
 - candidate bank；
 - handoff manifest；
+- hand collision sidecar scene manifest；
 - CEM override manifest/config；
 - updated registry。
 
 S5 只表达数据和 target 是否可进入下游，不把 RL/CEM 失败反向写成 raw data 失败。
+机器人手部碰撞体在 S5/CEM 作为独立轴处理，字段为 `hand_collision_variant_id`。默认 `sphere5cm` 保持旧行为；`rubber_hull` 通过 sidecar scene 把 `lh/rh` 从 5cm sphere 换成 rubber hand mesh convex hull。该轴只改变机器人侧碰撞几何，不改变 OmniRetarget 输入、不改变 target route，也不同于物体侧 `collision_policy`。
 
 当前入口：
 
@@ -435,6 +437,19 @@ workspace/core4d/scripts/data_construction_v3/stages/s5_handoff/export_cem_overr
 - `overrides/core4d_dcv3_<retarget>_<target>_<case>.yaml`：CEM 可引用的 override YAML。
 
 `ref_fk` route 使用 `contact_hdmi_target_source=ref_fk`。`adaptive` / `fingertip_aware` 等 external target route 必须提供 `target_npz`，且导出时校验 path、sha256、`spider_contact_target_object_local` 或 `eval_contact_target_object_local` 的 `(T,2,3)` shape 与有限值。校验不通过只会让该 override row 失败，不会反向改写 raw/template/Stage2b/gate 状态。
+
+手部碰撞体 scene adapter 入口：
+
+```bash
+workspace/core4d/scripts/data_construction_v3/stages/s5_handoff/patch_hand_collision.py \
+  --base-scene-act "$TASK_DIR/scene_act.xml" \
+  --hand-collision-variant-id rubber_hull \
+  --scene-name scene_act_rubber_hull \
+  --install-dir "$TASK_DIR" \
+  --out-dir "$RUN_DIR/s5_handoff/hand_collision/<case_id>"
+```
+
+adapter 必须写 sidecar scene，不覆盖源 `scene_act.xml`。CEM override 通过 `scene_name=<sidecar basename>` 指向该 scene。
 
 候选分类：
 

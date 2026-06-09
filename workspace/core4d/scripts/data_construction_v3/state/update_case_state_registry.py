@@ -12,7 +12,7 @@ for _path in (SCRIPT_ROOT / "lib", SCRIPT_ROOT / "state", SCRIPT_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from common import SCHEMA_VERSION, read_tsv, timestamp, write_json, write_tsv
+from common import DEFAULT_HAND_COLLISION_VARIANT_ID, SCHEMA_VERSION, read_tsv, timestamp, write_json, write_tsv
 
 
 FIELDS = [
@@ -30,6 +30,7 @@ FIELDS = [
     "retarget_variant_id",
     "stage2b_status",
     "target_variant_id",
+    "hand_collision_variant_id",
     "target_gate_status",
     "visual_qc_status",
     "cem_status",
@@ -103,6 +104,7 @@ DEFAULT_ROW = {
     "retarget_variant_id": "shared",
     "stage2b_status": "not_run",
     "target_variant_id": "ref_fk",
+    "hand_collision_variant_id": DEFAULT_HAND_COLLISION_VARIANT_ID,
     "target_gate_status": "not_run",
     "visual_qc_status": "not_run",
     "cem_status": "not_run",
@@ -116,12 +118,17 @@ DEFAULT_ROW = {
 TEMPLATE_CLEAN_STATUSES = {"clean", "clean_reviewed"}
 
 
-def row_key(row: dict[str, str]) -> tuple[str, str, str]:
+def row_key(row: dict[str, str]) -> tuple[str, str, str, str]:
     return (
         row.get("case_id", ""),
         row.get("retarget_variant_id", "shared") or "shared",
         row.get("target_variant_id", "ref_fk") or "ref_fk",
+        row.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID) or DEFAULT_HAND_COLLISION_VARIANT_ID,
     )
+
+
+def variant_key(row: dict[str, str]) -> tuple[str, str, str, str]:
+    return row_key(normalize_row(row))
 
 
 def normalize_row(row: dict[str, str], source_type: str | None = None, source_ref: str | None = None) -> dict[str, str]:
@@ -232,11 +239,7 @@ def registry_rows_from_visual_qc_manifest(
     }
     out: list[dict[str, str]] = []
     for row in rows:
-        key = (
-            row.get("case_id", ""),
-            row.get("retarget_variant_id", "shared") or "shared",
-            row.get("target_variant_id", "ref_fk") or "ref_fk",
-        )
+        key = variant_key(row)
         base = existing_by_key.get(key, {})
         reg = {
             **base,
@@ -249,6 +252,7 @@ def registry_rows_from_visual_qc_manifest(
             "person_idx": row.get("person_idx", base.get("person_idx", "")),
             "retarget_variant_id": row.get("retarget_variant_id", base.get("retarget_variant_id", "")),
             "target_variant_id": row.get("target_variant_id", base.get("target_variant_id", "ref_fk")),
+            "hand_collision_variant_id": row.get("hand_collision_variant_id", base.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID)),
             "target_gate_status": row.get("target_gate_status", base.get("target_gate_status", "not_run")) or "not_run",
             "visual_qc_status": row.get("visual_qc_status", base.get("visual_qc_status", "not_run")) or "not_run",
             "evidence_root": evidence_root,
@@ -275,11 +279,7 @@ def registry_rows_from_downstream_evidence(
     }
     out: list[dict[str, str]] = []
     for row in rows:
-        key = (
-            row.get("case_id", ""),
-            row.get("retarget_variant_id", "shared") or "shared",
-            row.get("target_variant_id", "ref_fk") or "ref_fk",
-        )
+        key = variant_key(row)
         base = existing_by_key.get(key, {})
         reg = {
             **base,
@@ -292,6 +292,7 @@ def registry_rows_from_downstream_evidence(
             "person_idx": row.get("person_idx", base.get("person_idx", "")),
             "retarget_variant_id": row.get("retarget_variant_id", base.get("retarget_variant_id", "")),
             "target_variant_id": row.get("target_variant_id", base.get("target_variant_id", "ref_fk")),
+            "hand_collision_variant_id": row.get("hand_collision_variant_id", base.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID)),
             "cem_status": row.get("cem_status", base.get("cem_status", "not_run")) or "not_run",
             "rl_status": row.get("rl_status", base.get("rl_status", "not_run")) or "not_run",
             "downstream_decision": row.get("downstream_decision", ""),
@@ -561,11 +562,7 @@ def registry_rows_from_target_gate_manifest(
     }
     out: list[dict[str, str]] = []
     for row in rows:
-        key = (
-            row.get("case_id", ""),
-            row.get("retarget_variant_id", "shared") or "shared",
-            row.get("target_variant_id", "ref_fk") or "ref_fk",
-        )
+        key = variant_key(row)
         base = existing_by_key.get(key, {})
         gate_status = row.get("target_gate_status", "not_run") or "not_run"
         stage2b_status = base.get("stage2b_status", "not_run")
@@ -582,6 +579,7 @@ def registry_rows_from_target_gate_manifest(
             "person_idx": row.get("person_idx", ""),
             "retarget_variant_id": row.get("retarget_variant_id", ""),
             "target_variant_id": row.get("target_variant_id", "ref_fk"),
+            "hand_collision_variant_id": row.get("hand_collision_variant_id", base.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID)),
             "stage2b_status": stage2b_status,
             "target_gate_status": gate_status,
             "visual_qc_status": row.get("visual_qc_status", base.get("visual_qc_status", "not_run")) or "not_run",
@@ -774,7 +772,7 @@ def main() -> None:
         f"- rows: {len(rows)}",
         f"- schema_version: {SCHEMA_VERSION}",
         "",
-        "说明：S3 之后状态按 `(case_id, retarget_variant_id, target_variant_id)` 区分；默认 `ref_fk` 只绑定 E098，`fingertip_aware` 绑定 E098-E101。",
+        "说明：S3 之后状态按 `(case_id, retarget_variant_id, target_variant_id, hand_collision_variant_id)` 区分；默认 `ref_fk` 只绑定 E098，`fingertip_aware` 绑定 E098-E101；旧行缺省视为 `hand_collision_variant_id=sphere5cm`。",
         "",
     ]
     (registry_dir / "case_state_summary.md").write_text("\n".join(summary_lines), encoding="utf-8")

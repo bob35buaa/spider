@@ -1,3 +1,50 @@
+# E147 Progress — 2026-06-08
+
+## E148 e143 24-case rubber hand extension
+
+- [x] 2026-06-09 E149 clean benchmark 启动：根据用户提醒重新读取 E143 标注表 `E143_raw_mask_ref_fk_24case_omniretarget_comparison-anno.xlsx` 和 failure report；确认 E143 已建议不要用全部 24 case 做主 claim，而是用 clean6 (`box021_035_p1/p2`, `box021_029_p2`, `box004_083_p1/p2`, `box023_person2`) 和 relaxed8 (`clean6` + `box004_082_p1`, `box026_139_p1`)。新增 eval-only 计划 `workspace/core4d/plan/157_E149_e143_clean_rubber_benchmark_eval_plan.md` 和固定 eval 脚本；不启动 CEM/远程/RL。
+- [x] 2026-06-09 E149 eval 首次运行修复：首次运行发现 E148 case comparison 的 `fall_*` 字段是 `true/false` 字符串而不是 `0/1`，已在 `eval_E149_e143_clean_rubber_benchmark.py` 中改为显式 bool 解析；`py_compile` 与 shell syntax 通过。
+- [x] 2026-06-09 E149 clean benchmark eval 完成：输出 `workspace/core4d/results/E149/e143_clean_rubber_benchmark/`，包含 method/diff/case TSV、summary md/json 和 `E149_e143_clean_rubber_benchmark.xlsx`。XLSX recalc `total_errors=0`。clean6 rubber-sphere：5cm +0.0079、10cm +0.0054、手物穿透 -0.2293、腿穿透 +0.0507、手物物理接触 -0.1980；relaxed8：5cm +0.0144、10cm +0.0093、手物穿透 -0.1858、腿穿透 +0.0389、手物物理接触 -0.1565。新增 log `workspace/core4d/log/189_E149_e143_clean_rubber_benchmark_results.md` 并更新 tracker。
+
+- [x] 2026-06-09 E148 计划写入本地：新增 `workspace/core4d/plan/156_E148_e143_24case_rubber_hand_collision_plan.md`。计划将 E147 rubber_hull 扩展到 E143 24-case workset；E143 中 8 条已跑 E147 overlap 直接复用，剩余 16 条用远程 2 卡 full CEM，最终输出 24case/filtered 对比 xlsx。当前仅写计划，尚未创建 E148 runner/evaluator，未启动远程任务。
+- [x] 2026-06-09 E148 manifest/固定入口初版落地：新增 `scripts/E148/build_rubber_hand_collision_manifest.py`、`scripts/train/train_E148_e143_rubber_hand_collision.sh`、`scripts/run_E148_remote.sh`、`scripts/pull_E148_remote_results.sh`、`scripts/eval/eval_E148_e143_rubber_hand_collision.py/.sh`。manifest build 通过：24 rows = 8 `reuse_e147` + 16 `to_run`；remote split 为 GPU0/GPU1 各 8。`py_compile` 与 `bash -n` 通过，E148 `__pycache__` 已清理。下一步启动远程 2 卡 full CEM。
+- [x] 2026-06-09 E148 evaluator pre-run smoke 通过：`eval_E148_e143_rubber_hand_collision.sh full --allow-missing-rubber` 成功重算 24 条 Omni/sphere 与 8 条 E147 reused rubber，输出 `method_rows=56/case_rows=8/missing_rubber=16`，证明 Omni freejoint→scene_act 转换和 E147 reuse eval 路径可用。首次远程同步在 tmux 启动前失败，原因是远端缺 `scripts/data_construction_v3/lib` 目录；已修复 `run_E148_remote.sh` 的 mkdir 列表，准备重试。
+- [x] 2026-06-09 E148 remote full 已启动：`run_E148_remote.sh full` 远端 static/list gate 通过，tmux session `E148_full_020443` 已启动；GPU0/GPU1 各 8 条 to-run rows。启动后检查确认两张卡分别在跑 `E148_bucket004_20231002_022_p1_rubber_hull` 和 `E148_box021_029_p2_rubber_hull`；当前 root npz/mp4 计数仍为 0，未 kill 任何进程。
+- [x] 2026-06-09 E148 remote full 中途状态：远端 root NPZ/MP4 为 3/16，完成 `E148_box021_029_p2_rubber_hull`、`E148_box026_039_p1_rubber_hull`、`E148_bucket004_20231002_022_p1_rubber_hull`；当前 GPU0 跑 `E148_box004_083_p2_rubber_hull`，GPU1 跑 `E148_box026_133_p1_rubber_hull`。SSH 偶发 kex 断开但 tmux/log 正常，未干预健康进程。
+- [x] 2026-06-09 E148 remote full 中途状态 2：远端 root NPZ/MP4 为 5/16，完成数继续增长；当前 GPU0 跑 `E148_box026_039_p2_rubber_hull`，GPU1 跑 `E148_box026_135_p1_rubber_hull`，logs 显示正常推进。SSH 偶发握手断开，重试可读状态；未 kill 或重启任何健康任务。
+- [x] 2026-06-09 E148 remote full 中途状态 3：远端 root NPZ/MP4 为 9/16；GPU0 当前跑 `E148_box026_135_p2_rubber_hull`，GPU1 当前跑 `E148_box026_141_p1_rubber_hull`。tmux/log 显示队列正常串行推进，仍未干预健康进程。
+- [x] 2026-06-09 E148 remote full 中途状态 4：远端 root NPZ/MP4 为 13/16；GPU1 正在跑该 split 最后一条 `E148_box026_20231023_139_p2_rubber_hull`，GPU0 正在跑 `E148_box026_141_p2_rubber_hull`，之后 GPU0 还剩 `E148_box026_139_p1_rubber_hull`。队列仍健康。
+- [x] 2026-06-09 E148 remote full 接近完成：远端 root NPZ/MP4 为 15/16；GPU1 split 已完成，GPU0 正在跑最后一条 `E148_box026_139_p1_rubber_hull`。待最后一条结束后 pull/eval。
+- [x] 2026-06-09 E148 remote full 完成并回收：tmux `E148_full_020443` 自然结束；`pull_E148_remote_results.sh full` 后本地新 E148 artifacts 为 16/16 root NPZ、16/16 MP4、16/16 outdir trajectory、16 logs，manifest 中 8/8 E147 reuse artifact 路径也存在。
+- [x] 2026-06-09 E148 full eval + xlsx 完成：`eval_E148_e143_rubber_hand_collision.sh full` 输出 `method_rows=72/case_rows=24/missing_rubber=0`；LibreOffice recalc `total_errors=0/total_formulas=1476`。XLSX 四个 sheet 为 `24case平均`、`逐case对比`、`filtered平均`、`filtered逐case`，row counts 分别是 3/24/3/23。
+- [x] 2026-06-09 E148 结果记录完成：新增 `workspace/core4d/log/188_E148_e143_24case_rubber_hand_collision_results.md` 并更新 `EXPERIMENT_TRACKER.md`。结论：rubber hand Spider 相对 sphere Spider 在 24case 上 5cm +0.0090、10cm +0.0010、手物穿透 -0.0336、腿穿透 +0.0053；filtered 23case 为 5cm +0.0216、10cm +0.0114、手物穿透 -0.0299、腿穿透 +0.0052，仍未替代 sphere 默认 baseline。
+
+## Rubber hand collision CEM A/B
+
+- [x] 按 `experiment-planning-zh` 恢复上下文：读取 E147 计划、EXPERIMENT_TRACKER、progress、remote execution 指南、E145/E146 相关索引和当前 v3 handoff/scene patch 入口。
+- [x] 当前理解：E147 不是一次性 scene hack，而是把 `hand_collision_variant_id` 作为 v3 第三个正交轴纳入 schema/registry/handoff/docs/skill；CEM A/B 中 sphere5cm 复用旧 npz，rubber_hull 只跑一遍 full CEM。
+- [x] 关键已定：rubber 使用单凸包 `maxhullvert=64`；patched scene 旁路写到 E147 结果区，CEM 通过 `scene_name=` 指向，不覆盖 processed source scene；需要远程 2 卡并行跑 full CEM 并回收 npz/mp4/log。
+- [x] 初步仓库状态：已有 E146 几何可视化和旧 `patch_hand_3box.py` 先例；尚未看到 E147 实现脚本。下一步需要读 E146/E145 结果、existing_cases.tsv、v3 schema/registry/handoff 代码和 CEM runner 入口，确认 10 case manifest/override 生成方式。
+- [x] 复核 E147 plan/remote-execution 后确认本轮执行边界：不改 reward/算法；sphere5cm 复用旧 full CEM npz；只为 10 个 case 生成 rubber_hull sidecar scene/override 并跑 full CEM。当前待修：`patch_hand_collision.py` import 语法错误；待确认：E079/E081 override 可复用性、`scene_name` 对 `humanoid_object` 的实际加载、rubber mesh 评估不能退化成中心球近似。
+- [x] 修复 `patch_hand_collision.py` import 语法错误，并修正 `update_case_state_registry.py` 中 visual/target/downstream merge 对 4D registry key 的 lookup；`python -m py_compile` 通过。
+- [x] 检查 E147 10 个旧 sphere row：`existing_cases.tsv` 中旧 `cem_result_npz`/video 全齐；box004/box023 person 字段存在历史解析污染，后续运行清单必须以旧 `config_act.yaml`/override/task 为准，不信任 registry person 字段。
+- [x] 新增 `scripts/E147/build_rubber_hand_collision_manifest.py`，生成 10-case `variants.tsv`、10 个 override、10 个 `scene_act_E147_rubber_hull.xml` sidecar 和 `results/E147/rubber_hand_collision/scene_snapshot/`；MuJoCo 验证 `lh/rh` 均为 mesh 且 rbound≈0.0998m。
+- [x] 新增固定运行入口 `scripts/train/train_E147_rubber_hand_collision.sh`、`scripts/run_E147_remote.sh`、`scripts/pull_E147_remote_results.sh`；`bash -n` 与 manifest preflight 通过，远程 full split 为 GPU0/GPU1 各 5 case。
+- [x] 本地 smoke：`E147_d003_box021_20231011_035_p1_rubber_hull` 用 `SMOKE_NUM_SAMPLES=64/SMOKE_MAX_NUM_ITERATIONS=4` 完成；产出 root npz/mp4/outdir trajectory。`config_act.yaml` 确认 `scene_name=scene_act_E147_rubber_hull`，`model_path` 指向 sidecar，`lh/rh` mesh rbound≈0.0998m。
+- [x] 启动远端 full：`run_E147_remote.sh full` 同步 artifacts 后启动 tmux `E147_full_rubber_231132`；GPU0/GPU1 各 5 case 串行。启动中修复两个运行侧问题：远端无裸 `python`，train 脚本改用 `.venv/bin/python`；远端不需要旧 sphere npz，preflight 放宽为只检查 rubber full 运行必需文件。
+- [x] 新增 E147 mesh-aware evaluator `scripts/eval/eval_E147_rubber_hand_collision.py/.sh`；smoke eval 通过（10 sphere historical + 1 rubber smoke，missing rubber=9）。smoke 低 sample/4 iter 的 rubber 摔倒仅作加载测试，不作为实验结论。
+- [x] 完成 v3 文档/skill 更新：新增 `docs/data_construction_v3/15_hand_collision_variants.md`，更新 README/02/03/09、release audit required docs/scripts、`.codex/skills/data-construction-v3-zh/SKILL.md`；`run_release_checks.sh --no-smoke` 通过，65/65 checks pass。
+- [x] 远端 full 运行中：tmux `E147_full_rubber_231132`。已完成第一批 box004 两条 root npz；当前第二批 box021 正在跑（最近检查 GPU0 `box021_035_p1` 约 84/258，GPU1 `box021_035_p2` 约 72/266）。未杀任何远端既有进程。
+- [x] 2026-06-08 23:45 CST 远端中途复核：tmux `E147_full_rubber_231132` 仍在运行；远端 full root `npz=2/videos=2/outdirs=4`；GPU0/GPU1 正在跑 `d003_box021_035_p1/p2`，日志分别约 `194/258`、`182/266` sim steps，未见报错；没有 kill 任何远端进程。
+- [x] 2026-06-08 23:52 CST 远端中途复核：第二批 box021 已完成并拷贝 root npz/mp4；远端 full root `npz=4/videos=4/outdirs=6`；第三批正在跑 `box023_person2`（GPU0，约 `34/272`）和 `box023_person1`（GPU1，约 `12/272`）。未杀任何远端既有进程。
+- [x] 2026-06-08 本地验证：`py_compile`、E147 shell `bash -n`、相关 `git diff --check` 通过；`bash workspace/core4d/scripts/data_construction_v3/orchestration/run_release_checks.sh --no-smoke` 通过（65 passed / 0 failed，compact smoke skipped by flag）。
+- [x] 2026-06-09 00:14 CST 远端中途复核：第三批 box023 已完成并拷贝 root npz/mp4；远端 full root `npz=6/videos=6/outdirs=8`；第四批正在跑 `box026_134_p1`（GPU0，约 `46/204`）和 `box026_134_p2`（GPU1，约 `32/214`）。未杀任何远端既有进程。
+- [x] 2026-06-09 00:32 CST 远端中途复核：第四批 box026 已完成并拷贝 root npz/mp4；远端 full root `npz=8/videos=8/outdirs=10`；最后一批正在跑 `bucket004_20231003_1_012_p1`（GPU0，约 `56/250`）和 `bucket004_20231002_021_p1`（GPU1，约 `36/290`）。未杀任何远端既有进程。
+- [x] 2026-06-09 00:54 CST 远端 full 完成并回收：remote full root `npz=10/videos=10/outdirs=10`；tmux `E147_full_rubber_231132` 自然结束；本地 `pull_E147_remote_results.sh full` 回收后 artifact audit 为 10/10 root npz、10/10 mp4、10/10 outdir trajectory/config、10/10 logs、100 keyframes。
+- [x] 2026-06-09 01:00 CST full eval + S6 完成：`eval_E147_rubber_hand_collision.sh full` 写 20 metric rows、missing rubber=0；A/B primary counts 为 pass 2 / stable-but-deep-not-improved 6 / fail 2；S6 `cem_status=pass 3/fail 7`，无 historical fail 被救成 downstream pass；写入 `workspace/core4d/results/E147/s6_downstream/evidence/` 与 `workspace/core4d/results/E147/registries/case_state_registry.tsv`。
+- [x] 2026-06-09 结果记录完成：写 `workspace/core4d/log/187_E147_rubber_hand_collision_full_cem_results.md`。结论：`rubber_hull` 显著降低 hand penetration/deep penetration，但 physics contact 下降且未救回 fail case；保留为 v3 CEM variant，不直接替代默认 `sphere5cm`。
+- [x] 2026-06-09 E147 OmniRetarget / sphere Spider / rubber hand Spider 对比表补齐：新增 `workspace/core4d/scripts/E147/build_omni_sphere_rubber_comparison_xlsx.py`，输出 `workspace/core4d/results/E147/rubber_hand_collision/comparison/E147_omni_sphere_rubber_hand_comparison.xlsx`（sheet: `10case平均`、`逐case对比`）和逐 case TSV；LibreOffice 重算公式 `total_errors=0`、`total_formulas=245`。均值表显示 case_count 均为 10，fall_count 为 OmniRetarget 0 / sphere 0 / rubber 1。
+
 # E137 Progress — 2026-06-03
 
 ## E107 semantic object-contact export preflight

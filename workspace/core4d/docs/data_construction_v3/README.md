@@ -57,11 +57,11 @@ S1  raw inventory + raw contact 3cm/5cm
 S2  source scene template build/audit
 S3  OmniRetarget/SPIDER preprocess by retarget_variant_id x target_variant_id
 S4  target gate + visual QC
-S5  candidate bank + handoff manifest
+S5  candidate bank + handoff manifest + hand_collision_variant_id scene adapter
 S6  CEM/RL downstream evidence
 ```
 
-S0-S2 在不同 retarget variant / target route 之间共享；S3 之后必须带 `retarget_variant_id` 和 `target_variant_id`，不同组合不能互相覆盖输出。
+S0-S2 在不同 retarget variant / target route 之间共享；S3 之后必须带 `retarget_variant_id` 和 `target_variant_id`。S5/CEM 之后还可带机器人手部碰撞体轴 `hand_collision_variant_id`，默认 `sphere5cm`；不同组合不能互相覆盖输出。
 
 ## 默认路线
 
@@ -426,3 +426,4 @@ workspace/core4d/scripts/data_construction_v3/qa/run_smoke_suite.py \
 | [12_completion_audit.md](12_completion_audit.md) | 当前实现对照计划必做项的完成度审查和剩余风险 |
 | [13_requirements_traceability.md](13_requirements_traceability.md) | 用户需求到实现与验证证据的追踪表 |
 | [14_release_readiness.md](14_release_readiness.md) | 当前可交接状态、推荐入口、最新验证和计划内边界 |
+| [15_hand_collision_variants.md](15_hand_collision_variants.md) | 机器人手部碰撞体 variant 轴、sidecar scene patch 和 CEM A/B 约定 |

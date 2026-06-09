@@ -14,7 +14,7 @@ for _path in (SCRIPT_ROOT / "lib", SCRIPT_ROOT / "state", SCRIPT_ROOT):
         sys.path.insert(0, str(_path))
 from typing import Any
 
-from common import SCHEMA_VERSION, read_tsv, timestamp, write_json, write_tsv
+from common import DEFAULT_HAND_COLLISION_VARIANT_ID, SCHEMA_VERSION, read_tsv, timestamp, write_json, write_tsv
 
 
 FIELDS = [
@@ -27,6 +27,7 @@ FIELDS = [
     "person_idx",
     "retarget_variant_id",
     "target_variant_id",
+    "hand_collision_variant_id",
     "candidate_decision",
     "handoff_decision",
     "cem_status",
@@ -54,11 +55,12 @@ STATUS_FAIL = {"fail", "failed", "reject", "rejected", "bad", "false", "0"}
 STATUS_PENDING = {"", "not_run", "pending", "review", "unknown", "na", "n/a", "none"}
 
 
-def key(row: dict[str, str]) -> tuple[str, str, str]:
+def key(row: dict[str, str]) -> tuple[str, str, str, str]:
     return (
         row.get("case_id", ""),
         row.get("retarget_variant_id", "shared") or "shared",
         row.get("target_variant_id", "ref_fk") or "ref_fk",
+        row.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID) or DEFAULT_HAND_COLLISION_VARIANT_ID,
     )
 
 
@@ -129,6 +131,10 @@ def build_rows(
             "person_idx": pick(ev.get("person_idx", ""), base.get("person_idx", "")),
             "retarget_variant_id": pick(ev.get("retarget_variant_id", ""), base.get("retarget_variant_id", "shared")),
             "target_variant_id": pick(ev.get("target_variant_id", ""), base.get("target_variant_id", "ref_fk")),
+            "hand_collision_variant_id": pick(
+                ev.get("hand_collision_variant_id", ""),
+                base.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID),
+            ),
             "candidate_decision": base.get("candidate_decision", ""),
             "handoff_decision": base.get("handoff_decision", ""),
             "cem_status": cem_status,
@@ -174,14 +180,14 @@ def markdown_summary(summary: dict[str, Any], rows: list[dict[str, Any]]) -> str
             "",
             "## failure rows",
             "",
-            "| case | variant | target | decision | failure |",
-            "|---|---|---|---|---|",
+            "| case | retarget | target | hand collision | decision | failure |",
+            "|---|---|---|---|---|---|",
         ]
     )
     for row in rows:
         if str(row["downstream_decision"]).endswith("_FAIL") or row["downstream_decision"] in {"DOWNSTREAM_POSTURE_FAIL", "DOWNSTREAM_MOTION_BINDING_FAIL"}:
             lines.append(
-                f"| `{row['case_id']}` | `{row['retarget_variant_id']}` | `{row['target_variant_id']}` | `{row['downstream_decision']}` | `{row['downstream_failure_mode']}` |"
+                f"| `{row['case_id']}` | `{row['retarget_variant_id']}` | `{row['target_variant_id']}` | `{row.get('hand_collision_variant_id', DEFAULT_HAND_COLLISION_VARIANT_ID)}` | `{row['downstream_decision']}` | `{row['downstream_failure_mode']}` |"
             )
     lines.append("")
     return "\n".join(lines)

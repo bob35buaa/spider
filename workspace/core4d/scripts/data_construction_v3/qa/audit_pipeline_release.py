@@ -39,6 +39,7 @@ REQUIRED_SCRIPTS = [
     "run_target_gate.py",
     "render_visual_qc_package.py",
     "make_visual_qc.py",
+    "patch_hand_collision.py",
     "export_handoff.py",
     "export_cem_overrides.py",
     "export_rl_inputs.py",
@@ -69,6 +70,7 @@ REQUIRED_DOCS = [
     "12_completion_audit.md",
     "13_requirements_traceability.md",
     "14_release_readiness.md",
+    "15_hand_collision_variants.md",
 ]
 
 

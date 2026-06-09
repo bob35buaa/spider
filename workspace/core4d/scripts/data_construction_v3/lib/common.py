@@ -21,6 +21,23 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = "core4d_data_construction_v3.0"
 DEFAULT_HOLOSOMA_REPO = Path.home() / "Workspace/holosoma"
+DEFAULT_HAND_COLLISION_VARIANT_ID = "sphere5cm"
+HAND_COLLISION_VARIANTS = {"sphere5cm", "rubber_hull"}
+HAND_COLLISION_VARIANT_SPECS = {
+    "sphere5cm": {
+        "description": "Current SPIDER default: one 5cm sphere per G1 wrist-yaw hand geom.",
+        "patch_mode": "noop",
+    },
+    "rubber_hull": {
+        "description": "Rubber hand visual mesh reused as a convex collision hull.",
+        "patch_mode": "mesh_convex_hull",
+        "left_mesh": "left_rubber_hand",
+        "right_mesh": "right_rubber_hand",
+        "left_pos": "0.0415 0.003 0",
+        "right_pos": "0.0415 -0.003 0",
+        "maxhullvert": "64",
+    },
+}
 SCRIPT_RELATIVE_PATHS = {
     "common.py": "lib/common.py",
     "geometry.py": "lib/geometry.py",
@@ -42,6 +59,7 @@ SCRIPT_RELATIVE_PATHS = {
     "make_visual_qc.py": "stages/s4_gate_visual_qc/make_visual_qc.py",
     "render_visual_qc_package.py": "stages/s4_gate_visual_qc/render_visual_qc_package.py",
     "run_target_gate.py": "stages/s4_gate_visual_qc/run_target_gate.py",
+    "patch_hand_collision.py": "stages/s5_handoff/patch_hand_collision.py",
     "export_cem_overrides.py": "stages/s5_handoff/export_cem_overrides.py",
     "export_handoff.py": "stages/s5_handoff/export_handoff.py",
     "export_rl_inputs.py": "stages/s6_downstream/export_rl_inputs.py",

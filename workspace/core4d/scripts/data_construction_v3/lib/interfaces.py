@@ -106,6 +106,21 @@ class VisualizerResult(ExtensionResult):
     manifest_path: str = ""
 
 
+@dataclass
+class HandCollisionAdapterResult(ExtensionResult):
+    interface_name: str = "HandCollisionAdapter"
+    hand_collision_variant_id: str = "sphere5cm"
+    base_scene_act: str = ""
+    patched_scene_act: str = ""
+    installed_scene_act: str = ""
+    scene_name: str = ""
+    patch_params_json: str = "{}"
+
+    def validate(self) -> None:
+        super().validate()
+        json.loads(self.patch_params_json or "{}")
+
+
 class CandidateFilter(Protocol):
     def evaluate(self, case_row: dict[str, str], context: dict[str, Any]) -> CandidateFilterResult:
         """Return a pass/review/reject decision for one case row."""
@@ -129,6 +144,11 @@ class TargetGate(Protocol):
 class Visualizer(Protocol):
     def render(self, row: dict[str, str], out_dir: Path, overwrite: bool) -> VisualizerResult:
         """Render visual evidence and return manifest paths."""
+
+
+class HandCollisionAdapter(Protocol):
+    def patch(self, row: dict[str, str], out_dir: Path, variant_id: str, dry_run: bool) -> HandCollisionAdapterResult:
+        """Patch or pass through the CEM scene for one hand-collision variant."""
 
 
 def self_test() -> None:
@@ -155,6 +175,17 @@ def self_test() -> None:
         ),
         TargetGateResult(case_id="case", decision="reject", status="reject", failure_mode="target_gate_exception"),
         VisualizerResult(case_id="case", decision="pass", status="pass", video_path="/tmp/a.mp4", sheet_path="/tmp/a.png"),
+        HandCollisionAdapterResult(
+            case_id="case",
+            decision="pass",
+            status="pass",
+            hand_collision_variant_id="rubber_hull",
+            base_scene_act="/tmp/scene_act.xml",
+            patched_scene_act="/tmp/scene_act_rubber_hull.xml",
+            installed_scene_act="/tmp/task/scene_act_rubber_hull.xml",
+            scene_name="scene_act_rubber_hull",
+            patch_params_json=stable_json({"maxhullvert": 64}),
+        ),
     ]
     for row in rows:
         row.to_row()

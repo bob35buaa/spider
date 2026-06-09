@@ -14,7 +14,7 @@ for _path in (SCRIPT_ROOT / "lib", SCRIPT_ROOT / "state", SCRIPT_ROOT):
         sys.path.insert(0, str(_path))
 from typing import Any
 
-from common import SCHEMA_VERSION, find_spider_repo, read_tsv, timestamp, write_json, write_tsv
+from common import DEFAULT_HAND_COLLISION_VARIANT_ID, SCHEMA_VERSION, find_spider_repo, read_tsv, timestamp, write_json, write_tsv
 
 
 FIELDS = [
@@ -27,6 +27,7 @@ FIELDS = [
     "person_idx",
     "retarget_variant_id",
     "target_variant_id",
+    "hand_collision_variant_id",
     "handoff_decision",
     "candidate_decision",
     "target_gate_status",
@@ -65,11 +66,12 @@ STATUS_FAIL = {"fail", "failed", "reject", "rejected", "bad", "false", "0"}
 STATUS_PENDING = {"", "not_run", "pending", "review", "unknown", "na", "n/a", "none"}
 
 
-def key(row: dict[str, str]) -> tuple[str, str, str]:
+def key(row: dict[str, str]) -> tuple[str, str, str, str]:
     return (
         row.get("case_id", ""),
         row.get("retarget_variant_id", "shared") or "shared",
         row.get("target_variant_id", "ref_fk") or "ref_fk",
+        row.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID) or DEFAULT_HAND_COLLISION_VARIANT_ID,
     )
 
 
@@ -144,6 +146,10 @@ def build_rows(
             "person_idx": handoff.get("person_idx", ""),
             "retarget_variant_id": handoff.get("retarget_variant_id", "shared") or "shared",
             "target_variant_id": handoff.get("target_variant_id", "ref_fk") or "ref_fk",
+            "hand_collision_variant_id": pick(
+                cem.get("hand_collision_variant_id", ""),
+                handoff.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID),
+            ),
             "handoff_decision": handoff.get("handoff_decision", ""),
             "candidate_decision": handoff.get("candidate_decision", ""),
             "target_gate_status": handoff.get("target_gate_status", ""),
@@ -193,10 +199,10 @@ def markdown_summary(summary: dict[str, Any], rows: list[dict[str, Any]]) -> str
     ]
     for decision, count in summary["rl_export_decision_counts"].items():
         lines.append(f"| `{decision}` | {count} |")
-    lines.extend(["", "## rows", "", "| case | variant | target | CEM | RL export | reason |", "|---|---|---|---|---|---|"])
+    lines.extend(["", "## rows", "", "| case | retarget | target | hand collision | CEM | RL export | reason |", "|---|---|---|---|---|---|---|"])
     for row in rows:
         lines.append(
-            f"| `{row['case_id']}` | `{row['retarget_variant_id']}` | `{row['target_variant_id']}` | "
+            f"| `{row['case_id']}` | `{row['retarget_variant_id']}` | `{row['target_variant_id']}` | `{row.get('hand_collision_variant_id', DEFAULT_HAND_COLLISION_VARIANT_ID)}` | "
             f"`{row['cem_status']}` | `{row['rl_export_decision']}` | `{row['skip_reason']}` |"
         )
     lines.extend(
