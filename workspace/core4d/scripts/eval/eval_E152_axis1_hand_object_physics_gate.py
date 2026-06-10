@@ -18,7 +18,13 @@ import numpy as np
 # Ensure lib package is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.core_metrics import METRIC_FIELDS, evaluate_sequence
+from lib.core_metrics import (
+    METRIC_FIELDS,
+    contact_mask_for_case,
+    evaluate_sequence,
+    kin_ref_for_scene,
+    person_idx_from_case,
+)
 
 REPO = Path(__file__).resolve().parents[4]
 VARIANTS_TSV = REPO / "workspace/core4d/scripts/E152/variants.tsv"
@@ -77,6 +83,9 @@ LOWER_IS_WORST_METRICS = {
     "hand_floor_con_dist_mean_m",
     "hand_floor_con_dist_min_m",
 }
+
+# E154 tracking-gated success threshold (matches EvalConfig.track_pelvis_terminal_th_m).
+TRACK_PELVIS_TERMINAL_TH_M = 0.08
 
 
 def rel(path: Path | str) -> str:
@@ -233,12 +242,19 @@ def run_info(row: dict[str, str]) -> dict[str, Any]:
 def eval_one(row: dict[str, str]) -> dict[str, Any]:
     qpos_path = repo_path(row["outdir_npz"])
     scene_xml = resolve_scene_xml(row)
+    # E154: tracking ref + real 3cm mask resolved from the *original* case dir
+    # (rubber_scene_act), not the resolved /tmp snapshot copy.
+    orig_scene = repo_path(row["rubber_scene_act"])
+    short = row["short_case_id"]
     item = evaluate_sequence(
         row=row,
         method=f"E152 {row['method']}",
         hand_collision_variant_id=row["hand_collision_variant_id"],
         qpos_path=qpos_path,
         scene_xml=scene_xml,
+        kin_ref_path=kin_ref_for_scene(orig_scene),
+        contact_mask_path=contact_mask_for_case(short),
+        person_idx=person_idx_from_case(short),
     )
     item.update(
         {
@@ -383,6 +399,20 @@ def delta_rows(metric_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 and item["obj_err_mean_m_delta"] <= 0.02
                 and not bool(row["fall_flag"])
             )
+            # E154 diagnostics + tracking-gated success (tracking only; release_false
+            # is reported but not gated — it fails universally incl. b1 due to the
+            # all-1 training mask). pelvis-z terminal tracking vs fixed kin truth.
+            item["track_pelvis_z_err_terminal_m"] = row.get("track_pelvis_z_err_terminal_m", "")
+            item["track_root_pos_err_terminal_m"] = row.get("track_root_pos_err_terminal_m", "")
+            item["hand_object_physics_contact_in_mask_frac"] = row.get("hand_object_physics_contact_in_mask_frac", "")
+            item["hand_object_false_contact_frac"] = row.get("hand_object_false_contact_frac", "")
+            item["hand_object_release_false_contact_frac"] = row.get("hand_object_release_false_contact_frac", "")
+            pz_term = finite(row.get("track_pelvis_z_err_terminal_m"))
+            item["success_tracked"] = bool(
+                item["success_pen2mm_down_contact_keep"]
+                and pz_term is not None
+                and pz_term <= TRACK_PELVIS_TERMINAL_TH_M
+            )
             out.append(item)
     return out
 
@@ -398,6 +428,7 @@ def delta_summary_rows(deltas: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "case_count": len(rows),
             "success_cases": sum(1 for r in rows if r["success_pen_down_contact_keep"]),
             "success_cases_2mm": sum(1 for r in rows if r["success_pen2mm_down_contact_keep"]),
+            "success_cases_tracked": sum(1 for r in rows if r.get("success_tracked")),
         }
         for metric in DELTA_METRICS:
             vals = [float(r[f"{metric}_delta"]) for r in rows if finite(r.get(f"{metric}_delta")) is not None]
@@ -561,11 +592,17 @@ def main() -> None:
         "gate_valid_frac",
         "hand_gate_valid_frac",
         "gate_fallback_used",
+        "track_pelvis_z_err_terminal_m",
+        "track_root_pos_err_terminal_m",
+        "hand_object_physics_contact_in_mask_frac",
+        "hand_object_false_contact_frac",
+        "hand_object_release_false_contact_frac",
+        "success_tracked",
         "success_pen_down_contact_keep",
         "success_pen2mm_down_contact_keep",
     ]
     write_tsv(eval_dir / "e152_delta_vs_reference.tsv", deltas, delta_fields)
-    write_tsv(eval_dir / "e152_delta_summary.tsv", delta_summaries, ["method", "case_count", "success_cases", "success_cases_2mm", *[f"{m}_delta_{s}" for m in DELTA_METRICS for s in ("mean", "std", "worst")]])
+    write_tsv(eval_dir / "e152_delta_summary.tsv", delta_summaries, ["method", "case_count", "success_cases", "success_cases_2mm", "success_cases_tracked", *[f"{m}_delta_{s}" for m in DELTA_METRICS for s in ("mean", "std", "worst")]])
     write_tsv(eval_dir / "e152_missing.tsv", missing, ["variant", "method", "missing"])
     write_tsv(eval_dir / "e152_visual_sheets.tsv", visual_rows, ["short_case_id", "frame", "sheet"])
     write_json(eval_dir / "e152_eval_summary.json", {"method_rows": len(metric_rows), "delta_rows": len(deltas), "missing": len(missing), "visual_sheets": len(visual_rows)})

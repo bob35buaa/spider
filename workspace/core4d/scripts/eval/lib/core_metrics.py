@@ -31,6 +31,10 @@ class EvalConfig:
     deep_penetration_m: float = -0.02
     deep_contact_dist_m: float = -0.005
     mesh_sample_count: int = 800
+    # E154: body-tracking vs fixed kinematic truth + masked-contact (real 3cm).
+    track_terminal_frac: float = 0.15  # terminal phase = last 15% of frames
+    track_pelvis_terminal_th_m: float = 0.08  # success gate: terminal pelvis-z err
+    release_false_contact_th: float = 0.30  # success gate: max false-contact frac
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +129,27 @@ METRIC_FIELDS = [
     "obj_err_max_m",
     "notes",
 ]
+
+# E154: body-tracking (vs fixed kinematic truth) + masked-contact (real 3cm).
+# All NaN/empty unless evaluate_sequence is called with kin_ref_path / contact_mask_path.
+TRACK_MASK_FIELDS = [
+    "track_root_pos_err_mean_m",
+    "track_root_pos_err_terminal_m",
+    "track_root_quat_err_mean",
+    "track_root_quat_err_terminal",
+    "track_joint_err_mean_rad",
+    "track_joint_err_terminal_rad",
+    "track_pelvis_z_err_mean_m",
+    "track_pelvis_z_err_terminal_m",
+    "ref_contact_frac",
+    "hand_object_physics_contact_in_mask_frac",
+    "hand_object_false_contact_frac",
+    "hand_object_approach_false_contact_frac",
+    "hand_object_release_false_contact_frac",
+    "hand_geom_penetration_2mm_in_mask_frac",
+    "hand_geom_penetration_5mm_in_mask_frac",
+]
+METRIC_FIELDS += TRACK_MASK_FIELDS
 
 # Minimal core metrics suitable as a shared baseline set.
 CORE_METRICS = [
@@ -296,6 +321,151 @@ def rel(path: Path | str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# E154 helpers: fixed kinematic-truth reference + real 3cm contact mask
+# ---------------------------------------------------------------------------
+
+CONTACT_MASK_ROOT = REPO / "workspace/core4d/results/E143/contact_masks"
+
+
+def kin_ref_for_scene(scene_xml: Path | str) -> Path:
+    """Fixed kinematic-truth trajectory for a case, from its scene path.
+
+    Scenes live at .../humanoid_object/<case_dir>/scene_act_*.xml; the
+    retargeted G1 kinematic reference is .../<case_dir>/0/trajectory_kinematic.npz.
+    Pass the *original* scene path (not a /tmp snapshot copy).
+    """
+    return Path(scene_xml).resolve().parent / "0" / "trajectory_kinematic.npz"
+
+
+def person_idx_from_case(case_id: str) -> int:
+    """Map a case id to the retargeted person index (person1->0, person2->1)."""
+    s = str(case_id).lower()
+    if "person1" in s or "_p1" in s:
+        return 0
+    return 1  # person2 / _p2 (the default for these collab cases)
+
+
+def contact_mask_for_case(case_key: str, root: Path | str | None = None) -> Path:
+    """Real 3cm contact-mask npz for a case (key = short case id / mask dir name)."""
+    base = Path(root) if root is not None else CONTACT_MASK_ROOT
+    return base / str(case_key) / "raw_contact_mask_3cm.npz"
+
+
+def _quat_geodesic_err(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Per-frame orientation error. Reuses spider.math.quat_sub when available
+    (matches get_humanoid_tracking_err.py), else falls back to geodesic angle."""
+    try:
+        import torch
+
+        from spider.math import quat_sub
+
+        d = quat_sub(
+            torch.from_numpy(np.ascontiguousarray(q1, dtype=np.float64)),
+            torch.from_numpy(np.ascontiguousarray(q2, dtype=np.float64)),
+        )
+        return np.linalg.norm(d.numpy(), axis=1)
+    except Exception:
+        dot = np.clip(np.abs(np.sum(q1 * q2, axis=1)), -1.0, 1.0)
+        return 2.0 * np.arccos(dot)
+
+
+def _tracking_metrics(robot_qpos: np.ndarray, kin_ref_path: Path | None, config: EvalConfig) -> dict[str, float]:
+    """Body tracking error of the run's robot channel vs the fixed kin truth.
+
+    Robot dofs [0:36] (7 root + 29 joints) share layout between the 42-dim run
+    channel and the 43-dim kin qpos; only object representation differs.
+    """
+    keys = [
+        "track_root_pos_err_mean_m", "track_root_pos_err_terminal_m",
+        "track_root_quat_err_mean", "track_root_quat_err_terminal",
+        "track_joint_err_mean_rad", "track_joint_err_terminal_rad",
+        "track_pelvis_z_err_mean_m", "track_pelvis_z_err_terminal_m",
+    ]
+    out: dict[str, float] = {k: math.nan for k in keys}
+    if kin_ref_path is None or not Path(kin_ref_path).is_file():
+        return out
+    kin = np.asarray(np.load(kin_ref_path, allow_pickle=True)["qpos"], dtype=np.float64)
+    H = min(robot_qpos.shape[0], kin.shape[0])
+    if H == 0:
+        return out
+    r = robot_qpos[:H]
+    k = kin[:H]
+    K = max(1, int(round(H * config.track_terminal_frac)))
+    pos = np.linalg.norm(r[:, :3] - k[:, :3], axis=1)
+    joint = np.linalg.norm(r[:, 7:36] - k[:, 7:36], axis=1)
+    pelvis = np.abs(r[:, 2] - k[:, 2])
+    quat = _quat_geodesic_err(r[:, 3:7], k[:, 3:7])
+
+    def mt(arr: np.ndarray) -> tuple[float, float]:
+        return float(np.mean(arr)), float(np.mean(arr[-K:]))
+
+    out["track_root_pos_err_mean_m"], out["track_root_pos_err_terminal_m"] = mt(pos)
+    out["track_root_quat_err_mean"], out["track_root_quat_err_terminal"] = mt(quat)
+    out["track_joint_err_mean_rad"], out["track_joint_err_terminal_rad"] = mt(joint)
+    out["track_pelvis_z_err_mean_m"], out["track_pelvis_z_err_terminal_m"] = mt(pelvis)
+    return out
+
+
+def _masked_contact_metrics(
+    hand_physics: list[bool],
+    hand_arr: np.ndarray,
+    contact_mask_path: Path | None,
+    person_idx: int | None,
+) -> dict[str, float]:
+    """Contact/penetration restricted to the real 3cm reference contact window.
+
+    `hand_physics` is the per-frame any-hand physics-contact flag; `hand_arr` is
+    the per-frame min hand-object geom SDF. The mask
+    `spider_contact_mask_3cm` is (N, 2 persons, 2 hands), frame-aligned.
+    """
+    keys = [
+        "ref_contact_frac",
+        "hand_object_physics_contact_in_mask_frac",
+        "hand_object_false_contact_frac",
+        "hand_object_approach_false_contact_frac",
+        "hand_object_release_false_contact_frac",
+        "hand_geom_penetration_2mm_in_mask_frac",
+        "hand_geom_penetration_5mm_in_mask_frac",
+    ]
+    out: dict[str, float] = {k: math.nan for k in keys}
+    if contact_mask_path is None or person_idx is None or not Path(contact_mask_path).is_file():
+        return out
+    data = np.load(contact_mask_path, allow_pickle=True)
+    if "spider_contact_mask_3cm" not in data.files:
+        return out
+    sm = np.asarray(data["spider_contact_mask_3cm"])  # (N, persons, hands)
+    pi = int(person_idx)
+    mask_any = sm[:, pi, 0].astype(bool) | sm[:, pi, 1].astype(bool)
+    H = min(len(hand_physics), mask_any.shape[0], hand_arr.shape[0])
+    if H == 0:
+        return out
+    rp = np.asarray(hand_physics[:H], dtype=bool)
+    m = mask_any[:H]
+    ha = np.asarray(hand_arr[:H], dtype=np.float64)
+    out["ref_contact_frac"] = float(np.mean(m))
+    if m.any():
+        out["hand_object_physics_contact_in_mask_frac"] = float(np.mean(rp[m]))
+        out["hand_geom_penetration_2mm_in_mask_frac"] = float(np.mean(ha[m] < -0.002))
+        out["hand_geom_penetration_5mm_in_mask_frac"] = float(np.mean(ha[m] < -0.005))
+    if (~m).any():
+        out["hand_object_false_contact_frac"] = float(np.mean(rp[~m]))
+    # Split the no-contact frames into the leading (approach) and trailing
+    # (release) windows; the release window is where "won't let go" shows up.
+    if m.any():
+        first_c = int(np.argmax(m))
+        last_c = int(H - 1 - np.argmax(m[::-1]))
+        approach = np.zeros(H, dtype=bool)
+        approach[:first_c] = True
+        release = np.zeros(H, dtype=bool)
+        release[last_c + 1:] = True
+        if approach.any():
+            out["hand_object_approach_false_contact_frac"] = float(np.mean(rp[approach]))
+        if release.any():
+            out["hand_object_release_false_contact_frac"] = float(np.mean(rp[release]))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Main evaluation function
 # ---------------------------------------------------------------------------
 
@@ -308,6 +478,9 @@ def evaluate_sequence(
     qpos_path: Path,
     scene_xml: Path,
     config: EvalConfig | None = None,
+    kin_ref_path: Path | None = None,
+    contact_mask_path: Path | None = None,
+    person_idx: int | None = None,
 ) -> dict[str, Any]:
     """Evaluate a single retargeting trajectory against a MuJoCo scene.
 
@@ -524,4 +697,9 @@ def evaluate_sequence(
         tag = int(round(threshold * 100))
         out[f"eef_near_{tag}cm_frac"] = max(frac(eef_l_arr < threshold), frac(eef_r_arr < threshold))
         out[f"hand_geom_near_{tag}cm_frac"] = frac(hand_arr < threshold)
+
+    # E154: body tracking vs fixed kin truth + masked contact (real 3cm).
+    # Always populated (NaN when refs not supplied) so METRIC_FIELDS stays complete.
+    out.update(_tracking_metrics(qpos, kin_ref_path, config))
+    out.update(_masked_contact_metrics(hand_physics, hand_arr, contact_mask_path, person_idx))
     return out

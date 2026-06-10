@@ -22,7 +22,13 @@ from typing import Any
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.core_metrics import EvalConfig, evaluate_sequence  # noqa: E402
+from lib.core_metrics import (  # noqa: E402
+    EvalConfig,
+    contact_mask_for_case,
+    evaluate_sequence,
+    kin_ref_for_scene,
+    person_idx_from_case,
+)
 
 REPO = Path(__file__).resolve().parents[4]
 RESULT_ROOT = REPO / "workspace/core4d/results/E153/gate_threshold_sweep"
@@ -70,6 +76,27 @@ GATE_HEALTH_KEYS = {
     "cem_hand_gate_min_sdf_min": ("min", "hand_gate_min_sdf_min_m"),
     "sample_hand_gate_violation_pct_mean": ("mean", "hand_gate_violation_pct"),
 }
+
+# E154 absolute diagnostics carried per grid row (tracking vs fixed kin truth +
+# real-3cm masked contact). Tracking gates success; false-contact is diagnostic.
+TRACK_DIAG = [
+    "track_pelvis_z_err_terminal_m",
+    "track_pelvis_z_err_mean_m",
+    "track_root_pos_err_terminal_m",
+    "track_joint_err_terminal_rad",
+    "ref_contact_frac",
+    "hand_object_physics_contact_in_mask_frac",
+    "hand_object_false_contact_frac",
+    "hand_object_release_false_contact_frac",
+    "hand_geom_penetration_2mm_in_mask_frac",
+    "hand_geom_penetration_5mm_in_mask_frac",
+]
+# masked-contact metrics that also get a delta-vs-b1 (the legit replacements for
+# the full-sequence physC / pen deltas)
+MASK_DELTA = [
+    "hand_object_physics_contact_in_mask_frac",
+    "hand_geom_penetration_2mm_in_mask_frac",
+]
 
 
 def sdf_tag(x: float) -> str:
@@ -133,7 +160,10 @@ def evaluate(case: str, variant: str, method: str, npz_rel: str, scene_rel: str,
         "expected_quality": "review",
     }
     m = evaluate_sequence(row=row, method=method, hand_collision_variant_id="rubber_hull",
-                          qpos_path=npz, scene_xml=scene, config=cfg)
+                          qpos_path=npz, scene_xml=scene, config=cfg,
+                          kin_ref_path=kin_ref_for_scene(scene),
+                          contact_mask_path=contact_mask_for_case(case),
+                          person_idx=person_idx_from_case(case))
     return m
 
 
@@ -208,6 +238,20 @@ def main() -> None:
                 and d["obj_err_mean_m_delta"] <= 0.02
                 and not bool(mm["fall_flag"])
             )
+            # E154 absolute diagnostics + masked-contact deltas vs b1
+            for k in TRACK_DIAG:
+                d[k] = mm.get(k, math.nan)
+            for k in MASK_DELTA:
+                d[f"{k}_b1"] = b1.get(k, math.nan)
+                d[f"{k}_delta"] = float(mm.get(k, math.nan)) - float(b1.get(k, math.nan))
+            # E154 tracking-gated success (user-confirmed): pen2mm verdict AND the
+            # robot completes the standup (terminal pelvis-z tracking vs fixed truth).
+            pz_term = mm.get("track_pelvis_z_err_terminal_m", math.inf)
+            d["success_tracked"] = bool(
+                d["success_pen2mm"]
+                and math.isfinite(pz_term)
+                and pz_term <= cfg.track_pelvis_terminal_th_m
+            )
             grid_rows.append(d)
 
     # ---- per-combo 3-case aggregate ----
@@ -217,6 +261,7 @@ def main() -> None:
         if not rs:
             continue
         item: dict[str, Any] = {"min_sdf_m": min_sdf, "max_viol": max_viol, "n_cases": len(rs),
+                                "success_tracked_cases": sum(1 for r in rs if r.get("success_tracked")),
                                 "success_pen2mm_cases": sum(1 for r in rs if r["success_pen2mm"]),
                                 "success_pen0mm_cases": sum(1 for r in rs if r["success_pen0mm"]),
                                 "fall_cases": sum(1 for r in rs if r["fall_flag"])}
@@ -228,6 +273,12 @@ def main() -> None:
             item[f"{k}_mean"] = mean
             item[f"{k}_std"] = std
             item[f"{k}_worst"] = worst
+        # E154 diagnostics: tracking (worst=max err) + release_false + in-mask contact
+        for k in ("track_pelvis_z_err_terminal_m", "hand_object_release_false_contact_frac",
+                  "hand_object_physics_contact_in_mask_frac", "hand_object_false_contact_frac"):
+            vals = [float(r[k]) for r in rs if r.get(k) not in ("", None) and math.isfinite(float(r[k]))]
+            item[f"{k}_mean"] = statistics.fmean(vals) if vals else math.nan
+            item[f"{k}_worst"] = max(vals) if vals else math.nan
         for k in ("hand_gate_valid_frac", "gate_fallback_used"):
             vals = [float(r[k]) for r in rs if r.get(k) not in ("", None) and math.isfinite(float(r[k]))]
             item[f"{k}_mean"] = statistics.fmean(vals) if vals else math.nan
@@ -247,16 +298,24 @@ def main() -> None:
                          "hand_object_physics_contact_frac", "hand_object_con_dist_mean_m",
                          "hand_object_con_dist_min_m", "hand_object_con_dist_frac_lt_neg5mm",
                          "leg_penetration_frac", "body_penetration_frac", "obj_err_mean_m")]
+                     + TRACK_DIAG
                      + [dst for _, (_, dst) in GATE_HEALTH_KEYS.items()])
     write_tsv(eval_dir / "e153_method_metrics.tsv", metric_rows, metric_fields)
 
     grid_fields = (["case_id", "variant", "min_sdf_m", "max_viol", "hard_floor_m", "fall_flag",
-                    "success_pen2mm", "success_pen0mm",
+                    "success_tracked", "success_pen2mm", "success_pen0mm",
                     "hand_gate_valid_frac", "gate_fallback_used", "hand_gate_min_sdf_min_m", "hand_gate_violation_pct"]
+                   + TRACK_DIAG
+                   + [f"{k}_{s}" for k in MASK_DELTA for s in ("b1", "delta")]
                    + [f"{k}_{s}" for k in DELTA_METRICS for s in ("b1", "run", "delta")])
     write_tsv(eval_dir / "e153_grid_delta_vs_b1.tsv", grid_rows, grid_fields)
 
-    combo_fields = (["min_sdf_m", "max_viol", "n_cases", "success_pen2mm_cases", "success_pen0mm_cases", "fall_cases",
+    combo_fields = (["min_sdf_m", "max_viol", "n_cases", "success_tracked_cases",
+                     "success_pen2mm_cases", "success_pen0mm_cases", "fall_cases",
+                     "track_pelvis_z_err_terminal_m_mean", "track_pelvis_z_err_terminal_m_worst",
+                     "hand_object_release_false_contact_frac_mean", "hand_object_release_false_contact_frac_worst",
+                     "hand_object_false_contact_frac_mean", "hand_object_false_contact_frac_worst",
+                     "hand_object_physics_contact_in_mask_frac_mean", "hand_object_physics_contact_in_mask_frac_worst",
                      "hand_gate_valid_frac_mean", "gate_fallback_used_mean", "hand_gate_min_sdf_min_m_worst"]
                     + [f"{k}_{s}" for k in DELTA_METRICS for s in ("mean", "std", "worst")])
     write_tsv(eval_dir / "e153_combo_summary.tsv", combo_rows, combo_fields)
