@@ -29,6 +29,8 @@ SUMMARY_METRICS = [
     "hand_geom_near_5cm_frac",
     "hand_geom_near_10cm_frac",
     "hand_geom_penetration_frac",
+    "hand_geom_penetration_2mm_frac",
+    "hand_geom_penetration_5mm_frac",
     "hand_geom_deep_penetration_2cm_frac",
     "hand_object_physics_contact_frac",
     "hand_object_con_dist_mean_m",
@@ -55,6 +57,8 @@ DELTA_METRICS = [
     "hand_geom_near_5cm_frac",
     "hand_geom_near_10cm_frac",
     "hand_geom_penetration_frac",
+    "hand_geom_penetration_2mm_frac",
+    "hand_geom_penetration_5mm_frac",
     "hand_object_physics_contact_frac",
     "hand_object_con_dist_frac_lt_neg5mm",
     "hand_object_con_deep5mm_frame_frac",
@@ -369,6 +373,16 @@ def delta_rows(metric_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 and item["obj_err_mean_m_delta"] <= 0.02
                 and not bool(row["fall_flag"])
             )
+            # Depth-aware variant: only SDF < -2mm counts as real penetration
+            # (SDF in [-2mm, 0) is grazing/surface contact, not penetration).
+            # Pairs with physical con_dist<-5mm; fixes the 0mm-threshold false
+            # negative where gate turns deep penetration into shallow contact.
+            item["success_pen2mm_down_contact_keep"] = (
+                item["hand_geom_penetration_2mm_frac_delta"] <= (-0.10 if method == "gateA" else 0.0)
+                and item["hand_geom_near_5cm_frac_delta"] >= -0.02
+                and item["obj_err_mean_m_delta"] <= 0.02
+                and not bool(row["fall_flag"])
+            )
             out.append(item)
     return out
 
@@ -383,6 +397,7 @@ def delta_summary_rows(deltas: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "method": method,
             "case_count": len(rows),
             "success_cases": sum(1 for r in rows if r["success_pen_down_contact_keep"]),
+            "success_cases_2mm": sum(1 for r in rows if r["success_pen2mm_down_contact_keep"]),
         }
         for metric in DELTA_METRICS:
             vals = [float(r[f"{metric}_delta"]) for r in rows if finite(r.get(f"{metric}_delta")) is not None]
@@ -491,15 +506,16 @@ def write_summary_md(path: Path, summaries: list[dict[str, Any]], delta_summarie
         "",
         "## Mean Deltas",
         "",
-        "| method | success | base | 5cm delta | hand pen delta | con<-5mm delta | floor pen delta | obj err delta |",
-        "|---|---:|---|---:|---:|---:|---:|---:|",
+        "| method | success(0mm) | success(2mm) | base | 5cm delta | geom pen Δ | geom pen2mm Δ | con<-5mm delta | floor pen delta | obj err delta |",
+        "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|",
     ]
     base_for = {"gateA": "baseline", "gateA_b1": "b1"}
     for row in delta_summaries:
         lines.append(
-            f"| `{row['method']}` | {row['success_cases']}/{row['case_count']} | `{base_for[row['method']]}` | "
+            f"| `{row['method']}` | {row['success_cases']}/{row['case_count']} | {row['success_cases_2mm']}/{row['case_count']} | `{base_for[row['method']]}` | "
             f"{float(row['hand_geom_near_5cm_frac_delta_mean']):+.4f} | "
             f"{float(row['hand_geom_penetration_frac_delta_mean']):+.4f} | "
+            f"{float(row['hand_geom_penetration_2mm_frac_delta_mean']):+.4f} | "
             f"{float(row['hand_object_con_dist_frac_lt_neg5mm_delta_mean']):+.4f} | "
             f"{float(row['hand_floor_penetration_frac_delta_mean']):+.4f} | "
             f"{float(row['obj_err_mean_m_delta_mean']):+.4f} |"
@@ -546,9 +562,10 @@ def main() -> None:
         "hand_gate_valid_frac",
         "gate_fallback_used",
         "success_pen_down_contact_keep",
+        "success_pen2mm_down_contact_keep",
     ]
     write_tsv(eval_dir / "e152_delta_vs_reference.tsv", deltas, delta_fields)
-    write_tsv(eval_dir / "e152_delta_summary.tsv", delta_summaries, ["method", "case_count", "success_cases", *[f"{m}_delta_{s}" for m in DELTA_METRICS for s in ("mean", "std", "worst")]])
+    write_tsv(eval_dir / "e152_delta_summary.tsv", delta_summaries, ["method", "case_count", "success_cases", "success_cases_2mm", *[f"{m}_delta_{s}" for m in DELTA_METRICS for s in ("mean", "std", "worst")]])
     write_tsv(eval_dir / "e152_missing.tsv", missing, ["variant", "method", "missing"])
     write_tsv(eval_dir / "e152_visual_sheets.tsv", visual_rows, ["short_case_id", "frame", "sheet"])
     write_json(eval_dir / "e152_eval_summary.json", {"method_rows": len(metric_rows), "delta_rows": len(deltas), "missing": len(missing), "visual_sheets": len(visual_rows)})
