@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import json
 import math
 import statistics
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +16,13 @@ import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+# Ensure lib package is importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib.core_metrics import METRIC_FIELDS, EvalConfig, evaluate_sequence
+
 REPO = Path(__file__).resolve().parents[4]
 VARIANTS_TSV = REPO / "workspace/core4d/scripts/E150/variants.tsv"
-E147_EVAL = REPO / "workspace/core4d/scripts/eval/eval_E147_rubber_hand_collision.py"
 RESULT_ROOT = REPO / "workspace/core4d/results/E150/contact_anchor_eef_offset_sweep"
 
 ANCHORS = ["off05", "off08", "off11"]
@@ -104,26 +108,18 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def load_e147_eval():
-    spec = importlib.util.spec_from_file_location("eval_E147_for_E150", E147_EVAL)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {E147_EVAL}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def eval_one(eval_mod: Any, row: dict[str, str]) -> dict[str, Any]:
+def eval_one(row: dict[str, str]) -> dict[str, Any]:
     offset_x = float(row["eef_offset_x"])
-    eval_mod.EEF_OFFSET = np.asarray([offset_x, 0.0, 0.0], dtype=np.float64)
+    config = EvalConfig(eef_offset=np.asarray([offset_x, 0.0, 0.0], dtype=np.float64))
     qpos_path = repo_path(row["outdir_npz"])
     scene_xml = repo_path(row["rubber_scene_act"])
-    item = eval_mod.evaluate_sequence(
+    item = evaluate_sequence(
         row=row,
         method=f"rubber_hull {row['anchor_variant']}",
         hand_collision_variant_id=row["hand_collision_variant_id"],
         qpos_path=qpos_path,
         scene_xml=scene_xml,
+        config=config,
     )
     item.update(
         {
@@ -142,7 +138,6 @@ def eval_one(eval_mod: Any, row: dict[str, str]) -> dict[str, Any]:
 
 
 def build_metric_rows(rows: list[dict[str, str]], *, allow_missing: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-    eval_mod = load_e147_eval()
     metric_rows: list[dict[str, Any]] = []
     missing: list[dict[str, Any]] = []
     fields = [
@@ -155,7 +150,7 @@ def build_metric_rows(rows: list[dict[str, str]], *, allow_missing: bool) -> tup
         "baseline_variant",
         "result_npz",
         "video",
-        *eval_mod.METRIC_FIELDS,
+        *METRIC_FIELDS,
     ]
     for row in rows:
         outdir = repo_path(row["outdir_npz"])
@@ -164,7 +159,7 @@ def build_metric_rows(rows: list[dict[str, str]], *, allow_missing: bool) -> tup
             if allow_missing:
                 continue
             raise FileNotFoundError(f"missing E150 qpos for {row['variant']}: {outdir}")
-        metric_rows.append(eval_one(eval_mod, row))
+        metric_rows.append(eval_one(row))
     return metric_rows, missing, fields
 
 

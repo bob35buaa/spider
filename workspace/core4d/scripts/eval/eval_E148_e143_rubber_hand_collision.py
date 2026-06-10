@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +15,13 @@ import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+# Ensure lib package is importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib.core_metrics import METRIC_FIELDS, evaluate_sequence
+
 REPO = Path(__file__).resolve().parents[4]
 VARIANTS_TSV = REPO / "workspace/core4d/scripts/E148/variants.tsv"
-E147_EVAL = REPO / "workspace/core4d/scripts/eval/eval_E147_rubber_hand_collision.py"
 RESULT_ROOT = REPO / "workspace/core4d/results/E148/e143_24case_rubber_hand_collision"
 FILTERED_EXCLUDE_CASES = {"bucket004_20231003_1_012_p1"}
 
@@ -96,13 +100,6 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def load_e147_eval():
-    spec = importlib.util.spec_from_file_location("eval_E147_for_E148", E147_EVAL)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {E147_EVAL}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def scene_euler_convention(scene_act: Path) -> str:
@@ -157,8 +154,8 @@ def converted_omni_qpos(row: dict[str, str], scene_act: Path, out_dir: Path) -> 
     return qpos_path
 
 
-def eval_sequence(eval_mod: Any, row: dict[str, str], *, method: str, method_key: str, source_exp: str, run_status: str, qpos_path: Path, scene_xml: Path) -> dict[str, Any]:
-    item = eval_mod.evaluate_sequence(
+def eval_sequence(row: dict[str, str], *, method: str, method_key: str, source_exp: str, run_status: str, qpos_path: Path, scene_xml: Path) -> dict[str, Any]:
+    item = evaluate_sequence(
         row=row,
         method=method,
         hand_collision_variant_id=method_key,
@@ -172,8 +169,7 @@ def eval_sequence(eval_mod: Any, row: dict[str, str], *, method: str, method_key
 
 
 def build_method_rows(rows: list[dict[str, str]], stage: str, results_dir: Path, allow_missing_rubber: bool) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[str]]:
-    eval_mod = load_e147_eval()
-    metric_fields = list(eval_mod.METRIC_FIELDS)
+    metric_fields = list(METRIC_FIELDS)
     metrics: list[dict[str, Any]] = []
     missing: list[dict[str, str]] = []
     omni_dir = RESULT_ROOT / "comparison/omni_converted_qpos"
@@ -183,7 +179,6 @@ def build_method_rows(rows: list[dict[str, str]], stage: str, results_dir: Path,
         omni_qpos = converted_omni_qpos(row, base_scene, omni_dir)
         metrics.append(
             eval_sequence(
-                eval_mod,
                 row,
                 method="OmniRetarget kinematic replay",
                 method_key="OmniRetarget",
@@ -197,7 +192,6 @@ def build_method_rows(rows: list[dict[str, str]], stage: str, results_dir: Path,
         sphere_path = repo_path(row["sphere_outdir_npz"])
         metrics.append(
             eval_sequence(
-                eval_mod,
                 row,
                 method="sphere Spider raw_mask_ref_fk",
                 method_key="sphere_spider",
@@ -215,7 +209,6 @@ def build_method_rows(rows: list[dict[str, str]], stage: str, results_dir: Path,
             continue
         metrics.append(
             eval_sequence(
-                eval_mod,
                 row,
                 method="rubber hand Spider",
                 method_key="rubber_hand_spider",

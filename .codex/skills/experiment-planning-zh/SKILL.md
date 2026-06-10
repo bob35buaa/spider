@@ -296,13 +296,95 @@ else:
   → 请求指导
 ```
 
+### 13. 评测指标规则
+
+所有实验的评测脚本**必须**使用公共评测模块，不允许通过 `importlib` 动态加载其他实验的 evaluator：
+
+```python
+# 正确：使用公共模块
+from lib.core_metrics import evaluate_sequence, EvalConfig, CORE_METRICS
+
+# 错误：动态加载其他实验的 evaluator
+# spec = importlib.util.spec_from_file_location("eval_E147", ...)  # 禁止
+```
+
+**公共模块位置**：`workspace/{exp_name}/scripts/eval/lib/core_metrics.py`
+
+**规则**：
+- `core_metrics.py` 提供计算函数和 `EvalConfig` 参数化接口
+- 每个 evaluator 保留自己的 `SUMMARY_METRICS`（报告哪些指标是实验特有决定）
+- 运行时参数（如 `eef_offset`、`mesh_sample_count`）通过 `EvalConfig` 传入，不修改模块全局变量
+- 新增公共指标需更新 `core_metrics.py` 的 `METRIC_FIELDS` 并同步 `CORE_METRICS`
+
+### 14. Progress 归档规则
+
+`progress.md` 只保留**当前活跃实验**（通常最近 1-2 个实验），历史内容归档到 `progress_archive/`：
+
+```
+workspace/{exp_name}/
+├── progress.md              ← 当前活跃（<100行），顶部有归档链接索引
+└── progress_archive/
+    ├── E098_E108_*.md       ← 按阶段归档
+    ├── E109_E124_*.md
+    └── *_full_backup.md     ← 完整备份（不删除）
+```
+
+**归档时机**：当 progress.md 超过 200 行时，将已完成实验的内容移入归档。
+
+**归档规则**：
+- 删除纯 SSH 监控轮询记录（"remote full 进度 X/Y"、"monitor: no new outputs" 等）
+- 保留有结论/结果/bug修复/决策的条目
+- 归档前先保存完整备份
+
+### 15. 实验脚本模板化
+
+新实验的 train/remote/pull/eval wrapper 脚本**优先使用模板生成器**：
+
+```bash
+python workspace/{exp_name}/scripts/gen_experiment.py \
+  --exp-id E153 \
+  --description "xxx" \
+  --splits "local-gpu0,remote-gpu0,remote-gpu1" \
+  --dry-run  # 先预览再生成
+```
+
+**模板位置**：`workspace/{exp_name}/scripts/templates/`
+
+**生成的文件**：
+| 文件 | 用途 |
+|------|------|
+| `scripts/train/train_{exp_id}_{slug}.sh` | 训练/CEM 入口 |
+| `scripts/run_{exp_id}_remote.sh` | 远程启动 |
+| `scripts/pull_{exp_id}_remote_results.sh` | 结果回收 |
+| `scripts/eval/eval_{exp_id}_{slug}.sh` | Eval wrapper |
+
+**不模板化**：manifest builder（`scripts/{EXP_ID}/build_*.py`）和 evaluator `.py`（实验特有逻辑）。
+
+### 16. Log 索引维护
+
+`log/` 目录使用自动生成的 `INDEX.md` 作为导航入口，按 Phase 分组：
+
+```bash
+# 新增实验日志后，重新生成索引
+python workspace/{exp_name}/scripts/build_log_index.py
+```
+
+**INDEX.md 结构**：按 Phase 分组 → 每组内按实验号排序 → 每行含序号/实验号/日期/摘要/文件链接。
+
+**规则**：不移动 log 文件（避免破坏已有引用），只加索引。
+
 ## 快速开始（新实验）
 
 ```bash
-# 方式1：使用初始化脚本
+# 方式1：使用模板生成器（推荐）
+python workspace/{exp_name}/scripts/gen_experiment.py \
+  --exp-id E153 --description "new_feature" \
+  --splits "local-gpu0,remote-gpu0,remote-gpu1"
+
+# 方式2：使用初始化脚本
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-experiment.sh v5.0 new_feature
 
-# 方式2：手动创建
+# 方式3：手动创建
 # 1. 确定编号：ls plan/ | sort | tail -1  →  下一个 NN
 # 2. 确定 Run ID：grep -oP 'R\d+' EXPERIMENT_TRACKER.md | sort -t'R' -k1 -n | tail -1  →  下一个 R{XXX}
 # 3. 创建 plan 和 log 文件

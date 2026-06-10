@@ -5,19 +5,23 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import json
 import math
 import statistics
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+# Ensure lib package is importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib.core_metrics import METRIC_FIELDS, evaluate_sequence
+
 REPO = Path(__file__).resolve().parents[4]
 VARIANTS_TSV = REPO / "workspace/core4d/scripts/E152/variants.tsv"
-E147_EVAL = REPO / "workspace/core4d/scripts/eval/eval_E147_rubber_hand_collision.py"
 RESULT_ROOT = REPO / "workspace/core4d/results/E152/axis1_hand_object_physics_gate"
 
 METHODS = ["baseline", "gateA", "b1", "gateA_b1"]
@@ -139,13 +143,6 @@ def rows_for_stage(rows: list[dict[str, str]], stage: str) -> list[dict[str, str
     return out
 
 
-def load_e147_eval():
-    spec = importlib.util.spec_from_file_location("eval_E147_for_E152", E147_EVAL)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {E147_EVAL}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def resolve_scene_xml(row: dict[str, str]) -> Path:
@@ -229,10 +226,10 @@ def run_info(row: dict[str, str]) -> dict[str, Any]:
     return out
 
 
-def eval_one(eval_mod: Any, row: dict[str, str]) -> dict[str, Any]:
+def eval_one(row: dict[str, str]) -> dict[str, Any]:
     qpos_path = repo_path(row["outdir_npz"])
     scene_xml = resolve_scene_xml(row)
-    item = eval_mod.evaluate_sequence(
+    item = evaluate_sequence(
         row=row,
         method=f"E152 {row['method']}",
         hand_collision_variant_id=row["hand_collision_variant_id"],
@@ -262,7 +259,6 @@ def eval_one(eval_mod: Any, row: dict[str, str]) -> dict[str, Any]:
 
 
 def build_metric_rows(rows: list[dict[str, str]], *, allow_missing: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-    eval_mod = load_e147_eval()
     metric_rows: list[dict[str, Any]] = []
     missing: list[dict[str, Any]] = []
     fields = [
@@ -280,7 +276,7 @@ def build_metric_rows(rows: list[dict[str, str]], *, allow_missing: bool) -> tup
         "cem_hand_gate_enabled",
         "cem_hand_gate_min_sdf_m",
         "cem_hand_gate_max_violation_pct",
-        *eval_mod.METRIC_FIELDS,
+        *METRIC_FIELDS,
         "cem_gate_valid_frac_mean",
         "cem_gate_fallback_used_mean",
         "cem_gate_selected_valid_frac_mean",
@@ -303,7 +299,7 @@ def build_metric_rows(rows: list[dict[str, str]], *, allow_missing: bool) -> tup
             if allow_missing:
                 continue
             raise FileNotFoundError(f"missing E152 qpos for {row['variant']}: {outdir}")
-        metric_rows.append(eval_one(eval_mod, row))
+        metric_rows.append(eval_one(row))
     return metric_rows, missing, fields
 
 
