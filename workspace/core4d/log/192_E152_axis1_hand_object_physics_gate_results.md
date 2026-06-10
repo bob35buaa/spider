@@ -97,3 +97,52 @@
 
 - 报 per-case + 3-case mean + worst，无 cherry-pick；主判据按计划原文 `hand_geom_penetration_frac ≥ −0.10` 严判为"未达标"，同时并列报告更贴物理的 `con_dist<−5mm` 深穿透（强降）；二值 `success_pen_down_contact_keep` 与连续指标并报，不挑有利者下结论。
 - box021 gateA_b1 二值 success=false（geom-SDF<0 frac +0.013）但物理深穿透 −0.298、physC +0.027，已如实标注"二值否、物理指标正向"的差异。
+
+## 8. 附录：指标口径与 success 定义（避免误读）
+
+> 来源：`eval_E147_rubber_hand_collision.py:evaluate_sequence`（指标）+ `eval_E152_*.py:delta_rows`（success）。
+
+### 8.1 两个独立数据源
+
+evaluator 对"手-物体"算了两套**来源不同**的量：
+
+| 来源 | 实现 | 性质 |
+|---|---|---|
+| **A. 解析几何 SDF** | `geom_object_sdf`：采样手 mesh 顶点，解析算到箱 box 的有符号距离取 min；**每帧都算**，与是否发生接触无关 | evaluator 自算的几何近似，帧级 |
+| **B. MuJoCo 仿真接触** | 遍历 `data.contact` 实际接触点读 `con.dist`（接触界面有符号距离，负=互嵌深度）；**只有发生接触的帧/点才有** | 仿真器真实接触，物理量 |
+
+### 8.2 三个手-物体指标
+
+| 指标 | 公式 | 来源 | 含义 |
+|---|---|---|---|
+| `hand_geom_penetration_frac`（几何穿透） | frac(解析SDF < 0) | A | **多少帧**手 mesh 几何上与箱重叠（只看重不重叠，**不看多深，蹭到 0.1mm 也算**） |
+| `hand_object_physics_contact_frac`（物理接触） | frac(该帧有 lh/rh–object 接触点) | B | **多少帧**真实发生物理接触 |
+| `hand_object_con_dist_frac_lt_neg5mm`（**深穿透**） | frac(所有接触点中 `con.dist < −5mm`) | B | **接触质量**：分母是接触点数（非帧数），在已发生的接触里多少是 >5mm 深嵌入。**最贴物理的穿透指标**（真实界面、真实深度） |
+
+阈值常量：`DEEP_CONTACT_DIST_M=−0.005`、`DEEP_PENETRATION_M=−0.02`、`NEAR_THRESHOLDS=(3,5,8,10)cm`、`FALL_PELVIS_Z=0.45m`、`FPS=30`。
+
+**几何穿透 ≠ 物理接触**：二者来源不同、问题不同。rubber pair `margin=0` 时手只能"压进箱"才被记为接触，故 baseline 下 frac 数值（近乎）重合（box004 baseline 二者精确 =0.3333）；gate 让"贴面接触"出现后两者解耦——物理接触保住、几何穿透掉下去，**两者之差 = 干净接触**。
+
+### 8.3 success_pen_down_contact_keep 定义（及其局限）
+
+```
+success = (几何穿透Δ ≤ (gateA:−0.10 / gateA_b1:0.0))   # 注意：只用「几何穿透」，未用「物理深穿透」
+          AND (near-5cmΔ ≥ −0.02)                       # 接触不掉
+          AND (obj_errΔ ≤ 0.02)                          # 跟踪不恶化
+          AND (not fall)
+```
+
+**局限（重要）**：success 完全建立在 8.2 来源 A 的**几何穿透帧占比**上，它对穿透深度不敏感（蹭 0.1mm 与插 3cm 同等计为"穿透帧"），且未纳入来源 B 的物理深穿透。因此当 gate 把"深嵌入"压成"贴面浅接触"时，浅接触帧数可能不降反微升，触发几何穿透Δ>0 → success 误判为 false，尽管物理深穿透与接触质量明显改善（见 §8.4）。**结论裁定以连续物理指标为准，二值 success 仅作粗筛**。下一实验应把判据改挂 `con_dist<−5mm` 深穿透（来源 B）。
+
+### 8.4 为何 box021 gateA_b1 success=false 但视频/物理都好
+
+box021 gateA_b1 vs b1 逐条：
+
+| 判据项 | 值 | 是否过 |
+|---|---:|:--:|
+| 几何穿透Δ ≤ 0 | **+0.013** | ❌ 唯一不过项 |
+| near-5cmΔ ≥ −0.02 | 0.000 | ✅ |
+| obj_errΔ ≤ 0.02 | −0.001 | ✅ |
+| not fall | fall=false | ✅ |
+
+→ **仅因几何穿透帧占比 +1.3pp 被判 false**。而同一行的物理指标全面变好：**物理深穿透 `con<−5mm` −0.298（接触从深嵌入变贴面）、物理接触 +0.027（接触还增多）、不摔、近场接触持平**。机理：gate 杀掉深嵌入后手停在箱面，多出的是 0~−5mm 的浅接触帧——来源 A 的几何穿透把这些也计为"穿透"甚至小幅增多，而来源 B 显示真实深嵌入腰斩。这正是 §8.3 所述二值判据对"浅接触增多"的盲区，属**假阴性**：视觉（屈身抱箱、不趴箱）+ 物理指标一致为正，二值 success 不能反映。
