@@ -125,6 +125,93 @@ MUJOCO_GL=egl python workspace/hdmi_reproduce/scripts/render_trajectory_video.py
     --output <output.mp4> --fps 30
 ```
 
+## 自动化回收 (watch_and_pull)
+
+手动轮询远程实验是否完成、拉取结果、校验产物数量、启动 eval 是重复性劳动。
+`watch_and_pull_template.sh` 将此流程自动化为一个后台脚本。
+
+### 模板位置
+
+```
+workspace/core4d/scripts/templates/watch_and_pull_template.sh
+```
+
+### 核心逻辑
+
+1. **循环轮询**: 每 `POLL_INTERVAL` 秒检查本地 tmux session 和远程 tmux session 是否存在
+2. **Hardened SSH**: SSH 不通时保守假定远程仍在运行，避免误判完成
+3. **双重确认**: 连续 2 次检测到双端完成后才视为真正完成
+4. **自动 pull**: 调用 pull 脚本将远程产物同步回本地
+5. **产物校验**: `find $RESULT_ROOT -name '*.npz' | wc -l` 与预期数量比对
+6. **自动 eval**: 产物数量达标后自动调用 eval 脚本
+7. **日志记录**: 全程输出带时间戳写入 `logs/{EXP_ID}/monitor/` 下
+
+### 占位符说明
+
+| 占位符 | 含义 | 默认值 |
+|--------|------|--------|
+| `{{EXP_ID}}` | 实验编号 | — |
+| `{{REMOTE_HOST}}` | 远程 SSH alias | `spider-remote` |
+| `{{LOCAL_TMUX}}` | 本地 tmux session 名 | `{exp_id_lower}_local` |
+| `{{REMOTE_TMUX}}` | 远程 tmux session 名 | `{exp_id_lower}_remote` |
+| `{{EXPECTED_NPZ_COUNT}}` | 预期 NPZ 产物数 | splits 数量 |
+| `{{PULL_SCRIPT}}` | pull 脚本路径 (repo-relative) | — |
+| `{{EVAL_SCRIPT}}` | eval 脚本路径 (repo-relative) | — |
+| `{{RESULT_ROOT}}` | 结果目录 (repo-relative) | — |
+| `{{POLL_INTERVAL}}` | 轮询间隔秒数 | `600` |
+
+### 使用方式一: gen_experiment.py --with-watcher
+
+最简方式，自动填充模板：
+
+```bash
+python workspace/core4d/scripts/gen_experiment.py \
+    --exp-id E153 \
+    --description "my experiment" \
+    --splits "local-gpu0,remote-gpu0,remote-gpu1" \
+    --with-watcher \
+    --poll-interval 600 \
+    --expected-npz-count 20
+```
+
+这会额外生成 `workspace/core4d/scripts/watch_and_pull_e153.sh`。
+
+可选参数：
+- `--remote-host` 覆盖远程主机 (默认 `spider-remote`)
+- `--poll-interval` 轮询间隔秒数 (默认 600)
+- `--expected-npz-count` 预期产物数 (默认从 splits 数量推算)
+
+### 使用方式二: 手动实例化模板
+
+```bash
+# 复制模板并替换占位符
+cp workspace/core4d/scripts/templates/watch_and_pull_template.sh \
+   workspace/core4d/scripts/watch_and_pull_e153.sh
+sed -i 's/{{EXP_ID}}/E153/g; s/{{REMOTE_HOST}}/spider-remote/g; ...' \
+   workspace/core4d/scripts/watch_and_pull_e153.sh
+chmod +x workspace/core4d/scripts/watch_and_pull_e153.sh
+```
+
+### 启动 watcher
+
+```bash
+# 在后台 tmux 中运行 (不怕终端断开)
+tmux new-session -d -s e153_watcher \
+  "bash workspace/core4d/scripts/watch_and_pull_e153.sh"
+
+# 或直接前台运行
+bash workspace/core4d/scripts/watch_and_pull_e153.sh
+```
+
+### 环境变量覆盖
+
+运行时可通过环境变量覆盖模板默认值：
+
+```bash
+INTERVAL_SECONDS=300 EXPECTED_NPZ_COUNT=30 \
+  bash workspace/core4d/scripts/watch_and_pull_e153.sh
+```
+
 ## 并行策略
 
 | 场景 | GPU 分配 | 预期时间 |

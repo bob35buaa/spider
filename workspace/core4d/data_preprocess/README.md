@@ -1,4 +1,9 @@
-# CORE4D 数据预处理 Pipeline
+> ⚠️ **DEPRECATED / 已废弃** — 本目录已由 `scripts/data_construction_v3/` 取代。
+> 新实验请使用 v3 管线。详见 [DEPRECATED.md](DEPRECATED.md)。
+
+---
+
+# CORE4D 数据预处理 Pipeline（Legacy）
 
 这个目录记录 E077 已验证成功、并在 E078 中实际使用的 CORE4D 数据预处理流程。当前已验证示例是 raw 序列 `20231008/045` 里的 `box023_person2`。
 

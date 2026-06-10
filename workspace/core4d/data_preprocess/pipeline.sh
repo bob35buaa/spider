@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# ⚠️ DEPRECATED — 已废弃。新实验请使用 scripts/data_construction_v3/。
+# 本脚本保留供历史参考，不建议直接运行。
 # Batch CORE4D -> Holosoma retarget -> SPIDER preprocessing pipeline.
 set -euo pipefail
 

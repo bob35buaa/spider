@@ -88,6 +88,29 @@ def parse_args() -> argparse.Namespace:
         help="TSV column index (1-based) for the 'override' path field (default: 27)",
     )
     parser.add_argument(
+        "--with-watcher",
+        action="store_true",
+        help="Also generate a watch_and_pull script from template",
+    )
+    parser.add_argument(
+        "--remote-host",
+        default="spider-remote",
+        help="Remote SSH host for watcher (default: spider-remote)",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=int,
+        default=600,
+        help="Poll interval in seconds for watcher (default: 600)",
+    )
+    parser.add_argument(
+        "--expected-npz-count",
+        type=int,
+        default=None,
+        help="Expected NPZ artifact count for watcher. "
+        "Default: inferred from number of splits",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be generated without writing files",
@@ -175,6 +198,34 @@ def main() -> int:
     eval_template = TEMPLATE_DIR / "eval_wrapper_template.sh"
     eval_output = SCRIPT_DIR / "eval" / f"eval_{exp_id}_{exp_slug}.sh"
     outputs.append((eval_output, render_template(eval_template, variables)))
+
+    # 5. Watch-and-pull script (optional)
+    if args.with_watcher:
+        watcher_template = TEMPLATE_DIR / "watch_and_pull_template.sh"
+        watcher_output = SCRIPT_DIR / f"watch_and_pull_{exp_id_lower}.sh"
+
+        # Infer expected NPZ count from splits if not explicitly given.
+        # Total splits count as a rough proxy for expected artifacts.
+        expected_npz = args.expected_npz_count or len(splits)
+
+        # Use repo-relative paths (scripts run from repo root via cd "$(git rev-parse ...)")
+        pull_rel = f"workspace/core4d/scripts/pull_{exp_id}_remote_results.sh"
+        eval_rel = f"workspace/core4d/scripts/eval/eval_{exp_id}_{exp_slug}.sh"
+
+        watcher_variables = {
+            "EXP_ID": exp_id,
+            "REMOTE_HOST": args.remote_host,
+            "LOCAL_TMUX": f"{exp_id_lower}_local",
+            "REMOTE_TMUX": f"{exp_id_lower}_remote",
+            "EXPECTED_NPZ_COUNT": str(expected_npz),
+            "PULL_SCRIPT": pull_rel,
+            "EVAL_SCRIPT": eval_rel,
+            "RESULT_ROOT": result_root,
+            "POLL_INTERVAL": str(args.poll_interval),
+        }
+        outputs.append(
+            (watcher_output, render_template(watcher_template, watcher_variables))
+        )
 
     if args.dry_run:
         print(f"[dry-run] Would generate {len(outputs)} files for {exp_id}:")

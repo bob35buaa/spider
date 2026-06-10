@@ -91,8 +91,14 @@ Plan → Implement → Train → Evaluate → Log → Update Tracker
 
 ### 6. Update Tracker（更新跟踪器）
 - 在 EXPERIMENT_TRACKER.md 添加新行
+- **描述列 ≤80 字符**（一句话摘要，详细内容在 log/ 文件中）
+- 必须填写 Log 列（相对链接到对应 log 文件）
+- 表格格式：`| Run | 日期 | Phase | 描述 | 状态 | Log |`
+- 如果描述过长，可运行 `python scripts/slim_tracker.py` 重新精简
 - 更新关键指标演进表
 - 更新 Logs 路径和 WandB Runs
+
+> **Tracker 是索引不是内容**：详细的执行过程、artifact 路径、指标明细全部放在 `log/` 文件中，Tracker 只放一句话摘要 + log 链接。
 
 ## 文件命名规则
 
