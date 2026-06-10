@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E152 | 2026-06-10 | Phase 27 | 轴1：手-物体物理穿透硬约束（CEM hand safety gate） | ✅ full complete, axis-1 gate cuts deep penetration; gateA_b1 box021 contact↑pen↓；详见 log 192 + results/E152 | [192](log/192_E152_axis1_hand_object_physics_gate_results.md) |
 | E151 | 2026-06-10 | Phase 27 | Route-B hand surface contact reward | ❌ full complete, route B contact gain is penetration tradeoff；详见 log 191 + results/E151 | [191](log/191_E151_route_b_hand_surface_contact_reward_results.md) |
 | E150 | 2026-06-09 | Phase 27 | Contact anchor `eef_offset` route-A sweep | ❌ full complete, route A not validated；详见 log 190 + results/E150 | [190](log/190_E150_contact_anchor_eef_offset_sweep_results.md) |
 | E149 | 2026-06-09 | Phase 27 | E143 clean benchmark rubber hand eval | 🔬 eval-only clean benchmark complete；详见 log 189 + results/E149 | [189](log/189_E149_e143_clean_rubber_benchmark_results.md) |
