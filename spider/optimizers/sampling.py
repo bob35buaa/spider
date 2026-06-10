@@ -96,6 +96,7 @@ def _compute_sample_gate_info(
         output_prefix: str,
         min_sdf_m: float,
         max_violation_pct: float,
+        hard_floor_m: float = float("nan"),
     ) -> None:
         nonlocal sample_gate_min_sdf
         nonlocal sample_gate_violation_pct
@@ -112,7 +113,13 @@ def _compute_sample_gate_info(
         min_sdf = info_combined[min_key].min(dim=0).values
         violation_pct = info_combined[violation_key].mean(dim=0)
         violation_depth_mean = info_combined[depth_key].mean(dim=0)
-        valid_mask = (min_sdf >= min_sdf_m) & (
+        # E153: hard floor decoupled from the per-frame violation threshold. NaN
+        # (hard_floor_m != hard_floor_m) => floor = min_sdf_m (legacy behavior, where
+        # the floor subsumes max_violation_pct). A deeper floor lets max_violation_pct
+        # tolerate a few frames in [floor, min_sdf_m) while still rejecting any frame
+        # below the absolute floor.
+        floor = min_sdf_m if hard_floor_m != hard_floor_m else hard_floor_m
+        valid_mask = (min_sdf >= floor) & (
             violation_pct <= max_violation_pct
         )
         gate_masks.append(valid_mask)
@@ -149,6 +156,7 @@ def _compute_sample_gate_info(
             "sample_body_gate",
             config.cem_safety_gate_min_sdf_m,
             config.cem_safety_gate_max_violation_pct,
+            config.cem_safety_gate_hard_floor_m,
         )
     if config.cem_hand_gate_enabled:
         add_gate(
@@ -156,6 +164,7 @@ def _compute_sample_gate_info(
             "sample_hand_gate",
             config.cem_hand_gate_min_sdf_m,
             config.cem_hand_gate_max_violation_pct,
+            config.cem_hand_gate_hard_floor_m,
         )
 
     if not gate_masks:

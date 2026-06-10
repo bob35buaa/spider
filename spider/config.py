@@ -306,6 +306,12 @@ class Config:
     cem_safety_gate_geom_ids: list[int] = field(default_factory=list)
     cem_safety_gate_min_sdf_m: float = -0.005
     cem_safety_gate_max_violation_pct: float = 0.0
+    # E153: absolute single-frame hard floor, decoupled from min_sdf_m. NaN (default)
+    # => floor = min_sdf_m (legacy: any frame below min_sdf_m kills the sample, so
+    # max_violation_pct is inert). Set deeper than min_sdf_m to activate
+    # max_violation_pct (allow a few frames in [hard_floor, min_sdf_m), reject only
+    # frames below hard_floor). Default NaN keeps E088-E152 numerically unchanged.
+    cem_safety_gate_hard_floor_m: float = float("nan")
     cem_safety_gate_min_valid_frac: float = 0.02
     cem_safety_gate_fallback: str = "least_violation"
     # E152: independent hand/object hard gate. Hands need a looser threshold
@@ -315,6 +321,9 @@ class Config:
     cem_hand_gate_geom_ids: list[int] = field(default_factory=list)
     cem_hand_gate_min_sdf_m: float = -0.005
     cem_hand_gate_max_violation_pct: float = 0.05
+    # E153: see cem_safety_gate_hard_floor_m. NaN (default) => floor = min_sdf_m
+    # (legacy, max_violation_pct inert). Set deeper (e.g. -0.020) to activate.
+    cem_hand_gate_hard_floor_m: float = float("nan")
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
