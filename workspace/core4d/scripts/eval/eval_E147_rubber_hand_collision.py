@@ -86,6 +86,9 @@ METRIC_FIELDS = [
     "hand_geom_penetration_frac",
     "hand_geom_deep_penetration_2cm_frac",
     "hand_object_physics_contact_frac",
+    "hand_floor_min_z_m",
+    "hand_floor_near_2cm_frac",
+    "hand_floor_penetration_frac",
     "leg_near_2cm_frac",
     "leg_penetration_frac",
     "leg_object_physics_contact_frac",
@@ -322,6 +325,7 @@ def evaluate_sequence(
     data = mujoco.MjData(model)
     object_gids = object_collision_geoms(model)
     floor_gid = mj_id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    floor_z0 = 0.0
     object_body = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
     pelvis_body = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
     left_wrist = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "left_wrist_yaw_link")
@@ -344,6 +348,7 @@ def evaluate_sequence(
     hand_physics: list[bool] = []
     leg_physics: list[bool] = []
     object_floor: list[bool] = []
+    hand_floor_sdf: list[float] = []
     obj_err: list[float] = []
 
     object_set = set(object_gids)
@@ -367,6 +372,13 @@ def evaluate_sequence(
 
         hand_vals = [geom_object_sdf(model, data, gid, object_gids) for gid in hand_gids]
         hand_sdf.append(float(min(hand_vals)) if hand_vals else math.nan)
+        # Hand-floor signed distance: min z of hand mesh sample points minus floor
+        # plane (z=0), same geom-vertex sampling used for hand-object SDF.
+        hf_min = math.inf
+        for gid in hand_gids:
+            pts, radius = geom_sample_points(model, data, gid)
+            hf_min = min(hf_min, float(pts[:, 2].min()) - radius - floor_z0)
+        hand_floor_sdf.append(hf_min if hand_gids else math.nan)
         leg_vals = [geom_object_sdf(model, data, gid, object_gids) for gid in lower_gids]
         leg_sdf.append(float(min(leg_vals)) if leg_vals else math.nan)
         body_vals = [point_object_sdf(model, data, data.xpos[bid].copy(), object_gids) for bid in upper_bodies]
@@ -405,6 +417,7 @@ def evaluate_sequence(
     eef_l_arr = np.asarray(eef_l)
     eef_r_arr = np.asarray(eef_r)
     hand_arr = np.asarray(hand_sdf)
+    hand_floor_arr = np.asarray(hand_floor_sdf)
     leg_arr = np.asarray(leg_sdf)
     body_arr = np.asarray(body_sdf)
     head_arr = np.asarray(head_sdf)
@@ -433,6 +446,9 @@ def evaluate_sequence(
         "hand_geom_penetration_frac": frac(hand_arr < 0.0),
         "hand_geom_deep_penetration_2cm_frac": frac(hand_arr < DEEP_PENETRATION_M),
         "hand_object_physics_contact_frac": frac(np.asarray(hand_physics, dtype=bool)),
+        "hand_floor_min_z_m": float(np.nanmin(hand_floor_arr)) if hand_floor_arr.size else math.nan,
+        "hand_floor_near_2cm_frac": frac(hand_floor_arr < 0.02),
+        "hand_floor_penetration_frac": frac(hand_floor_arr < 0.0),
         "leg_near_2cm_frac": frac(leg_arr < 0.02),
         "leg_penetration_frac": frac(leg_arr < 0.0),
         "leg_object_physics_contact_frac": frac(np.asarray(leg_physics, dtype=bool)),

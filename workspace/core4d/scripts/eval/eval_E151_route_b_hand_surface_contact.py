@@ -27,6 +27,9 @@ SUMMARY_METRICS = [
     "hand_geom_penetration_frac",
     "hand_geom_deep_penetration_2cm_frac",
     "hand_object_physics_contact_frac",
+    "hand_floor_near_2cm_frac",
+    "hand_floor_penetration_frac",
+    "hand_floor_min_z_m",
     "leg_penetration_frac",
     "object_floor_contact_frac",
     "pelvis_min_m",
@@ -37,6 +40,8 @@ DELTA_METRICS = [
     "hand_geom_near_10cm_frac",
     "hand_geom_penetration_frac",
     "hand_object_physics_contact_frac",
+    "hand_floor_near_2cm_frac",
+    "hand_floor_penetration_frac",
     "leg_penetration_frac",
     "obj_err_mean_m",
 ]
@@ -120,9 +125,33 @@ def load_e147_eval():
     return module
 
 
+def resolve_scene_xml(row: dict[str, str]) -> Path:
+    """Task-dir scene, falling back to the per-exp snapshot when absent locally.
+
+    Clean/derived task dirs are remote-only; the E151 snapshot (experiment.md
+    §7) holds the exact rubber scene. When falling back we rewrite the snapshot
+    XML's relative asset paths to absolute so MuJoCo can load it locally.
+    """
+    scene_xml = repo_path(row["rubber_scene_act"])
+    if scene_xml.is_file():
+        return scene_xml
+    snap = RESULT_ROOT / "scene_snapshot" / row["derived_task"] / scene_xml.name
+    if not snap.is_file():
+        raise FileNotFoundError(f"scene missing in task dir and snapshot: {scene_xml} / {snap}")
+    import re
+    import tempfile
+
+    txt = snap.read_text(encoding="utf-8")
+    txt = re.sub(r'meshdir="(\.\./)+spider', f'meshdir="{REPO}/spider', txt)
+    txt = re.sub(r'file="(\.\./)+example_datasets', f'file="{REPO}/example_datasets', txt)
+    fixed = Path(tempfile.gettempdir()) / f"e151_eval_{row['variant']}_{scene_xml.name}"
+    fixed.write_text(txt, encoding="utf-8")
+    return fixed
+
+
 def eval_one(eval_mod: Any, row: dict[str, str]) -> dict[str, Any]:
     qpos_path = repo_path(row["outdir_npz"])
-    scene_xml = repo_path(row["rubber_scene_act"])
+    scene_xml = resolve_scene_xml(row)
     item = eval_mod.evaluate_sequence(
         row=row,
         method=f"E151 {row['method']}",
@@ -233,7 +262,7 @@ def summary_rows(metric_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             vals = [float(r[metric]) for r in rows if finite(r.get(metric)) is not None]
             item[f"{metric}_mean"] = avg(vals)
             item[f"{metric}_std"] = stdev(vals)
-            item[f"{metric}_worst"] = max(vals) if metric != "pelvis_min_m" else min(vals)
+            item[f"{metric}_worst"] = min(vals) if metric in ("pelvis_min_m", "hand_floor_min_z_m") else max(vals)
         out.append(item)
     return out
 

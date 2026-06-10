@@ -227,6 +227,43 @@ E151 没有验证当前 B2/B1 形式的路线 B。
 2. 保留 B1 mesh SDF plumbing，因为该路径已验证可用且 reward 信号有效。
 3. 不把 B2 单独作为 release 路径；它复现了 E116 风格问题，即通过非 clean penetration / posture tradeoff 换取更高 contact。
 
+## 追加分析：手-地接触现象 + 新增 hand-floor 指标（2026-06-10）
+
+用户观察：box004 三方法在接触箱子前手会碰地；box021 的 B2 序列末尾摔倒。离线复算（手 mesh 顶点最低 z 减地面 z=0，与手-物 SDF 同口径）逐 case 量化，并把指标固化进 evaluator。
+
+新增指标（`eval_E147.evaluate_sequence` → E151 summary/delta）：
+- `hand_floor_min_z_m`：全序列手 mesh 顶点最低 z（worst 取 min）
+- `hand_floor_near_2cm_frac`：手离地 <2cm 帧比例
+- `hand_floor_penetration_frac`：手 z<0 帧比例
+
+逐 case（含 baseline）：
+
+| case | method | 5cm | obj穿透 | hand floor minZ | hf<2cm | hf<0 | pelvis min | fall |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| box004_083_p2 | baseline | 0.619 | 0.333 | **−1.60cm** | 0.057 | **0.038** | 0.651 | false |
+| box004_083_p2 | b2_sup | 0.781 | 0.552 | −2.31cm | 0.076 | 0.067 | 0.362 | **true** |
+| box004_083_p2 | b2_tip | 0.781 | 0.667 | −1.40cm | 0.057 | 0.038 | 0.478 | false |
+| box004_083_p2 | b1_mesh | 0.714 | 0.590 | −2.32cm | 0.048 | 0.038 | 0.647 | false |
+| box021_029_p2 | baseline | 0.733 | 0.267 | +10.74cm | 0.000 | 0.000 | 0.621 | false |
+| box021_029_p2 | b2_sup | 0.787 | 0.520 | +14.17cm | 0.000 | 0.000 | **0.146** | **true** |
+| box021_029_p2 | b2_tip | 0.787 | 0.653 | +8.21cm | 0.000 | 0.000 | 0.633 | false |
+| box021_029_p2 | b1_mesh | 0.787 | 0.507 | −1.95cm | 0.080 | 0.067 | 0.621 | false |
+| box023_person2 | (all) | ~0.55 | ~0.5 | +10~13cm | 0.000 | 0.000 | ~0.67 | false |
+
+### 现象一：box004 手碰地 —— 非 E151 引入，是该 clip 固有姿态
+- **baseline（纯 ref_fk rubber，无任何 E151 改动）就已经 minHandZ=−1.60cm、3.8% 帧手穿地。** box004 是大箱、参考为深蹲抱箱，接触 reward 只管"手贴箱"，**无任何项惩罚手碰地**（旧 eval 也无此指标，所以一直没被量化）。
+- B2/B1 把手更用力往箱拽，顺带把本就存在的手-地接触放大（b2_sup 3.8%→6.7%）。结论：**不是"忽然出现"，是有了并排对比/抽帧后才被注意到。**
+
+### 现象二：box021 B2-sup 末尾摔倒 —— B2-sup 特有，由 33cm target 偏移驱动
+- baseline / b2_tip / b1_mesh 都不摔（pelvis_min 0.62~0.63），**唯独 b2_sup 摔**（pelvis 0.62→0.146）。
+- 根因：前置 clean-gate 记录 **B2-sup old-vs-clean target max diff 0.328m**（b2_tip 仅 0.069m）。adaptive_support 支撑面 target 把手往与身体平衡不兼容的位置拽，CEM 为够靶牺牲姿态 → 末尾失稳。这解释了 **b2_sup 摔 / b2_tip 不摔 / b1_mesh 不摔（不用 external target）** 的分布，呼应 plan §7 R4（E116 非语义姿态满足 target）教训。
+- 注意 box021 摔倒**不伴随手碰地**（minHandZ 仍 +14cm）——是整体姿态崩，非手部触地。
+
+### 指标实现与回归
+- `hand_floor_*` 加在共享 `eval_E147.evaluate_sequence`，复用既有 `geom_sample_points`（手 mesh 顶点）+ floor 平面 z=0，**与手-物 mesh SDF 完全同口径**；纯增量字段，E147/E148/E149 输出不受影响（仅多三列）。
+- E151 evaluator 加 snapshot-fallback：clean/derived task dir 为远端时，自动用 per-exp scene_snapshot（修正相对 asset 路径）本地评测，符合 experiment.md §7。
+- 重跑 full eval：`method_rows=12 delta_rows=9 missing=0`，新指标数值与手算一致。
+
 ## 验证
 
 - `py_compile`：E151 evaluator 与 preflight scripts 通过。
