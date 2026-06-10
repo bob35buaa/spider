@@ -23,6 +23,7 @@ FALL_PELVIS_Z_M = 0.45
 EEF_OFFSET = np.asarray([0.05, 0.0, 0.0], dtype=np.float64)
 NEAR_THRESHOLDS_M = (0.03, 0.05, 0.08, 0.10)
 DEEP_PENETRATION_M = -0.02
+DEEP_CONTACT_DIST_M = -0.005
 MESH_SAMPLE_COUNT = 800
 
 HAND_GEOMS = ["lh", "rh"]
@@ -86,9 +87,18 @@ METRIC_FIELDS = [
     "hand_geom_penetration_frac",
     "hand_geom_deep_penetration_2cm_frac",
     "hand_object_physics_contact_frac",
+    "hand_object_con_dist_mean_m",
+    "hand_object_con_dist_min_m",
+    "hand_object_con_dist_frac_lt_neg5mm",
+    "hand_object_con_deep5mm_frame_frac",
     "hand_floor_min_z_m",
     "hand_floor_near_2cm_frac",
     "hand_floor_penetration_frac",
+    "hand_floor_physics_contact_frac",
+    "hand_floor_con_dist_mean_m",
+    "hand_floor_con_dist_min_m",
+    "hand_floor_con_dist_frac_lt_neg5mm",
+    "hand_floor_con_deep5mm_frame_frac",
     "leg_near_2cm_frac",
     "leg_penetration_frac",
     "leg_object_physics_contact_frac",
@@ -310,6 +320,30 @@ def frac(mask: np.ndarray) -> float:
     return float(np.nanmean(mask))
 
 
+def mean_or_nan(values: list[float]) -> float:
+    if not values:
+        return math.nan
+    arr = np.asarray(values, dtype=np.float64)
+    arr = arr[np.isfinite(arr)]
+    return float(np.mean(arr)) if arr.size else math.nan
+
+
+def min_or_nan(values: list[float]) -> float:
+    if not values:
+        return math.nan
+    arr = np.asarray(values, dtype=np.float64)
+    arr = arr[np.isfinite(arr)]
+    return float(np.min(arr)) if arr.size else math.nan
+
+
+def contact_frac_lt(values: list[float], threshold: float) -> float:
+    if not values:
+        return math.nan
+    arr = np.asarray(values, dtype=np.float64)
+    arr = arr[np.isfinite(arr)]
+    return frac(arr < threshold) if arr.size else math.nan
+
+
 def evaluate_sequence(
     *,
     row: dict[str, str],
@@ -346,9 +380,14 @@ def evaluate_sequence(
     head_sdf: list[float] = []
     upper_sdf: list[float] = []
     hand_physics: list[bool] = []
+    hand_object_deep_frame: list[bool] = []
+    hand_object_contact_dists: list[float] = []
     leg_physics: list[bool] = []
     object_floor: list[bool] = []
     hand_floor_sdf: list[float] = []
+    hand_floor_physics: list[bool] = []
+    hand_floor_deep_frame: list[bool] = []
+    hand_floor_contact_dists: list[float] = []
     obj_err: list[float] = []
 
     object_set = set(object_gids)
@@ -388,22 +427,43 @@ def evaluate_sequence(
         upper_sdf.append(float(min(upper_vals)) if upper_vals else math.nan)
 
         hand_contact = False
+        hand_object_frame_dists: list[float] = []
         leg_contact = False
         floor_contact = False
+        hand_floor_contact = False
+        hand_floor_frame_dists: list[float] = []
         for ci in range(data.ncon):
             con = data.contact[ci]
             pair = {int(con.geom1), int(con.geom2)}
             if floor_gid >= 0 and floor_gid in pair and object_set & pair:
                 floor_contact = True
+            if floor_gid >= 0 and floor_gid in pair:
+                other_floor = pair - {floor_gid}
+                if other_floor and any(gid in hand_gids for gid in other_floor):
+                    hand_floor_contact = True
+                    hand_floor_frame_dists.append(float(con.dist))
             if not (object_set & pair):
                 continue
             other = list(pair - object_set)
             if other:
-                hand_contact = hand_contact or other[0] in hand_gids
+                if other[0] in hand_gids:
+                    hand_contact = True
+                    hand_object_frame_dists.append(float(con.dist))
                 leg_contact = leg_contact or other[0] in lower_gids
         hand_physics.append(hand_contact)
+        hand_object_deep_frame.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) < DEEP_CONTACT_DIST_M
+        )
+        hand_object_contact_dists.extend(hand_object_frame_dists)
         leg_physics.append(leg_contact)
         object_floor.append(floor_contact)
+        hand_floor_physics.append(hand_floor_contact)
+        hand_floor_deep_frame.append(
+            bool(hand_floor_frame_dists)
+            and min(hand_floor_frame_dists) < DEEP_CONTACT_DIST_M
+        )
+        hand_floor_contact_dists.extend(hand_floor_frame_dists)
 
         if ref_qpos is not None and i < len(ref_qpos):
             data.qpos[:] = ref_qpos[i]
@@ -446,9 +506,26 @@ def evaluate_sequence(
         "hand_geom_penetration_frac": frac(hand_arr < 0.0),
         "hand_geom_deep_penetration_2cm_frac": frac(hand_arr < DEEP_PENETRATION_M),
         "hand_object_physics_contact_frac": frac(np.asarray(hand_physics, dtype=bool)),
+        "hand_object_con_dist_mean_m": mean_or_nan(hand_object_contact_dists),
+        "hand_object_con_dist_min_m": min_or_nan(hand_object_contact_dists),
+        "hand_object_con_dist_frac_lt_neg5mm": contact_frac_lt(
+            hand_object_contact_dists, DEEP_CONTACT_DIST_M
+        ),
+        "hand_object_con_deep5mm_frame_frac": frac(
+            np.asarray(hand_object_deep_frame, dtype=bool)
+        ),
         "hand_floor_min_z_m": float(np.nanmin(hand_floor_arr)) if hand_floor_arr.size else math.nan,
         "hand_floor_near_2cm_frac": frac(hand_floor_arr < 0.02),
         "hand_floor_penetration_frac": frac(hand_floor_arr < 0.0),
+        "hand_floor_physics_contact_frac": frac(np.asarray(hand_floor_physics, dtype=bool)),
+        "hand_floor_con_dist_mean_m": mean_or_nan(hand_floor_contact_dists),
+        "hand_floor_con_dist_min_m": min_or_nan(hand_floor_contact_dists),
+        "hand_floor_con_dist_frac_lt_neg5mm": contact_frac_lt(
+            hand_floor_contact_dists, DEEP_CONTACT_DIST_M
+        ),
+        "hand_floor_con_deep5mm_frame_frac": frac(
+            np.asarray(hand_floor_deep_frame, dtype=bool)
+        ),
         "leg_near_2cm_frac": frac(leg_arr < 0.02),
         "leg_penetration_frac": frac(leg_arr < 0.0),
         "leg_object_physics_contact_frac": frac(np.asarray(leg_physics, dtype=bool)),

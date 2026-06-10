@@ -23,6 +23,7 @@ import warp as wp
 from spider.config import Config
 from spider.math import quat_sub
 from spider.optimizers.sampling import (
+    _compute_sample_gate_info,
     _compute_weights_compiled,
     _compute_weights_impl,
     _compute_weights_with_gate_impl,
@@ -324,26 +325,9 @@ def make_rollout_fn_fast(  # noqa: D103
             "trace": trace_list,
             **mean_info,
         }
-        if config.cem_safety_gate_enabled and "cem_gate_min_sdf" in info_combined:
-            sample_gate_min_sdf = info_combined["cem_gate_min_sdf"].min(dim=0).values
-            sample_gate_violation_pct = info_combined["cem_gate_violation"].mean(dim=0)
-            sample_gate_violation_depth_mean = info_combined[
-                "cem_gate_violation_depth"
-            ].mean(dim=0)
-            sample_gate_valid_mask = (
-                sample_gate_min_sdf >= config.cem_safety_gate_min_sdf_m
-            ) & (
-                sample_gate_violation_pct
-                <= config.cem_safety_gate_max_violation_pct
-            )
-            info.update(
-                {
-                    "sample_gate_min_sdf": sample_gate_min_sdf,
-                    "sample_gate_violation_pct": sample_gate_violation_pct,
-                    "sample_gate_violation_depth_mean": sample_gate_violation_depth_mean,
-                    "sample_gate_valid_mask": sample_gate_valid_mask,
-                }
-            )
+        gate_info = _compute_sample_gate_info(config, info_combined)
+        if gate_info is not None:
+            info.update(gate_info)
 
         if record_states:
             info["recorded_qpos"] = recorded_qpos
@@ -390,7 +374,7 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
             )
             min_rew = torch.minimum(min_rew, rews)
             if (
-                config.cem_safety_gate_enabled
+                (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
                 and "sample_gate_valid_mask" in rollout_info
             ):
                 valid_mask = rollout_info["sample_gate_valid_mask"]
@@ -420,7 +404,10 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     )
                 )
         rews = min_rew
-        if config.cem_safety_gate_enabled and combined_gate_valid_mask is not None:
+        if (
+            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+            and combined_gate_valid_mask is not None
+        ):
             rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
             rollout_info["sample_gate_min_sdf"] = combined_gate_min_sdf
             rollout_info["sample_gate_violation_pct"] = combined_gate_violation_pct
@@ -429,7 +416,7 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
             )
 
         gate_enabled = (
-            config.cem_safety_gate_enabled
+            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
             and "sample_gate_valid_mask" in rollout_info
         )
         selected_indices = None
@@ -525,6 +512,22 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                 if selected_indices is not None and selected_indices.numel() > 0
                 else 0.0
             )
+            if "sample_hand_gate_valid_mask" in rollout_info:
+                hand_mask = rollout_info["sample_hand_gate_valid_mask"]
+                info["cem_hand_gate_valid_frac"] = hand_mask.float().mean().item()
+                info["cem_hand_gate_selected_valid_frac"] = (
+                    hand_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+            if "sample_body_gate_valid_mask" in rollout_info:
+                body_mask = rollout_info["sample_body_gate_valid_mask"]
+                info["cem_body_gate_valid_frac"] = body_mask.float().mean().item()
+                info["cem_body_gate_selected_valid_frac"] = (
+                    body_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
 
         if "trace" in rollout_info:
             info["trace_sample"] = rollout_info["trace"][sel_idx].cpu().numpy()

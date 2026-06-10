@@ -78,6 +78,102 @@ def sample_ctrls(
         return _sample_ctrls_impl(config, ctrls, sample_params)
 
 
+def _compute_sample_gate_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Build sample-level gate masks with independent body/hand thresholds."""
+    if not (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled):
+        return None
+
+    gate_masks: list[torch.Tensor] = []
+    sample_gate_min_sdf = None
+    sample_gate_violation_pct = None
+    sample_gate_violation_depth_mean = None
+    out: dict[str, torch.Tensor] = {}
+
+    def add_gate(
+        source_prefix: str,
+        output_prefix: str,
+        min_sdf_m: float,
+        max_violation_pct: float,
+    ) -> None:
+        nonlocal sample_gate_min_sdf
+        nonlocal sample_gate_violation_pct
+        nonlocal sample_gate_violation_depth_mean
+        min_key = f"{source_prefix}_min_sdf"
+        violation_key = f"{source_prefix}_violation"
+        depth_key = f"{source_prefix}_violation_depth"
+        if (
+            min_key not in info_combined
+            or violation_key not in info_combined
+            or depth_key not in info_combined
+        ):
+            return
+        min_sdf = info_combined[min_key].min(dim=0).values
+        violation_pct = info_combined[violation_key].mean(dim=0)
+        violation_depth_mean = info_combined[depth_key].mean(dim=0)
+        valid_mask = (min_sdf >= min_sdf_m) & (
+            violation_pct <= max_violation_pct
+        )
+        gate_masks.append(valid_mask)
+        sample_gate_min_sdf = (
+            min_sdf
+            if sample_gate_min_sdf is None
+            else torch.minimum(sample_gate_min_sdf, min_sdf)
+        )
+        sample_gate_violation_pct = (
+            violation_pct
+            if sample_gate_violation_pct is None
+            else torch.maximum(sample_gate_violation_pct, violation_pct)
+        )
+        sample_gate_violation_depth_mean = (
+            violation_depth_mean
+            if sample_gate_violation_depth_mean is None
+            else torch.maximum(
+                sample_gate_violation_depth_mean, violation_depth_mean
+            )
+        )
+        out[f"{output_prefix}_min_sdf"] = min_sdf
+        out[f"{output_prefix}_violation_pct"] = violation_pct
+        out[f"{output_prefix}_violation_depth_mean"] = violation_depth_mean
+        out[f"{output_prefix}_valid_mask"] = valid_mask
+
+    if config.cem_safety_gate_enabled:
+        source_prefix = (
+            "cem_body_gate"
+            if "cem_body_gate_min_sdf" in info_combined
+            else "cem_gate"
+        )
+        add_gate(
+            source_prefix,
+            "sample_body_gate",
+            config.cem_safety_gate_min_sdf_m,
+            config.cem_safety_gate_max_violation_pct,
+        )
+    if config.cem_hand_gate_enabled:
+        add_gate(
+            "cem_hand_gate",
+            "sample_hand_gate",
+            config.cem_hand_gate_min_sdf_m,
+            config.cem_hand_gate_max_violation_pct,
+        )
+
+    if not gate_masks:
+        return None
+    sample_gate_valid_mask = gate_masks[0]
+    for mask in gate_masks[1:]:
+        sample_gate_valid_mask = sample_gate_valid_mask & mask
+    out.update(
+        {
+            "sample_gate_min_sdf": sample_gate_min_sdf,
+            "sample_gate_violation_pct": sample_gate_violation_pct,
+            "sample_gate_violation_depth_mean": sample_gate_violation_depth_mean,
+            "sample_gate_valid_mask": sample_gate_valid_mask,
+        }
+    )
+    return out
+
+
 def make_rollout_fn(
     step_env,
     save_state,
@@ -196,26 +292,9 @@ def make_rollout_fn(
             "trace": trace_list,  # (N, H, n_trace, 3)
             **mean_info,
         }
-        if config.cem_safety_gate_enabled and "cem_gate_min_sdf" in info_combined:
-            sample_gate_min_sdf = info_combined["cem_gate_min_sdf"].min(dim=0).values
-            sample_gate_violation_pct = info_combined["cem_gate_violation"].mean(dim=0)
-            sample_gate_violation_depth_mean = info_combined[
-                "cem_gate_violation_depth"
-            ].mean(dim=0)
-            sample_gate_valid_mask = (
-                sample_gate_min_sdf >= config.cem_safety_gate_min_sdf_m
-            ) & (
-                sample_gate_violation_pct
-                <= config.cem_safety_gate_max_violation_pct
-            )
-            info.update(
-                {
-                    "sample_gate_min_sdf": sample_gate_min_sdf,
-                    "sample_gate_violation_pct": sample_gate_violation_pct,
-                    "sample_gate_violation_depth_mean": sample_gate_violation_depth_mean,
-                    "sample_gate_valid_mask": sample_gate_valid_mask,
-                }
-            )
+        gate_info = _compute_sample_gate_info(config, info_combined)
+        if gate_info is not None:
+            info.update(gate_info)
         return ctrls, mean_rew, terminate, info
 
     return rollout
@@ -370,7 +449,7 @@ def make_optimize_once_fn(
             )
             min_rew = torch.minimum(min_rew, rews)
             if (
-                config.cem_safety_gate_enabled
+                (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
                 and "sample_gate_valid_mask" in rollout_info
             ):
                 valid_mask = rollout_info["sample_gate_valid_mask"]
@@ -401,7 +480,10 @@ def make_optimize_once_fn(
                 )
         # Use worst-case rewards across DR parameter sets
         rews = min_rew
-        if config.cem_safety_gate_enabled and combined_gate_valid_mask is not None:
+        if (
+            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+            and combined_gate_valid_mask is not None
+        ):
             rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
             rollout_info["sample_gate_min_sdf"] = combined_gate_min_sdf
             rollout_info["sample_gate_violation_pct"] = combined_gate_violation_pct
@@ -416,7 +498,7 @@ def make_optimize_once_fn(
             sample_params.get("elite_fraction", 0.1) if sample_params else 0.1
         )
         gate_enabled = (
-            config.cem_safety_gate_enabled
+            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
             and "sample_gate_valid_mask" in rollout_info
         )
         selected_indices = None
@@ -524,6 +606,22 @@ def make_optimize_once_fn(
                 if selected_indices is not None and selected_indices.numel() > 0
                 else 0.0
             )
+            if "sample_hand_gate_valid_mask" in rollout_info:
+                hand_mask = rollout_info["sample_hand_gate_valid_mask"]
+                info["cem_hand_gate_valid_frac"] = hand_mask.float().mean().item()
+                info["cem_hand_gate_selected_valid_frac"] = (
+                    hand_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+            if "sample_body_gate_valid_mask" in rollout_info:
+                body_mask = rollout_info["sample_body_gate_valid_mask"]
+                info["cem_body_gate_valid_frac"] = body_mask.float().mean().item()
+                info["cem_body_gate_selected_valid_frac"] = (
+                    body_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
 
         # Downsample and store trace site positions for selected sample trajectories
         if "trace" in rollout_info:

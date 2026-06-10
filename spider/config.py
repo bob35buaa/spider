@@ -308,6 +308,13 @@ class Config:
     cem_safety_gate_max_violation_pct: float = 0.0
     cem_safety_gate_min_valid_frac: float = 0.02
     cem_safety_gate_fallback: str = "least_violation"
+    # E152: independent hand/object hard gate. Hands need a looser threshold
+    # than body safety geoms because light hand-object contact is intentional.
+    cem_hand_gate_enabled: bool = False
+    cem_hand_gate_geom_names: list[str] = field(default_factory=list)
+    cem_hand_gate_geom_ids: list[int] = field(default_factory=list)
+    cem_hand_gate_min_sdf_m: float = -0.005
+    cem_hand_gate_max_violation_pct: float = 0.05
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
@@ -978,6 +985,7 @@ def process_config(config: Config):
         or config.object_lift_rew_scale > 0.0
         or config.object_floor_penalty_scale > 0.0
         or config.cem_safety_gate_enabled
+        or config.cem_hand_gate_enabled
         or config.object_clearance_rew_scale > 0.0
         or config.object_clearance_penalty_scale > 0.0
         or config.carry_corridor_rew_scale > 0.0
@@ -1136,6 +1144,18 @@ def process_config(config: Config):
             loguru.logger.info(
                 "CEM safety gate: {} geoms resolved.", len(geom_ids)
             )
+        if config.cem_hand_gate_enabled:
+            geom_ids = []
+            for name in config.cem_hand_gate_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "cem_hand_gate_geom_names: geom '{}' not found.", name
+                    )
+            config.cem_hand_gate_geom_ids = geom_ids
+            loguru.logger.info("CEM hand gate: {} geoms resolved.", len(geom_ids))
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:
