@@ -26,9 +26,9 @@ import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.core_metrics import METRIC_FIELDS, evaluate_sequence, person_idx_from_case  # noqa: E402
+from eval.core.core_metrics import METRIC_FIELDS, evaluate_sequence, person_idx_from_case  # noqa: E402
 
 
 REPO = Path(__file__).resolve().parents[5]

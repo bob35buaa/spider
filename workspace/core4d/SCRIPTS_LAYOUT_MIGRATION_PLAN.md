@@ -417,6 +417,21 @@ E143-E151 旧根路径 Python 入口 -> thin wrapper
 git revert <phase-7-commit>
 ```
 
+## Phase 7.1：固定 eval core/lib 边界
+
+执行策略：
+
+- `workspace/core4d/scripts/eval/core/` 是唯一 canonical metrics 实现。
+- `workspace/core4d/scripts/eval/lib/` 只保留历史兼容 shim，不新增真实评测逻辑。
+- E147-E154 的活跃 runner/report 直接 import `eval.core.core_metrics`。
+- Phase 5 smoke script 增加 `lib.core_metrics` 与 `eval.core.core_metrics` 的对象一致性检查，防止兼容层未来分叉。
+
+回退：
+
+```bash
+git revert <phase-7.1-commit>
+```
+
 ## 兼容窗口
 
 建议策略：

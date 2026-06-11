@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Evaluate E153 CEM hand-gate threshold sweep (gateA_b1, 3 cases x 3 min_sdf x 2 max_viol).
 
-Per SKILL.md §13: uses lib.core_metrics directly (no importlib of other evaluators).
+Per SKILL.md §13: uses eval.core.core_metrics directly (no importlib of other evaluators).
 Compares each grid point vs the reward-only b1 reference (E151, gate off), and reports
 the depth-aware success criterion + gate health. Baseline (E147/E148 rubber, gate off)
 is also evaluated for context.
@@ -21,8 +21,8 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib.core_metrics import (  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from eval.core.core_metrics import (  # noqa: E402
     EvalConfig,
     EVAL_METRIC_STANDARD_ID,
     STANDARD_DELTA_METRICS,

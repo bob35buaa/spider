@@ -16,10 +16,10 @@ import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-# Ensure lib package is importable
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Ensure the canonical eval package is importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.core_metrics import METRIC_FIELDS, EvalConfig, evaluate_sequence
+from eval.core.core_metrics import METRIC_FIELDS, EvalConfig, evaluate_sequence
 
 REPO = Path(__file__).resolve().parents[5]
 VARIANTS_TSV = REPO / "workspace/core4d/scripts/E150/variants.tsv"

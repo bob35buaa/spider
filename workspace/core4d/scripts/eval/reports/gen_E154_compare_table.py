@@ -25,8 +25,8 @@ from openpyxl.utils import get_column_letter
 
 
 CORE4D = pathlib.Path(__file__).parents[3]
-sys.path.insert(0, str(CORE4D / "scripts/eval"))
-from lib.core_metrics import (  # noqa: E402
+sys.path.insert(0, str(CORE4D / "scripts"))
+from eval.core.core_metrics import (  # noqa: E402
     EVAL_METRIC_STANDARD_ID,
     STANDARD_TABLE_METRIC_DIRECTIONS,
     STANDARD_TABLE_METRIC_FIELDS,

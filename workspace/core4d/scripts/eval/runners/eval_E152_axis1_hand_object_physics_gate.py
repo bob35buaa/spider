@@ -15,10 +15,10 @@ from typing import Any
 
 import numpy as np
 
-# Ensure the eval compatibility package is importable.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Ensure the canonical eval package is importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.core_metrics import (
+from eval.core.core_metrics import (
     EVAL_METRIC_STANDARD_ID,
     METRIC_FIELDS,
     STANDARD_DELTA_METRICS,

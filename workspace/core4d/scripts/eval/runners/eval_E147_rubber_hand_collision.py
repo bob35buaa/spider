@@ -12,10 +12,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-# Ensure lib package is importable
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Ensure the canonical eval package is importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.core_metrics import (
+from eval.core.core_metrics import (
     METRIC_FIELDS,
     evaluate_sequence,
     rel as _lib_rel,

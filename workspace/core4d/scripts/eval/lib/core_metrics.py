@@ -1,6 +1,6 @@
-"""Compatibility wrapper for the migrated CORE4D evaluation core.
+"""Deprecated compatibility wrapper for the migrated CORE4D evaluation core.
 
-New code should import from `eval/core/core_metrics.py` via the scripts root.
+New code must import from `eval.core.core_metrics` via the scripts root.
 This module remains so historical evaluators using `from lib.core_metrics import ...`
 continue to work.
 """
