@@ -341,22 +341,22 @@ git revert <phase-5-commit>
 
 执行策略：
 
-- `E001-E081` 视为历史实验，归档到 `workspace/core4d/scripts/experiments/legacy/`。
+- `E001-E081` 视为历史实验，归档到 `workspace/core4d/scripts/experiments/legacy/`；原 `workspace/core4d/scripts/E###` 路径删除。
 - `E082+` 复制到 `workspace/core4d/scripts/experiments/`，旧真实目录暂时保留。
 - 这样历史命令、hardcoded manifest path、remote 脚本和 `Path(__file__).resolve().parents[...]`
   仍按旧目录深度工作。
-- 只对已经归档的 `E001-E081` 使用旧路径 symlink；活跃/较新的 `E082+` 不使用 symlink。
+- 活跃/较新的 `E082+` 不使用 symlink，旧真实目录继续保留。
 
 迁移规则：
 
 ```text
 workspace/core4d/scripts/E055
 -> workspace/core4d/scripts/experiments/legacy/E055
-workspace/core4d/scripts/E055 -> experiments/legacy/E055
+删除 workspace/core4d/scripts/E055
 
 workspace/core4d/scripts/E081
 -> workspace/core4d/scripts/experiments/legacy/E081
-workspace/core4d/scripts/E081 -> experiments/legacy/E081
+删除 workspace/core4d/scripts/E081
 
 workspace/core4d/scripts/E082
 保留原目录，并复制到 workspace/core4d/scripts/experiments/E082
@@ -367,12 +367,12 @@ workspace/core4d/scripts/E154
 
 这一步风险较高，因为很多脚本和实验记录直接引用 `scripts/E###`。
 因此本阶段对 `E082+` 不删除旧路径，也不把旧路径变成 symlink；只新增新结构副本。
-`E001-E081` 作为历史归档，旧路径使用 symlink 指向 `experiments/legacy/E###`。
+`E001-E081` 作为历史归档，旧路径删除，只保留 `experiments/legacy/E###`。
 
 验证：
 
 - 跑 Phase 5 smoke script。
-- 检查 symlink 没有 broken link。
+- 检查 `E001-E081` 旧路径已删除，真实归档目录存在。
 - 检查关键旧路径和新路径都能访问同一批文件。
 - 检查 E082+ 关键脚本通过旧真实路径执行时，`Path(__file__).resolve()` 的目录深度不变。
 - 检查所有引用旧 manifest 的 remote launch 脚本仍能访问旧真实路径。

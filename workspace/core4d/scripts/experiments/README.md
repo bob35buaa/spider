@@ -1,18 +1,15 @@
-# CORE4D experiment script archive
+# CORE4D experiment scripts 归档目录
 
-This directory is the target layout for experiment-local scripts and manifests.
+这个目录是实验局部脚本和 manifest 的目标结构。
 
-Current Phase 6 policy:
+当前 Phase 6 策略：
 
-- `legacy/E###` contains archived historical experiment directories up to E081.
-- `E082+` directories are structural copies while the old
-  `workspace/core4d/scripts/E###` directories remain the executable compatibility
-  paths.
-- Many copied scripts still compute the repo root from
-  `Path(__file__).resolve().parents[...]`; running those copied scripts directly
-  from this deeper directory can change that calculation.
+- `legacy/E###` 存放 E081 及以前的历史实验归档。
+- E001-E081 的原 `workspace/core4d/scripts/E###` 路径已删除；需要查看历史脚本时使用 `workspace/core4d/scripts/experiments/legacy/E###`。
+- `E082+` 目录是结构副本；旧的 `workspace/core4d/scripts/E###` 真实目录仍保留，作为兼容执行入口。
+- 很多复制过来的脚本仍通过 `Path(__file__).resolve().parents[...]` 计算 repo root；如果直接从更深的 `experiments/E###` 路径运行，可能改变这个计算结果。
 
-Until a script has been migrated to `workspace/core4d/scripts/eval/runners`,
-`workspace/core4d/scripts/eval/reports`, or updated to use
-`workspace/core4d/scripts/common/paths.py`, run it through the old compatibility
-path under `workspace/core4d/scripts/E###`.
+在某个脚本迁到 `workspace/core4d/scripts/eval/runners`、
+`workspace/core4d/scripts/eval/reports`，或者改用
+`workspace/core4d/scripts/common/paths.py` 之前，E082+ 仍建议通过旧兼容路径
+`workspace/core4d/scripts/E###` 运行。
