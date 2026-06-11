@@ -432,6 +432,29 @@ git revert <phase-7-commit>
 git revert <phase-7.1-commit>
 ```
 
+## Phase 8：整理 launch/pull 根目录入口
+
+执行策略：
+
+- `workspace/core4d/scripts/launch/active/` 存放 E143 及以后仍可能用于复现实验的 launch/pull/local/recover 入口。
+- `workspace/core4d/scripts/launch/legacy/` 存放 E142 及以前的历史 launch/pull/sync/wait 入口。
+- E143+ 的旧根路径保留 thin wrapper，转发到 `launch/active/`。
+- E142 及以前的旧根路径删除，只保留归档文件。
+- 结果目录和 `workspace/core4d/scripts/E###` 实验目录不移动。
+
+验证：
+
+- `bash -n` 检查 `launch/active/`、E143+ 根 wrapper、`launch/legacy/`。
+- 检查根目录不再存在 E142 及以前的 `run_E*.sh`、`pull_E*.sh`、`sync_E*.sh`、`wait_pull_eval_E*.sh`。
+- 检查 E143+ 根 wrapper 全存在。
+- 跑 Phase 5 smoke script。
+
+回退：
+
+```bash
+git revert <phase-8-commit>
+```
+
 ## 兼容窗口
 
 建议策略：
