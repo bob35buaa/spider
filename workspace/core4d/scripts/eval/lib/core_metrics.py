@@ -29,6 +29,7 @@ class EvalConfig:
     eef_offset: np.ndarray = field(default_factory=lambda: np.asarray([0.05, 0.0, 0.0], dtype=np.float64))
     near_thresholds_m: tuple[float, ...] = (0.03, 0.05, 0.08, 0.10)
     deep_penetration_m: float = -0.02
+    clean_contact_penetration_m: float = -0.002
     deep_contact_dist_m: float = -0.005
     mesh_sample_count: int = 800
     # E154: body-tracking vs fixed kinematic truth + masked-contact (real 3cm).
@@ -107,9 +108,18 @@ METRIC_FIELDS = [
     "hand_geom_penetration_5mm_frac",
     "hand_geom_deep_penetration_2cm_frac",
     "hand_object_physics_contact_frac",
+    "hand_object_clean_physics_contact_frac",
+    "hand_object_physics_contact_3mm_frac",
+    "hand_object_physics_contact_5mm_frac",
+    "hand_object_physics_penetration_3mm_frame_frac",
+    "hand_object_physics_penetration_5mm_frame_frac",
     "hand_object_con_dist_mean_m",
     "hand_object_con_dist_min_m",
+    "hand_object_con_dist_frac_lt_neg2mm",
+    "hand_object_con_dist_frac_lt_neg3mm",
     "hand_object_con_dist_frac_lt_neg5mm",
+    "hand_object_con_deep2mm_frame_frac",
+    "hand_object_con_deep3mm_frame_frac",
     "hand_object_con_deep5mm_frame_frac",
     "hand_floor_min_z_m",
     "hand_floor_near_2cm_frac",
@@ -143,15 +153,34 @@ TRACK_MASK_FIELDS = [
     "track_pelvis_z_err_terminal_m",
     "ref_contact_frac",
     "hand_object_physics_contact_in_mask_frac",
+    "hand_object_clean_physics_contact_in_mask_frac",
+    "hand_object_physics_contact_3mm_in_mask_frac",
+    "hand_object_physics_contact_5mm_in_mask_frac",
     "hand_object_false_contact_frac",
+    "hand_object_clean_false_contact_frac",
+    "hand_object_false_contact_3mm_frac",
+    "hand_object_false_contact_5mm_frac",
     "hand_object_approach_false_contact_frac",
+    "hand_object_clean_approach_false_contact_frac",
+    "hand_object_approach_false_contact_3mm_frac",
+    "hand_object_approach_false_contact_5mm_frac",
     "hand_object_release_false_contact_frac",
+    "hand_object_clean_release_false_contact_frac",
+    "hand_object_release_false_contact_3mm_frac",
+    "hand_object_release_false_contact_5mm_frac",
     "hand_geom_penetration_2mm_in_mask_frac",
     "hand_geom_penetration_5mm_in_mask_frac",
 ]
 METRIC_FIELDS += TRACK_MASK_FIELDS
 
-# Minimal core metrics suitable as a shared baseline set.
+# ---------------------------------------------------------------------------
+# Canonical metric standard for E154+ experiments
+# ---------------------------------------------------------------------------
+
+EVAL_METRIC_STANDARD_ID = "core4d-e154-physics-contact-v1"
+PHYSICS_CONTACT_THRESHOLDS_M = (0.003, 0.005)
+
+# Minimal core metrics suitable as a shared baseline set. Kept for older scripts.
 CORE_METRICS = [
     "pelvis_min_m",
     "fall_flag",
@@ -165,6 +194,128 @@ CORE_METRICS = [
     "object_floor_contact_frac",
     "obj_err_mean_m",
 ]
+
+# Standard method summary fields for new CEM/retargeting experiments. Experiment
+# scripts may append run-specific health fields, but should not redefine these.
+STANDARD_SUMMARY_METRICS = [
+    "hand_geom_near_5cm_frac",
+    "hand_geom_near_10cm_frac",
+    "hand_geom_penetration_frac",
+    "hand_geom_penetration_2mm_frac",
+    "hand_geom_penetration_5mm_frac",
+    "hand_geom_deep_penetration_2cm_frac",
+    "hand_object_physics_contact_frac",
+    "hand_object_clean_physics_contact_frac",
+    "hand_object_physics_contact_3mm_frac",
+    "hand_object_physics_contact_5mm_frac",
+    "hand_object_physics_penetration_3mm_frame_frac",
+    "hand_object_physics_penetration_5mm_frame_frac",
+    "hand_object_con_dist_mean_m",
+    "hand_object_con_dist_min_m",
+    "hand_object_con_dist_frac_lt_neg2mm",
+    "hand_object_con_dist_frac_lt_neg3mm",
+    "hand_object_con_dist_frac_lt_neg5mm",
+    "hand_object_con_deep2mm_frame_frac",
+    "hand_object_con_deep3mm_frame_frac",
+    "hand_object_con_deep5mm_frame_frac",
+    "hand_floor_near_2cm_frac",
+    "hand_floor_penetration_frac",
+    "hand_floor_min_z_m",
+    "hand_floor_physics_contact_frac",
+    "hand_floor_con_dist_min_m",
+    "hand_floor_con_dist_frac_lt_neg5mm",
+    "hand_floor_con_deep5mm_frame_frac",
+    "leg_penetration_frac",
+    "object_floor_contact_frac",
+    "pelvis_min_m",
+    "obj_err_mean_m",
+]
+
+STANDARD_DELTA_METRICS = [
+    "hand_geom_near_5cm_frac",
+    "hand_geom_near_10cm_frac",
+    "hand_geom_penetration_frac",
+    "hand_geom_penetration_2mm_frac",
+    "hand_geom_penetration_5mm_frac",
+    "hand_object_physics_contact_frac",
+    "hand_object_clean_physics_contact_frac",
+    "hand_object_physics_contact_3mm_frac",
+    "hand_object_physics_contact_5mm_frac",
+    "hand_object_physics_penetration_3mm_frame_frac",
+    "hand_object_physics_penetration_5mm_frame_frac",
+    "hand_object_con_dist_frac_lt_neg2mm",
+    "hand_object_con_dist_frac_lt_neg3mm",
+    "hand_object_con_dist_frac_lt_neg5mm",
+    "hand_object_con_deep2mm_frame_frac",
+    "hand_object_con_deep3mm_frame_frac",
+    "hand_object_con_deep5mm_frame_frac",
+    "hand_floor_near_2cm_frac",
+    "hand_floor_penetration_frac",
+    "hand_floor_physics_contact_frac",
+    "hand_floor_con_deep5mm_frame_frac",
+    "leg_penetration_frac",
+    "obj_err_mean_m",
+]
+
+STANDARD_TRACK_DIAG = [
+    "track_pelvis_z_err_terminal_m",
+    "track_pelvis_z_err_mean_m",
+    "track_root_pos_err_terminal_m",
+    "track_joint_err_terminal_rad",
+    "ref_contact_frac",
+    "hand_object_physics_contact_in_mask_frac",
+    "hand_object_clean_physics_contact_in_mask_frac",
+    "hand_object_physics_contact_3mm_in_mask_frac",
+    "hand_object_physics_contact_5mm_in_mask_frac",
+    "hand_object_false_contact_frac",
+    "hand_object_clean_false_contact_frac",
+    "hand_object_false_contact_3mm_frac",
+    "hand_object_false_contact_5mm_frac",
+    "hand_object_release_false_contact_frac",
+    "hand_object_clean_release_false_contact_frac",
+    "hand_object_release_false_contact_3mm_frac",
+    "hand_object_release_false_contact_5mm_frac",
+    "hand_geom_penetration_2mm_in_mask_frac",
+    "hand_geom_penetration_5mm_in_mask_frac",
+]
+
+STANDARD_MASK_DELTA_METRICS = [
+    "hand_object_physics_contact_3mm_in_mask_frac",
+    "hand_object_physics_contact_5mm_in_mask_frac",
+    "hand_geom_penetration_2mm_in_mask_frac",
+]
+
+STANDARD_TABLE_METRIC_FIELDS = {
+    "5cm": "hand_geom_near_5cm_frac",
+    "2mm_pen": "hand_geom_penetration_2mm_frac",
+    "5mm_pen": "hand_geom_penetration_5mm_frac",
+    "phys_contact3": "hand_object_physics_contact_3mm_frac",
+    "phys_pen3": "hand_object_physics_penetration_3mm_frame_frac",
+    "phys_contact5": "hand_object_physics_contact_5mm_frac",
+    "phys_pen5": "hand_object_physics_penetration_5mm_frame_frac",
+    "leg_pen": "leg_penetration_frac",
+    "obj_err": "obj_err_mean_m",
+}
+STANDARD_TABLE_METRIC_ORDER = [
+    "5cm",
+    "2mm_pen",
+    "5mm_pen",
+    "phys_contact3",
+    "phys_pen3",
+    "phys_contact5",
+    "phys_pen5",
+    "leg_pen",
+]
+STANDARD_TABLE_METRIC_DIRECTIONS = [+1, -1, -1, +1, -1, +1, -1, -1]
+
+STANDARD_LOWER_IS_WORST_METRICS = {
+    "pelvis_min_m",
+    "hand_floor_min_z_m",
+    "hand_object_con_dist_mean_m",
+    "hand_object_con_dist_min_m",
+    "hand_floor_con_dist_mean_m",
+    "hand_floor_con_dist_min_m",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +559,9 @@ def _tracking_metrics(robot_qpos: np.ndarray, kin_ref_path: Path | None, config:
 
 def _masked_contact_metrics(
     hand_physics: list[bool],
+    hand_clean_physics: list[bool],
+    hand_clean3_physics: list[bool],
+    hand_clean5_physics: list[bool],
     hand_arr: np.ndarray,
     contact_mask_path: Path | None,
     person_idx: int | None,
@@ -415,15 +569,29 @@ def _masked_contact_metrics(
     """Contact/penetration restricted to the real 3cm reference contact window.
 
     `hand_physics` is the per-frame any-hand physics-contact flag; `hand_arr` is
-    the per-frame min hand-object geom SDF. The mask
+    the per-frame min hand-object geom SDF. `hand_clean_physics` removes frames
+    where the MuJoCo contact distance penetrates deeper than the clean-contact
+    threshold. The mask
     `spider_contact_mask_3cm` is (N, 2 persons, 2 hands), frame-aligned.
     """
     keys = [
         "ref_contact_frac",
         "hand_object_physics_contact_in_mask_frac",
+        "hand_object_clean_physics_contact_in_mask_frac",
+        "hand_object_physics_contact_3mm_in_mask_frac",
+        "hand_object_physics_contact_5mm_in_mask_frac",
         "hand_object_false_contact_frac",
+        "hand_object_clean_false_contact_frac",
+        "hand_object_false_contact_3mm_frac",
+        "hand_object_false_contact_5mm_frac",
         "hand_object_approach_false_contact_frac",
+        "hand_object_clean_approach_false_contact_frac",
+        "hand_object_approach_false_contact_3mm_frac",
+        "hand_object_approach_false_contact_5mm_frac",
         "hand_object_release_false_contact_frac",
+        "hand_object_clean_release_false_contact_frac",
+        "hand_object_release_false_contact_3mm_frac",
+        "hand_object_release_false_contact_5mm_frac",
         "hand_geom_penetration_2mm_in_mask_frac",
         "hand_geom_penetration_5mm_in_mask_frac",
     ]
@@ -436,19 +604,35 @@ def _masked_contact_metrics(
     sm = np.asarray(data["spider_contact_mask_3cm"])  # (N, persons, hands)
     pi = int(person_idx)
     mask_any = sm[:, pi, 0].astype(bool) | sm[:, pi, 1].astype(bool)
-    H = min(len(hand_physics), mask_any.shape[0], hand_arr.shape[0])
+    H = min(
+        len(hand_physics),
+        len(hand_clean_physics),
+        len(hand_clean3_physics),
+        len(hand_clean5_physics),
+        mask_any.shape[0],
+        hand_arr.shape[0],
+    )
     if H == 0:
         return out
     rp = np.asarray(hand_physics[:H], dtype=bool)
+    cp = np.asarray(hand_clean_physics[:H], dtype=bool)
+    c3 = np.asarray(hand_clean3_physics[:H], dtype=bool)
+    c5 = np.asarray(hand_clean5_physics[:H], dtype=bool)
     m = mask_any[:H]
     ha = np.asarray(hand_arr[:H], dtype=np.float64)
     out["ref_contact_frac"] = float(np.mean(m))
     if m.any():
         out["hand_object_physics_contact_in_mask_frac"] = float(np.mean(rp[m]))
+        out["hand_object_clean_physics_contact_in_mask_frac"] = float(np.mean(cp[m]))
+        out["hand_object_physics_contact_3mm_in_mask_frac"] = float(np.mean(c3[m]))
+        out["hand_object_physics_contact_5mm_in_mask_frac"] = float(np.mean(c5[m]))
         out["hand_geom_penetration_2mm_in_mask_frac"] = float(np.mean(ha[m] < -0.002))
         out["hand_geom_penetration_5mm_in_mask_frac"] = float(np.mean(ha[m] < -0.005))
     if (~m).any():
         out["hand_object_false_contact_frac"] = float(np.mean(rp[~m]))
+        out["hand_object_clean_false_contact_frac"] = float(np.mean(cp[~m]))
+        out["hand_object_false_contact_3mm_frac"] = float(np.mean(c3[~m]))
+        out["hand_object_false_contact_5mm_frac"] = float(np.mean(c5[~m]))
     # Split the no-contact frames into the leading (approach) and trailing
     # (release) windows; the release window is where "won't let go" shows up.
     if m.any():
@@ -460,8 +644,14 @@ def _masked_contact_metrics(
         release[last_c + 1:] = True
         if approach.any():
             out["hand_object_approach_false_contact_frac"] = float(np.mean(rp[approach]))
+            out["hand_object_clean_approach_false_contact_frac"] = float(np.mean(cp[approach]))
+            out["hand_object_approach_false_contact_3mm_frac"] = float(np.mean(c3[approach]))
+            out["hand_object_approach_false_contact_5mm_frac"] = float(np.mean(c5[approach]))
         if release.any():
             out["hand_object_release_false_contact_frac"] = float(np.mean(rp[release]))
+            out["hand_object_clean_release_false_contact_frac"] = float(np.mean(cp[release]))
+            out["hand_object_release_false_contact_3mm_frac"] = float(np.mean(c3[release]))
+            out["hand_object_release_false_contact_5mm_frac"] = float(np.mean(c5[release]))
     return out
 
 
@@ -535,6 +725,11 @@ def evaluate_sequence(
     head_sdf: list[float] = []
     upper_sdf: list[float] = []
     hand_physics: list[bool] = []
+    hand_clean_physics: list[bool] = []
+    hand_clean3_physics: list[bool] = []
+    hand_clean5_physics: list[bool] = []
+    hand_object_deep2mm_frame: list[bool] = []
+    hand_object_deep3mm_frame: list[bool] = []
     hand_object_deep_frame: list[bool] = []
     hand_object_contact_dists: list[float] = []
     leg_physics: list[bool] = []
@@ -606,6 +801,26 @@ def evaluate_sequence(
                     hand_object_frame_dists.append(float(con.dist))
                 leg_contact = leg_contact or other[0] in lower_gids
         hand_physics.append(hand_contact)
+        hand_clean_physics.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) >= config.clean_contact_penetration_m
+        )
+        hand_clean3_physics.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) >= -0.003
+        )
+        hand_clean5_physics.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) >= -0.005
+        )
+        hand_object_deep2mm_frame.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) < config.clean_contact_penetration_m
+        )
+        hand_object_deep3mm_frame.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) < -0.003
+        )
         hand_object_deep_frame.append(
             bool(hand_object_frame_dists)
             and min(hand_object_frame_dists) < config.deep_contact_dist_m
@@ -663,10 +878,31 @@ def evaluate_sequence(
         "hand_geom_penetration_5mm_frac": frac(hand_arr < -0.005),
         "hand_geom_deep_penetration_2cm_frac": frac(hand_arr < config.deep_penetration_m),
         "hand_object_physics_contact_frac": frac(np.asarray(hand_physics, dtype=bool)),
+        "hand_object_clean_physics_contact_frac": frac(np.asarray(hand_clean_physics, dtype=bool)),
+        "hand_object_physics_contact_3mm_frac": frac(np.asarray(hand_clean3_physics, dtype=bool)),
+        "hand_object_physics_contact_5mm_frac": frac(np.asarray(hand_clean5_physics, dtype=bool)),
+        "hand_object_physics_penetration_3mm_frame_frac": frac(
+            np.asarray(hand_object_deep3mm_frame, dtype=bool)
+        ),
+        "hand_object_physics_penetration_5mm_frame_frac": frac(
+            np.asarray(hand_object_deep_frame, dtype=bool)
+        ),
         "hand_object_con_dist_mean_m": mean_or_nan(hand_object_contact_dists),
         "hand_object_con_dist_min_m": min_or_nan(hand_object_contact_dists),
+        "hand_object_con_dist_frac_lt_neg2mm": contact_frac_lt(
+            hand_object_contact_dists, config.clean_contact_penetration_m
+        ),
+        "hand_object_con_dist_frac_lt_neg3mm": contact_frac_lt(
+            hand_object_contact_dists, -0.003
+        ),
         "hand_object_con_dist_frac_lt_neg5mm": contact_frac_lt(
             hand_object_contact_dists, config.deep_contact_dist_m
+        ),
+        "hand_object_con_deep2mm_frame_frac": frac(
+            np.asarray(hand_object_deep2mm_frame, dtype=bool)
+        ),
+        "hand_object_con_deep3mm_frame_frac": frac(
+            np.asarray(hand_object_deep3mm_frame, dtype=bool)
         ),
         "hand_object_con_deep5mm_frame_frac": frac(
             np.asarray(hand_object_deep_frame, dtype=bool)
@@ -701,5 +937,5 @@ def evaluate_sequence(
     # E154: body tracking vs fixed kin truth + masked contact (real 3cm).
     # Always populated (NaN when refs not supplied) so METRIC_FIELDS stays complete.
     out.update(_tracking_metrics(qpos, kin_ref_path, config))
-    out.update(_masked_contact_metrics(hand_physics, hand_arr, contact_mask_path, person_idx))
+    out.update(_masked_contact_metrics(hand_physics, hand_clean_physics, hand_clean3_physics, hand_clean5_physics, hand_arr, contact_mask_path, person_idx))
     return out

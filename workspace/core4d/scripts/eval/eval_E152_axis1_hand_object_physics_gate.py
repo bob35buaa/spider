@@ -19,7 +19,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.core_metrics import (
+    EVAL_METRIC_STANDARD_ID,
     METRIC_FIELDS,
+    STANDARD_DELTA_METRICS,
+    STANDARD_LOWER_IS_WORST_METRICS,
+    STANDARD_SUMMARY_METRICS,
     contact_mask_for_case,
     evaluate_sequence,
     kin_ref_for_scene,
@@ -32,57 +36,14 @@ RESULT_ROOT = REPO / "workspace/core4d/results/E152/axis1_hand_object_physics_ga
 
 METHODS = ["baseline", "gateA", "b1", "gateA_b1"]
 SUMMARY_METRICS = [
-    "hand_geom_near_5cm_frac",
-    "hand_geom_near_10cm_frac",
-    "hand_geom_penetration_frac",
-    "hand_geom_penetration_2mm_frac",
-    "hand_geom_penetration_5mm_frac",
-    "hand_geom_deep_penetration_2cm_frac",
-    "hand_object_physics_contact_frac",
-    "hand_object_con_dist_mean_m",
-    "hand_object_con_dist_min_m",
-    "hand_object_con_dist_frac_lt_neg5mm",
-    "hand_object_con_deep5mm_frame_frac",
-    "hand_floor_near_2cm_frac",
-    "hand_floor_penetration_frac",
-    "hand_floor_min_z_m",
-    "hand_floor_physics_contact_frac",
-    "hand_floor_con_dist_min_m",
-    "hand_floor_con_dist_frac_lt_neg5mm",
-    "hand_floor_con_deep5mm_frame_frac",
-    "leg_penetration_frac",
-    "object_floor_contact_frac",
-    "pelvis_min_m",
-    "obj_err_mean_m",
+    *STANDARD_SUMMARY_METRICS,
     "cem_gate_valid_frac_mean",
     "cem_gate_fallback_used_mean",
     "cem_hand_gate_valid_frac_mean",
     "cem_hand_gate_selected_valid_frac_mean",
 ]
-DELTA_METRICS = [
-    "hand_geom_near_5cm_frac",
-    "hand_geom_near_10cm_frac",
-    "hand_geom_penetration_frac",
-    "hand_geom_penetration_2mm_frac",
-    "hand_geom_penetration_5mm_frac",
-    "hand_object_physics_contact_frac",
-    "hand_object_con_dist_frac_lt_neg5mm",
-    "hand_object_con_deep5mm_frame_frac",
-    "hand_floor_near_2cm_frac",
-    "hand_floor_penetration_frac",
-    "hand_floor_physics_contact_frac",
-    "hand_floor_con_deep5mm_frame_frac",
-    "leg_penetration_frac",
-    "obj_err_mean_m",
-]
-LOWER_IS_WORST_METRICS = {
-    "pelvis_min_m",
-    "hand_floor_min_z_m",
-    "hand_object_con_dist_mean_m",
-    "hand_object_con_dist_min_m",
-    "hand_floor_con_dist_mean_m",
-    "hand_floor_con_dist_min_m",
-}
+DELTA_METRICS = list(STANDARD_DELTA_METRICS)
+LOWER_IS_WORST_METRICS = set(STANDARD_LOWER_IS_WORST_METRICS)
 
 # E154 tracking-gated success threshold (matches EvalConfig.track_pelvis_terminal_th_m).
 TRACK_PELVIS_TERMINAL_TH_M = 0.08
@@ -405,8 +366,17 @@ def delta_rows(metric_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             item["track_pelvis_z_err_terminal_m"] = row.get("track_pelvis_z_err_terminal_m", "")
             item["track_root_pos_err_terminal_m"] = row.get("track_root_pos_err_terminal_m", "")
             item["hand_object_physics_contact_in_mask_frac"] = row.get("hand_object_physics_contact_in_mask_frac", "")
+            item["hand_object_clean_physics_contact_in_mask_frac"] = row.get("hand_object_clean_physics_contact_in_mask_frac", "")
+            item["hand_object_physics_contact_3mm_in_mask_frac"] = row.get("hand_object_physics_contact_3mm_in_mask_frac", "")
+            item["hand_object_physics_contact_5mm_in_mask_frac"] = row.get("hand_object_physics_contact_5mm_in_mask_frac", "")
             item["hand_object_false_contact_frac"] = row.get("hand_object_false_contact_frac", "")
+            item["hand_object_clean_false_contact_frac"] = row.get("hand_object_clean_false_contact_frac", "")
+            item["hand_object_false_contact_3mm_frac"] = row.get("hand_object_false_contact_3mm_frac", "")
+            item["hand_object_false_contact_5mm_frac"] = row.get("hand_object_false_contact_5mm_frac", "")
             item["hand_object_release_false_contact_frac"] = row.get("hand_object_release_false_contact_frac", "")
+            item["hand_object_clean_release_false_contact_frac"] = row.get("hand_object_clean_release_false_contact_frac", "")
+            item["hand_object_release_false_contact_3mm_frac"] = row.get("hand_object_release_false_contact_3mm_frac", "")
+            item["hand_object_release_false_contact_5mm_frac"] = row.get("hand_object_release_false_contact_5mm_frac", "")
             pz_term = finite(row.get("track_pelvis_z_err_terminal_m"))
             item["success_tracked"] = bool(
                 item["success_pen2mm_down_contact_keep"]
@@ -595,8 +565,17 @@ def main() -> None:
         "track_pelvis_z_err_terminal_m",
         "track_root_pos_err_terminal_m",
         "hand_object_physics_contact_in_mask_frac",
+        "hand_object_clean_physics_contact_in_mask_frac",
+        "hand_object_physics_contact_3mm_in_mask_frac",
+        "hand_object_physics_contact_5mm_in_mask_frac",
         "hand_object_false_contact_frac",
+        "hand_object_clean_false_contact_frac",
+        "hand_object_false_contact_3mm_frac",
+        "hand_object_false_contact_5mm_frac",
         "hand_object_release_false_contact_frac",
+        "hand_object_clean_release_false_contact_frac",
+        "hand_object_release_false_contact_3mm_frac",
+        "hand_object_release_false_contact_5mm_frac",
         "success_tracked",
         "success_pen_down_contact_keep",
         "success_pen2mm_down_contact_keep",
@@ -605,7 +584,13 @@ def main() -> None:
     write_tsv(eval_dir / "e152_delta_summary.tsv", delta_summaries, ["method", "case_count", "success_cases", "success_cases_2mm", "success_cases_tracked", *[f"{m}_delta_{s}" for m in DELTA_METRICS for s in ("mean", "std", "worst")]])
     write_tsv(eval_dir / "e152_missing.tsv", missing, ["variant", "method", "missing"])
     write_tsv(eval_dir / "e152_visual_sheets.tsv", visual_rows, ["short_case_id", "frame", "sheet"])
-    write_json(eval_dir / "e152_eval_summary.json", {"method_rows": len(metric_rows), "delta_rows": len(deltas), "missing": len(missing), "visual_sheets": len(visual_rows)})
+    write_json(eval_dir / "e152_eval_summary.json", {
+        "metric_standard_id": EVAL_METRIC_STANDARD_ID,
+        "method_rows": len(metric_rows),
+        "delta_rows": len(deltas),
+        "missing": len(missing),
+        "visual_sheets": len(visual_rows),
+    })
     write_summary_md(eval_dir / "e152_summary.md", summaries, delta_summaries, missing, visual_rows)
     print(f"E152 eval: method_rows={len(metric_rows)} delta_rows={len(deltas)} missing={len(missing)} visual_sheets={len(visual_rows)}")
 

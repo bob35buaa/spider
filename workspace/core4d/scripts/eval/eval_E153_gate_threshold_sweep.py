@@ -24,6 +24,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.core_metrics import (  # noqa: E402
     EvalConfig,
+    EVAL_METRIC_STANDARD_ID,
+    STANDARD_DELTA_METRICS,
+    STANDARD_MASK_DELTA_METRICS,
+    STANDARD_TRACK_DIAG,
     contact_mask_for_case,
     evaluate_sequence,
     kin_ref_for_scene,
@@ -60,16 +64,7 @@ CASES: dict[str, dict[str, str]] = {
 }
 
 # Metrics carried into per-row TSV + deltas.
-DELTA_METRICS = [
-    "hand_geom_near_5cm_frac",
-    "hand_geom_penetration_frac",
-    "hand_geom_penetration_2mm_frac",
-    "hand_geom_penetration_5mm_frac",
-    "hand_object_physics_contact_frac",
-    "hand_object_con_dist_frac_lt_neg5mm",
-    "leg_penetration_frac",
-    "obj_err_mean_m",
-]
+DELTA_METRICS = list(STANDARD_DELTA_METRICS)
 GATE_HEALTH_KEYS = {
     "cem_hand_gate_valid_frac": ("mean", "hand_gate_valid_frac"),
     "cem_gate_fallback_used": ("mean", "gate_fallback_used"),
@@ -79,24 +74,10 @@ GATE_HEALTH_KEYS = {
 
 # E154 absolute diagnostics carried per grid row (tracking vs fixed kin truth +
 # real-3cm masked contact). Tracking gates success; false-contact is diagnostic.
-TRACK_DIAG = [
-    "track_pelvis_z_err_terminal_m",
-    "track_pelvis_z_err_mean_m",
-    "track_root_pos_err_terminal_m",
-    "track_joint_err_terminal_rad",
-    "ref_contact_frac",
-    "hand_object_physics_contact_in_mask_frac",
-    "hand_object_false_contact_frac",
-    "hand_object_release_false_contact_frac",
-    "hand_geom_penetration_2mm_in_mask_frac",
-    "hand_geom_penetration_5mm_in_mask_frac",
-]
+TRACK_DIAG = list(STANDARD_TRACK_DIAG)
 # masked-contact metrics that also get a delta-vs-b1 (the legit replacements for
 # the full-sequence physC / pen deltas)
-MASK_DELTA = [
-    "hand_object_physics_contact_in_mask_frac",
-    "hand_geom_penetration_2mm_in_mask_frac",
-]
+MASK_DELTA = list(STANDARD_MASK_DELTA_METRICS)
 
 
 def sdf_tag(x: float) -> str:
@@ -274,8 +255,14 @@ def main() -> None:
             item[f"{k}_std"] = std
             item[f"{k}_worst"] = worst
         # E154 diagnostics: tracking (worst=max err) + release_false + in-mask contact
-        for k in ("track_pelvis_z_err_terminal_m", "hand_object_release_false_contact_frac",
-                  "hand_object_physics_contact_in_mask_frac", "hand_object_false_contact_frac"):
+        for k in ("track_pelvis_z_err_terminal_m",
+                  "hand_object_release_false_contact_3mm_frac", "hand_object_release_false_contact_5mm_frac",
+                  "hand_object_physics_contact_3mm_in_mask_frac", "hand_object_physics_contact_5mm_in_mask_frac",
+                  "hand_object_false_contact_3mm_frac", "hand_object_false_contact_5mm_frac",
+                  "hand_object_clean_release_false_contact_frac",
+                  "hand_object_clean_physics_contact_in_mask_frac", "hand_object_clean_false_contact_frac",
+                  "hand_object_release_false_contact_frac", "hand_object_physics_contact_in_mask_frac",
+                  "hand_object_false_contact_frac"):
             vals = [float(r[k]) for r in rs if r.get(k) not in ("", None) and math.isfinite(float(r[k]))]
             item[f"{k}_mean"] = statistics.fmean(vals) if vals else math.nan
             item[f"{k}_worst"] = max(vals) if vals else math.nan
@@ -295,8 +282,13 @@ def main() -> None:
                          "hand_geom_near_5cm_frac", "hand_geom_near_10cm_frac",
                          "hand_geom_penetration_frac", "hand_geom_penetration_2mm_frac",
                          "hand_geom_penetration_5mm_frac", "hand_geom_deep_penetration_2cm_frac",
-                         "hand_object_physics_contact_frac", "hand_object_con_dist_mean_m",
-                         "hand_object_con_dist_min_m", "hand_object_con_dist_frac_lt_neg5mm",
+                         "hand_object_physics_contact_frac", "hand_object_clean_physics_contact_frac",
+                         "hand_object_physics_contact_3mm_frac", "hand_object_physics_contact_5mm_frac",
+                         "hand_object_physics_penetration_3mm_frame_frac",
+                         "hand_object_physics_penetration_5mm_frame_frac",
+                         "hand_object_con_dist_mean_m", "hand_object_con_dist_min_m",
+                         "hand_object_con_dist_frac_lt_neg2mm", "hand_object_con_dist_frac_lt_neg3mm",
+                         "hand_object_con_dist_frac_lt_neg5mm",
                          "leg_penetration_frac", "body_penetration_frac", "obj_err_mean_m")]
                      + TRACK_DIAG
                      + [dst for _, (_, dst) in GATE_HEALTH_KEYS.items()])
@@ -313,6 +305,15 @@ def main() -> None:
     combo_fields = (["min_sdf_m", "max_viol", "n_cases", "success_tracked_cases",
                      "success_pen2mm_cases", "success_pen0mm_cases", "fall_cases",
                      "track_pelvis_z_err_terminal_m_mean", "track_pelvis_z_err_terminal_m_worst",
+                     "hand_object_release_false_contact_3mm_frac_mean", "hand_object_release_false_contact_3mm_frac_worst",
+                     "hand_object_release_false_contact_5mm_frac_mean", "hand_object_release_false_contact_5mm_frac_worst",
+                     "hand_object_false_contact_3mm_frac_mean", "hand_object_false_contact_3mm_frac_worst",
+                     "hand_object_false_contact_5mm_frac_mean", "hand_object_false_contact_5mm_frac_worst",
+                     "hand_object_physics_contact_3mm_in_mask_frac_mean", "hand_object_physics_contact_3mm_in_mask_frac_worst",
+                     "hand_object_physics_contact_5mm_in_mask_frac_mean", "hand_object_physics_contact_5mm_in_mask_frac_worst",
+                     "hand_object_clean_release_false_contact_frac_mean", "hand_object_clean_release_false_contact_frac_worst",
+                     "hand_object_clean_false_contact_frac_mean", "hand_object_clean_false_contact_frac_worst",
+                     "hand_object_clean_physics_contact_in_mask_frac_mean", "hand_object_clean_physics_contact_in_mask_frac_worst",
                      "hand_object_release_false_contact_frac_mean", "hand_object_release_false_contact_frac_worst",
                      "hand_object_false_contact_frac_mean", "hand_object_false_contact_frac_worst",
                      "hand_object_physics_contact_in_mask_frac_mean", "hand_object_physics_contact_in_mask_frac_worst",
@@ -321,6 +322,7 @@ def main() -> None:
     write_tsv(eval_dir / "e153_combo_summary.tsv", combo_rows, combo_fields)
 
     write_json(eval_dir / "e153_eval_summary.json", {
+        "metric_standard_id": EVAL_METRIC_STANDARD_ID,
         "stage": stage, "metric_rows": len(metric_rows), "grid_rows": len(grid_rows),
         "combos": len(combo_rows), "missing": missing,
     })
