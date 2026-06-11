@@ -7,17 +7,17 @@ hooks:
   UserPromptSubmit:
     - hooks:
         - type: command
-          command: "EXP_WS=\"${EXPERIMENT_WORKSPACE:-workspace/v2}\"; if [ -f \"$EXP_WS/EXPERIMENT_TRACKER.md\" ]; then echo '[experiment-planning] 检测到实验项目。如果你在本次对话中还没有读取实验文件，请立即读取：$EXP_WS/EXPERIMENT_TRACKER.md、最新的 plan/ 和 log/ 文件、以及 $EXP_WS/progress.md'; fi"
+          command: "EXP_NAME=\"${EXPERIMENT_NAME:-core4d}\"; EXP_WS=\"${EXPERIMENT_WORKSPACE:-workspace/$EXP_NAME}\"; if [ -f \"$EXP_WS/EXPERIMENT_TRACKER.md\" ]; then echo '[experiment-planning] 检测到实验项目。如果你在本次对话中还没有读取实验文件，请立即读取：$EXP_WS/EXPERIMENT_TRACKER.md、最新的 plan/ 和 log/ 文件、以及 $EXP_WS/progress.md'; fi"
   PreToolUse:
     - matcher: "Write|Edit|Bash|Read|Glob|Grep"
       hooks:
         - type: command
-          command: "EXP_WS=\"${EXPERIMENT_WORKSPACE:-workspace/v2}\"; echo '=== TRACKER ===' && tail -15 \"$EXP_WS/EXPERIMENT_TRACKER.md\" 2>/dev/null; echo '=== CURRENT PLAN ===' && ls -1 \"$EXP_WS/plan/\"*.md 2>/dev/null | sort | tail -1 | xargs head -15 2>/dev/null; true"
+          command: "EXP_NAME=\"${EXPERIMENT_NAME:-core4d}\"; EXP_WS=\"${EXPERIMENT_WORKSPACE:-workspace/$EXP_NAME}\"; echo '=== TRACKER ===' && tail -15 \"$EXP_WS/EXPERIMENT_TRACKER.md\" 2>/dev/null; echo '=== CURRENT PLAN ===' && ls -1 \"$EXP_WS/plan/\"*.md 2>/dev/null | sort | tail -1 | xargs head -15 2>/dev/null; true"
   PostToolUse:
     - matcher: "Write|Edit"
       hooks:
         - type: command
-          command: "EXP_WS=\"${EXPERIMENT_WORKSPACE:-workspace/v2}\"; if [ -f \"$EXP_WS/EXPERIMENT_TRACKER.md\" ]; then echo '[experiment-planning] 请更新 progress.md 记录你刚才做了什么。如果实验已完成，请更新 EXPERIMENT_TRACKER.md 的状态和结果。'; fi"
+          command: "EXP_NAME=\"${EXPERIMENT_NAME:-core4d}\"; EXP_WS=\"${EXPERIMENT_WORKSPACE:-workspace/$EXP_NAME}\"; if [ -f \"$EXP_WS/EXPERIMENT_TRACKER.md\" ]; then echo '[experiment-planning] 请更新 progress.md 记录你刚才做了什么。如果实验已完成，请更新 EXPERIMENT_TRACKER.md 的状态和结果。'; fi"
   Stop:
     - hooks:
         - type: command

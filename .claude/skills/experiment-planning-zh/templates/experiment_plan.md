@@ -48,7 +48,7 @@
 ## 训练命令
 
 ```bash
-bash workspace/v2/scripts/train/train_core4d_{version}.sh R{XXX} {GPU}
+bash workspace/{exp_name}/scripts/train/train_{exp_name}_{version}.sh R{XXX} {GPU}
 ```
 
 ## 成功标准

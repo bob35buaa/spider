@@ -2,8 +2,8 @@
 
 **日期**: {YYYY-MM-DD}
 **实验域 (exp_name)**: `{exp_name}`  <!-- 大实验方向标识，如 core4d、holosoma_hdmi。决定脚本命名、logs 子目录、NPZ 输出路径 -->
-**对应Plan**: `workspace/v2/plan/{NN}_{version}_{topic}_plan.md`
-**前置**: `workspace/v2/log/{prev_NN}_{prev_version}_{prev_topic}.md`
+**对应Plan**: `workspace/{exp_name}/plan/{NN}_{version}_{topic}_plan.md`
+**前置**: `workspace/{exp_name}/log/{prev_NN}_{prev_version}_{prev_topic}.md`
 
 ## 1. 背景
 
@@ -20,16 +20,16 @@
 
 ### 运行指令
 
-> **脚本规则**：脚本保存在 `workspace/v2/scripts/`，确保可复现。若脚本不存在，**必须先创建再运行**。CORE4D 的 launch/pull 真实入口放 `scripts/launch/active/`，评估 shell 入口放 `scripts/eval/wrappers/`。
+> **脚本规则**：脚本保存在 `workspace/{exp_name}/scripts/`，确保可复现。若脚本不存在，**必须先创建再运行**。CORE4D 的 launch/pull 真实入口放 `scripts/launch/active/`，评估 shell 入口放 `scripts/eval/wrappers/`。
 
-**训练**（脚本：`workspace/v2/scripts/train/train_{version}.sh`）：
+**训练**（脚本：`workspace/{exp_name}/scripts/train/train_{exp_name}_{version}.sh`）：
 ```bash
-bash workspace/v2/scripts/train/train_{version}.sh R{XXX} {GPU}
+bash workspace/{exp_name}/scripts/train/train_{exp_name}_{version}.sh R{XXX} {GPU}
 ```
 
-**评估**（脚本：`workspace/v2/scripts/eval/wrappers/eval_{version}.sh`）：
+**评估**（脚本：`workspace/{exp_name}/scripts/eval/wrappers/eval_{exp_name}_{version}.sh`）：
 ```bash
-bash workspace/v2/scripts/eval/wrappers/eval_{version}.sh R{XXX} {GPU}
+bash workspace/{exp_name}/scripts/eval/wrappers/eval_{exp_name}_{version}.sh R{XXX} {GPU}
 ```
 
 **验证指令**：

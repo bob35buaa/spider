@@ -10,7 +10,9 @@ VERSION="${1:?用法: $0 <version> <topic> [run_id]}"
 TOPIC="${2:?用法: $0 <version> <topic> [run_id]}"
 RUN_ID="${3:-}"
 
-EXP_WS="${EXPERIMENT_WORKSPACE:-workspace/v2}"
+EXP_NAME="${EXPERIMENT_NAME:-core4d}"
+EXP_WS="${EXPERIMENT_WORKSPACE:-workspace/$EXP_NAME}"
+EXP_NAME="${EXPERIMENT_NAME:-$(basename "$EXP_WS")}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR/../templates"
 
@@ -46,7 +48,10 @@ if [ ! -f "$PLAN_FILE" ]; then
     if [ -f "$TEMPLATE_DIR/experiment_plan.md" ]; then
         sed -e "s/{XXX}/${RUN_ID#R}/g" \
             -e "s/{X\.X}/${VERSION#v}/g" \
+            -e "s/{Version}/$VERSION/g" \
             -e "s/{version}/$VERSION/g" \
+            -e "s/{exp_name}/$EXP_NAME/g" \
+            -e "s/{topic}/$TOPIC/g" \
             -e "s/{标题}/[待填写]/g" \
             "$TEMPLATE_DIR/experiment_plan.md" > "$PLAN_FILE"
     else
@@ -75,7 +80,7 @@ if [ ! -f "$PLAN_FILE" ]; then
 ## 训练命令
 
 \`\`\`bash
-bash workspace/v2/scripts/train/train_core4d_$VERSION.sh $RUN_ID 0
+bash $EXP_WS/scripts/train/train_${EXP_NAME}_$VERSION.sh $RUN_ID 0
 \`\`\`
 
 ## 成功标准
@@ -95,7 +100,10 @@ if [ ! -f "$LOG_FILE" ]; then
     if [ -f "$TEMPLATE_DIR/experiment_log.md" ]; then
         sed -e "s/{XXX}/${RUN_ID#R}/g" \
             -e "s/{X\.X}/${VERSION#v}/g" \
+            -e "s/{Version}/$VERSION/g" \
             -e "s/{version}/$VERSION/g" \
+            -e "s/{exp_name}/$EXP_NAME/g" \
+            -e "s/{topic}/$TOPIC/g" \
             -e "s/{YYYY-MM-DD}/$DATE/g" \
             -e "s/{NN}/$NN/g" \
             "$TEMPLATE_DIR/experiment_log.md" > "$LOG_FILE"
@@ -104,7 +112,8 @@ if [ ! -f "$LOG_FILE" ]; then
 # V${VERSION#v} 实验结果
 
 **日期**: $DATE
-**对应Plan**: \`workspace/v2/plan/${NN}_${VERSION}_${TOPIC}_plan.md\`
+**实验域 (exp_name)**: \`$EXP_NAME\`
+**对应Plan**: \`$EXP_WS/plan/${NN}_${VERSION}_${TOPIC}_plan.md\`
 
 ## 1. 背景
 

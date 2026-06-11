@@ -2,7 +2,8 @@
 # 检查 EXPERIMENT_TRACKER.md 中实验完成状态
 # 由 Stop 钩子调用，始终以退出码 0 结束
 
-EXP_WS="${EXPERIMENT_WORKSPACE:-workspace/v2}"
+EXP_NAME="${EXPERIMENT_NAME:-core4d}"
+EXP_WS="${EXPERIMENT_WORKSPACE:-workspace/$EXP_NAME}"
 TRACKER="$EXP_WS/EXPERIMENT_TRACKER.md"
 
 if [ ! -f "$TRACKER" ]; then
