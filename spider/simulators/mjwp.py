@@ -1526,6 +1526,23 @@ def get_reward(
                     * hand_support_score
                     * hand_support_gate
                 )
+                # E155-D: neutral baseline when gate=0 (like contact_hdmi_rew)
+                if config.hand_support_neutral_baseline > 0.0:
+                    hand_support_rew = (
+                        hand_support_rew
+                        + config.hand_support_neutral_baseline * (1.0 - hand_support_gate)
+                    )
+                # E155-C: tail decay (last decay_frac of episode)
+                if config.hand_support_decay_frac > 0.0:
+                    time_arr = wp.to_torch(env.data_wp.time)
+                    total_time = float(config.max_sim_steps) * config.sim_dt
+                    decay_start = total_time * (1.0 - config.hand_support_decay_frac)
+                    if total_time > decay_start:
+                        decay_factor = torch.clamp(
+                            (total_time - time_arr) / (total_time - decay_start),
+                            0.0, 1.0,
+                        )
+                        hand_support_rew = hand_support_rew * decay_factor
             if (
                 config.nonhand_support_penalty_scale > 0.0
                 and config.nonhand_support_penalty_geom_ids

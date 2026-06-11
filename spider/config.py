@@ -204,6 +204,8 @@ class Config:
     contact_hdmi_mask_path: str = ""
     contact_hdmi_mask_person_idx: int = 0
     contact_hdmi_mask_time_axis: str = "auto"  # "auto" | "spider" | "eval"
+    contact_hdmi_mask_carry_union: bool = False  # E155: carry task L/R union
+    contact_hdmi_mask_ramp_frames: int = 0  # E155: linear ramp frames at boundary, 0=off
     # E040: dynamic per-frame contact target (from ref FK)
     contact_hdmi_dynamic_target: bool = (
         False  # True=use per-frame ref-derived target instead of fixed
@@ -367,6 +369,8 @@ class Config:
         default_factory=lambda: ["lh", "rh"]
     )
     hand_support_geom_ids: list[int] = field(default_factory=list)
+    hand_support_decay_frac: float = 0.0  # E155-C: tail decay fraction, 0=off
+    hand_support_neutral_baseline: float = 0.0  # E155-D: gate=0 neutral value, 0=current
     nonhand_support_penalty_scale: float = 0.0
     nonhand_support_penalty_margin_m: float = 0.02
     nonhand_support_penalty_gate_source: str = "contact_mask"

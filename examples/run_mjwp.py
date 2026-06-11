@@ -877,6 +877,38 @@ def main(config: Config):
         ).astype(np.int64)
         return mask_np[idx].astype(np.float32)
 
+    def _apply_mask_ramp(mask_np: np.ndarray, ramp_frames: int) -> np.ndarray:
+        """E155: linear ramp-down at the last contact boundary, centered on the edge.
+
+        The midpoint of the ramp (mask=0.5) is placed at the original boundary B
+        (last frame where mask > 0.5 before ramp).
+
+        Args:
+            mask_np: (T, n_eef) float32, after union both columns are identical.
+            ramp_frames: total ramp width in sim frames.
+        Returns:
+            (T, n_eef) float32 with ramp applied.
+        """
+        mask_np = mask_np.copy()
+        # Find last frame with any contact (boundary B)
+        any_active = mask_np.max(axis=1)
+        active_idx = np.where(any_active > 0.5)[0]
+        if len(active_idx) == 0:
+            return mask_np
+        B = int(active_idx[-1])
+        half = ramp_frames // 2
+        ramp_start = max(B - half, 0)
+        ramp_end = min(B + half + 1, mask_np.shape[0])
+        ramp_len = ramp_end - ramp_start
+        if ramp_len <= 1:
+            return mask_np
+        ramp_values = np.linspace(1.0, 0.0, ramp_len).astype(np.float32)
+        # Ensure before ramp stays 1, after ramp stays 0
+        mask_np[:ramp_start] = np.where(mask_np[:ramp_start] > 0.5, 1.0, mask_np[:ramp_start])
+        mask_np[ramp_start:ramp_end] = ramp_values[:, None]
+        mask_np[ramp_end:] = 0.0
+        return mask_np
+
     # E039b/E078: precompute per-EEF contact mask.
     if config.contact_hdmi_gain > 0.0 and config.hand_approach_body_ids:
         obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
@@ -910,6 +942,12 @@ def main(config: Config):
                 )
             original_len = per_eef_mask_np.shape[0]
             per_eef_mask_np = _resize_contact_mask(per_eef_mask_np, target_len)
+            # E155: carry union (max L/R) + boundary ramp
+            if config.contact_hdmi_mask_carry_union:
+                union = per_eef_mask_np.max(axis=1, keepdims=True)
+                per_eef_mask_np = np.broadcast_to(union, per_eef_mask_np.shape).copy()
+            if config.contact_hdmi_mask_ramp_frames > 0:
+                per_eef_mask_np = _apply_mask_ramp(per_eef_mask_np, config.contact_hdmi_mask_ramp_frames)
             approach_mask_t = torch.tensor(per_eef_mask_np, device=config.device)
             active_pct = per_eef_mask_np.mean(axis=0) * 100
             loguru.logger.info(
