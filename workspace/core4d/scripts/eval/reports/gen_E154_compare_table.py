@@ -49,6 +49,9 @@ DEFAULT_E153_GRID_DELTA = (
 DEFAULT_OMNIRETARGET_METRICS = (
     RESULTS / "E154/omniretarget_eval/e154_omniretarget_method_metrics.tsv"
 )
+DEFAULT_E155_METHOD_METRICS = (
+    RESULTS / "E155/eval/full/e155_method_metrics.tsv"
+)
 
 CASE_ORDER = ["box021_029_p2", "box004_083_p2", "box023_person2"]
 CASE_ALIASES = {
@@ -298,6 +301,7 @@ def load_inputs(args) -> tuple[dict[str, Summary], dict[tuple[float, float], Sum
     e153_grid = select_cases(read_tsv(args.e153_grid_delta))
     omni = select_cases(read_tsv(args.omniretarget_metrics))
     omni = [r for r in omni if is_omniretarget_row(r)]
+    e155 = select_cases(read_tsv(args.e155_method_metrics))
 
     summaries: dict[str, Summary] = {}
     summaries["omniretarget"] = summarize_metric_rows(
@@ -344,6 +348,13 @@ def load_inputs(args) -> tuple[dict[str, Summary], dict[tuple[float, float], Sum
         msdf, mviol = key
         label = f"gateA+b1\n(sdf={msdf:.3f}, viol={mviol:.2f})"
         grid[key] = summarize_grid_rows(rows, label, rel(args.e153_grid_delta))
+
+    e155_decay = [r for r in e155 if r.get("method") == "decay"]
+    summaries["e155_decay"] = summarize_metric_rows(
+        e155_decay,
+        label="E155 decay\n(release smooth)",
+        source=rel(args.e155_method_metrics),
+    )
 
     return summaries, grid, e153_grid
 
@@ -675,7 +686,7 @@ def write_sheet_method_compare(wb, summaries: dict[str, Summary], grid: dict[tup
         1,
         1,
         len(cols),
-        value="E154 评测修正: E152/E153 方法对比 (3-case 均值, OmniRetarget 为 baseline)",
+        value="E154 评测修正: E152/E153/E155 方法对比 (3-case 均值, OmniRetarget 为 baseline)",
         bold=True,
         fg="FFFFFF",
         bg="2F2F2F",
@@ -686,15 +697,18 @@ def write_sheet_method_compare(wb, summaries: dict[str, Summary], grid: dict[tup
         set_cell(ws, 2, 1 + i, label, bold=True, bg=SUB_BG, size=9)
     ws.row_dimensions[2].height = 55
 
+    e153_best = grid[(-0.01, 0.10)]
+    e153_best.label = "gateA+b1 *\n(sdf=-0.010, viol=0.100)\n[E153最优]"
+    e155_decay = summaries["e155_decay"]
     rows = [
         summaries["omniretarget"],
         summaries["e152_baseline"],
         summaries["e152_gateA"],
         summaries["e152_b1"],
         summaries["e152_gateA_b1"],
-        grid[(-0.01, 0.10)],
+        e153_best,
+        e155_decay,
     ]
-    rows[-1].label = "gateA+b1 *\n(sdf=-0.010, viol=0.100)\n[E153最优]"
     ref = summaries["omniretarget"]
     ranked_rows: list[tuple[int, Summary]] = []
     for ri, summary in enumerate(rows):
@@ -706,7 +720,7 @@ def write_sheet_method_compare(wb, summaries: dict[str, Summary], grid: dict[tup
             ref,
             METHOD_BG[ri % 2],
             is_ref=(summary is ref),
-            is_best=summary is rows[-1],
+            is_best=(summary is e153_best or summary is e155_decay),
             include_gate=False,
             source_col=TAIL_START_COL + 2,
         )
@@ -819,6 +833,7 @@ def write_sheet_notes(wb, summaries: dict[str, Summary]):
         ("b1 / gateA / gateA+b1", summaries["e152_gateA_b1"].source, "E152 方法对比输入。"),
         ("E153 threshold sweep", summaries["e153_b1"].source, "E153 baseline/b1 聚合输入。"),
         ("E153 grid per-case", "workspace/core4d/results/E153/gate_threshold_sweep/eval/full/e153_grid_delta_vs_b1.tsv", "E153 6 个 gate 配置的 per-case 明细、success_tracked、success_pen2mm 与 gate 统计。"),
+        ("E155 decay", summaries["e155_decay"].source, "E155 release smooth transition 的 decay 方案，加入方法对比页；指标同样来自 E154+ 固定 3mm/5mm 物理接触标准。"),
         ("", "", ""),
         ("-- 指标 --", "", ""),
         ("succ_tracked", "track_pelvis_z_err_terminal_m < 0.08", "body tracking 门控。"),
@@ -860,6 +875,7 @@ def parse_args():
     parser.add_argument("--e153-method-metrics", type=pathlib.Path, default=DEFAULT_E153_METHOD_METRICS)
     parser.add_argument("--e153-grid-delta", type=pathlib.Path, default=DEFAULT_E153_GRID_DELTA)
     parser.add_argument("--omniretarget-metrics", type=pathlib.Path, default=DEFAULT_OMNIRETARGET_METRICS)
+    parser.add_argument("--e155-method-metrics", type=pathlib.Path, default=DEFAULT_E155_METHOD_METRICS)
     return parser.parse_args()
 
 
