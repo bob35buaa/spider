@@ -33,7 +33,11 @@ ssh spider-remote "cd /home/xiayb/pHRI_workspace/spider && git pull"
 
 ### 2. 编写远程运行脚本
 
-在 `workspace/{exp_name}/scripts/` 下创建脚本，模板如下：
+在 `workspace/{exp_name}/scripts/launch/active/` 下创建真实脚本。
+如果需要保留旧命令，再在 `workspace/{exp_name}/scripts/` 根目录放 thin wrapper。
+CORE4D 新实验不要把真实 `run_E*.sh` / `pull_E*.sh` 实现直接写在 `scripts/` 根目录。
+
+模板如下：
 
 ```bash
 #!/bin/bash
@@ -100,19 +104,21 @@ ssh spider-remote "tail -1 /home/xiayb/pHRI_workspace/spider/<logs_dir>/<name>.l
 ### 5. 回收结果
 
 ```bash
-# SCP 结果 (npz + mp4)
-scp spider-remote:/home/xiayb/pHRI_workspace/spider/<results_dir>/*.npz <local_results_dir>/
-scp spider-remote:/home/xiayb/pHRI_workspace/spider/<results_dir>/*.mp4 <local_results_dir>/
+# 优先固化为 pull 脚本
+bash workspace/core4d/scripts/launch/active/pull_E###_remote_results.sh <stage>
 
-# SCP 运行日志
-scp spider-remote:/home/xiayb/pHRI_workspace/spider/<logs_dir>/*.log <local_logs_dir>/
+# 如需兼容历史命令，可通过根目录 wrapper 调用
+bash workspace/core4d/scripts/pull_E###_remote_results.sh <stage>
 ```
 
 ### 6. 本地评估
 
 ```bash
-# 对每个结果运行 eval
-uv run workspace/core4d/scripts/eval/eval_comprehensive.py <task> <result.npz>
+# 使用当前 eval 结构
+python workspace/core4d/scripts/eval/runners/eval_E###_<topic>.py <stage>
+
+# 若已保留兼容 wrapper，也可使用旧根路径
+python workspace/core4d/scripts/eval/eval_E###_<topic>.py <stage>
 ```
 
 ### 7. 离线可视化 (不需要重跑实验)
@@ -174,7 +180,8 @@ python workspace/core4d/scripts/gen_experiment.py \
     --expected-npz-count 20
 ```
 
-这会额外生成 `workspace/core4d/scripts/watch_and_pull_e153.sh`。
+这会额外生成 watcher。新脚本应优先放在 `workspace/core4d/scripts/launch/active/`；
+若 generator 仍输出到根目录，后续需要迁移真实实现到 `launch/active/` 并保留根 wrapper。
 
 可选参数：
 - `--remote-host` 覆盖远程主机 (默认 `spider-remote`)
@@ -186,10 +193,10 @@ python workspace/core4d/scripts/gen_experiment.py \
 ```bash
 # 复制模板并替换占位符
 cp workspace/core4d/scripts/templates/watch_and_pull_template.sh \
-   workspace/core4d/scripts/watch_and_pull_e153.sh
+   workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
 sed -i 's/{{EXP_ID}}/E153/g; s/{{REMOTE_HOST}}/spider-remote/g; ...' \
-   workspace/core4d/scripts/watch_and_pull_e153.sh
-chmod +x workspace/core4d/scripts/watch_and_pull_e153.sh
+   workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
+chmod +x workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
 ```
 
 ### 启动 watcher
@@ -197,10 +204,10 @@ chmod +x workspace/core4d/scripts/watch_and_pull_e153.sh
 ```bash
 # 在后台 tmux 中运行 (不怕终端断开)
 tmux new-session -d -s e153_watcher \
-  "bash workspace/core4d/scripts/watch_and_pull_e153.sh"
+  "bash workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh"
 
 # 或直接前台运行
-bash workspace/core4d/scripts/watch_and_pull_e153.sh
+bash workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
 ```
 
 ### 环境变量覆盖
@@ -209,7 +216,7 @@ bash workspace/core4d/scripts/watch_and_pull_e153.sh
 
 ```bash
 INTERVAL_SECONDS=300 EXPECTED_NPZ_COUNT=30 \
-  bash workspace/core4d/scripts/watch_and_pull_e153.sh
+  bash workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
 ```
 
 ## 并行策略

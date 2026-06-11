@@ -80,7 +80,11 @@ Plan → Implement → Train → Evaluate → Log → Update Tracker
 - 记录完整 logs 路径
 
 ### 4. Evaluate（评估）
-- 使用 `workspace/{exp_name}/scripts/eval/` 下的脚本
+- 使用 `workspace/{exp_name}/scripts/eval/` 下的当前评估结构：
+  - 活跃 evaluator 实现放 `scripts/eval/runners/`
+  - 表格/report 生成放 `scripts/eval/reports/`
+  - shell 入口放 `scripts/eval/wrappers/`
+  - 旧根路径只作为兼容 wrapper
 - GUI 观察记录到 log
 - 量化指标对比表
 
@@ -109,7 +113,9 @@ Plan → Implement → Train → Evaluate → Log → Update Tracker
 | 日志 | `log/{NN}_{version}_{topic}.md` | `log/11_v5.0_results.md` |
 | Run ID | `R{XXX}` (全局递增) | `R027` |
 | 训练脚本 | `scripts/train/train_{exp_name}_{version}.sh` | `scripts/train/train_core4d_v5.0.sh` |
-| 评估脚本 | `scripts/eval/eval_{exp_name}_{version}.sh` | `scripts/eval/eval_core4d_v5.0.sh` |
+| 评估 runner | `scripts/eval/runners/eval_{exp_id}_{topic}.py` | `scripts/eval/runners/eval_E153_gate_threshold_sweep.py` |
+| 评估 shell wrapper | `scripts/eval/wrappers/eval_{exp_id}_{topic}.sh` | `scripts/eval/wrappers/eval_E153_gate_threshold_sweep.sh` |
+| launch/pull 脚本 | `scripts/launch/active/{run,pull}_{exp_id}_*.sh` | `scripts/launch/active/run_E153_remote.sh` |
 | 训练日志目录 | `logs/{exp_name}/{run_dir}/` | `logs/core4d/R027_v5.0/` |
 | NPZ 输出 | `workspace/{exp_name}/results/` | `workspace/core4d/results/` |
 
@@ -163,10 +169,36 @@ if 训练/实验失败:
 | 脚本类型 | 存放路径 | 命名 |
 |---------|---------|------|
 | 训练脚本 | `workspace/{exp_name}/scripts/train/` | `train_{exp_name}_{version}.sh` |
-| 评估脚本 | `workspace/{exp_name}/scripts/eval/` | `eval_{exp_name}_{version}.sh` |
-| **远程并行脚本** | `workspace/{exp_name}/scripts/` | `run_{exp_id}_remote.sh` |
+| 评估 runner | `workspace/{exp_name}/scripts/eval/runners/` | `eval_{exp_id}_{topic}.py` |
+| 评估 shell wrapper | `workspace/{exp_name}/scripts/eval/wrappers/` | `eval_{exp_id}_{topic}.sh` |
+| 报告/表格生成 | `workspace/{exp_name}/scripts/eval/reports/` | `gen_{exp_id}_{topic}.py` |
+| **远程/本地 launch 脚本** | `workspace/{exp_name}/scripts/launch/active/` | `run_{exp_id}_remote.sh` / `pull_{exp_id}_remote_results.sh` |
 
 在创建 log 文件时，若对应脚本不存在，**必须先创建脚本再记录命令**。脚本内容需包含：运行命令、关键参数注释、GPU 参数占位符。
+
+对 CORE4D：
+- 新实验真实 launch/pull/local/recover 入口写入 `workspace/core4d/scripts/launch/active/`。
+- 若需要保持历史命令可用，再在 `workspace/core4d/scripts/` 根目录添加 thin wrapper，转发到 `launch/active/`。
+- 不要再把真实 `run_E*.sh` / `pull_E*.sh` 实现直接放在 `scripts/` 根目录。
+- E142 及以前的历史入口只放 `workspace/core4d/scripts/launch/legacy/`，不要恢复根路径，除非用户明确要求兼容。
+
+### 8a. CORE4D scripts 目录规范
+
+CORE4D 当前脚本结构已经固定，后续新实验应遵循：
+
+| 类型 | canonical 路径 | 兼容策略 |
+|------|----------------|----------|
+| 实验 manifest/builder | `workspace/core4d/scripts/experiments/E###/` | 需要兼容时保留 `scripts/E###/` |
+| 训练脚本 | `workspace/core4d/scripts/train/` | 无 |
+| 评估核心 metrics | `workspace/core4d/scripts/eval/core/` | `eval/lib/` 仅历史 shim |
+| 评估 runner | `workspace/core4d/scripts/eval/runners/` | 根 `scripts/eval/eval_E*.py` 只做 wrapper |
+| 评估 shell | `workspace/core4d/scripts/eval/wrappers/` | 根 `scripts/eval/eval_E*.sh` 只做 wrapper |
+| 报告/表格 | `workspace/core4d/scripts/eval/reports/` | 旧路径只做 wrapper |
+| launch/pull/local/recover | `workspace/core4d/scripts/launch/active/` | E143+ 根路径只做 wrapper |
+| 历史 launch/pull | `workspace/core4d/scripts/launch/legacy/` | E142 及以前根路径删除 |
+| 历史 eval | `workspace/core4d/scripts/eval/legacy/` | E142 及以前根路径删除 |
+
+新评估代码必须直接 import `eval.core.core_metrics`，不要 import `lib.core_metrics`。`lib.core_metrics` 只为历史脚本兼容保留。
 
 ### 8b. 远程并行执行规则
 
@@ -175,10 +207,10 @@ if 训练/实验失败:
 **触发条件**: 需要运行 ≥3 个独立实验 (不同 case / 不同参数)。
 
 **标准流程**:
-1. 编写 `run_{exp_id}_remote.sh` — GPU0/GPU1 分配，视频路径独立
+1. 编写 `scripts/launch/active/run_{exp_id}_remote.sh` — GPU0/GPU1 分配，视频路径独立
 2. `git push` 同步代码到远程
 3. `ssh spider-remote` + tmux 启动
-4. 监控完成后 `scp` 结果回本地
+4. 编写或复用 `scripts/launch/active/pull_{exp_id}_remote_results.sh` 回收结果
 5. 本地评估 + 离线渲染可视化
 
 **并行分配策略**:
@@ -308,19 +340,20 @@ else:
 
 ```python
 # 正确：使用公共模块
-from lib.core_metrics import evaluate_sequence, EvalConfig, CORE_METRICS
+from eval.core.core_metrics import evaluate_sequence, EvalConfig, METRIC_FIELDS
 
 # 错误：动态加载其他实验的 evaluator
 # spec = importlib.util.spec_from_file_location("eval_E147", ...)  # 禁止
 ```
 
-**公共模块位置**：`workspace/{exp_name}/scripts/eval/lib/core_metrics.py`
+**公共模块位置**：`workspace/{exp_name}/scripts/eval/core/core_metrics.py`
 
 **规则**：
 - `core_metrics.py` 提供计算函数和 `EvalConfig` 参数化接口
 - 每个 evaluator 保留自己的 `SUMMARY_METRICS`（报告哪些指标是实验特有决定）
 - 运行时参数（如 `eef_offset`、`mesh_sample_count`）通过 `EvalConfig` 传入，不修改模块全局变量
-- 新增公共指标需更新 `core_metrics.py` 的 `METRIC_FIELDS` 并同步 `CORE_METRICS`
+- 新增公共指标需更新 `core_metrics.py` 的 `METRIC_FIELDS` 和相关标准表字段
+- `workspace/{exp_name}/scripts/eval/lib/` 只作为历史兼容 shim，不允许新增真实逻辑
 
 ### 14. Progress 归档规则
 
@@ -360,11 +393,14 @@ python workspace/{exp_name}/scripts/gen_experiment.py \
 | 文件 | 用途 |
 |------|------|
 | `scripts/train/train_{exp_id}_{slug}.sh` | 训练/CEM 入口 |
-| `scripts/run_{exp_id}_remote.sh` | 远程启动 |
-| `scripts/pull_{exp_id}_remote_results.sh` | 结果回收 |
-| `scripts/eval/eval_{exp_id}_{slug}.sh` | Eval wrapper |
+| `scripts/launch/active/run_{exp_id}_remote.sh` | 远程启动真实入口 |
+| `scripts/launch/active/pull_{exp_id}_remote_results.sh` | 结果回收真实入口 |
+| `scripts/eval/runners/eval_{exp_id}_{slug}.py` | Eval runner |
+| `scripts/eval/wrappers/eval_{exp_id}_{slug}.sh` | Eval shell wrapper |
 
-**不模板化**：manifest builder（`scripts/{EXP_ID}/build_*.py`）和 evaluator `.py`（实验特有逻辑）。
+**可选兼容 wrapper**：若历史命令或外部文档需要，额外在 `scripts/` 根目录和 `scripts/eval/` 根目录放 thin wrapper。
+
+**不模板化**：manifest builder（`scripts/experiments/{EXP_ID}/build_*.py`）中的实验特有逻辑。
 
 ### 16. Log 索引维护
 
