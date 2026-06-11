@@ -1,9 +1,9 @@
 # 实验日志索引
 
-> 自动生成，共 190 个日志文件。
+> 自动生成，共 195 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
-## Phase 27 (E147-E151)
+## Phase 27 (E147-E155)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
@@ -13,6 +13,11 @@
 | 189 | E149, e143 | 2026-06-09 | E143 clean rubber benchmark results | [189_E149_e143_clean_rubber_benchmark_res...](189_E149_e143_clean_rubber_benchmark_results.md) |
 | 190 | E150 | 2026-06-09 | Contact anchor eef offset sweep results | [190_E150_contact_anchor_eef_offset_sweep...](190_E150_contact_anchor_eef_offset_sweep_results.md) |
 | 191 | E151 | 2026-06-10 | Route b hand surface contact reward results | [191_E151_route_b_hand_surface_contact_re...](191_E151_route_b_hand_surface_contact_reward_results.md) |
+| 192 | E152 | 2026-06-10 | Axis1 hand object physics gate results | [192_E152_axis1_hand_object_physics_gate_...](192_E152_axis1_hand_object_physics_gate_results.md) |
+| 193 | E153 | 2026-06-10 | Gate threshold sweep results | [193_E153_gate_threshold_sweep_results.md](193_E153_gate_threshold_sweep_results.md) |
+| 194 | E154 | 2026-06-11 | Masked tracking eval results | [194_E154_masked_tracking_eval_results.md](194_E154_masked_tracking_eval_results.md) |
+| 195 | E154 | 2026-06-11 | Gate mask collapse bug | [195_E154_gate_mask_collapse_bug.md](195_E154_gate_mask_collapse_bug.md) |
+| 196 | E155 | 2026-06-11 | Release smooth transition results | [196_E155_release_smooth_transition_resul...](196_E155_release_smooth_transition_results.md) |
 
 ## Phase 26 (E145-E145)
 

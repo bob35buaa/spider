@@ -38,3 +38,14 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 重评结果:E153 `(−0.010,0.10)` 存活 tracked 3/3;`(−0.005,0.05)` 由 3/3 降级 2/3;box004 三 combo(sdf005_v05/sdf010_v05/sdf015_v10)结尾弯腰 pz_term 0.08~0.105 被判 fail(过去全 pass)。box021 的 fail 全是 pen2mm 驱动(起身正常);box023 全过。E152 gateA_b1 tracked 3/3(但 box004 同配置 E152 0.047 vs E153 0.081,单 seed 边界抖动)。视觉 box004 sdf005_v05 sim 塌陷弯腰扑箱 vs sdf010_v10 sim 直立跟上 ref。C1–C4 全成立。
 - [x] 记录:plan 162、log 194(取代 192/193 接触结论,正文不改)、TRACKER E154 行、本 progress。**待 commit**。
 - [ ] 下一步候选(待用户决策):①训练侧根因修复——用真实 `spider_contact_mask_3cm` 替 `io.py` 接触 target 重训(新 E+可能新分支);②box004 起身边界多 seed 复核;③接 Holosoma RL 前确认放手行为。
+
+## Active: E155 — release smooth transition 补跑与评测 (2026-06-11)
+
+- [x] 接手 E155 full 补跑：计划文件为 `plan/164_E155_release_smooth_transition_plan.md`，full 矩阵为 3 case × 4 method = 12 run。补跑前已有 8/12 完整，缺 `box004_083_p2:ramp5/ramp10`、`box023_person2:decay/neutral`。
+- [x] 固化并提交 E155 launch/pull 入口：真实脚本在 `scripts/launch/active/`，根路径保留 thin wrapper；commit `9c87e71 test(core4d): add E155 selected launch scripts` 已 push。
+- [x] E155 full 补跑启动并监控：本地 tmux `E155_local_full_181509` 跑 `box004_083_p2:ramp5`；远程 `spider-remote` tmux `E155_full_181509` 跑 `box004_083_p2:ramp10` 与 `box023_person2:decay -> neutral`。初始完整度 8/12。
+- [x] 新增 E155 评测入口：`scripts/eval/runners/eval_E155_release_smooth_transition.py` + 根路径 wrapper + `scripts/eval/wrappers/eval_E155_release_smooth_transition.sh`。指标使用 `core4d-e154-physics-contact-v1`，参考为 E153 `gateA_b1_sdf010_v10`，输出 `e155_method_metrics.tsv`、`e155_delta_vs_e153_sdf010_v10.tsv`、`e155_method_summary.tsv`。
+- [x] E155 `--allow-missing` 评测通过：当前 11 method rows / 8 delta rows / missing 4，缺项与补跑列表一致。补跑进度约本地 `box004 ramp5 104/210`、远程 `box004 ramp10 86/210`、`box023 decay 96/272`、`box023 neutral` 未开始。
+- [x] 本地 `E155_box004_083_p2_ramp5` 完成并落盘，artifact 完整；日志尾部为 MuJoCo EGL 析构噪声，不影响 `npz/mp4/trajectory_mjwp_act.npz`。当前完整度 9/12，剩余均在远程侧：`box004 ramp10`、`box023 decay`、`box023 neutral`。
+- [x] E155 full 补跑完成并 pull：远程 `box004 ramp10`、`box023 decay`、`box023 neutral` 均落盘；本地完整性检查 12/12 complete，严格评测 `metric_rows=15/delta_rows=12/missing=0`。
+- [x] E155 结果记录完成：`log/196_E155_release_smooth_transition_results.md`。结论：四方案均 tracking 3/3；按 E154+ 3mm/5mm 干净接触标准，`decay` 最优，release_false_3mm/5mm=0.033/0.054，inmaskC3/5=0.291/0.421。
