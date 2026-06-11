@@ -385,19 +385,31 @@ git revert <phase-6-commit>
 
 ## Phase 7：可选整理 eval 根目录
 
-按类别移动：
+执行策略：
 
 ```text
-eval/audit_*.py       -> eval/audits/
-eval/diagnose_*.py    -> eval/audits/
-eval/verify_*.py      -> eval/audits/
-eval/extract_*.sh     -> eval/extract/
-eval/eval_E*.sh       -> eval/wrappers/
-old frozen eval_E*.py -> eval/legacy/
+E142 及以前 eval 根目录文件 -> eval/legacy/
+删除 E142 及以前旧根路径
+
+E143-E151 Python 实现 -> eval/runners/
+E143-E152 shell 入口 -> eval/wrappers/
+E143-E152 旧根路径 shell 入口 -> thin wrapper
+E143-E151 旧根路径 Python 入口 -> thin wrapper
 ```
 
-这一步只在 E154+ 活跃链路稳定之后做。只要 remote 脚本、README 或结果记录
-还引用旧路径，就保留旧路径 wrapper。
+本阶段边界：
+
+- E142 及以前作为历史文档归档，不保留旧根路径 wrapper。
+- E143 及以后仍可能被当前复现实验、remote 脚本或结果记录引用，因此保留旧根路径 wrapper。
+- E143-E145 仍依赖 E090/E105 的历史 evaluator，迁移后显式指向 `eval/legacy/` 中的归档实现。
+- 结果目录不移动。
+
+验证：
+
+- `python3 -m py_compile` 检查 E143+ root wrapper 和 runner。
+- `bash -n` 检查 E143+ root shell wrapper 和 `eval/wrappers/` shell 入口。
+- 检查 eval 根目录不再存在 E142 及以前文件。
+- 跑 Phase 5 smoke script。
 
 回退：
 
