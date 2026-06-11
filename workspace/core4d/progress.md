@@ -49,3 +49,12 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 本地 `E155_box004_083_p2_ramp5` 完成并落盘，artifact 完整；日志尾部为 MuJoCo EGL 析构噪声，不影响 `npz/mp4/trajectory_mjwp_act.npz`。当前完整度 9/12，剩余均在远程侧：`box004 ramp10`、`box023 decay`、`box023 neutral`。
 - [x] E155 full 补跑完成并 pull：远程 `box004 ramp10`、`box023 decay`、`box023 neutral` 均落盘；本地完整性检查 12/12 complete，严格评测 `metric_rows=15/delta_rows=12/missing=0`。
 - [x] E155 结果记录完成：`log/196_E155_release_smooth_transition_results.md`。结论：四方案均 tracking 3/3；按 E154+ 3mm/5mm 干净接触标准，`decay` 最优，release_false_3mm/5mm=0.033/0.054，inmaskC3/5=0.291/0.421。
+
+## Active: E156 — clean8 gate/decay benchmark (2026-06-11)
+
+- [x] 写入 E156 计划：`plan/165_E156_clean8_gate_decay_benchmark_plan.md`。计划将 E149/E150 `relaxed8_valid_like` 8 case 作为 clean benchmark，比较 `spider-rubberhand`、`+gateA`、`E155_decay` 三方法；baseline 复用 E148 8/8，`+gateA` 按 E153/E155 阈值新跑 8/8，`E155_decay` 复用 E155 3/8 并补跑 5/8。
+- [x] E156 manifest/preflight 完成：新增 `scripts/experiments/E156/build_clean8_gate_decay_manifest.py`，从 E148 manifest 生成 24 method rows；preflight `preflight_ok=true`，`reuse_e148=8`、`reuse_e155=3`、`to_run=13`。已修正 `box023_person2` 使用 `rubber_scene_act.parent` 派生 task，避免误用 e026 旧 task。
+- [x] E156 launch/eval 脚手架完成：新增 canonical local/remote/pull 脚本与 eval runner/wrapper；`py_compile`、`bash -n` 均通过。full `--allow-missing` 评测当前 `metric_rows=11`、`missing=13`，缺失列表正好对应 13 条新跑任务。
+- [x] E156 smoke 通过：本地 GPU0 跑 `box021_035_p1:+gateA` 与 `box021_035_p1:E155_decay`，均产出 root npz、mp4、`trajectory_mjwp_act.npz`。`config_act.yaml` 确认 hand gate 阈值为 `-0.010/0.10/hard_floor=-0.020`，decay 额外写入 `contact_hdmi_mask_carry_union=true`、`hand_support_decay_frac=0.15`、`hand_support_rew_scale=3.0`。
+- [x] E156 full 运行完成：远程首次 tmux 因远端 runner 重新执行 builder、缺 E148 manifest 上下文而退出；已修 `run_E156_local.sh` 为 manifest 存在时不重建。最终 13/13 新跑 full 全部完成，本地/远程日志尾部仅 MuJoCo EGL 析构噪声；通过 `pull_E156_remote_results.sh full` 回收远程结果后，本地 root npz / `trajectory_mjwp_act.npz` / full mp4 均为 13/13。
+- [x] 2026-06-12 E156 strict eval + log/tracker 完成：`eval_E156_clean8_gate_decay.sh full` 输出 `metric_rows=24/methods=3/delta_vs_baseline=16/delta_vs_gate=8/missing=0`，XLSX 有 5 个 sheet、无公式错误、method_summary 最优黑色加粗/次优下划线。clean8 结论：三方法 tracking 8/8；`E155_decay` inmaskC3/5 最高(0.314/0.479)但相对 `+gateA` release_false3 +0.115、physPen3 +0.111，`promote_decay=false`；保留 `+gateA` 为当前 clean8 默认候选。写 `log/197_E156_clean8_gate_decay_benchmark_results.md`，TRACKER 加 E156 行。

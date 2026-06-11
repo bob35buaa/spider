@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E156 | 2026-06-12 | Phase 27 | clean8 三方法 benchmark: rubberhand / +gateA / decay | ✅ 13/13 new full + 24/24 strict eval；tracking 8/8；`decay` 接触↑但 false/穿透↑，不升级默认；保留 `+gateA` | [197](log/197_E156_clean8_gate_decay_benchmark_results.md) |
 | E155 | 2026-06-11 | Phase 27 | hand_support 放手平滑过渡 3case×4 full | ✅ 12/12 complete；四方案 tracking 3/3；`decay` 最优: release_false3/5=0.033/0.054, inmaskC3/5=0.291/0.421 | [196](log/196_E155_release_smooth_transition_results.md) |
 | E154 | 2026-06-11 | Phase 27 | 评测方法学修订:真实 3cm contact mask + body tracking(对固定运动学真值),重评 E152/E153 | ✅ 纯评测(不重训)。修复全序列+全1-mask 评测缺陷;新增 tracking 门控 success。**根因**:`core4d.py` one-mode 全1 mask 经 `io.py` 泄漏到 reward→优化器全程被奖励接触,放手普遍失败(连 b1 都不放)。重评:`(−0.010,0.10)` 存活 3/3,`(−0.005,0.05)` 降级 2/3;box004 三 combo 结尾弯腰被判 fail。**取代 192/193 接触结论**;详见 log 194 | [194](log/194_E154_masked_tracking_eval_results.md) |
 | E153 | 2026-06-10 | Phase 27 | CEM hand gate 阈值扫（先解耦 max_violation 再扫 min_sdf×max_viol，gateA_b1 3case×3×2=18 grid） | ✅ full complete, found 3/3 strict sweet spot (−0.010,0.10): deep<−5mm −0.172/接触零损失/fallback修复; min_sdf 主导单调权衡, 0 fall；详见 log 193 + results/E153 | [193](log/193_E153_gate_threshold_sweep_results.md) |
