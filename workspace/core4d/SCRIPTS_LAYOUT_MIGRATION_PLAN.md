@@ -337,28 +337,45 @@ bash workspace/core4d/scripts/eval/wrappers/smoke_E154_metrics_stack.sh
 git revert <phase-5-commit>
 ```
 
-## Phase 6：可选迁移 experiment 目录
+## Phase 6：迁移 experiment 目录
 
-活跃 evaluator 稳定后，再考虑迁移实验局部输入：
+执行策略：
+
+- `E001-E081` 视为历史实验，归档到 `workspace/core4d/scripts/experiments/legacy/`。
+- `E082+` 复制到 `workspace/core4d/scripts/experiments/`，旧真实目录暂时保留。
+- 这样历史命令、hardcoded manifest path、remote 脚本和 `Path(__file__).resolve().parents[...]`
+  仍按旧目录深度工作。
+- 只对已经归档的 `E001-E081` 使用旧路径 symlink；活跃/较新的 `E082+` 不使用 symlink。
+
+迁移规则：
 
 ```text
-workspace/core4d/scripts/E152/variants.tsv
--> workspace/core4d/scripts/experiments/E152/variants.tsv
+workspace/core4d/scripts/E055
+-> workspace/core4d/scripts/experiments/legacy/E055
+workspace/core4d/scripts/E055 -> experiments/legacy/E055
 
-workspace/core4d/scripts/E153/*
--> workspace/core4d/scripts/experiments/E153/
+workspace/core4d/scripts/E081
+-> workspace/core4d/scripts/experiments/legacy/E081
+workspace/core4d/scripts/E081 -> experiments/legacy/E081
 
-workspace/core4d/scripts/E154/*
--> workspace/core4d/scripts/experiments/E154/
+workspace/core4d/scripts/E082
+保留原目录，并复制到 workspace/core4d/scripts/experiments/E082
+
+workspace/core4d/scripts/E154
+保留原目录，并复制到 workspace/core4d/scripts/experiments/E154
 ```
 
-这一步风险更高，因为很多脚本和实验记录可能直接引用 `scripts/E###`。
-建议旧目录至少保留一个迁移周期，里面放 wrapper 或 manifest pointer。
+这一步风险较高，因为很多脚本和实验记录直接引用 `scripts/E###`。
+因此本阶段对 `E082+` 不删除旧路径，也不把旧路径变成 symlink；只新增新结构副本。
+`E001-E081` 作为历史归档，旧路径使用 symlink 指向 `experiments/legacy/E###`。
 
 验证：
 
 - 跑 Phase 5 smoke script。
-- 检查所有引用被移动 manifest 的 remote launch 脚本。
+- 检查 symlink 没有 broken link。
+- 检查关键旧路径和新路径都能访问同一批文件。
+- 检查 E082+ 关键脚本通过旧真实路径执行时，`Path(__file__).resolve()` 的目录深度不变。
+- 检查所有引用旧 manifest 的 remote launch 脚本仍能访问旧真实路径。
 
 回退：
 

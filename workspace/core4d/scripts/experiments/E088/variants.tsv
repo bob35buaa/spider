@@ -1,0 +1,4 @@
+# variant	source_task	derived_task	mask_source_dir	mask_slug	person_idx	split	role	group	mass_kg	notes
+E088A_m10_gate_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083_m10_e087	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	remote-gpu0	main	gate_only	10.0	E087B 10kg raw-target baseline plus hard CEM upper-body safety gate
+E088B_m10_gate_low_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083_m10_e087	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	remote-gpu1	main	gate_low_contact	10.0	Hard gate plus low contact/object reward weights
+E088C_m10_gate_clearance_main	d003_box021_20231018_029_p2	d003_box021_20231018_029_p2_upperobj_e083_m10_e087	workspace/core4d/results/E084/contact_masks	d003_box021_20231018_029_p2	1	remote-gpu1	main	gate_low_contact_clearance	10.0	Hard gate plus low contact/object weights and absolute object bottom clearance shaping
