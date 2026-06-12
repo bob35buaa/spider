@@ -392,6 +392,7 @@ class Config:
     surface_band_gate_source: str = "contact_mask"
     surface_band_start_eval_time: float = 0.0
     surface_band_end_eval_time: float = 999.0
+    surface_band_decay_frac: float = 0.0  # E161-M1: tail decay fraction, 0=off
     surface_band_geom_names: list[str] = field(default_factory=lambda: ["lh", "rh"])
     surface_band_geom_ids: list[int] = field(default_factory=list)
     nonhand_support_penalty_scale: float = 0.0

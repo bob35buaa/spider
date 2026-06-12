@@ -1268,6 +1268,7 @@ def get_reward(
     surface_band_sdf = torch.zeros(N, device=config.device)
     surface_band_score = torch.zeros(N, device=config.device)
     surface_band_penetration = torch.zeros(N, device=config.device)
+    surface_band_decay_factor = torch.ones(N, device=config.device)
     cem_posture_z_err = torch.zeros(N, device=config.device)
     cem_posture_z_drop = torch.zeros(N, device=config.device)
     nonhand_support_penalty = torch.zeros(N, device=config.device)
@@ -1342,12 +1343,30 @@ def get_reward(
                     return torch.ones(N, device=config.device, dtype=dtype)
                 valid_sources = {
                     "contact_mask",
+                    "contact_mask_strict_current",
                     "time_window",
                     "contact_mask_time_window",
                 }
                 if source not in valid_sources:
                     raise ValueError(f"Unsupported support gate source={source!r}")
                 gates = []
+                if source == "contact_mask_strict_current":
+                    ref_gate = (
+                        approach_mask_val
+                        if torch.is_tensor(approach_mask_val)
+                        else torch.tensor(
+                            approach_mask_val, device=config.device, dtype=dtype
+                        )
+                    )
+                    ref_gate = ref_gate.to(device=config.device, dtype=dtype)
+                    if ref_gate.ndim == 0:
+                        gates.append(ref_gate.view(1).expand(N))
+                    elif ref_gate.ndim == 1:
+                        gates.append(ref_gate[0].view(1).expand(N))
+                    elif ref_gate.ndim == 2:
+                        gates.append(ref_gate[0].max().view(1).expand(N))
+                    else:
+                        gates.append(ref_gate.reshape(-1)[0].view(1).expand(N))
                 if source in {"contact_mask", "contact_mask_time_window"}:
                     gates.append(
                         _sample_gate_from_ref_mask(
@@ -1587,6 +1606,19 @@ def get_reward(
                     * surface_band_penetration
                     * surface_band_gate
                 )
+                if config.surface_band_decay_frac > 0.0:
+                    time_arr = wp.to_torch(env.data_wp.time)
+                    total_time = float(config.max_sim_steps) * config.sim_dt
+                    decay_frac = min(max(float(config.surface_band_decay_frac), 0.0), 1.0)
+                    decay_start = total_time * (1.0 - decay_frac)
+                    if total_time > decay_start:
+                        surface_band_decay_factor = torch.clamp(
+                            (total_time - time_arr) / (total_time - decay_start),
+                            0.0,
+                            1.0,
+                        )
+                        surface_band_rew = surface_band_rew * surface_band_decay_factor
+                        surface_band_penalty = surface_band_penalty * surface_band_decay_factor
             if (
                 config.nonhand_support_penalty_scale > 0.0
                 and config.nonhand_support_penalty_geom_ids
@@ -1975,6 +2007,7 @@ def get_reward(
         "surface_band_rew": surface_band_rew,
         "surface_band_penalty": surface_band_penalty,
         "surface_band_gate": surface_band_gate,
+        "surface_band_decay_factor": surface_band_decay_factor,
         "surface_band_sdf": surface_band_sdf,
         "surface_band_score": surface_band_score,
         "surface_band_penetration": surface_band_penetration,
