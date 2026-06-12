@@ -25,7 +25,7 @@ RAW_ROOT = Path("/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/COR
 SMPLX_DIR = Path("/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/smplx")
 HOLOSOMA_REPO = Path("/home/ubuntu/Workspace/holosoma")
 
-TARGET_SHORT_CASES = ["box021_035_p2", "box023_person2", "box004_082_p1"]
+TARGET_SHORT_CASES = ["box021_035_p2", "box021_035_p1", "box023_person2", "box004_082_p1"]
 
 OBJECT_NAME = {
     "box021": "Box021",

@@ -8,6 +8,7 @@
 用户希望先用 E156 的 `+gateA` 结果做下游 RL 实验，指定 3 个 case：
 
 - `box021_035_p2`
+- `box021_035_p1`（后续追加）
 - `box023`（按当前 clean benchmark 中的 `box023_person2` 解释）
 - `box004_082_p1`
 
@@ -17,7 +18,7 @@
 
 | Claim | 验证方式 |
 |---|---|
-| C1: 3 个 gateA case 都能进入 `RL_EXPORT_READY` | `s6_downstream/rl_export/rl_export_input.tsv` 中 3/3 ready |
+| C1: gateA case 都能进入 `RL_EXPORT_READY` | `s6_downstream/rl_export/rl_export_input.tsv` 中全部 ready |
 | C2: RL export 使用 rubber hand collision scene | `scene_act` 指向 `scene_act_E147_rubber_hull.xml` |
 | C3: CEM evidence 只记录 E156 后验结果，不回写 S1-S5 | 通过 `record_downstream_evidence.py` 生成 S6 manifest |
 | C4: partner OmniRetarget 输出有显式 manifest | `partner_omnirt/rl_partner_omnirt_manifest.tsv` 记录 pass 或 failure |
@@ -68,7 +69,7 @@ workspace/core4d/scripts/run_E157_gateA_rl_export.sh
 
 脚本逻辑：
 
-1. 从 E156 `variants.tsv` 读取 3 个 `method_group=gateA` rows。
+1. 从 E156 `variants.tsv` 读取目标 `method_group=gateA` rows。
 2. 从 E156 metrics join 对应 `+gateA` 指标，作为 downstream notes。
 3. 写 S5 handoff seed，`hand_collision_variant_id=rubber_hull`，`scene_act` 使用 rubber sidecar。
 4. 写 S6 evidence seed，`cem_status=pass`、`rl_status=not_run`。
@@ -82,8 +83,8 @@ workspace/core4d/scripts/run_E157_gateA_rl_export.sh
 - `bash -n workspace/core4d/scripts/launch/active/run_E157_gateA_rl_export.sh`
 - `bash -n workspace/core4d/scripts/run_E157_gateA_rl_export.sh`
 - 生成后检查：
-  - `rl_export_input.tsv` 3 rows 且 `RL_EXPORT_READY=3`
-  - partner manifest 3 rows
+  - `rl_export_input.tsv` rows 与目标 case 数一致，且全部 `RL_EXPORT_READY`
+  - partner manifest rows 与目标 case 数一致
   - required paths 存在：`scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`
   - 若 partner 执行成功，`trimmed_npz` 存在；若失败，failure_mode 必须非空
 

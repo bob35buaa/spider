@@ -67,3 +67,4 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 正式结果写入 `workspace/core4d/results/E157/gateA_rl_export/`。`rl_export_input.tsv` 为 3 rows，`RL_EXPORT_READY=3`；每行 `scene_act/trajectory/contact_mask/cem_result_npz` 均存在，`scene_act` 全部指向 `scene_act_E147_rubber_hull.xml`。
 - [x] partner OmniRetarget 实际执行：`box021_20231011_035_p1` pass(trim 127 frames)，`box023_20231008_045_p1` pass(trim 134 frames)，`box004_20231003_2_082_p2` 在 Holosoma `robot_retarget.py` CVXPY solve 报 `infeasible`，manifest 记录为 `missing_outputs / partner_omnirt_outputs_missing`。
 - [x] 验证通过：`py_compile`、两个 shell `bash -n`、`git diff --check` 均通过。结果 log 写入 `log/198_E157_gateA_rl_export_results.md`，TRACKER 加 E157 行。
+- [x] 按用户追加 `box021_035_p1`：更新 E157 builder 目标列表并重跑导出。`rl_export_input.tsv` 更新为 4 rows / `RL_EXPORT_READY=4`；新增 partner `box021_20231011_035_p2` OmniRetarget pass(trim 127 frames)。partner 总计 3/4 pass，`box004_20231003_2_082_p2` 仍为历史一致的 CVXPY infeasible。

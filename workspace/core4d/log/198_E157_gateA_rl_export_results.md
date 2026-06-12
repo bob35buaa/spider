@@ -1,14 +1,14 @@
 # E157 — E156 gateA 下游 RL export 结果
 
 > 计划：`workspace/core4d/plan/166_E157_gateA_rl_export_plan.md`  
-> 状态：**完成 S6 RL export；partner OmniRetarget 2/3 pass，1/3 显式失败**  
+> 状态：**完成 S6 RL export；partner OmniRetarget 3/4 pass，1/4 显式失败**
 > 输入：E156 clean8 benchmark 中 3 条 `+gateA` CEM 结果
 
 ## 0. 一句话结论
 
-E157 已把 `box021_035_p2`、`box023_person2`、`box004_082_p1` 三条 E156 `+gateA` 结果整理成标准 S6 下游 RL 输入。
+E157 已把 `box021_035_p2`、`box021_035_p1`、`box023_person2`、`box004_082_p1` 四条 E156 `+gateA` 结果整理成标准 S6 下游 RL 输入。
 
-`rl_export_input.tsv` 中 3/3 都是 `RL_EXPORT_READY`，且都使用 `scene_act_E147_rubber_hull.xml`。partner OmniRetarget 实际执行后，`box021_035_p1` 和 `box023_20231008_045_p1` 产出 trimmed motion；`box004_20231003_2_082_p2` 在 Holosoma OmniRetarget 的 CVXPY 求解阶段报 `infeasible`，manifest 中保留为 `missing_outputs / partner_omnirt_outputs_missing`。
+`rl_export_input.tsv` 中 4/4 都是 `RL_EXPORT_READY`，且都使用 `scene_act_E147_rubber_hull.xml`。partner OmniRetarget 实际执行后，`box021_20231011_035_p1`、`box021_20231011_035_p2` 和 `box023_20231008_045_p1` 产出 trimmed motion；`box004_20231003_2_082_p2` 在 Holosoma OmniRetarget 的 CVXPY 求解阶段报 `infeasible`，manifest 中保留为 `missing_outputs / partner_omnirt_outputs_missing`。
 
 ## 1. 输出路径
 
@@ -27,6 +27,7 @@ E157 已把 `box021_035_p2`、`box023_person2`、`box004_082_p1` 三条 E156 `+g
 | short case | case_id | person | scene_act | decision |
 |---|---|---|---|---|
 | `box021_035_p2` | `d003_box021_20231011_035_p2` | `person2` | `scene_act_E147_rubber_hull.xml` | `RL_EXPORT_READY` |
+| `box021_035_p1` | `d003_box021_20231011_035_p1` | `person1` | `scene_act_E147_rubber_hull.xml` | `RL_EXPORT_READY` |
 | `box023_person2` | `box023_person2` | `person2` | `scene_act_E147_rubber_hull.xml` | `RL_EXPORT_READY` |
 | `box004_082_p1` | `e091_box004_20231003_2_082_p1` | `person1` | `scene_act_E147_rubber_hull.xml` | `RL_EXPORT_READY` |
 
@@ -37,6 +38,7 @@ E157 已把 `box021_035_p2`、`box023_person2`、`box004_082_p1` 三条 E156 `+g
 | source | partner | status | trim frames | 备注 |
 |---|---|---|---:|---|
 | `d003_box021_20231011_035_p2` | `box021_20231011_035_p1` | `pass` | 127 | trimmed npz 已生成 |
+| `d003_box021_20231011_035_p1` | `box021_20231011_035_p2` | `pass` | 127 | trimmed npz 已生成 |
 | `box023_person2` | `box023_20231008_045_p1` | `pass` | 134 | trimmed npz 已生成 |
 | `e091_box004_20231003_2_082_p1` | `box004_20231003_2_082_p2` | `missing_outputs` | - | OmniRetarget CVXPY infeasible |
 
@@ -46,10 +48,10 @@ E157 已把 `box021_035_p2`、`box023_person2`、`box004_082_p1` 三条 E156 `+g
 
 | Claim | 结果 | 裁定 |
 |---|---|---|
-| C1: 3 个 gateA case 都进入 `RL_EXPORT_READY` | 3/3 ready | 成立 |
-| C2: RL export 使用 rubber hand collision scene | 3/3 `scene_act_E147_rubber_hull.xml` | 成立 |
+| C1: gateA case 都进入 `RL_EXPORT_READY` | 4/4 ready | 成立 |
+| C2: RL export 使用 rubber hand collision scene | 4/4 `scene_act_E147_rubber_hull.xml` | 成立 |
 | C3: CEM evidence 只记录 E156 后验结果 | 通过 S6 evidence manifest 生成，不回写 S1-S5 | 成立 |
-| C4: partner OmniRetarget 输出有显式 manifest | 3 rows，2 pass + 1 missing_outputs | 成立 |
+| C4: partner OmniRetarget 输出有显式 manifest | 4 rows，3 pass + 1 missing_outputs | 成立 |
 
 ## 5. 脚本
 
