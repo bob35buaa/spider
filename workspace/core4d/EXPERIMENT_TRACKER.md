@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E160 | 2026-06-13 | Phase 27 | surfaceBand-A2 posture rerank 3case | ⚠️ 3/3 complete；C1-C5 全 pass，修复 box021 fall；但 box021 releaseF3=0.75，不能直接升级默认 | [203](log/203_E160_posture_rerank_results.md) |
 | E159 | 2026-06-13 | Phase 27 | gateA+surfaceBand-A2 no-penalty clean6 | ❌ 6/6 complete；较 E158 稳定(tracked 5/6)且接触↑/穿透↓，但 box021_029_p2 fall、box004_p2 release false↑，不晋级 | [201](log/201_E159_gate_surface_band_A2_results.md) |
 | E158 | 2026-06-12 | Phase 27 | gateA+surfaceBand-A clean6 | ❌ 6/6 complete；接触↑/几何穿透↓，但 tracking 1/6、fall 4/6、release false↑，不晋级 | [200](log/200_E158_gate_surface_band_results.md) |
 | E157 | 2026-06-12 | Phase 27 | E156 gateA 下游 RL export + partner OmniRetarget | ✅ RL export 4/4 ready；partner OmniRetarget 3/4 pass，box004_p2 CVXPY infeasible 已显式记录 | [198](log/198_E157_gateA_rl_export_results.md) |
