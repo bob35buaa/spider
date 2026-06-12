@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E159 | 2026-06-13 | Phase 27 | gateA+surfaceBand-A2 no-penalty clean6 | ❌ 6/6 complete；较 E158 稳定(tracked 5/6)且接触↑/穿透↓，但 box021_029_p2 fall、box004_p2 release false↑，不晋级 | [201](log/201_E159_gate_surface_band_A2_results.md) |
+| E158 | 2026-06-12 | Phase 27 | gateA+surfaceBand-A clean6 | ❌ 6/6 complete；接触↑/几何穿透↓，但 tracking 1/6、fall 4/6、release false↑，不晋级 | [200](log/200_E158_gate_surface_band_results.md) |
 | E157 | 2026-06-12 | Phase 27 | E156 gateA 下游 RL export + partner OmniRetarget | ✅ RL export 4/4 ready；partner OmniRetarget 3/4 pass，box004_p2 CVXPY infeasible 已显式记录 | [198](log/198_E157_gateA_rl_export_results.md) |
 | E156 | 2026-06-12 | Phase 27 | clean8 benchmark: OmniRetarget / rubberhand / +gateA / decay | ✅ 13/13 new full + 32/32 strict eval；Omni 穿透高，SPIDER 降穿透；`decay` 接触↑但 false/穿透↑，不升级默认 | [197](log/197_E156_clean8_gate_decay_benchmark_results.md) |
 | E155 | 2026-06-11 | Phase 27 | hand_support 放手平滑过渡 3case×4 full | ✅ 12/12 complete；四方案 tracking 3/3；`decay` 最优: release_false3/5=0.033/0.054, inmaskC3/5=0.291/0.421 | [196](log/196_E155_release_smooth_transition_results.md) |

@@ -603,6 +603,14 @@ def _masked_contact_metrics(
         return out
     sm = np.asarray(data["spider_contact_mask_3cm"])  # (N, persons, hands)
     pi = int(person_idx)
+    if sm.ndim != 3 or sm.shape[2] != 2:
+        raise ValueError(f"{contact_mask_path}: spider_contact_mask_3cm expected (T, persons, 2), got {sm.shape}")
+    if pi < 0 or pi >= sm.shape[1]:
+        raise ValueError(f"{contact_mask_path}: person_idx={pi} out of mask shape {sm.shape}")
+    if sm.shape[0] != hand_arr.shape[0]:
+        raise ValueError(
+            f"{contact_mask_path}: contact mask length {sm.shape[0]} != qpos frames {hand_arr.shape[0]}"
+        )
     mask_any = sm[:, pi, 0].astype(bool) | sm[:, pi, 1].astype(bool)
     H = min(
         len(hand_physics),

@@ -180,7 +180,15 @@ def explicit_mask_candidates(e109_case_id: str, short_id: str, object_key: str) 
             / "raw_contact_mask_3cm.npz"
         )
     if e109_case_id.startswith("d003_box021_20231011_035_p1"):
-        candidates.append(REPO / "workspace/core4d/results/E079/contact_masks/box021_person1/raw_contact_mask_3cm.npz")
+        candidates += [
+            REPO
+            / "workspace/core4d_collab_retarget/results/E029/d6/contact_masks"
+            / "d003_box021_20231011_035_p1/raw_contact_mask_3cm.npz",
+            REPO
+            / "workspace/core4d_collab_retarget/results/E028b_anchor_refit/contact_masks"
+            / "d003_box021_20231011_035_p1/raw_contact_mask_3cm.npz",
+            REPO / "workspace/core4d/results/E079/contact_masks/box021_person1/raw_contact_mask_3cm.npz",
+        ]
     if e109_case_id.startswith("d003_box021_20231011_035_p2"):
         candidates.append(REPO / "workspace/core4d/results/E082/contact_masks/d003_box021_20231011_035_p2/raw_contact_mask_3cm.npz")
     if e109_case_id.startswith("d003_box021_20231018_029_p2"):
@@ -237,6 +245,29 @@ def make_e104_mask(e109_case_id: str, short_id: str, object_key: str, derived_ta
     return out, rel(source)
 
 
+def apply_manual_mask_fixes(path: Path, short_id: str) -> None:
+    if short_id != "box021_035_p2":
+        return
+    data = dict(np.load(path, allow_pickle=True))
+    key = "spider_contact_mask_3cm"
+    if key not in data:
+        return
+    mask = np.asarray(data[key]).astype(bool).copy()
+    if mask.shape[0] < 93 or mask.shape[1] < 2 or mask.shape[2] < 2:
+        raise ValueError(f"{path}:{key} cannot apply box021_035_p2 frame-91:92 right-hand fill to shape {mask.shape}")
+    # E158 diagnostic review: the p2 reference intent has a two-frame isolated
+    # dropout around 3s. Fill only the right-hand channel so the union contact
+    # window stays continuous without inventing two-hand contact.
+    mask[91:93, 1, 1] = True
+    data[key] = mask
+    data["manual_fill_note"] = np.array("E158: fill box021_035_p2 p2 right-hand frames 91:92 isolated 3s dropout.")
+    data["manual_fill_short_id"] = np.array(short_id)
+    data["manual_fill_spider_frames"] = np.array([91, 92], dtype=np.int32)
+    data["manual_fill_person_idx"] = np.array(1, dtype=np.int32)
+    data["manual_fill_hand_idx"] = np.array(1, dtype=np.int32)
+    np.savez(path, **data)
+
+
 def resolve_mask(e109_case_id: str, short_id: str, object_key: str, derived_task: str) -> tuple[Path, str, str]:
     for candidate in explicit_mask_candidates(e109_case_id, short_id, object_key):
         if candidate.is_file():
@@ -244,9 +275,11 @@ def resolve_mask(e109_case_id: str, short_id: str, object_key: str, derived_task
             out.parent.mkdir(parents=True, exist_ok=True)
             if candidate.resolve() != out.resolve():
                 shutil.copy2(candidate, out)
+            apply_manual_mask_fixes(out, short_id)
             return out, "mjwp_compatible_copied", rel(candidate)
     if object_key in {"box004", "box026"}:
         mask, source = make_e104_mask(e109_case_id, short_id, object_key, derived_task)
+        apply_manual_mask_fixes(mask, short_id)
         return mask, "e104_raw_proxy_converted", source
     raise FileNotFoundError(f"No contact mask found for {e109_case_id}")
 

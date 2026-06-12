@@ -1262,6 +1262,12 @@ def get_reward(
     hand_support_gate = torch.ones(N, device=config.device)
     hand_support_sdf = torch.zeros(N, device=config.device)
     hand_support_score = torch.ones(N, device=config.device)
+    surface_band_rew = torch.zeros(N, device=config.device)
+    surface_band_penalty = torch.zeros(N, device=config.device)
+    surface_band_gate = torch.ones(N, device=config.device)
+    surface_band_sdf = torch.zeros(N, device=config.device)
+    surface_band_score = torch.zeros(N, device=config.device)
+    surface_band_penetration = torch.zeros(N, device=config.device)
     nonhand_support_penalty = torch.zeros(N, device=config.device)
     nonhand_support_gate = torch.ones(N, device=config.device)
     nonhand_support_sdf = torch.zeros(N, device=config.device)
@@ -1543,6 +1549,42 @@ def get_reward(
                             0.0, 1.0,
                         )
                         hand_support_rew = hand_support_rew * decay_factor
+            if (
+                (config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0)
+                and config.surface_band_geom_ids
+            ):
+                surface_band_sdf = geom_box_sdf_min(config.surface_band_geom_ids)
+                band_width = float(config.surface_band_width_m)
+                band_min_sdf = float(config.surface_band_min_sdf_m)
+                sigma = max(float(config.surface_band_sigma), 1e-6)
+                in_band = (surface_band_sdf >= band_min_sdf) & (
+                    surface_band_sdf <= band_width
+                )
+                surface_band_score = torch.where(
+                    in_band,
+                    torch.exp(-torch.clamp(surface_band_sdf, min=0.0) / sigma),
+                    torch.zeros_like(surface_band_sdf),
+                )
+                surface_band_gate = support_gate(
+                    config.surface_band_gate_source,
+                    config.surface_band_start_eval_time,
+                    config.surface_band_end_eval_time,
+                    surface_band_score.dtype,
+                )
+                surface_band_rew = (
+                    config.surface_band_rew_scale
+                    * surface_band_score
+                    * surface_band_gate
+                )
+                surface_band_penetration = torch.clamp(
+                    -surface_band_sdf - config.surface_band_penetration_tol_m,
+                    min=0.0,
+                )
+                surface_band_penalty = (
+                    -config.surface_band_penalty_scale
+                    * surface_band_penetration
+                    * surface_band_gate
+                )
             if (
                 config.nonhand_support_penalty_scale > 0.0
                 and config.nonhand_support_penalty_geom_ids
@@ -1867,6 +1909,8 @@ def get_reward(
         + object_clearance_penalty
         + carry_corridor_rew
         + hand_support_rew
+        + surface_band_rew
+        + surface_band_penalty
         + nonhand_support_penalty
     )
 
@@ -1921,6 +1965,12 @@ def get_reward(
         "hand_support_gate": hand_support_gate,
         "hand_support_sdf": hand_support_sdf,
         "hand_support_score": hand_support_score,
+        "surface_band_rew": surface_band_rew,
+        "surface_band_penalty": surface_band_penalty,
+        "surface_band_gate": surface_band_gate,
+        "surface_band_sdf": surface_band_sdf,
+        "surface_band_score": surface_band_score,
+        "surface_band_penetration": surface_band_penetration,
         "nonhand_support_penalty": nonhand_support_penalty,
         "nonhand_support_gate": nonhand_support_gate,
         "nonhand_support_sdf": nonhand_support_sdf,

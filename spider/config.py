@@ -371,6 +371,19 @@ class Config:
     hand_support_geom_ids: list[int] = field(default_factory=list)
     hand_support_decay_frac: float = 0.0  # E155-C: tail decay fraction, 0=off
     hand_support_neutral_baseline: float = 0.0  # E155-D: gate=0 neutral value, 0=current
+    # E158/E159: hand/object surface-band reward. By default this remains
+    # one-sided outside the object; E159 may allow a shallow negative band.
+    surface_band_rew_scale: float = 0.0
+    surface_band_penalty_scale: float = 0.0
+    surface_band_width_m: float = 0.03
+    surface_band_min_sdf_m: float = 0.0
+    surface_band_sigma: float = 0.015
+    surface_band_penetration_tol_m: float = 0.003
+    surface_band_gate_source: str = "contact_mask"
+    surface_band_start_eval_time: float = 0.0
+    surface_band_end_eval_time: float = 999.0
+    surface_band_geom_names: list[str] = field(default_factory=lambda: ["lh", "rh"])
+    surface_band_geom_ids: list[int] = field(default_factory=list)
     nonhand_support_penalty_scale: float = 0.0
     nonhand_support_penalty_margin_m: float = 0.02
     nonhand_support_penalty_gate_source: str = "contact_mask"
@@ -1125,6 +1138,18 @@ def process_config(config: Config):
                     )
             config.hand_support_geom_ids = geom_ids
             loguru.logger.info("Hand support geoms: {} resolved.", len(geom_ids))
+        if config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0:
+            geom_ids = []
+            for name in config.surface_band_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "surface_band_geom_names: geom '{}' not found.", name
+                    )
+            config.surface_band_geom_ids = geom_ids
+            loguru.logger.info("Surface-band geoms: {} resolved.", len(geom_ids))
         if (
             config.nonhand_support_penalty_scale > 0.0
             or config.terminal_carry_gate_enabled
