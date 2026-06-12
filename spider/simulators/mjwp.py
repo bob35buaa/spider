@@ -1268,6 +1268,8 @@ def get_reward(
     surface_band_sdf = torch.zeros(N, device=config.device)
     surface_band_score = torch.zeros(N, device=config.device)
     surface_band_penetration = torch.zeros(N, device=config.device)
+    cem_posture_z_err = torch.zeros(N, device=config.device)
+    cem_posture_z_drop = torch.zeros(N, device=config.device)
     nonhand_support_penalty = torch.zeros(N, device=config.device)
     nonhand_support_gate = torch.ones(N, device=config.device)
     nonhand_support_sdf = torch.zeros(N, device=config.device)
@@ -1922,6 +1924,11 @@ def get_reward(
         below = torch.clamp(config.stability_penalty_threshold - pelvis_z, min=0.0)
         stability_penalty = -config.stability_penalty_scale * below
         reward = reward + stability_penalty
+    if config.cem_posture_gate_enabled and qpos_sim.shape[1] >= 3:
+        sim_root_z = qpos_sim[:, 2]
+        ref_root_z = qpos_ref[2]
+        cem_posture_z_err = torch.abs(sim_root_z - ref_root_z)
+        cem_posture_z_drop = ref_root_z - sim_root_z
 
     info = {
         "qpos_dist": qpos_dist,
@@ -1971,6 +1978,8 @@ def get_reward(
         "surface_band_sdf": surface_band_sdf,
         "surface_band_score": surface_band_score,
         "surface_band_penetration": surface_band_penetration,
+        "cem_posture_z_err": cem_posture_z_err,
+        "cem_posture_z_drop": cem_posture_z_drop,
         "nonhand_support_penalty": nonhand_support_penalty,
         "nonhand_support_gate": nonhand_support_gate,
         "nonhand_support_sdf": nonhand_support_sdf,

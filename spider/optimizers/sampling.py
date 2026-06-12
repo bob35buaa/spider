@@ -24,6 +24,23 @@ from spider.config import Config
 from spider.interp import interp
 
 
+def _cem_any_gate_enabled(config: Config) -> bool:
+    return (
+        config.cem_safety_gate_enabled
+        or config.cem_hand_gate_enabled
+        or config.cem_posture_gate_enabled
+    )
+
+
+def _cem_min_valid_frac(config: Config) -> float:
+    vals = []
+    if config.cem_safety_gate_enabled or config.cem_hand_gate_enabled:
+        vals.append(float(config.cem_safety_gate_min_valid_frac))
+    if config.cem_posture_gate_enabled:
+        vals.append(float(config.cem_posture_gate_min_valid_frac))
+    return max(vals) if vals else float(config.cem_safety_gate_min_valid_frac)
+
+
 def _sample_ctrls_impl(
     config, ctrls: torch.Tensor, sample_params: dict | None = None
 ) -> torch.Tensor:
@@ -82,7 +99,7 @@ def _compute_sample_gate_info(
     config: Config, info_combined: dict[str, torch.Tensor]
 ) -> dict[str, torch.Tensor] | None:
     """Build sample-level gate masks with independent body/hand thresholds."""
-    if not (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled):
+    if not _cem_any_gate_enabled(config):
         return None
 
     gate_masks: list[torch.Tensor] = []
@@ -165,6 +182,58 @@ def _compute_sample_gate_info(
             config.cem_hand_gate_min_sdf_m,
             config.cem_hand_gate_max_violation_pct,
             config.cem_hand_gate_hard_floor_m,
+        )
+    if config.cem_posture_gate_enabled and {
+        "cem_posture_z_err",
+        "cem_posture_z_drop",
+    }.issubset(info_combined):
+        z_err = info_combined["cem_posture_z_err"]
+        z_drop = info_combined["cem_posture_z_drop"]
+        terminal_frac = float(config.cem_posture_gate_terminal_frac)
+        terminal_steps = max(1, int(np.ceil(z_err.shape[0] * terminal_frac)))
+        mean_z_err = z_err.mean(dim=0)
+        terminal_z_err = z_err[-terminal_steps:].mean(dim=0)
+        max_z_drop = z_drop.max(dim=0).values
+        valid_mask = (
+            (mean_z_err <= config.cem_posture_gate_mean_z_err_m)
+            & (terminal_z_err <= config.cem_posture_gate_terminal_z_err_m)
+            & (max_z_drop <= config.cem_posture_gate_max_z_drop_m)
+        )
+        violation = (
+            torch.clamp(mean_z_err - config.cem_posture_gate_mean_z_err_m, min=0.0)
+            / 0.05
+            + torch.clamp(
+                terminal_z_err - config.cem_posture_gate_terminal_z_err_m,
+                min=0.0,
+            )
+            / 0.05
+            + torch.clamp(max_z_drop - config.cem_posture_gate_max_z_drop_m, min=0.0)
+            / 0.05
+        )
+        gate_masks.append(valid_mask)
+        sample_gate_min_sdf = (
+            -violation
+            if sample_gate_min_sdf is None
+            else torch.minimum(sample_gate_min_sdf, -violation)
+        )
+        sample_gate_violation_pct = (
+            violation
+            if sample_gate_violation_pct is None
+            else torch.maximum(sample_gate_violation_pct, violation)
+        )
+        sample_gate_violation_depth_mean = (
+            violation
+            if sample_gate_violation_depth_mean is None
+            else torch.maximum(sample_gate_violation_depth_mean, violation)
+        )
+        out.update(
+            {
+                "sample_posture_mean_z_err": mean_z_err,
+                "sample_posture_terminal_z_err": terminal_z_err,
+                "sample_posture_max_z_drop": max_z_drop,
+                "sample_posture_violation": violation,
+                "sample_posture_valid_mask": valid_mask,
+            }
         )
 
     if not gate_masks:
@@ -358,6 +427,7 @@ def _compute_weights_with_gate_impl(
     violation_pct: torch.Tensor,
     violation_depth: torch.Tensor,
     min_valid_frac: float,
+    fallback_score: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, bool]:
     """Compute elite weights after applying a sample-level hard safety gate."""
     nan_mask = torch.isnan(rews) | torch.isinf(rews)
@@ -375,13 +445,16 @@ def _compute_weights_with_gate_impl(
     fallback_used = valid_count < min_valid_count
 
     if fallback_used:
-        rew_std = rews_clean.std(unbiased=False).clamp(min=1e-6)
-        rew_norm = (rews_clean - rews_clean.mean()) / rew_std
-        fallback_score = (
-            -violation_depth.to(rews.device)
-            - violation_pct.to(rews.device)
-            + 1e-3 * rew_norm
-        )
+        if fallback_score is None:
+            rew_std = rews_clean.std(unbiased=False).clamp(min=1e-6)
+            rew_norm = (rews_clean - rews_clean.mean()) / rew_std
+            fallback_score = (
+                -violation_depth.to(rews.device)
+                - violation_pct.to(rews.device)
+                + 1e-3 * rew_norm
+            )
+        else:
+            fallback_score = fallback_score.to(rews.device)
         fallback_score = torch.where(
             nan_mask,
             torch.full_like(fallback_score, -float("inf")),
@@ -458,7 +531,7 @@ def make_optimize_once_fn(
             )
             min_rew = torch.minimum(min_rew, rews)
             if (
-                (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+                _cem_any_gate_enabled(config)
                 and "sample_gate_valid_mask" in rollout_info
             ):
                 valid_mask = rollout_info["sample_gate_valid_mask"]
@@ -490,7 +563,7 @@ def make_optimize_once_fn(
         # Use worst-case rewards across DR parameter sets
         rews = min_rew
         if (
-            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+            _cem_any_gate_enabled(config)
             and combined_gate_valid_mask is not None
         ):
             rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
@@ -507,12 +580,21 @@ def make_optimize_once_fn(
             sample_params.get("elite_fraction", 0.1) if sample_params else 0.1
         )
         gate_enabled = (
-            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+            _cem_any_gate_enabled(config)
             and "sample_gate_valid_mask" in rollout_info
         )
         selected_indices = None
         gate_fallback_used = False
         if gate_enabled:
+            fallback_score = None
+            if (
+                config.cem_posture_gate_enabled
+                and "sample_posture_violation" in rollout_info
+            ):
+                fallback_score = rews - (
+                    float(config.cem_posture_gate_fallback_lambda)
+                    * rollout_info["sample_posture_violation"].to(rews.device)
+                )
             weights, nan_mask, selected_indices, gate_fallback_used = (
                 _compute_weights_with_gate_impl(
                     rews,
@@ -522,7 +604,8 @@ def make_optimize_once_fn(
                     rollout_info["sample_gate_valid_mask"],
                     rollout_info["sample_gate_violation_pct"],
                     rollout_info["sample_gate_violation_depth_mean"],
-                    config.cem_safety_gate_min_valid_frac,
+                    _cem_min_valid_frac(config),
+                    fallback_score,
                 )
             )
         elif config.use_torch_compile and elite_fraction == 0.1:
@@ -631,6 +714,17 @@ def make_optimize_once_fn(
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
                 )
+            if "sample_posture_valid_mask" in rollout_info:
+                posture_mask = rollout_info["sample_posture_valid_mask"]
+                info["cem_posture_gate_valid_frac"] = (
+                    posture_mask.float().mean().item()
+                )
+                info["cem_posture_gate_selected_valid_frac"] = (
+                    posture_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
 
         # Downsample and store trace site positions for selected sample trajectories
         if "trace" in rollout_info:

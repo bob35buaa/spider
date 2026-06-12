@@ -23,6 +23,8 @@ import warp as wp
 from spider.config import Config
 from spider.math import quat_sub
 from spider.optimizers.sampling import (
+    _cem_any_gate_enabled,
+    _cem_min_valid_frac,
     _compute_sample_gate_info,
     _compute_weights_compiled,
     _compute_weights_impl,
@@ -374,7 +376,7 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
             )
             min_rew = torch.minimum(min_rew, rews)
             if (
-                (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+                _cem_any_gate_enabled(config)
                 and "sample_gate_valid_mask" in rollout_info
             ):
                 valid_mask = rollout_info["sample_gate_valid_mask"]
@@ -405,7 +407,7 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                 )
         rews = min_rew
         if (
-            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+            _cem_any_gate_enabled(config)
             and combined_gate_valid_mask is not None
         ):
             rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
@@ -416,12 +418,21 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
             )
 
         gate_enabled = (
-            (config.cem_safety_gate_enabled or config.cem_hand_gate_enabled)
+            _cem_any_gate_enabled(config)
             and "sample_gate_valid_mask" in rollout_info
         )
         selected_indices = None
         gate_fallback_used = False
         if gate_enabled:
+            fallback_score = None
+            if (
+                config.cem_posture_gate_enabled
+                and "sample_posture_violation" in rollout_info
+            ):
+                fallback_score = rews - (
+                    float(config.cem_posture_gate_fallback_lambda)
+                    * rollout_info["sample_posture_violation"].to(rews.device)
+                )
             weights, nan_mask, selected_indices, gate_fallback_used = (
                 _compute_weights_with_gate_impl(
                     rews,
@@ -431,7 +442,8 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     rollout_info["sample_gate_valid_mask"],
                     rollout_info["sample_gate_violation_pct"],
                     rollout_info["sample_gate_violation_depth_mean"],
-                    config.cem_safety_gate_min_valid_frac,
+                    _cem_min_valid_frac(config),
+                    fallback_score,
                 )
             )
         elif config.use_torch_compile:
@@ -528,6 +540,17 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
                 )
+            if "sample_posture_valid_mask" in rollout_info:
+                posture_mask = rollout_info["sample_posture_valid_mask"]
+                info["cem_posture_gate_valid_frac"] = (
+                    posture_mask.float().mean().item()
+                )
+                info["cem_posture_gate_selected_valid_frac"] = (
+                    posture_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
 
         if "trace" in rollout_info:
             info["trace_sample"] = rollout_info["trace"][sel_idx].cpu().numpy()

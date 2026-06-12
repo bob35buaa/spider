@@ -326,6 +326,16 @@ class Config:
     # E153: see cem_safety_gate_hard_floor_m. NaN (default) => floor = min_sdf_m
     # (legacy, max_violation_pct inert). Set deeper (e.g. -0.020) to activate.
     cem_hand_gate_hard_floor_m: float = float("nan")
+    # E160: sample-level posture gate for CEM elite selection. This compares the
+    # simulated root height to the reference root height, so naturally crouched
+    # reference motions are not rejected by an absolute pelvis-z threshold.
+    cem_posture_gate_enabled: bool = False
+    cem_posture_gate_mean_z_err_m: float = 0.10
+    cem_posture_gate_terminal_z_err_m: float = 0.12
+    cem_posture_gate_max_z_drop_m: float = 0.18
+    cem_posture_gate_terminal_frac: float = 0.15
+    cem_posture_gate_min_valid_frac: float = 0.05
+    cem_posture_gate_fallback_lambda: float = 5.0
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
