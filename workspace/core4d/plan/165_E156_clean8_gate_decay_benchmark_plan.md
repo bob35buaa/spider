@@ -8,10 +8,11 @@ E155 在 3 个 selected case 上验证了 `decay` 放手平滑策略：在 `core
 当前需要把 case 范围扩大到历史 clean benchmark 的 8 个 case，判断该结论是否能从 3 case 推广到
 E149/E150 固定过的 `relaxed8_valid_like` benchmark。
 
-本实验只比较 3 个方法：
+本实验主比较 3 个 SPIDER 方法，并额外加入 OmniRetarget reference 作为评测表 baseline：
 
 | 方法 | 名称 | 定义 |
 |---|---|---|
+| reference baseline | `OmniRetarget` | 每个 case 的 `trajectory_kinematic.npz` 输入参考，按 E154 口径转换到 `scene_act.xml` 后评测 |
 | baseline | `spider-rubberhand` | E148 rubber hand CEM 结果，不加 gate、不加 B1/decay |
 | +gateA | `+gateA` | rubberhand + hand SDF CEM gate |
 | E155_decay | `E155_decay` | gateA+B1 hand-support + carry-union mask + tail decay |
@@ -44,6 +45,14 @@ workspace/core4d/results/E143/contact_masks/<case>/raw_contact_mask_3cm.npz
 - 复用 E148 rubberhand 8/8 结果。
 - 显示名固定为 `spider-rubberhand`。
 - 如果实现时发现 E148 某个 artifact 缺失，只补跑缺失 baseline，不重跑已完整 case。
+
+### 2.1a `OmniRetarget`
+
+- 不启动 CEM，不重跑 OmniRetarget。
+- 对每个 clean8 case 读取本地 `trajectory_kinematic.npz`（CEM 输入参考）。
+- 参考 E154 evaluator：将 freejoint object qpos 转为对应 `base_scene_act` 的 6DoF object actuation qpos，再用同一
+  `core4d-e154-physics-contact-v1` 口径评测。
+- 该行只作为 reference baseline 进入 XLSX/TSV 对比，不参与 E156 promotion 判据。
 
 ### 2.2 `+gateA`
 
@@ -114,7 +123,7 @@ workspace/core4d/results/E143/contact_masks/<case>/raw_contact_mask_3cm.npz
 2. 生成 `variants.tsv`，包含 24 method rows，并标注 `reuse_e148` / `reuse_e155` / `to_run`。
 3. 为 `+gateA` 和缺失的 `E155_decay` 生成 Hydra override。
 4. 写 local/remote/pull 脚本；支持 `STAGE=smoke|full`、`CASE_METHODS=case:method ...`、已完成自动 skip。
-5. 写 evaluator，直接 import `eval.core.core_metrics`，使用 `core4d-e154-physics-contact-v1`。
+5. 写 evaluator，直接 import `eval.core.core_metrics`，使用 `core4d-e154-physics-contact-v1`；同时按 E154 方式加入 `OmniRetarget` reference 行。
 6. 输出 TSV/JSON/XLSX；XLSX 中最优黑色加粗、次优下划线。
 
 ## 5. 指标与成功标准
@@ -183,7 +192,7 @@ bash -n workspace/core4d/scripts/eval/wrappers/eval_E156_clean8_gate_decay.sh
 ### 6.4 Full + Eval
 
 - full CEM 新跑 13/13 complete。
-- strict eval `missing=[]`。
+- strict eval `missing=[]`，且 method rows 为 `OmniRetarget` + 3 个 SPIDER 方法共 32 行。
 - 输出 method summary、per-case metrics、delta vs baseline、delta vs gateA。
 - XLSX 无 Excel error cells，best/second formatting 存在。
 

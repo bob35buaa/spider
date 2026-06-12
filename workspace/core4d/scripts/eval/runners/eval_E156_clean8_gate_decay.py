@@ -12,9 +12,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import mujoco
 import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from scipy.spatial.transform import Rotation as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from eval.core.core_metrics import (  # noqa: E402
@@ -40,7 +42,7 @@ GATE_HEALTH_KEYS = {
     "sample_hand_gate_violation_pct_mean": ("mean", "hand_gate_violation_pct"),
 }
 
-METHOD_ORDER = ["spider-rubberhand", "+gateA", "E155_decay"]
+METHOD_ORDER = ["OmniRetarget", "spider-rubberhand", "+gateA", "E155_decay"]
 TRACK_DIAG = list(STANDARD_TRACK_DIAG)
 DELTA_METRICS = list(STANDARD_DELTA_METRICS)
 MASK_DELTA = list(STANDARD_MASK_DELTA_METRICS)
@@ -139,6 +141,62 @@ def stage_video(row: dict[str, str], stage: str) -> Path:
     return RESULT_ROOT / "cem" / stage / f"{row['variant']}_{stage}.mp4"
 
 
+def scene_euler_convention(scene_act: Path) -> str:
+    meta = scene_act.parent / "scene_act_meta.json"
+    if meta.is_file():
+        return str(json.loads(meta.read_text(encoding="utf-8")).get("euler_convention", "XYZ"))
+    return "XYZ"
+
+
+def convert_freejoint_to_scene_act(qpos: np.ndarray, scene_act: Path) -> np.ndarray:
+    model = mujoco.MjModel.from_xml_path(str(scene_act))
+    if qpos.shape[1] == model.nq:
+        return qpos.astype(np.float64, copy=True)
+    nq_robot = model.nq - 6
+    if qpos.shape[1] < nq_robot + 7:
+        raise ValueError(f"cannot convert qpos shape={qpos.shape} for scene nq={model.nq}: {scene_act}")
+
+    obj_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+    if obj_body < 0:
+        raise ValueError(f"scene has no object body: {scene_act}")
+
+    obj_pos_world = qpos[:, nq_robot : nq_robot + 3]
+    obj_quat_wxyz = qpos[:, nq_robot + 3 : nq_robot + 7]
+    body_pos = model.body_pos[obj_body]
+    body_quat_wxyz = model.body_quat[obj_body]
+    body_quat_xyzw = [body_quat_wxyz[1], body_quat_wxyz[2], body_quat_wxyz[3], body_quat_wxyz[0]]
+    r_body = R.from_quat(body_quat_xyzw)
+
+    obj_slide = r_body.inv().apply(obj_pos_world - body_pos[np.newaxis, :])
+    obj_quat_xyzw = np.column_stack(
+        [obj_quat_wxyz[:, 1], obj_quat_wxyz[:, 2], obj_quat_wxyz[:, 3], obj_quat_wxyz[:, 0]]
+    )
+    obj_euler = (r_body.inv() * R.from_quat(obj_quat_xyzw)).as_euler(scene_euler_convention(scene_act))
+
+    out = np.zeros((qpos.shape[0], model.nq), dtype=np.float64)
+    out[:, :nq_robot] = qpos[:, :nq_robot]
+    out[:, nq_robot : nq_robot + 3] = obj_slide
+    out[:, nq_robot + 3 : nq_robot + 6] = obj_euler
+    return out
+
+
+def omniretarget_qpos(row: dict[str, str], eval_dir: Path) -> Path:
+    trajectory = repo_path(row["trajectory"])
+    scene_act = repo_path(row["base_scene_act"])
+    data = np.load(trajectory, allow_pickle=True)
+    qpos = np.asarray(data["qpos"], dtype=np.float64)
+    if qpos.ndim == 3:
+        qpos = qpos[:, 0, :]
+    if qpos.ndim != 2:
+        raise ValueError(f"unsupported OmniRetarget qpos shape={qpos.shape}: {trajectory}")
+
+    qpos_dir = eval_dir / "omni_converted_qpos"
+    qpos_dir.mkdir(parents=True, exist_ok=True)
+    qpos_path = qpos_dir / f"E156_{row['short_case_id']}_omniretarget_scene_act_qpos.npz"
+    np.savez_compressed(qpos_path, qpos=convert_freejoint_to_scene_act(qpos, scene_act))
+    return qpos_path
+
+
 def gate_health(qpos_path: Path) -> dict[str, Any]:
     out: dict[str, Any] = {dst: "" for _, (_, dst) in GATE_HEALTH_KEYS.items()}
     if not qpos_path.is_file():
@@ -195,6 +253,41 @@ def evaluate_row(row: dict[str, str], qpos_path: Path, cfg: EvalConfig) -> dict[
     }
 
 
+def evaluate_omniretarget_row(row: dict[str, str], eval_dir: Path, cfg: EvalConfig) -> dict[str, Any] | None:
+    scene = repo_path(row["base_scene_act"])
+    trajectory = repo_path(row["trajectory"])
+    if not scene.is_file() or not trajectory.is_file():
+        return None
+    qpos_path = omniretarget_qpos(row, eval_dir)
+    eval_row = dict(row)
+    eval_row["variant"] = f"E156_{row['short_case_id']}_omniretarget"
+    item = evaluate_sequence(
+        row=eval_row,
+        method="OmniRetarget",
+        hand_collision_variant_id="OmniRetarget",
+        qpos_path=qpos_path,
+        scene_xml=scene,
+        config=cfg,
+        kin_ref_path=trajectory,
+        contact_mask_path=contact_mask_for_case(row["short_case_id"]),
+        person_idx=person_idx_from_case(row["short_case_id"]),
+    )
+    add_success_flags(item, cfg)
+    return {
+        **item,
+        "short_case_id": row["short_case_id"],
+        "variant": eval_row["variant"],
+        "method": "OmniRetarget",
+        "method_group": "omniretarget",
+        "run_status": "recomputed_reference",
+        "source_exp": "E156",
+        "split": "reference",
+        "result_npz": rel(qpos_path),
+        "video": "",
+        **{dst: "" for _, (_, dst) in GATE_HEALTH_KEYS.items()},
+    }
+
+
 def mean(values: list[Any]) -> float:
     vals = [finite(v) for v in values]
     vals = [v for v in vals if math.isfinite(v)]
@@ -232,20 +325,26 @@ def summarize_method(method: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def build_delta_rows(metric_rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def build_delta_rows(
+    metric_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     by_case_method = {(r["short_case_id"], r["method"]): r for r in metric_rows}
+    vs_omni: list[dict[str, Any]] = []
     vs_baseline: list[dict[str, Any]] = []
     vs_gate: list[dict[str, Any]] = []
     for case in sorted({r["short_case_id"] for r in metric_rows}):
+        omni = by_case_method.get((case, "OmniRetarget"))
         base = by_case_method.get((case, "spider-rubberhand"))
         gate = by_case_method.get((case, "+gateA"))
-        for method in ("+gateA", "E155_decay"):
+        for method in ("spider-rubberhand", "+gateA", "E155_decay"):
             run = by_case_method.get((case, method))
-            if base and run:
+            if omni and run:
+                vs_omni.append(delta_row(case, run, omni, "OmniRetarget"))
+            if base and run and method != "spider-rubberhand":
                 vs_baseline.append(delta_row(case, run, base, "spider-rubberhand"))
             if gate and run and method == "E155_decay":
                 vs_gate.append(delta_row(case, run, gate, "+gateA"))
-    return vs_baseline, vs_gate
+    return vs_omni, vs_baseline, vs_gate
 
 
 def delta_row(case: str, run: dict[str, Any], ref: dict[str, Any], ref_method: str) -> dict[str, Any]:
@@ -310,7 +409,15 @@ def rank_styles(values: list[float], direction: int) -> tuple[int | None, int | 
     return best, second
 
 
-def write_xlsx(path: Path, method_summary: list[dict[str, Any]], metric_rows: list[dict[str, Any]], delta_vs_baseline: list[dict[str, Any]], delta_vs_gate: list[dict[str, Any]], promotion: dict[str, Any]) -> None:
+def write_xlsx(
+    path: Path,
+    method_summary: list[dict[str, Any]],
+    metric_rows: list[dict[str, Any]],
+    delta_vs_omni: list[dict[str, Any]],
+    delta_vs_baseline: list[dict[str, Any]],
+    delta_vs_gate: list[dict[str, Any]],
+    promotion: dict[str, Any],
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
     ws = wb.active
@@ -337,6 +444,7 @@ def write_xlsx(path: Path, method_summary: list[dict[str, Any]], metric_rows: li
 
     for title, rows2 in (
         ("per_case_metrics", metric_rows),
+        ("delta_vs_omniretarget", delta_vs_omni),
         ("delta_vs_baseline", delta_vs_baseline),
         ("delta_vs_gateA", delta_vs_gate),
     ):
@@ -373,6 +481,14 @@ def main() -> None:
     rows = read_tsv(VARIANTS_TSV)
     metric_rows: list[dict[str, Any]] = []
     missing: list[str] = []
+    baseline_rows = [row for row in rows if row.get("method") == "spider-rubberhand"]
+
+    for row in baseline_rows:
+        metrics = evaluate_omniretarget_row(row, eval_dir, cfg)
+        if metrics is None:
+            missing.append(f"E156_{row['short_case_id']}_omniretarget")
+            continue
+        metric_rows.append(metrics)
 
     for row in rows:
         qpos = stage_qpos(row, args.stage)
@@ -383,7 +499,7 @@ def main() -> None:
         metric_rows.append(metrics)
 
     method_summary = [summarize_method(method, [r for r in metric_rows if r["method"] == method]) for method in METHOD_ORDER]
-    delta_vs_baseline, delta_vs_gate = build_delta_rows(metric_rows)
+    delta_vs_omni, delta_vs_baseline, delta_vs_gate = build_delta_rows(metric_rows)
     promotion = promotion_summary(method_summary, delta_vs_gate)
 
     metric_fields = (
@@ -405,8 +521,12 @@ def main() -> None:
             "hand_geom_penetration_5mm_frac",
             "hand_object_physics_contact_3mm_frac",
             "hand_object_physics_contact_5mm_frac",
+            "hand_object_physics_contact_3mm_in_mask_frac",
+            "hand_object_physics_contact_5mm_in_mask_frac",
             "hand_object_physics_penetration_3mm_frame_frac",
             "hand_object_physics_penetration_5mm_frame_frac",
+            "hand_object_release_false_contact_3mm_frac",
+            "hand_object_release_false_contact_5mm_frac",
             "leg_penetration_frac",
             "obj_err_mean_m",
         ]
@@ -435,6 +555,7 @@ def main() -> None:
 
     write_tsv(eval_dir / "e156_method_metrics.tsv", metric_rows, metric_fields)
     write_tsv(eval_dir / "e156_method_summary.tsv", method_summary, summary_fields)
+    write_tsv(eval_dir / "e156_delta_vs_omniretarget.tsv", delta_vs_omni, delta_fields)
     write_tsv(eval_dir / "e156_delta_vs_spider_rubberhand.tsv", delta_vs_baseline, delta_fields)
     write_tsv(eval_dir / "e156_delta_vs_gateA.tsv", delta_vs_gate, delta_fields)
     write_json(
@@ -444,6 +565,7 @@ def main() -> None:
             "stage": args.stage,
             "metric_rows": len(metric_rows),
             "method_rows": len(method_summary),
+            "delta_vs_omniretarget_rows": len(delta_vs_omni),
             "delta_vs_baseline_rows": len(delta_vs_baseline),
             "delta_vs_gate_rows": len(delta_vs_gate),
             "missing": missing,
@@ -455,13 +577,15 @@ def main() -> None:
         eval_dir / "E156_clean8_gate_decay_benchmark.xlsx",
         method_summary,
         metric_rows,
+        delta_vs_omni,
         delta_vs_baseline,
         delta_vs_gate,
         promotion,
     )
     print(
         f"E156 eval: metric_rows={len(metric_rows)} methods={len(method_summary)} "
-        f"delta_vs_baseline={len(delta_vs_baseline)} delta_vs_gate={len(delta_vs_gate)} missing={len(missing)}"
+        f"delta_vs_omni={len(delta_vs_omni)} delta_vs_baseline={len(delta_vs_baseline)} "
+        f"delta_vs_gate={len(delta_vs_gate)} missing={len(missing)}"
     )
     if missing:
         print("MISSING:", missing)
