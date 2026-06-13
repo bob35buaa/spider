@@ -24,6 +24,8 @@ S6_ROOT = REPO / "workspace/core4d/scripts/data_construction_v3/stages/s6_downst
 RAW_ROOT = Path("/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real")
 SMPLX_DIR = Path("/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/smplx")
 HOLOSOMA_REPO = Path("/home/ubuntu/Workspace/holosoma")
+SOURCE_EXP_ID = "E161"
+SPIDER_METHOD_ID = "gateA_surfaceBandA2_postureRerankA_surfaceBandReleaseDecay"
 
 TARGET_SHORT_CASES = [
     "box021_035_p1",
@@ -55,6 +57,8 @@ HANDOFF_FIELDS = [
     "retarget_variant_id",
     "target_variant_id",
     "hand_collision_variant_id",
+    "source_exp_id",
+    "spider_method_id",
     "handoff_decision",
     "candidate_decision",
     "target_gate_status",
@@ -84,6 +88,8 @@ EVIDENCE_FIELDS = [
     "retarget_variant_id",
     "target_variant_id",
     "hand_collision_variant_id",
+    "source_exp_id",
+    "spider_method_id",
     "cem_status",
     "rl_status",
     "downstream_failure_mode",
@@ -104,6 +110,8 @@ SOURCE_FIELDS = [
     "seq",
     "person",
     "person_idx",
+    "source_exp_id",
+    "spider_method_id",
     "derived_task",
     "target_scene",
     "trajectory",
@@ -216,6 +224,8 @@ def load_sources() -> list[dict[str, str]]:
             "seq": seq,
             "person": person,
             "person_idx": variant["person_idx"],
+            "source_exp_id": SOURCE_EXP_ID,
+            "spider_method_id": SPIDER_METHOD_ID,
             "derived_task": variant["derived_task"],
             "target_scene": variant["target_scene"],
             "trajectory": variant["trajectory"],
@@ -285,6 +295,8 @@ def build_handoff_rows(source_rows: list[dict[str, str]]) -> list[dict[str, str]
                 "retarget_variant_id": "omnirt_v1",
                 "target_variant_id": "ref_fk",
                 "hand_collision_variant_id": "rubber_hull",
+                "source_exp_id": SOURCE_EXP_ID,
+                "spider_method_id": SPIDER_METHOD_ID,
                 "handoff_decision": "HANDOFF_READY",
                 "candidate_decision": "E161_RELEASE_DECAY_READY",
                 "target_gate_status": "pass",
@@ -321,6 +333,8 @@ def build_evidence_rows(source_rows: list[dict[str, str]]) -> list[dict[str, str
                 "retarget_variant_id": "omnirt_v1",
                 "target_variant_id": "ref_fk",
                 "hand_collision_variant_id": "rubber_hull",
+                "source_exp_id": SOURCE_EXP_ID,
+                "spider_method_id": SPIDER_METHOD_ID,
                 "cem_status": "pass",
                 "rl_status": "not_run",
                 "downstream_failure_mode": "",

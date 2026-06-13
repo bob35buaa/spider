@@ -28,6 +28,8 @@ FIELDS = [
     "retarget_variant_id",
     "target_variant_id",
     "hand_collision_variant_id",
+    "source_exp_id",
+    "spider_method_id",
     "candidate_decision",
     "handoff_decision",
     "cem_status",
@@ -134,6 +136,16 @@ def build_rows(
             "hand_collision_variant_id": pick(
                 ev.get("hand_collision_variant_id", ""),
                 base.get("hand_collision_variant_id", DEFAULT_HAND_COLLISION_VARIANT_ID),
+            ),
+            "source_exp_id": pick(
+                ev.get("source_exp_id", ""),
+                base.get("source_exp_id", ""),
+                ev.get("source_exp", ""),
+                base.get("source_exp", ""),
+            ),
+            "spider_method_id": pick(
+                ev.get("spider_method_id", ""),
+                base.get("spider_method_id", ""),
             ),
             "candidate_decision": base.get("candidate_decision", ""),
             "handoff_decision": base.get("handoff_decision", ""),

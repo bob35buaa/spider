@@ -403,6 +403,8 @@ S6 当前脚本输出：
 - `case_id`
 - `retarget_variant_id`
 - `target_variant_id`
+- `source_exp_id`
+- `spider_method_id`
 - `handoff_decision`
 - `target_gate_status`
 - `visual_qc_status`
@@ -425,6 +427,12 @@ S6 当前脚本输出：
 - `cem_result_exists`
 
 `rl_export_decision=RL_EXPORT_READY` 表示该 row 同时满足 S5 handoff ready、S4 gate/QC pass、CEM pass，并且 `scene_act`、`trajectory`、`cem_result_npz` 文件存在。RL 导出脚本只消费这些 rows。
+
+字段语义：
+
+- `target_variant_id` 只表示 SPIDER target route，例如 `ref_fk`、`adaptive`、`fingertip_aware`；不要把 CEM/reward 方法名写入该字段。
+- `spider_method_id` 表示 CEM/SPIDER 优化方法版本，例如 `gateA_surfaceBandA2_postureRerankA_surfaceBandReleaseDecay`。
+- `source_exp_id` 表示该 RL row 来源实验编号，例如 `E161`。
 
 ## retarget variant 注册表
 

@@ -206,7 +206,9 @@ workspace/core4d/results/E108/registries/
 
 正式实验根目录必须按 `s0_environment/`、`s1_raw_contact/`、...、`s6_downstream/` 组织。整理前的 smoke/临时目录只能放在 `archive_legacy/`，不得作为新脚本默认输入。
 
-RL motion export 不直接扫描 CEM 目录，也不只读 S5 handoff。CEM evidence 产生后，必须用 `stages/s6_downstream/export_rl_inputs.py` 生成 `s6_downstream/rl_export/rl_export_input.tsv`；下游只消费其中 `rl_export_decision=RL_EXPORT_READY` 的 rows。该表必须同时带 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`cem_status`，以保证 RL 转换使用的 `scene_act` 与 CEM 所属 target case 对齐。
+RL motion export 不直接扫描 CEM 目录，也不只读 S5 handoff。CEM evidence 产生后，必须用 `stages/s6_downstream/export_rl_inputs.py` 生成 `s6_downstream/rl_export/rl_export_input.tsv`；下游只消费其中 `rl_export_decision=RL_EXPORT_READY` 的 rows。该表必须同时带 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`cem_status`、`source_exp_id`、`spider_method_id`，以保证 RL 转换使用的 `scene_act` 与 CEM 所属 target case 对齐，并能区分来源实验和 CEM/SPIDER 方法版本。
+
+`target_variant_id` 只表示 target route，例如默认 `ref_fk`；不要把 `surfaceBandReleaseDecay`、`gateA` 等 CEM/reward/selection 方法写入该字段。SPIDER/CEM 方法版本写入 `spider_method_id`，来源实验编号写入 `source_exp_id`。
 
 Holosoma RL 输出可以留在 Holosoma 仓库自己的 `workspace/v3/data_construction/results/` 和 `logs/` 下，但 Core4D S6 registry 必须记录这些路径。
 

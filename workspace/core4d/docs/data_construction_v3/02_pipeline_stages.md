@@ -518,10 +518,12 @@ workspace/core4d/scripts/data_construction_v3/stages/s6_downstream/export_rl_inp
 
 输出：
 
-- `rl_export_input.tsv/json`：S5 handoff 与 S6 CEM evidence 的 join 表，包含 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`cem_status` 和 `rl_export_decision`；
+- `rl_export_input.tsv/json`：S5 handoff 与 S6 CEM evidence 的 join 表，包含 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`cem_status`、`source_exp_id`、`spider_method_id` 和 `rl_export_decision`；
 - `rl_export_summary.json/md`：`RL_EXPORT_READY`、`SKIP_CEM_FAIL`、`WAIT_CEM_NOT_RUN` 等分布。
 
 下游 RL 导出只消费 `rl_export_input.tsv` 中 `rl_export_decision=RL_EXPORT_READY` 的 rows。S5 保持 CEM 前 handoff 语义，不写入 CEM 后验结果。
+
+`target_variant_id` 只描述 target route，例如默认 `ref_fk`；CEM/SPIDER reward 或 selection 方法版本必须写入 `spider_method_id`，来源实验编号写入 `source_exp_id`。
 
 `manual_or_eval_results.tsv` 最小字段：
 

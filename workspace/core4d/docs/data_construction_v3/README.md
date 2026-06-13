@@ -358,7 +358,9 @@ workspace/core4d/scripts/data_construction_v3/stages/s6_downstream/export_rl_inp
 $RUN_DIR/s6_downstream/rl_export/rl_export_input.tsv
 ```
 
-并只消费 `rl_export_decision=RL_EXPORT_READY` 的 rows。这个 TSV 同时包含 `scene_act`、`trajectory`、`contact_mask` 和 `cem_result_npz`，避免 RL 脚本重新猜路径。
+并只消费 `rl_export_decision=RL_EXPORT_READY` 的 rows。这个 TSV 同时包含 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`、`source_exp_id` 和 `spider_method_id`，避免 RL 脚本重新猜路径或混淆 CEM/SPIDER 方法版本。
+
+`target_variant_id` 只表示 target route，例如默认 `ref_fk`；CEM/reward/selection 方法版本写入 `spider_method_id`，来源实验编号写入 `source_exp_id`。
 
 S5 后建议跑一次 run 级可复现性检查：
 

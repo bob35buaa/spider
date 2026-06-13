@@ -200,3 +200,21 @@ python3 -m py_compile workspace/core4d/scripts/experiments/E161/export_releaseDe
 bash -n workspace/core4d/scripts/launch/active/run_E161_releaseDecay_rl_export.sh
 git diff --check
 ```
+
+### 7.1 方法版本字段修正
+
+用户指出 `target_variant_id=ref_fk` 不能表达 `surfaceBandReleaseDecay` 方法版本。确认后修正如下：
+
+- `target_variant_id` 继续只表示 target route，本实验仍为 `ref_fk`。
+- `spider_method_id` 新增为 CEM/SPIDER 方法版本，本实验为 `gateA_surfaceBandA2_postureRerankA_surfaceBandReleaseDecay`。
+- `source_exp_id` 新增为来源实验编号，本实验为 `E161`。
+
+已更新通用 S6 脚本 `export_rl_inputs.py` 与 `record_downstream_evidence.py`，并重跑 E161 export 刷新结果：
+
+```text
+s5_handoff/handoff_manifest.tsv: source_exp_id=E161, spider_method_id=gateA_surfaceBandA2_postureRerankA_surfaceBandReleaseDecay, target_variant_id=ref_fk
+s6_downstream/evidence/downstream_evidence_manifest.tsv: 同上
+s6_downstream/rl_export/rl_export_input.tsv: 同上，8/8 RL_EXPORT_READY
+```
+
+同时更新 v3 docs 与 `.codex/skills/data-construction-v3-zh/SKILL.md`：后续 RL handoff 必须同时保留 `source_exp_id` 与 `spider_method_id`，不能把 CEM/reward 方法写入 `target_variant_id`。
