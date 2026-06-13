@@ -139,3 +139,64 @@ E161 支持把 `surfaceBandReleaseDecay` 作为下一轮默认候选。它解决
 
 1. 以 M1 `gateA+surfaceBand-A2+postureRerankA+surfaceBandReleaseDecay` 做 clean8 视觉抽查和下游 RL handoff 候选。
 2. 如继续优化 release，可做 `horizon-aware release decay`：对 rollout horizon 内 reference release 帧同步衰减 surface reward，而不只是按全局 tail time 衰减。
+
+## 7. 追加：releaseDecay clean8 下游 RL handoff
+
+用户确认 `surfaceBandReleaseDecay` 作为当前可用优化后，已在 E161 内追加 S6/RL handoff 导出，不新开实验编号。
+
+新增脚本：
+
+| 文件 | 内容 |
+|---|---|
+| `scripts/experiments/E161/export_releaseDecay_rl_handoff.py` | 从 E161 `variants.tsv` 与 strict metrics 读取 M1 releaseDecay clean8 源行，生成 S5/S6/RL export |
+| `scripts/launch/active/run_E161_releaseDecay_rl_export.sh` | 正式导出入口，默认执行 partner OmniRetarget，允许单 case 失败并记录 |
+
+结果根目录：
+
+```text
+workspace/core4d/results/E161/releaseDecay_rl_export/
+```
+
+关键产物：
+
+| 文件 | 内容 |
+|---|---|
+| `manifest/releaseDecay_source_rows.tsv` | 8 个 releaseDecay 源行快照 |
+| `s5_handoff/handoff_manifest.tsv` | S5 handoff manifest |
+| `s6_downstream/evidence/downstream_evidence_manifest.tsv` | S6 CEM evidence |
+| `s6_downstream/rl_export/rl_export_input.tsv` | 下游 RL 唯一输入索引 |
+| `s6_downstream/rl_export/partner_omnirt/rl_partner_omnirt_manifest.tsv` | partner OmniRetarget 结果索引 |
+| `summary.md` | 导出汇总 |
+
+校验结果：
+
+```text
+rl_export_rows=8
+rl_export_decision_counts={'RL_EXPORT_READY': 8}
+rl_missing_required=[]
+partner_rows=8
+partner_status_counts={'pass': 7, 'missing_outputs': 1}
+```
+
+Partner OmniRetarget 结果：
+
+| source | partner | status | trimmed frames |
+|---|---|---|---:|
+| `d003_box021_20231011_035_p1` | `box021_20231011_035_p2` | pass | 133 |
+| `d003_box021_20231011_035_p2` | `box021_20231011_035_p1` | pass | 127 |
+| `d003_box021_20231018_029_p2` | `box021_20231018_029_p1` | pass | 71 |
+| `e091_box004_20231003_2_083_p1` | `box004_20231003_2_083_p2` | pass | 105 |
+| `e091_box004_20231003_2_083_p2` | `box004_20231003_2_083_p1` | pass | 102 |
+| `box023_person2` | `box023_20231008_045_p1` | pass | 134 |
+| `e091_box004_20231003_2_082_p1` | `box004_20231003_2_082_p2` | missing_outputs | - |
+| `e091_box026_20231023_139_p1` | `box026_20231023_139_p2` | pass | 141 |
+
+`box004_20231003_2_082_p2` 失败原因仍是 Holosoma `robot_retarget.py` 中 CVXPY solve `infeasible`，与 E157 历史记录一致。为避免该失败阻断后续 case，E161 exporter 已改为在 `--allow-partner-failure` 下逐 source case 执行 partner OmniRetarget，最后重建完整 8 行 partner manifest 并按输出文件存在性标记 `pass/missing_outputs`。
+
+静态与文件级检查：
+
+```text
+python3 -m py_compile workspace/core4d/scripts/experiments/E161/export_releaseDecay_rl_handoff.py
+bash -n workspace/core4d/scripts/launch/active/run_E161_releaseDecay_rl_export.sh
+git diff --check
+```

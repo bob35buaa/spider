@@ -412,3 +412,40 @@ Full：
 - M1 tail decay 可能对短序列尾部过强，导致搬运末段接触下降。
 - M2 strict mask 可能在 mask 边界造成奖励突变，触发接触掉点或 posture tradeoff。
 - 如果 M0 扩到 clean8 后本身在新 5 case 上不稳定，需要先分析 M0 clean8 的 posture/fall，再解释 M1/M2。
+
+## 11. 追加：M1 releaseDecay 下游 RL handoff
+
+用户确认 M1 `surfaceBandReleaseDecay` 可以作为当前优化方法后，本计划追加 S6/RL handoff，不新开实验编号。
+
+导出范围：
+
+```text
+box021_035_p1
+box021_035_p2
+box021_029_p2
+box004_083_p1
+box004_083_p2
+box023_person2
+box004_082_p1
+box026_139_p1
+```
+
+导出产物：
+
+```text
+workspace/core4d/results/E161/releaseDecay_rl_export/
+```
+
+执行入口：
+
+```bash
+workspace/core4d/scripts/launch/active/run_E161_releaseDecay_rl_export.sh
+```
+
+要求：
+
+1. `rl_export_input.tsv` 必须 8/8 `RL_EXPORT_READY`。
+2. 每行必须有存在的 `scene_act`、`trajectory`、`contact_mask`、`cem_result_npz`。
+3. `scene_act` 使用 releaseDecay 源行的 rubber hand sidecar scene。
+4. 生成 partner OmniRetarget 临时结果；单个 partner 失败不能阻断其他 case，必须在 partner manifest 中记录。
+5. `box004_20231003_2_082_p2` 若继续 CVXPY infeasible，按历史失败记录为 `missing_outputs / partner_omnirt_outputs_missing`。
