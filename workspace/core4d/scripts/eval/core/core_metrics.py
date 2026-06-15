@@ -163,6 +163,12 @@ TRACK_MASK_FIELDS = [
     "hand_object_clean_physics_contact_in_mask_frac",
     "hand_object_physics_contact_3mm_in_mask_frac",
     "hand_object_physics_contact_5mm_in_mask_frac",
+    "rl_object_contact_ref_frac",
+    "rl_object_contact_gap_fill_frames",
+    "rl_object_contact_filled_frame_count",
+    "hand_object_physics_contact_in_rl_mask_frac",
+    "hand_object_physics_contact_3mm_in_rl_mask_frac",
+    "hand_object_physics_contact_5mm_in_rl_mask_frac",
     "hand_object_false_contact_frac",
     "hand_object_clean_false_contact_frac",
     "hand_object_false_contact_3mm_frac",
@@ -186,6 +192,7 @@ METRIC_FIELDS += TRACK_MASK_FIELDS
 
 EVAL_METRIC_STANDARD_ID = "core4d-e154-physics-contact-v1"
 PHYSICS_CONTACT_THRESHOLDS_M = (0.003, 0.005)
+DOWNSTREAM_RL_CONTACT_GAP_FILL_FRAMES = 5
 
 # Minimal core metrics suitable as a shared baseline set. Kept for older scripts.
 CORE_METRICS = [
@@ -281,6 +288,12 @@ STANDARD_TRACK_DIAG = [
     "hand_object_clean_physics_contact_in_mask_frac",
     "hand_object_physics_contact_3mm_in_mask_frac",
     "hand_object_physics_contact_5mm_in_mask_frac",
+    "rl_object_contact_ref_frac",
+    "rl_object_contact_gap_fill_frames",
+    "rl_object_contact_filled_frame_count",
+    "hand_object_physics_contact_in_rl_mask_frac",
+    "hand_object_physics_contact_3mm_in_rl_mask_frac",
+    "hand_object_physics_contact_5mm_in_rl_mask_frac",
     "hand_object_false_contact_frac",
     "hand_object_clean_false_contact_frac",
     "hand_object_false_contact_3mm_frac",
@@ -702,6 +715,30 @@ def _tracking_metrics(
     return out
 
 
+def _fill_internal_false_gaps(mask: np.ndarray, max_gap_frames: int) -> tuple[np.ndarray, int]:
+    filled = np.asarray(mask, dtype=np.bool_).copy()
+    if filled.ndim == 1:
+        filled = filled[:, None]
+    changed_frames = np.zeros((filled.shape[0],), dtype=np.bool_)
+    for col in range(filled.shape[1]):
+        values = filled[:, col]
+        i = 0
+        while i < values.shape[0]:
+            if values[i]:
+                i += 1
+                continue
+            start = i
+            while i < values.shape[0] and not values[i]:
+                i += 1
+            end = i
+            if start == 0 or end == values.shape[0]:
+                continue
+            if end - start <= max_gap_frames and values[start - 1] and values[end]:
+                values[start:end] = True
+                changed_frames[start:end] = True
+    return filled, int(np.count_nonzero(changed_frames))
+
+
 def _masked_contact_metrics(
     hand_physics: list[bool],
     hand_clean_physics: list[bool],
@@ -725,6 +762,12 @@ def _masked_contact_metrics(
         "hand_object_clean_physics_contact_in_mask_frac",
         "hand_object_physics_contact_3mm_in_mask_frac",
         "hand_object_physics_contact_5mm_in_mask_frac",
+        "rl_object_contact_ref_frac",
+        "rl_object_contact_gap_fill_frames",
+        "rl_object_contact_filled_frame_count",
+        "hand_object_physics_contact_in_rl_mask_frac",
+        "hand_object_physics_contact_3mm_in_rl_mask_frac",
+        "hand_object_physics_contact_5mm_in_rl_mask_frac",
         "hand_object_false_contact_frac",
         "hand_object_clean_false_contact_frac",
         "hand_object_false_contact_3mm_frac",
@@ -774,6 +817,16 @@ def _masked_contact_metrics(
     m = mask_any[:H]
     ha = np.asarray(hand_arr[:H], dtype=np.float64)
     out["ref_contact_frac"] = float(np.mean(m))
+    any_hand = np.max(sm[:H, pi, :].astype(bool), axis=1)
+    rl_pair_mask = np.stack([any_hand, any_hand], axis=1)
+    rl_pair_filled, rl_filled_count = _fill_internal_false_gaps(
+        rl_pair_mask,
+        DOWNSTREAM_RL_CONTACT_GAP_FILL_FRAMES,
+    )
+    rl_mask = np.max(rl_pair_filled, axis=1)
+    out["rl_object_contact_gap_fill_frames"] = float(DOWNSTREAM_RL_CONTACT_GAP_FILL_FRAMES)
+    out["rl_object_contact_filled_frame_count"] = float(rl_filled_count)
+    out["rl_object_contact_ref_frac"] = float(np.mean(rl_mask))
     if m.any():
         out["hand_object_physics_contact_in_mask_frac"] = float(np.mean(rp[m]))
         out["hand_object_clean_physics_contact_in_mask_frac"] = float(np.mean(cp[m]))
@@ -781,6 +834,10 @@ def _masked_contact_metrics(
         out["hand_object_physics_contact_5mm_in_mask_frac"] = float(np.mean(c5[m]))
         out["hand_geom_penetration_2mm_in_mask_frac"] = float(np.mean(ha[m] < -0.002))
         out["hand_geom_penetration_5mm_in_mask_frac"] = float(np.mean(ha[m] < -0.005))
+    if rl_mask.any():
+        out["hand_object_physics_contact_in_rl_mask_frac"] = float(np.mean(rp[rl_mask]))
+        out["hand_object_physics_contact_3mm_in_rl_mask_frac"] = float(np.mean(c3[rl_mask]))
+        out["hand_object_physics_contact_5mm_in_rl_mask_frac"] = float(np.mean(c5[rl_mask]))
     if (~m).any():
         out["hand_object_false_contact_frac"] = float(np.mean(rp[~m]))
         out["hand_object_clean_false_contact_frac"] = float(np.mean(cp[~m]))

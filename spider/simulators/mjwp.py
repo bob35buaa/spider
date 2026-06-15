@@ -1007,6 +1007,10 @@ def get_reward(
     # E039: HDMI-aligned contact — predefined target points + per-EEF + mask gate
     # E040: dynamic per-frame target support
     contact_hdmi_rew = torch.zeros(N, device=config.device)
+    contact_hdmi_left_score = torch.zeros(N, device=config.device)
+    contact_hdmi_right_score = torch.zeros(N, device=config.device)
+    contact_hdmi_bimanual_gate = torch.zeros(N, device=config.device)
+    contact_hdmi_bimanual_score = torch.zeros(N, device=config.device)
     if config.contact_hdmi_gain > 0.0 and (
         config.contact_hdmi_target_left or contact_target_dynamic is not None
     ):
@@ -1141,9 +1145,38 @@ def get_reward(
                 raise ValueError(f"Unsupported contact_hdmi mask ndim {mask.ndim}")
             gain = config.contact_hdmi_gain
             # HDMI formula: mask=1 → gain*pos_rew, mask=0 → 1.0
-            contact_hdmi_rew = (
-                rew_stack * mask_eef * gain + (1.0 - mask_eef)
-            ).mean(dim=1)
+            if config.contact_hdmi_bimanual_required:
+                if rew_stack.shape[1] != 2:
+                    raise ValueError(
+                        "contact_hdmi_bimanual_required expects exactly two EEF rewards"
+                    )
+                if config.contact_hdmi_bimanual_score_reduce != "min":
+                    raise ValueError(
+                        "Unsupported contact_hdmi_bimanual_score_reduce="
+                        f"{config.contact_hdmi_bimanual_score_reduce!r}"
+                    )
+                active = mask_eef > 0.0
+                active_any = active.any(dim=1)
+                active_both = active.all(dim=1)
+                contact_hdmi_left_score = rew_stack[:, 0]
+                contact_hdmi_right_score = rew_stack[:, 1]
+                contact_hdmi_bimanual_gate = active_both.to(rew_stack.dtype)
+                contact_hdmi_bimanual_score = torch.minimum(
+                    contact_hdmi_left_score, contact_hdmi_right_score
+                )
+                contact_hdmi_rew = torch.where(
+                    active_any,
+                    torch.where(
+                        active_both,
+                        gain * contact_hdmi_bimanual_score,
+                        torch.zeros_like(contact_hdmi_bimanual_score),
+                    ),
+                    torch.ones_like(contact_hdmi_bimanual_score),
+                )
+            else:
+                contact_hdmi_rew = (
+                    rew_stack * mask_eef * gain + (1.0 - mask_eef)
+                ).mean(dim=1)
 
     # E074A: robot control trust-region guard.
     ctrl_ref_guard_rew = torch.zeros(N, device=config.device)
@@ -1269,6 +1302,12 @@ def get_reward(
     surface_band_score = torch.zeros(N, device=config.device)
     surface_band_penetration = torch.zeros(N, device=config.device)
     surface_band_decay_factor = torch.ones(N, device=config.device)
+    surface_band_left_sdf = torch.zeros(N, device=config.device)
+    surface_band_right_sdf = torch.zeros(N, device=config.device)
+    surface_band_left_score = torch.zeros(N, device=config.device)
+    surface_band_right_score = torch.zeros(N, device=config.device)
+    surface_band_bimanual_gate = torch.zeros(N, device=config.device)
+    surface_band_bimanual_score = torch.zeros(N, device=config.device)
     cem_posture_z_err = torch.zeros(N, device=config.device)
     cem_posture_z_drop = torch.zeros(N, device=config.device)
     nonhand_support_penalty = torch.zeros(N, device=config.device)
@@ -1574,30 +1613,78 @@ def get_reward(
                 (config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0)
                 and config.surface_band_geom_ids
             ):
-                surface_band_sdf = geom_box_sdf_min(config.surface_band_geom_ids)
                 band_width = float(config.surface_band_width_m)
                 band_min_sdf = float(config.surface_band_min_sdf_m)
                 sigma = max(float(config.surface_band_sigma), 1e-6)
-                in_band = (surface_band_sdf >= band_min_sdf) & (
-                    surface_band_sdf <= band_width
-                )
-                if config.surface_band_score_mode == "one_sided":
-                    surface_band_score_raw = torch.exp(
-                        -torch.clamp(surface_band_sdf, min=0.0) / sigma
-                    )
-                elif config.surface_band_score_mode == "symmetric_abs":
-                    surface_band_score_raw = torch.exp(
-                        -torch.abs(surface_band_sdf) / sigma
-                    )
-                else:
+
+                def surface_score_raw(sdf: torch.Tensor) -> torch.Tensor:
+                    if config.surface_band_score_mode == "one_sided":
+                        return torch.exp(-torch.clamp(sdf, min=0.0) / sigma)
+                    if config.surface_band_score_mode == "symmetric_abs":
+                        return torch.exp(-torch.abs(sdf) / sigma)
                     raise ValueError(
                         f"Unsupported surface_band_score_mode={config.surface_band_score_mode!r}"
                     )
-                surface_band_score = torch.where(
-                    in_band,
-                    surface_band_score_raw,
-                    torch.zeros_like(surface_band_sdf),
-                )
+
+                if config.surface_band_bimanual_required:
+                    if (
+                        not config.surface_band_left_geom_ids
+                        or not config.surface_band_right_geom_ids
+                    ):
+                        raise ValueError(
+                            "surface_band_bimanual_required requires left/right surface-band geoms"
+                        )
+                    if config.surface_band_bimanual_score_reduce != "min":
+                        raise ValueError(
+                            "Unsupported surface_band_bimanual_score_reduce="
+                            f"{config.surface_band_bimanual_score_reduce!r}"
+                        )
+                    surface_band_left_sdf = geom_box_sdf_min(
+                        config.surface_band_left_geom_ids
+                    )
+                    surface_band_right_sdf = geom_box_sdf_min(
+                        config.surface_band_right_geom_ids
+                    )
+                    left_in_band = (surface_band_left_sdf >= band_min_sdf) & (
+                        surface_band_left_sdf <= band_width
+                    )
+                    right_in_band = (surface_band_right_sdf >= band_min_sdf) & (
+                        surface_band_right_sdf <= band_width
+                    )
+                    both_in_band = left_in_band & right_in_band
+                    surface_band_left_score = surface_score_raw(surface_band_left_sdf)
+                    surface_band_right_score = surface_score_raw(surface_band_right_sdf)
+                    surface_band_bimanual_gate = both_in_band.to(
+                        surface_band_left_score.dtype
+                    )
+                    surface_band_bimanual_score = torch.minimum(
+                        surface_band_left_score, surface_band_right_score
+                    )
+                    surface_band_score = torch.where(
+                        both_in_band,
+                        surface_band_bimanual_score,
+                        torch.zeros_like(surface_band_bimanual_score),
+                    )
+                    # Report the bimanual bottleneck distance; penetration uses
+                    # the deepest hand below so one over-penetrating hand is visible.
+                    surface_band_sdf = torch.maximum(
+                        surface_band_left_sdf, surface_band_right_sdf
+                    )
+                    surface_band_penetration_sdf = torch.minimum(
+                        surface_band_left_sdf, surface_band_right_sdf
+                    )
+                else:
+                    surface_band_sdf = geom_box_sdf_min(config.surface_band_geom_ids)
+                    in_band = (surface_band_sdf >= band_min_sdf) & (
+                        surface_band_sdf <= band_width
+                    )
+                    surface_band_score_raw = surface_score_raw(surface_band_sdf)
+                    surface_band_score = torch.where(
+                        in_band,
+                        surface_band_score_raw,
+                        torch.zeros_like(surface_band_sdf),
+                    )
+                    surface_band_penetration_sdf = surface_band_sdf
                 surface_band_gate = support_gate(
                     config.surface_band_gate_source,
                     config.surface_band_start_eval_time,
@@ -1610,7 +1697,7 @@ def get_reward(
                     * surface_band_gate
                 )
                 surface_band_penetration = torch.clamp(
-                    -surface_band_sdf - config.surface_band_penetration_tol_m,
+                    -surface_band_penetration_sdf - config.surface_band_penetration_tol_m,
                     min=0.0,
                 )
                 surface_band_penalty = (
@@ -1984,6 +2071,10 @@ def get_reward(
         "interact_rew": interact_rew,
         "hand_approach_rew": hand_approach_rew,
         "contact_hdmi_rew": contact_hdmi_rew,
+        "contact_hdmi_left_score": contact_hdmi_left_score,
+        "contact_hdmi_right_score": contact_hdmi_right_score,
+        "contact_hdmi_bimanual_gate": contact_hdmi_bimanual_gate,
+        "contact_hdmi_bimanual_score": contact_hdmi_bimanual_score,
         "ctrl_ref_guard_rew": ctrl_ref_guard_rew,
         "hold_contact_rew": hold_contact_rew,
         "robot_object_penalty": robot_object_penalty,
@@ -2023,6 +2114,12 @@ def get_reward(
         "surface_band_sdf": surface_band_sdf,
         "surface_band_score": surface_band_score,
         "surface_band_penetration": surface_band_penetration,
+        "surface_band_left_sdf": surface_band_left_sdf,
+        "surface_band_right_sdf": surface_band_right_sdf,
+        "surface_band_left_score": surface_band_left_score,
+        "surface_band_right_score": surface_band_right_score,
+        "surface_band_bimanual_gate": surface_band_bimanual_gate,
+        "surface_band_bimanual_score": surface_band_bimanual_score,
         "cem_posture_z_err": cem_posture_z_err,
         "cem_posture_z_drop": cem_posture_z_drop,
         "nonhand_support_penalty": nonhand_support_penalty,

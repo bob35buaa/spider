@@ -206,6 +206,10 @@ class Config:
     contact_hdmi_mask_time_axis: str = "auto"  # "auto" | "spider" | "eval"
     contact_hdmi_mask_carry_union: bool = False  # E155: carry task L/R union
     contact_hdmi_mask_ramp_frames: int = 0  # E155: linear ramp frames at boundary, 0=off
+    # E164: require both hands to satisfy contact HDMI reward. Disabled by
+    # default so E039-E163 behavior remains unchanged.
+    contact_hdmi_bimanual_required: bool = False
+    contact_hdmi_bimanual_score_reduce: str = "min"  # min
     # E040: dynamic per-frame contact target (from ref FK)
     contact_hdmi_dynamic_target: bool = (
         False  # True=use per-frame ref-derived target instead of fixed
@@ -389,6 +393,8 @@ class Config:
     surface_band_min_sdf_m: float = 0.0
     surface_band_sigma: float = 0.015
     surface_band_score_mode: str = "one_sided"  # one_sided | symmetric_abs
+    surface_band_bimanual_required: bool = False
+    surface_band_bimanual_score_reduce: str = "min"  # min
     surface_band_penetration_tol_m: float = 0.003
     surface_band_gate_source: str = "contact_mask"
     surface_band_start_eval_time: float = 0.0
@@ -396,6 +402,10 @@ class Config:
     surface_band_decay_frac: float = 0.0  # E161-M1: tail decay fraction, 0=off
     surface_band_geom_names: list[str] = field(default_factory=lambda: ["lh", "rh"])
     surface_band_geom_ids: list[int] = field(default_factory=list)
+    surface_band_left_geom_names: list[str] = field(default_factory=lambda: ["lh"])
+    surface_band_right_geom_names: list[str] = field(default_factory=lambda: ["rh"])
+    surface_band_left_geom_ids: list[int] = field(default_factory=list)
+    surface_band_right_geom_ids: list[int] = field(default_factory=list)
     nonhand_support_penalty_scale: float = 0.0
     nonhand_support_penalty_margin_m: float = 0.02
     nonhand_support_penalty_gate_source: str = "contact_mask"
@@ -1162,6 +1172,32 @@ def process_config(config: Config):
                     )
             config.surface_band_geom_ids = geom_ids
             loguru.logger.info("Surface-band geoms: {} resolved.", len(geom_ids))
+            if config.surface_band_bimanual_required:
+                left_ids = []
+                for name in config.surface_band_left_geom_names:
+                    gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                    if gid != -1:
+                        left_ids.append(gid)
+                    else:
+                        loguru.logger.warning(
+                            "surface_band_left_geom_names: geom '{}' not found.", name
+                        )
+                right_ids = []
+                for name in config.surface_band_right_geom_names:
+                    gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                    if gid != -1:
+                        right_ids.append(gid)
+                    else:
+                        loguru.logger.warning(
+                            "surface_band_right_geom_names: geom '{}' not found.", name
+                        )
+                config.surface_band_left_geom_ids = left_ids
+                config.surface_band_right_geom_ids = right_ids
+                loguru.logger.info(
+                    "Bimanual surface-band geoms: left={} right={} resolved.",
+                    len(left_ids),
+                    len(right_ids),
+                )
         if (
             config.nonhand_support_penalty_scale > 0.0
             or config.terminal_carry_gate_enabled

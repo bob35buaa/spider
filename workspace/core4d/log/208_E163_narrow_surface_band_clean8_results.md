@@ -172,3 +172,49 @@ failed case = box004_082_p1
 `box004_082_p1` 是唯一 blocker。它相对 rubberhand baseline 的 raw in-mask contact 从 0.6721 降到 0.5738，超过允许降幅 0.05；虽然 clean3/clean5 接触和穿透指标相对 rubberhand 更好，但根据 E162 后的 RL-safe 口径，这个 case 必须判接触退化。
 
 下一步建议不要导出 clean8 RL-ready；先针对 `box004_082_p1` 做 case-specific 诊断或小范围参数修复，再重新跑该 case 和受影响 case。
+
+## 8. 追加：downstream RL contact 口径
+
+按 Holosoma downstream exporter 的 `object_contact` 口径追加了 RL contact 指标，并重跑了 E156 full eval 与 E163 clean8 eval。
+
+口径来自：
+
+```text
+/home/ubuntu/Workspace/holosoma/workspace/v3/scripts/data/export_rl_motion_from_spider_tsv.py
+```
+
+等价逻辑：
+
+```text
+spider_contact_mask_3cm[:, person_idx, :]
+-> max(L, R)
+-> duplicate to both hands
+-> fill internal false gaps with length <= 5 source frames
+-> mean on the eval qpos time axis
+```
+
+新增字段：
+
+```text
+rl_object_contact_ref_frac
+rl_object_contact_filled_frame_count
+hand_object_physics_contact_in_rl_mask_frac
+hand_object_physics_contact_3mm_in_rl_mask_frac
+hand_object_physics_contact_5mm_in_rl_mask_frac
+```
+
+E163 clean8 表已更新：
+
+```text
+workspace/core4d/results/E163/narrow_surface_band/eval/clean8/E163_narrow_surface_band_clean8_eval.xlsx
+```
+
+`box004_082_p1` 结果：
+
+| 方法 | raw contact | RL contact | RL mask占比 | RL补洞帧数 | RL Δ vs rubberhand |
+|---|---:|---:|---:|---:|---:|
+| `SPIDER+rubberhand` | 0.6721 | 0.6613 | 0.5688 | 1 | 0.0000 |
+| `surfaceBand releaseDecay` | 0.6066 | 0.5968 | 0.5688 | 1 | -0.0645 |
+| `E163 narrowSurfaceBand` | 0.5738 | 0.5645 | 0.5688 | 1 | -0.0968 |
+
+结论不变：downstream RL mask 会补掉 `box004_082_p1` 的 1 帧短断口，但 E163 相对 rubberhand 的 RL contact 仍低 `0.0968`，超过 `0.05` hard gate。

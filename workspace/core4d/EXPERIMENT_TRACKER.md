@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E164 | 2026-06-15 | Phase 27 | bimanual global mask + bimanual reward | ❌ 产物3/3且tracking 3/3；raw contact gate 0/3，不导出RL | [210](log/210_E164_bimanual_global_mask_reward_results.md) |
 | E163-clean8 | 2026-06-15 | Phase 27 | E163 narrowSurfaceBand clean8 extension | ❌ 产物8/8，tracking 8/8，但 raw contact gate 7/8；box004_082_p1 退化 | [208](log/208_E163_narrow_surface_band_clean8_results.md) |
 | E163-export | 2026-06-15 | Phase 27 | E163 narrowSurfaceBand RL-ready export | ✅ RL_EXPORT_READY 3/3；partner OmniRetarget 3/3 pass | [207](log/207_E163_narrow_surface_band_rl_export_results.md) |
 | E163 | 2026-06-14 | Phase 27 | narrow symmetric surfaceBand 3case RL-safe probe | ✅ 3/3 pass；box023 raw 0.7538→0.8769，worst Δ=-0.0308；missing=0 | [206](log/206_E163_narrow_surface_band_results.md) |

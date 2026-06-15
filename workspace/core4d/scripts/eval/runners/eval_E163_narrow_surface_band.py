@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - PyYAML is present in the experiment env.
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from eval.core.core_metrics import EvalConfig  # noqa: E402
+from eval.core.core_metrics import EvalConfig, evaluate_sequence, person_idx_from_case  # noqa: E402
 from eval_E156_clean8_gate_decay import (  # noqa: E402
     evaluate_row,
     finite,
@@ -77,6 +77,9 @@ TABLE4_TRACKING = [
 
 CORE_METRICS = [
     CONTACT_METRIC,
+    "hand_object_physics_contact_in_rl_mask_frac",
+    "rl_object_contact_ref_frac",
+    "rl_object_contact_filled_frame_count",
     "hand_object_physics_contact_3mm_in_mask_frac",
     "hand_object_physics_contact_5mm_in_mask_frac",
     "hand_object_physics_penetration_3mm_frame_frac",
@@ -283,6 +286,42 @@ def load_reference_rows(
     return rows, missing
 
 
+def enrich_rl_contact_metrics(row: dict[str, Any], cfg: EvalConfig) -> dict[str, Any]:
+    if math.isfinite(finite(row.get("hand_object_physics_contact_in_rl_mask_frac"))):
+        return row
+    qpos_raw = row.get("qpos_path") or row.get("result_npz") or ""
+    scene_raw = row.get("scene_xml") or ""
+    mask_raw = row.get("contact_mask_path") or ""
+    if not qpos_raw or not scene_raw or not mask_raw:
+        return row
+    qpos_path = repo_path(str(qpos_raw))
+    scene_xml = repo_path(str(scene_raw))
+    contact_mask = repo_path(str(mask_raw))
+    if not qpos_path.is_file() or not scene_xml.is_file() or not contact_mask.is_file():
+        return row
+    metrics = evaluate_sequence(
+        row={"case_id": row.get("short_case_id", ""), "variant": row.get("variant", "")},
+        method=str(row.get("method_label") or row.get("method") or ""),
+        hand_collision_variant_id=str(row.get("hand_collision_variant_id") or "rubber_hull"),
+        qpos_path=qpos_path,
+        scene_xml=scene_xml,
+        config=cfg,
+        kin_ref_path=None,
+        contact_mask_path=contact_mask,
+        person_idx=person_idx_from_case(str(row.get("short_case_id", ""))),
+    )
+    for key in (
+        "rl_object_contact_ref_frac",
+        "rl_object_contact_gap_fill_frames",
+        "rl_object_contact_filled_frame_count",
+        "hand_object_physics_contact_in_rl_mask_frac",
+        "hand_object_physics_contact_3mm_in_rl_mask_frac",
+        "hand_object_physics_contact_5mm_in_rl_mask_frac",
+    ):
+        row[key] = metrics.get(key, row.get(key, ""))
+    return row
+
+
 def tracked_ok(row: dict[str, Any]) -> bool:
     value = row.get("success_tracked")
     if value not in {None, ""}:
@@ -331,6 +370,10 @@ def build_per_case(rows: list[dict[str, Any]], target_cases: list[str]) -> list[
                 "case": case,
                 "状态": status,
                 "物理接触Δ_vs_rubberhand": delta,
+                "RL接触Δ_vs_rubberhand": (
+                    finite(row.get("hand_object_physics_contact_in_rl_mask_frac"))
+                    - finite(baseline.get("hand_object_physics_contact_in_rl_mask_frac"))
+                ),
                 "raw接触下限": raw_min,
                 "source/method_id": method_id,
                 "说明": note,
@@ -433,6 +476,8 @@ def write_workbook(
         ("接触退化case", "接触退化case", "text"),
         ("物理接触Δ最差", "物理接触Δ最差", "pct_delta"),
         ("物理接触(raw)", f"{CONTACT_METRIC}_mean", "pct"),
+        ("RL接触(raw)", "hand_object_physics_contact_in_rl_mask_frac_mean", "pct"),
+        ("RL mask占比", "rl_object_contact_ref_frac_mean", "pct"),
         ("clean3接触", "hand_object_physics_contact_3mm_in_mask_frac_mean", "pct"),
         ("clean5接触", "hand_object_physics_contact_5mm_in_mask_frac_mean", "pct"),
         ("物理穿透3mm", "hand_object_physics_penetration_3mm_frame_frac_mean", "pct"),
@@ -452,8 +497,12 @@ def write_workbook(
         ("case", "case", "text"),
         ("状态", "状态", "text"),
         ("物理接触Δ_vs_rubberhand", "物理接触Δ_vs_rubberhand", "pct_delta"),
+        ("RL接触Δ_vs_rubberhand", "RL接触Δ_vs_rubberhand", "pct_delta"),
         ("raw接触下限", "raw接触下限", "pct"),
         ("物理接触(raw)", CONTACT_METRIC, "pct"),
+        ("RL接触(raw)", "hand_object_physics_contact_in_rl_mask_frac", "pct"),
+        ("RL mask占比", "rl_object_contact_ref_frac", "pct"),
+        ("RL补洞帧数", "rl_object_contact_filled_frame_count", "int"),
         ("clean3接触", "hand_object_physics_contact_3mm_in_mask_frac", "pct"),
         ("clean5接触", "hand_object_physics_contact_5mm_in_mask_frac", "pct"),
         ("物理穿透3mm", "hand_object_physics_penetration_3mm_frame_frac", "pct"),
@@ -493,6 +542,7 @@ def write_workbook(
     info_rows = [
         {"项": "baseline", "说明": "所有 delta/status 均相对同 case 的 SPIDER+rubberhand。"},
         {"项": "raw contact hard gate", "说明": "raw hand_object_physics_contact_in_mask_frac 相对 rubberhand 下降超过 0.05 判接触退化。"},
+        {"项": "RL contact", "说明": "按 Holosoma downstream exporter 口径：spider_contact_mask_3cm 取 max(L,R)，填补 <=5 帧内部断口，统计该 RL object_contact 窗口内 raw contact 比例。"},
         {"项": "box023 sanity", "说明": f"E163 必须超过 E161 releaseDecay raw contact {BOX023_E161_RELEASE_DECAY_RAW:.4f}；真正 pass 为 >=0.8577。"},
         {"项": "E163 config", "说明": "surface_band_min_sdf=-1mm, width=+3mm, sigma=1.5mm, score_mode=symmetric_abs, mask_source=core4d_3cm。"},
         {"项": "secondary", "说明": "clean3/5、physPen、geomPen、release false 只辅助解释，不能抵消 raw contact fail。"},
@@ -519,6 +569,7 @@ def main() -> None:
     cfg = EvalConfig()
     e163_rows, artifact_rows, e163_missing = evaluate_e163(args.stage, cfg, target_cases)
     all_rows, ref_missing = load_reference_rows(e163_rows, target_cases)
+    all_rows = [enrich_rl_contact_metrics(row, cfg) for row in all_rows]
     per_case = build_per_case(all_rows, target_cases)
     summary = build_summary(per_case)
 
