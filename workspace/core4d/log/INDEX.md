@@ -1,9 +1,9 @@
 # 实验日志索引
 
-> 自动生成，共 195 个日志文件。
+> 自动生成，共 209 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
-## Phase 27 (E147-E155)
+## Phase 27 (E147-E163)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
@@ -18,6 +18,19 @@
 | 194 | E154 | 2026-06-11 | Masked tracking eval results | [194_E154_masked_tracking_eval_results.md](194_E154_masked_tracking_eval_results.md) |
 | 195 | E154 | 2026-06-11 | Gate mask collapse bug | [195_E154_gate_mask_collapse_bug.md](195_E154_gate_mask_collapse_bug.md) |
 | 196 | E155 | 2026-06-11 | Release smooth transition results | [196_E155_release_smooth_transition_resul...](196_E155_release_smooth_transition_results.md) |
+| 197 | E156 | 2026-06-12 | Clean8 gate decay benchmark results | [197_E156_clean8_gate_decay_benchmark_res...](197_E156_clean8_gate_decay_benchmark_results.md) |
+| 198 | E157 | 2026-06-12 | GateA rl export results | [198_E157_gateA_rl_export_results.md](198_E157_gateA_rl_export_results.md) |
+| 199 | E158 | 2026-06-12 | Gate surface band start and mask fix | [199_E158_gate_surface_band_start_and_mas...](199_E158_gate_surface_band_start_and_mask_fix.md) |
+| 200 | E158 | 2026-06-12 | Gate surface band results | [200_E158_gate_surface_band_results.md](200_E158_gate_surface_band_results.md) |
+| 201 | E159 | 2026-06-13 | Gate surface band A2 results | [201_E159_gate_surface_band_A2_results.md](201_E159_gate_surface_band_A2_results.md) |
+| 202 | E159 | 2026-06-13 | Box021 029 p2 failure analysis | [202_E159_box021_029_p2_failure_analysis....](202_E159_box021_029_p2_failure_analysis.md) |
+| 203 | E160 | 2026-06-13 | Posture rerank results | [203_E160_posture_rerank_results.md](203_E160_posture_rerank_results.md) |
+| 204 | E161 | 2026-06-13 | Surface release ablation results | [204_E161_surface_release_ablation_result...](204_E161_surface_release_ablation_results.md) |
+| 205 | E162, e147 | 2026-06-14 | Post e147 rl safe reeval results | [205_E162_post_e147_rl_safe_reeval_result...](205_E162_post_e147_rl_safe_reeval_results.md) |
+| 206 | E163 | 2026-06-14 | Narrow surface band results | [206_E163_narrow_surface_band_results.md](206_E163_narrow_surface_band_results.md) |
+| 207 | E163 | 2026-06-15 | Narrow surface band rl export results | [207_E163_narrow_surface_band_rl_export_r...](207_E163_narrow_surface_band_rl_export_results.md) |
+| 208 | E163 | 2026-06-15 | Narrow surface band clean8 results | [208_E163_narrow_surface_band_clean8_resu...](208_E163_narrow_surface_band_clean8_results.md) |
+| 209 | E163 | 2026-06-15 | Box004 082 p1 failure analysis | [209_E163_box004_082_p1_failure_analysis.md](209_E163_box004_082_p1_failure_analysis.md) |
 
 ## Phase 26 (E145-E145)
 

@@ -151,6 +151,13 @@ TRACK_MASK_FIELDS = [
     "track_joint_err_terminal_rad",
     "track_pelvis_z_err_mean_m",
     "track_pelvis_z_err_terminal_m",
+    "track_joint_err_deg_mean",
+    "track_eef_pos_err_cm_mean",
+    "track_eef_ori_err_deg_mean",
+    "track_root_pos_err_cm_mean",
+    "track_root_ori_err_deg_mean",
+    "track_obj_pos_err_cm_mean",
+    "track_obj_ori_err_deg_mean",
     "ref_contact_frac",
     "hand_object_physics_contact_in_mask_frac",
     "hand_object_clean_physics_contact_in_mask_frac",
@@ -262,6 +269,13 @@ STANDARD_TRACK_DIAG = [
     "track_pelvis_z_err_mean_m",
     "track_root_pos_err_terminal_m",
     "track_joint_err_terminal_rad",
+    "track_joint_err_deg_mean",
+    "track_eef_pos_err_cm_mean",
+    "track_eef_ori_err_deg_mean",
+    "track_root_pos_err_cm_mean",
+    "track_root_ori_err_deg_mean",
+    "track_obj_pos_err_cm_mean",
+    "track_obj_ori_err_deg_mean",
     "ref_contact_frac",
     "hand_object_physics_contact_in_mask_frac",
     "hand_object_clean_physics_contact_in_mask_frac",
@@ -520,7 +534,130 @@ def _quat_geodesic_err(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
         return 2.0 * np.arccos(dot)
 
 
-def _tracking_metrics(robot_qpos: np.ndarray, kin_ref_path: Path | None, config: EvalConfig) -> dict[str, float]:
+def _quat_angle_deg(q1_wxyz: np.ndarray, q2_wxyz: np.ndarray) -> float:
+    q1 = np.asarray(q1_wxyz, dtype=np.float64)
+    q2 = np.asarray(q2_wxyz, dtype=np.float64)
+    n1 = np.linalg.norm(q1)
+    n2 = np.linalg.norm(q2)
+    if n1 <= 0.0 or n2 <= 0.0:
+        return math.nan
+    dot = float(np.clip(abs(np.dot(q1 / n1, q2 / n2)), -1.0, 1.0))
+    return float(np.degrees(2.0 * math.acos(dot)))
+
+
+def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model: mujoco.MjModel) -> dict[str, float]:
+    """SPIDER Table-4-style tracking metrics against fixed kin truth.
+
+    The run scene uses a 6-DoF object representation (42 qpos in the current
+    CORE4D scenes), while the OmniRetarget/SPIDER input reference commonly uses
+    a 7-DoF freejoint object representation (43 qpos). For robot-body FK we
+    only need the shared robot qpos prefix. Object tracking is reported when the
+    reference object pose can be read either in scene qpos layout or as a world
+    freejoint pose after the robot prefix.
+    """
+    keys = [
+        "track_joint_err_deg_mean",
+        "track_eef_pos_err_cm_mean",
+        "track_eef_ori_err_deg_mean",
+        "track_root_pos_err_cm_mean",
+        "track_root_ori_err_deg_mean",
+        "track_obj_pos_err_cm_mean",
+        "track_obj_ori_err_deg_mean",
+    ]
+    out: dict[str, float] = {k: math.nan for k in keys}
+    H = min(robot_qpos.shape[0], kin_qpos.shape[0])
+    if H == 0:
+        return out
+
+    # Current G1+object scenes use 36 robot qpos followed by 6 object qpos.
+    # Keep this bounded by actual dimensions so older scenes fail to NaN rather
+    # than indexing past layout.
+    nq_robot = min(36, max(0, model.nq - 6), robot_qpos.shape[1], kin_qpos.shape[1])
+    if nq_robot <= 7:
+        return out
+
+    joint = np.abs(robot_qpos[:H, 7:nq_robot] - kin_qpos[:H, 7:nq_robot])
+    if joint.size:
+        out["track_joint_err_deg_mean"] = float(np.degrees(np.mean(joint)))
+
+    pelvis_id = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
+    left_wrist_id = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "left_wrist_yaw_link")
+    right_wrist_id = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "right_wrist_yaw_link")
+    object_id = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+    eef_ids = [bid for bid in (left_wrist_id, right_wrist_id) if bid >= 0]
+
+    data_run = mujoco.MjData(model)
+    data_ref = mujoco.MjData(model)
+    eef_pos: list[float] = []
+    eef_ori: list[float] = []
+    root_pos: list[float] = []
+    root_ori: list[float] = []
+    obj_pos: list[float] = []
+    obj_ori: list[float] = []
+
+    for i in range(H):
+        q_run = robot_qpos[i]
+        data_run.qpos[:] = q_run
+        data_run.qvel[:] = 0.0
+        mujoco.mj_forward(model, data_run)
+
+        if kin_qpos.shape[1] == model.nq:
+            q_ref = kin_qpos[i, : model.nq].copy()
+        else:
+            q_ref = q_run.copy()
+            q_ref[:nq_robot] = kin_qpos[i, :nq_robot]
+        data_ref.qpos[:] = q_ref
+        data_ref.qvel[:] = 0.0
+        mujoco.mj_forward(model, data_ref)
+
+        if pelvis_id >= 0:
+            root_pos.append(float(np.linalg.norm(data_run.xpos[pelvis_id] - data_ref.xpos[pelvis_id])))
+            root_ori.append(_quat_angle_deg(data_run.xquat[pelvis_id], data_ref.xquat[pelvis_id]))
+
+        frame_eef_pos = []
+        frame_eef_ori = []
+        for bid in eef_ids:
+            frame_eef_pos.append(float(np.linalg.norm(data_run.xpos[bid] - data_ref.xpos[bid])))
+            frame_eef_ori.append(_quat_angle_deg(data_run.xquat[bid], data_ref.xquat[bid]))
+        if frame_eef_pos:
+            eef_pos.append(float(np.nanmean(frame_eef_pos)))
+            eef_ori.append(float(np.nanmean(frame_eef_ori)))
+
+        if object_id >= 0:
+            if kin_qpos.shape[1] == model.nq:
+                ref_obj_pos = data_ref.xpos[object_id].copy()
+                ref_obj_quat = data_ref.xquat[object_id].copy()
+            elif kin_qpos.shape[1] >= nq_robot + 7:
+                ref_obj_pos = kin_qpos[i, nq_robot : nq_robot + 3]
+                ref_obj_quat = kin_qpos[i, nq_robot + 3 : nq_robot + 7]
+            else:
+                ref_obj_pos = None
+                ref_obj_quat = None
+            if ref_obj_pos is not None and ref_obj_quat is not None:
+                obj_pos.append(float(np.linalg.norm(data_run.xpos[object_id] - ref_obj_pos)))
+                obj_ori.append(_quat_angle_deg(data_run.xquat[object_id], ref_obj_quat))
+
+    if eef_pos:
+        out["track_eef_pos_err_cm_mean"] = float(np.nanmean(eef_pos) * 100.0)
+    if eef_ori:
+        out["track_eef_ori_err_deg_mean"] = float(np.nanmean(eef_ori))
+    if root_pos:
+        out["track_root_pos_err_cm_mean"] = float(np.nanmean(root_pos) * 100.0)
+    if root_ori:
+        out["track_root_ori_err_deg_mean"] = float(np.nanmean(root_ori))
+    if obj_pos:
+        out["track_obj_pos_err_cm_mean"] = float(np.nanmean(obj_pos) * 100.0)
+    if obj_ori:
+        out["track_obj_ori_err_deg_mean"] = float(np.nanmean(obj_ori))
+    return out
+
+
+def _tracking_metrics(
+    robot_qpos: np.ndarray,
+    kin_ref_path: Path | None,
+    config: EvalConfig,
+    model: mujoco.MjModel | None = None,
+) -> dict[str, float]:
     """Body tracking error of the run's robot channel vs the fixed kin truth.
 
     Robot dofs [0:36] (7 root + 29 joints) share layout between the 42-dim run
@@ -531,11 +668,17 @@ def _tracking_metrics(robot_qpos: np.ndarray, kin_ref_path: Path | None, config:
         "track_root_quat_err_mean", "track_root_quat_err_terminal",
         "track_joint_err_mean_rad", "track_joint_err_terminal_rad",
         "track_pelvis_z_err_mean_m", "track_pelvis_z_err_terminal_m",
+        "track_joint_err_deg_mean",
+        "track_eef_pos_err_cm_mean", "track_eef_ori_err_deg_mean",
+        "track_root_pos_err_cm_mean", "track_root_ori_err_deg_mean",
+        "track_obj_pos_err_cm_mean", "track_obj_ori_err_deg_mean",
     ]
     out: dict[str, float] = {k: math.nan for k in keys}
     if kin_ref_path is None or not Path(kin_ref_path).is_file():
         return out
     kin = np.asarray(np.load(kin_ref_path, allow_pickle=True)["qpos"], dtype=np.float64)
+    if kin.ndim == 3:
+        kin = kin[:, 0, :]
     H = min(robot_qpos.shape[0], kin.shape[0])
     if H == 0:
         return out
@@ -554,6 +697,8 @@ def _tracking_metrics(robot_qpos: np.ndarray, kin_ref_path: Path | None, config:
     out["track_root_quat_err_mean"], out["track_root_quat_err_terminal"] = mt(quat)
     out["track_joint_err_mean_rad"], out["track_joint_err_terminal_rad"] = mt(joint)
     out["track_pelvis_z_err_mean_m"], out["track_pelvis_z_err_terminal_m"] = mt(pelvis)
+    if model is not None:
+        out.update(_table4_tracking_metrics(r, k, model))
     return out
 
 
@@ -944,6 +1089,6 @@ def evaluate_sequence(
 
     # E154: body tracking vs fixed kin truth + masked contact (real 3cm).
     # Always populated (NaN when refs not supplied) so METRIC_FIELDS stays complete.
-    out.update(_tracking_metrics(qpos, kin_ref_path, config))
+    out.update(_tracking_metrics(qpos, kin_ref_path, config, model=model))
     out.update(_masked_contact_metrics(hand_physics, hand_clean_physics, hand_clean3_physics, hand_clean5_physics, hand_arr, contact_mask_path, person_idx))
     return out

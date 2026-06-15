@@ -9,7 +9,7 @@ lists locally.
 
 ## Required Entry Point
 
-Use `lib.core_metrics.evaluate_sequence(...)` for per-case MuJoCo kinematic
+Use `eval.core.core_metrics.evaluate_sequence(...)` for per-case MuJoCo kinematic
 replay metrics. Write raw per-case TSVs with `METRIC_FIELDS`.
 
 For method summaries and deltas, import:
@@ -58,6 +58,43 @@ Real 3cm contact-mask diagnostics use the same thresholded contact definition:
 
 The old raw-mask fields remain available for backward diagnostics, but E154+
 tables should use the thresholded 3mm/5mm fields.
+
+## RL-Safe Contact Gate
+
+For E162+ downstream-RL screening, per-case in-mask physical contact is a
+hard gate:
+
+- baseline: E147 `spider-rubberhand`
+- gate metric: `hand_object_physics_contact_in_mask_frac`
+- fail rule: `method - E147 < -0.05`
+
+A per-case contact regression cannot be offset by lower penetration, lower
+release false-contact, or better tracking. Missing E147 baseline/contact-mask
+rows should be reported separately and must not be marked RL-safe pass.
+
+The gate intentionally uses raw physical contact inside the real 3cm reference
+mask, not clean 3mm contact, because downstream RL mainly depends on whether the
+contact gate is active and is less sensitive to penetration. The clean 3mm/5mm
+fields remain diagnostics for contact quality and penetration tradeoffs.
+
+## Table4 Tracking
+
+`evaluate_sequence(...)` also reports SPIDER Table-4-style tracking fields
+against the fixed kinematic reference (`trajectory_kinematic.npz`), not against
+a run's drifted internal reference:
+
+- `track_joint_err_deg_mean`
+- `track_eef_pos_err_cm_mean`
+- `track_eef_ori_err_deg_mean`
+- `track_root_pos_err_cm_mean`
+- `track_root_ori_err_deg_mean`
+- `track_obj_pos_err_cm_mean`
+- `track_obj_ori_err_deg_mean`
+
+These fields use MuJoCo FK on the run scene. Joint error is mean absolute
+`qpos[7:36]` error in degrees; position errors are reported in cm; orientation
+errors are quaternion geodesic angles in degrees. Older E154 fields in meters or
+radians remain available for backward-compatible diagnostics.
 
 ## Table Metrics
 

@@ -388,6 +388,7 @@ class Config:
     surface_band_width_m: float = 0.03
     surface_band_min_sdf_m: float = 0.0
     surface_band_sigma: float = 0.015
+    surface_band_score_mode: str = "one_sided"  # one_sided | symmetric_abs
     surface_band_penetration_tol_m: float = 0.003
     surface_band_gate_source: str = "contact_mask"
     surface_band_start_eval_time: float = 0.0

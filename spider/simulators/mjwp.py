@@ -1581,9 +1581,21 @@ def get_reward(
                 in_band = (surface_band_sdf >= band_min_sdf) & (
                     surface_band_sdf <= band_width
                 )
+                if config.surface_band_score_mode == "one_sided":
+                    surface_band_score_raw = torch.exp(
+                        -torch.clamp(surface_band_sdf, min=0.0) / sigma
+                    )
+                elif config.surface_band_score_mode == "symmetric_abs":
+                    surface_band_score_raw = torch.exp(
+                        -torch.abs(surface_band_sdf) / sigma
+                    )
+                else:
+                    raise ValueError(
+                        f"Unsupported surface_band_score_mode={config.surface_band_score_mode!r}"
+                    )
                 surface_band_score = torch.where(
                     in_band,
-                    torch.exp(-torch.clamp(surface_band_sdf, min=0.0) / sigma),
+                    surface_band_score_raw,
                     torch.zeros_like(surface_band_sdf),
                 )
                 surface_band_gate = support_gate(
