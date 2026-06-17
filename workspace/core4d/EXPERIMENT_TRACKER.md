@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E165-P0 | 2026-06-18 | Phase 28 | Phase0离线审计A/C/E1: box004标签虚高(recall0.06)/box023自碰撞INHERITED/三标量分病 | ✅ 3/3 claim坐实 | [211](log/211_E165_phase0_offline_audit_results.md) |
+| E165 plan | 2026-06-18 | Phase 28 | RL可恢复性杠杆: on-rails探针preflight/RL抬升reward/peak-margin rerank | 📋 计划完成 | [plan](plan/176_E165_rl_safe_eval_levers_plan.md) |
 | E164 | 2026-06-15 | Phase 27 | bimanual global mask + bimanual reward | ❌ 产物3/3且tracking 3/3；raw contact gate 0/3，不导出RL | [210](log/210_E164_bimanual_global_mask_reward_results.md) |
 | E163-clean8 | 2026-06-15 | Phase 27 | E163 narrowSurfaceBand clean8 extension | ❌ 产物8/8，tracking 8/8，但 raw contact gate 7/8；box004_082_p1 退化 | [208](log/208_E163_narrow_surface_band_clean8_results.md) |
 | E163-export | 2026-06-15 | Phase 27 | E163 narrowSurfaceBand RL-ready export | ✅ RL_EXPORT_READY 3/3；partner OmniRetarget 3/3 pass | [207](log/207_E163_narrow_surface_band_rl_export_results.md) |

@@ -1,9 +1,15 @@
 # 实验日志索引
 
-> 自动生成，共 209 个日志文件。
+> 自动生成，共 210 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
-## Phase 27 (E147-E163)
+## Phase 28 (E165-E165)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 211 | E165, e0 |  | Phase0 offline audit results | [211_E165_phase0_offline_audit_results.md](211_E165_phase0_offline_audit_results.md) |
+
+## Phase 27 (E147-E164)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
@@ -28,9 +34,10 @@
 | 204 | E161 | 2026-06-13 | Surface release ablation results | [204_E161_surface_release_ablation_result...](204_E161_surface_release_ablation_results.md) |
 | 205 | E162, e147 | 2026-06-14 | Post e147 rl safe reeval results | [205_E162_post_e147_rl_safe_reeval_result...](205_E162_post_e147_rl_safe_reeval_results.md) |
 | 206 | E163 | 2026-06-14 | Narrow surface band results | [206_E163_narrow_surface_band_results.md](206_E163_narrow_surface_band_results.md) |
-| 207 | E163 | 2026-06-15 | Narrow surface band rl export results | [207_E163_narrow_surface_band_rl_export_r...](207_E163_narrow_surface_band_rl_export_results.md) |
-| 208 | E163 | 2026-06-15 | Narrow surface band clean8 results | [208_E163_narrow_surface_band_clean8_resu...](208_E163_narrow_surface_band_clean8_results.md) |
-| 209 | E163 | 2026-06-15 | Box004 082 p1 failure analysis | [209_E163_box004_082_p1_failure_analysis.md](209_E163_box004_082_p1_failure_analysis.md) |
+| 207 | E163 | 2026-06-14 | Narrow surface band rl export results | [207_E163_narrow_surface_band_rl_export_r...](207_E163_narrow_surface_band_rl_export_results.md) |
+| 208 | E163 | 2026-06-14 | Narrow surface band clean8 results | [208_E163_narrow_surface_band_clean8_resu...](208_E163_narrow_surface_band_clean8_results.md) |
+| 209 | E163 | 2026-06-14 | Box004 082 p1 failure analysis | [209_E163_box004_082_p1_failure_analysis....](209_E163_box004_082_p1_failure_analysis.md) |
+| 210 | E164 | 2026-06-15 | Bimanual global mask reward results | [210_E164_bimanual_global_mask_reward_res...](210_E164_bimanual_global_mask_reward_results.md) |
 
 ## Phase 26 (E145-E145)
 

@@ -13,6 +13,34 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 
 ---
 
+## Active: E165 — RL可恢复性杠杆 (2026-06-18)
+
+- [x] 上下文恢复：highest plan=175→176，log=210→211，E-num=164→165。
+- [x] 代码确认关键事实：`spider/config.py:153-162` CEM 物体是 GT（`object_pd_override` kp=2000 / `object_kinematic_override` 上轨 / E015 weld）→ 机器人不承重。两条推论：抬升只能进 RL reward（不进 CEM）；接触是 SPIDER 自评 Goodhart，唯一预测下游的是 Isaac on-rails 探针。
+- [x] 用户定调：杠杆1 **不拆** free-object、**不考虑** free-joint z，只保留 on-rails 接触几何探针。
+- [x] 落计划 `plan/176_E165_rl_safe_eval_levers_plan.md`：Phase0 离线审计(A box004标签 / C box023溯源 / E1 on-rails探针)→Phase1 文档纠错→Phase2 RL(B 抬升reward / F box023自碰撞)→Phase3 CEM peak-margin rerank(D)。6 条 Claim 已定量。
+- [x] **Phase1 文档纠错完成**（`E163_RL_DEEP_INSIGHTS_CN.md`）：§4 杠杆1 加"范围界定"(on-rails 接触几何 only,不释放物体/不考虑 free-joint z);杠杆3 改写为 RL reward + 引 `config.py:153-162` 物体 GT 证据;实验B 改为 RL z-reward。无残留旧措辞。SUGAR 文档经检查无 CEM-z_max 错误措辞,未改。
+- [x] **Phase0 A/C/E1 全跑完**(log 211)。3 runner+1 plot 已固化到 `scripts/eval/runners|reports/`。结果 `results/E165/`。三 claim 全坐实:
+  - **A box004**: 距离判据被证伪(box004/box021 wrist↔箱都~5cm,无判别力),改 recall 判据坐实——box004 recall **0.058** vs box021 **0.615**,fiction=近而未触。
+  - **C box023**: spider 0.069m vs omni 0.073m 手↔髋,**INHERITED**(源/姿态继承,非CEM)——**决定性回答用户问题3**。
+  - **E1**: 三标量联合分病;recall单序≠下游序(box023 recall0.67却0/64),证明不可合成单标量;box023 init-net **2459N** 抓自碰撞。
+  - 三图均亲验(skill§9)。
+- [x] **(纠正)早期误记的2个bug已撤回**: E163N标签由`convert_core4d_e163_manifest_to_sugar.py`从源人体mask生成(连续区间为证),**不是**`convert_holosoma_export_to_sugar.py`的距离heuristic→BOX021硬编码/8cm阈值两个"bug"对本实验不适用。真正指向: box004源接触未被retarget复现(recall0.058)=手部贴合+proxy容错,非标签bug。教训:定位前先确证label provenance。
+- [x] **Phase1 回填完成**: A/C/E1 实测数字进 `E163_RL_DEEP_INSIGHTS_CN.md` §3(box004 recall0.058/box023自碰撞行+标签provenance脚注)、§4 杠杆1(三标量表+单标量不预测)、§1.3(E165-C INHERITED spider0.069 vs omni0.073)。
+- [x] **本轮 commit**(spider repo, 分支 experiment/E161-surface-release-ablation): plan176 + 文档(纠错+回填) + Phase0 4脚本 + log211 + tracker/progress/INDEX。results/E165 为gitignore产物不入库(log已嵌数字)。pyproject/uv.lock/hdmi env 为会话前既有改动,不纳入。
+- [ ] Phase2(远程GPU) 用户明确暂不做。
+
+### 遇到的错误/修正
+| 项 | 修正 |
+|---|---|
+| C-A 距离判据(median>0.08)预设过强 | box021 对照证明几何距离无判别力, 改 recall<0.2 为 fiction 操作判据(脚本已改, JSON 同时保留 dist_criterion 供对照) |
+| E1 recall 顺序≠下游顺序 初看像"探针失败" | 实为预期: 证明需三标量联合, 改输出 mode 标签 + note_single_scalar_insufficient |
+
+### 决策记录
+- 文档 §4 杠杆3 旧写法"CEM selection 加 z_max 约束"判定**错误**（物体 GT 恒满分），改为 RL reward；Phase1 已回填纠错。
+
+---
+
 ## Active: E152 — Hand Gate Physics (2026-06-10)
 
 - [x] 恢复 E152 计划：当前目标是 `workspace/core4d/plan/160_E152_axis1_hand_object_physics_gate_plan.md`。用户指出 `box004` 三个方法接触箱子前手碰地，需要在 E152 evaluator 显式报告手-地接触/穿透。
