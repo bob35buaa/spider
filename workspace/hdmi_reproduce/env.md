@@ -7,6 +7,7 @@
 - Python 3.12+
 - CUDA 12.8+ (已验证 CUDA 12.9 + NVIDIA L20Y)
 - uv (`~/.local/bin/uv`，确保在 PATH 中)
+> curl -LsSf https://astral.sh/uv/install.sh | sh
 - IsaacLab v2.2.0 源码: `/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/IsaacLab_v2.2`
 - HDMI 源码: `/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/Loco-Manipulation/HDMI`
 

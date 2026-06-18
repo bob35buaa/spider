@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E166 plan | 2026-06-18 | Phase 29 | 脚约束+平滑重定向: R3红线预测力→B平滑→A脚约束→C下游staggered验证 | 📋 计划完成 | [plan](plan/177_E166_foot_smooth_retarget_plan.md) |
 | E163-export-clean8 | 2026-06-18 | Phase 27 | E163 clean8 RL export；8case ready，partner 6/8 pass | ✅ RL主输入8/8 ready | [213](log/213_E163_clean8_rl_export_results.md) |
 | E165D-export | 2026-06-18 | Phase 28 | E165D 诊断性 RL export；三case ready，partner全pass | ⚠️ export ready但不推广 | [212](log/212_E165D_peak_margin_rerank_results.md) |
 | E165D | 2026-06-18 | Phase 28 | CEM peak-margin025 rerank 3case；tracking改善但contact/penetration回归 | ⚠️ 管线通过，不推广 | [212](log/212_E165D_peak_margin_rerank_results.md) |

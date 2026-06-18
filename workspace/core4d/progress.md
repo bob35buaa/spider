@@ -13,6 +13,21 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 
 ---
 
+## Active: E166 — 脚约束 + 平滑重定向优化 (2026-06-18)
+
+- [x] 上下文恢复：读 `SUGAR-private/docs/CORE4D_E163_8CASE_E165D_DOWNSTREAM_ANALYSIS_CN.md`（重点 §2.5/§2.6/§8/§9）+ tracker/plan176/progress。下游头号杀手=`ee_body_pos`（6/7 case），97–100% 由**脚（踝）**驱动；数据质量真判别量=参考运动**平滑度/jerk**（成功 case jerk~1000/acc~60，失败 case jerk~3000/acc~300）；接触≈0 预测力；E165D peak-margin 牺牲接触、下游回退、不推广。
+- [x] code-grounded 现状诊断（`config.py`/`mjwp.py`/`sampling.py`）：脚=`local_frame_lower_ids`(454) 被动同权跟踪，无足滑/足-地/ankle加权；平滑只 `vel_rew_scale=0.0001`(578)。jerk 聚合点=`sampling.py` `info_combined[...].max(dim=0)`（dim0=时间，E160/E165D 已用）；ankle 加权可镜像 E044 `local_frame_wrist_weight`(462-466/mjwp 765)。
+- [x] 落计划 `plan/177_E166_foot_smooth_retarget_plan.md`：4 Phase——Phase0 E166-R3 离线红线预测力(training-free，复用 `eval_E165_8case_handfoot_dataquality.py`，**C-R3 通过是硬门**)→Phase1 E166-B 平滑(B1 CEM jerk/accel penalty / B2 handoff 后平滑)→Phase2 E166-A 脚约束(A1 足滑 / A2 ankle 加权 / A3 足-地一致)→Phase3 E166-C 四臂消融(baseline/仅平滑/仅脚/两者)×2 最抖 case(box021_035_p2 jerk3217、box004_082_p1 jerk2956) 下游 staggered 验证。7 条 Claim 已定量；接触不退化为一票否决（E165D 教训）。
+- [x] 2026-06-18 与用户讨论敲定 Phase3 case/臂设计（用 case 横跨 脚×抖 2×2 + 同 case 消融拆 A/B）：
+  - **3 case**：`box021_035_p2`(脚坏且抖,踝0.60,box021) + `box004_082_p1`(脚坏且抖,动力学最抖,box004) + `box004_083_p2`=r161(**脚坏但不抖**,jerk907,A隔离,box004)。澄清 box004_r161≡box004_083_p2（run-id vs clip 双标签）。数据里**不存在"脚好但抖"**（jerk↔脚坏强相关,§2.6）,故 B 无 case 级隔离,靠消融臂；box004_083_p2 反证 B 不该串味。用户明确选 035_p2（非035_p1）。
+  - **5 臂**（config 开关,默认关,可逆）：baseline(复用E163) / B1(CEM jerk惩罚,新CEM) / **B2(handoff后平滑,纯后处理无CEM)** / A(脚约束三项,新CEM) / A+B(全栈)。compute=每case 3新CEM+B2后处理+4新RL → 3case=**9 CEM+12 RL**（baseline复用省6）。
+  - **预测矩阵**（可证伪）：box004_083_p2 上 B1/B2≈0、A 显著>0（A独立有效+B不串味）；两条脚坏且抖上 A+B>单臂、B1vsB2 比 CEM内vs事后平滑性价比。
+  - 一票否决：任何臂接触/穿透退化>5% 判不推广（E165D教训）。
+- [x] 2026-06-18 plan/177 已按上述更新：Claims 增 C-disentangle/C-B1vsB2、C-A1/C-C 覆盖3case；Phase3 重写为3case×5臂+预测矩阵+9CEM/12RL；成功标准/文件表/可视化/风险同步。
+- [ ] 下一步：实现 Phase0 E166-R3（纯离线分析,无 GPU 依赖,可立即跑）；**C-R3 通过是开 GPU 硬门**。
+
+---
+
 ## Active: E165 — RL可恢复性杠杆 (2026-06-18)
 
 - [x] 上下文恢复：highest plan=175→176，log=210→211，E-num=164→165。

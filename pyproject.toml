@@ -40,13 +40,13 @@ spider-mjwp = "examples.run_mjwp:main"
 [tool.hatch.metadata]
 allow-direct-references = true
 
-[[tool.uv.index]]
-name = "nvidia"
-url = "https://pypi.nvidia.com/"
-explicit = true
+# [[tool.uv.index]]
+# name = "nvidia"
+# url = "https://pypi.nvidia.com/"
+# explicit = true
 
-[tool.uv.sources]
-warp-lang = { index = "nvidia" }
+# [tool.uv.sources]
+# warp-lang = { index = "nvidia" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["spider"]
