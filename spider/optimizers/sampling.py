@@ -29,6 +29,7 @@ def _cem_any_gate_enabled(config: Config) -> bool:
         config.cem_safety_gate_enabled
         or config.cem_hand_gate_enabled
         or config.cem_posture_gate_enabled
+        or config.cem_peak_margin_enabled
     )
 
 
@@ -38,6 +39,8 @@ def _cem_min_valid_frac(config: Config) -> float:
         vals.append(float(config.cem_safety_gate_min_valid_frac))
     if config.cem_posture_gate_enabled:
         vals.append(float(config.cem_posture_gate_min_valid_frac))
+    if config.cem_peak_margin_enabled:
+        vals.append(float(config.cem_peak_margin_min_valid_frac))
     return max(vals) if vals else float(config.cem_safety_gate_min_valid_frac)
 
 
@@ -233,6 +236,60 @@ def _compute_sample_gate_info(
                 "sample_posture_max_z_drop": max_z_drop,
                 "sample_posture_violation": violation,
                 "sample_posture_valid_mask": valid_mask,
+            }
+        )
+
+    if config.cem_peak_margin_enabled and {
+        "cem_peak_margin_ee_body_err",
+        "cem_peak_margin_anchor_pos_err",
+    }.issubset(info_combined):
+        ee_peak = info_combined["cem_peak_margin_ee_body_err"].max(dim=0).values
+        anchor_peak = info_combined["cem_peak_margin_anchor_pos_err"].max(dim=0).values
+        ee_margin = float(config.cem_peak_margin_ee_threshold_m) - ee_peak
+        anchor_margin = float(config.cem_peak_margin_anchor_threshold_m) - anchor_peak
+        buffer_m = max(float(config.cem_peak_margin_buffer_m), 1e-6)
+        ee_violation = torch.clamp(buffer_m - ee_margin, min=0.0) / buffer_m
+        anchor_violation = torch.clamp(buffer_m - anchor_margin, min=0.0) / buffer_m
+        posture_violation = out.get(
+            "sample_posture_violation",
+            torch.zeros_like(ee_violation),
+        )
+        violation = (
+            float(config.cem_peak_margin_w_ee) * ee_violation
+            + float(config.cem_peak_margin_w_anchor) * anchor_violation
+            + float(config.cem_peak_margin_w_posture) * posture_violation
+        )
+        valid_mask = (
+            (ee_peak <= float(config.cem_peak_margin_ee_threshold_m))
+            & (anchor_peak <= float(config.cem_peak_margin_anchor_threshold_m))
+        )
+        gate_masks.append(valid_mask)
+        min_margin = torch.minimum(ee_margin, anchor_margin)
+        sample_gate_min_sdf = (
+            min_margin
+            if sample_gate_min_sdf is None
+            else torch.minimum(sample_gate_min_sdf, min_margin)
+        )
+        sample_gate_violation_pct = (
+            violation
+            if sample_gate_violation_pct is None
+            else torch.maximum(sample_gate_violation_pct, violation)
+        )
+        sample_gate_violation_depth_mean = (
+            violation
+            if sample_gate_violation_depth_mean is None
+            else torch.maximum(sample_gate_violation_depth_mean, violation)
+        )
+        out.update(
+            {
+                "sample_peak_margin_ee_peak": ee_peak,
+                "sample_peak_margin_anchor_peak": anchor_peak,
+                "sample_peak_margin_ee_margin": ee_margin,
+                "sample_peak_margin_anchor_margin": anchor_margin,
+                "sample_peak_margin_ee_violation": ee_violation,
+                "sample_peak_margin_anchor_violation": anchor_violation,
+                "sample_peak_margin_violation": violation,
+                "sample_peak_margin_valid_mask": valid_mask,
             }
         )
 
@@ -588,6 +645,16 @@ def make_optimize_once_fn(
         if gate_enabled:
             fallback_score = None
             if (
+                config.cem_peak_margin_enabled
+                and "sample_peak_margin_violation" in rollout_info
+            ):
+                fallback_score = rews - (
+                    float(config.cem_peak_margin_lambda)
+                    * rollout_info["sample_peak_margin_violation"].to(rews.device)
+                )
+            if (
+                fallback_score is None
+                and
                 config.cem_posture_gate_enabled
                 and "sample_posture_violation" in rollout_info
             ):
@@ -725,6 +792,17 @@ def make_optimize_once_fn(
                     else 0.0
                 )
                 info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
+            if "sample_peak_margin_valid_mask" in rollout_info:
+                peak_mask = rollout_info["sample_peak_margin_valid_mask"]
+                info["cem_peak_margin_valid_frac"] = (
+                    peak_mask.float().mean().item()
+                )
+                info["cem_peak_margin_selected_valid_frac"] = (
+                    peak_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                info["cem_peak_margin_fallback_used"] = float(gate_fallback_used)
 
         # Downsample and store trace site positions for selected sample trajectories
         if "trace" in rollout_info:

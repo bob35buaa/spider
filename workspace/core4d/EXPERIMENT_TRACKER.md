@@ -4,6 +4,9 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E163-export-clean8 | 2026-06-18 | Phase 27 | E163 clean8 RL export；8case ready，partner 6/8 pass | ✅ RL主输入8/8 ready | [213](log/213_E163_clean8_rl_export_results.md) |
+| E165D-export | 2026-06-18 | Phase 28 | E165D 诊断性 RL export；三case ready，partner全pass | ⚠️ export ready但不推广 | [212](log/212_E165D_peak_margin_rerank_results.md) |
+| E165D | 2026-06-18 | Phase 28 | CEM peak-margin025 rerank 3case；tracking改善但contact/penetration回归 | ⚠️ 管线通过，不推广 | [212](log/212_E165D_peak_margin_rerank_results.md) |
 | E165-P0 | 2026-06-18 | Phase 28 | Phase0离线审计A/C/E1: box004标签虚高(recall0.06)/box023自碰撞INHERITED/三标量分病 | ✅ 3/3 claim坐实 | [211](log/211_E165_phase0_offline_audit_results.md) |
 | E165 plan | 2026-06-18 | Phase 28 | RL可恢复性杠杆: on-rails探针preflight/RL抬升reward/peak-margin rerank | 📋 计划完成 | [plan](plan/176_E165_rl_safe_eval_levers_plan.md) |
 | E164 | 2026-06-15 | Phase 27 | bimanual global mask + bimanual reward | ❌ 产物3/3且tracking 3/3；raw contact gate 0/3，不导出RL | [210](log/210_E164_bimanual_global_mask_reward_results.md) |

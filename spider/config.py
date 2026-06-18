@@ -340,6 +340,29 @@ class Config:
     cem_posture_gate_terminal_frac: float = 0.15
     cem_posture_gate_min_valid_frac: float = 0.05
     cem_posture_gate_fallback_lambda: float = 5.0
+    # E165-D: sample-level peak-margin rerank for downstream SUGAR hard gates.
+    # Disabled by default. It tracks worst-frame key-body and anchor deviations
+    # during CEM rollouts and filters/reranks samples before elite selection.
+    cem_peak_margin_enabled: bool = False
+    cem_peak_margin_ee_body_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+            "left_wrist_yaw_link",
+            "right_wrist_yaw_link",
+        ]
+    )
+    cem_peak_margin_ee_body_ids: list[int] = field(default_factory=list)
+    cem_peak_margin_anchor_body_name: str = "torso_link"
+    cem_peak_margin_anchor_body_id: int = -1
+    cem_peak_margin_ee_threshold_m: float = 0.25
+    cem_peak_margin_anchor_threshold_m: float = 0.25
+    cem_peak_margin_buffer_m: float = 0.03
+    cem_peak_margin_min_valid_frac: float = 0.05
+    cem_peak_margin_w_ee: float = 1.0
+    cem_peak_margin_w_anchor: float = 0.5
+    cem_peak_margin_w_posture: float = 1.0
+    cem_peak_margin_lambda: float = 3.0
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
@@ -1034,6 +1057,7 @@ def process_config(config: Config):
         or config.object_floor_penalty_scale > 0.0
         or config.cem_safety_gate_enabled
         or config.cem_hand_gate_enabled
+        or config.cem_peak_margin_enabled
         or config.object_clearance_rew_scale > 0.0
         or config.object_clearance_penalty_scale > 0.0
         or config.carry_corridor_rew_scale > 0.0
@@ -1242,6 +1266,33 @@ def process_config(config: Config):
                     )
             config.cem_hand_gate_geom_ids = geom_ids
             loguru.logger.info("CEM hand gate: {} geoms resolved.", len(geom_ids))
+        if config.cem_peak_margin_enabled:
+            body_ids = []
+            for name in config.cem_peak_margin_ee_body_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "cem_peak_margin_ee_body_names: body '{}' not found.", name
+                    )
+            config.cem_peak_margin_ee_body_ids = body_ids
+            anchor_id = mujoco.mj_name2id(
+                model,
+                mujoco.mjtObj.mjOBJ_BODY,
+                config.cem_peak_margin_anchor_body_name,
+            )
+            config.cem_peak_margin_anchor_body_id = anchor_id
+            if anchor_id == -1:
+                loguru.logger.warning(
+                    "cem_peak_margin_anchor_body_name: body '{}' not found.",
+                    config.cem_peak_margin_anchor_body_name,
+                )
+            loguru.logger.info(
+                "CEM peak-margin: {} ee bodies resolved, anchor_id={}.",
+                len(body_ids),
+                anchor_id,
+            )
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:

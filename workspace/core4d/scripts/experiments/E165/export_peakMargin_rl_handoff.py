@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Export E163 narrowSurfaceBand rows as S6 RL handoff inputs."""
+"""Export E165D peak-margin rerank rows as S6 RL handoff inputs."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import json
-import re
-import subprocess
 import sys
 from collections import Counter
 from datetime import datetime
@@ -16,91 +14,32 @@ from typing import Any
 
 
 REPO = Path(__file__).resolve().parents[5]
-RESULT_ROOT = REPO / "workspace/core4d/results/E163/narrow_surface_band_rl_export"
-E163_VARIANTS = REPO / "workspace/core4d/scripts/experiments/E163/variants.tsv"
-E163_METRICS = REPO / "workspace/core4d/results/E163/narrow_surface_band/eval/full/e163_method_metrics.tsv"
-E163_METRICS_REF = "workspace/core4d/results/E163/narrow_surface_band/eval/full/e163_method_metrics.tsv"
+E163_SCRIPT_DIR = REPO / "workspace/core4d/scripts/experiments/E163"
+sys.path.insert(0, str(E163_SCRIPT_DIR))
+
+import export_narrowSurfaceBand_rl_handoff as e163_export  # noqa: E402
+
+
+RESULT_ROOT = REPO / "workspace/core4d/results/E165/peak_margin_rerank/rl_export"
+E165_VARIANTS = REPO / "workspace/core4d/scripts/experiments/E165/variants.tsv"
+E165_METRICS = REPO / "workspace/core4d/results/E165/peak_margin_rerank/eval/full/e165d_method_metrics.tsv"
+E165_METRICS_REF = "workspace/core4d/results/E165/peak_margin_rerank/eval/full/e165d_method_metrics.tsv"
 S6_ROOT = REPO / "workspace/core4d/scripts/data_construction_v3/stages/s6_downstream"
 RAW_ROOT = Path("/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real")
 SMPLX_DIR = Path("/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/smplx")
 HOLOSOMA_REPO = Path("/home/ubuntu/Workspace/holosoma")
 
-SOURCE_EXP_ID = "E163"
-SPIDER_METHOD_ID = "gateA_surfaceBandA2_postureRerankA_narrowSurfaceBandReleaseDecay"
-SOURCE_REF = "E163_narrowSurfaceBand_three_case"
-
+SOURCE_EXP_ID = "E165D"
+SPIDER_METHOD_ID = "gateA_surfaceBandA2_postureRerankA_narrowSurfaceBandReleaseDecay_peakMargin025"
+SOURCE_REF = "E165D_peakMargin025_three_case"
+METHOD_LABEL = "E165D peakMargin025"
 TARGET_SHORT_CASES = ["box023_person2", "box021_029_p2", "box004_083_p2"]
-CLEAN8_SHORT_CASES = [
-    "box023_person2",
-    "box021_029_p2",
-    "box004_083_p2",
-    "box021_035_p1",
-    "box021_035_p2",
-    "box004_083_p1",
-    "box004_082_p1",
-    "box026_139_p1",
-]
 
 OBJECT_NAME = {
     "box021": "Box021",
     "box023": "Box023",
     "box004": "box004",
 }
-
-HANDOFF_FIELDS = [
-    "case_id",
-    "short_case_id",
-    "object_key",
-    "object_name",
-    "date",
-    "seq",
-    "person",
-    "person_idx",
-    "retarget_variant_id",
-    "target_variant_id",
-    "hand_collision_variant_id",
-    "source_exp_id",
-    "spider_method_id",
-    "handoff_decision",
-    "candidate_decision",
-    "target_gate_status",
-    "visual_qc_status",
-    "target_scene",
-    "trajectory",
-    "scene_act",
-    "contact_mask",
-    "stage2b_target_task",
-    "stage2b_result_root",
-    "stage2b_manifest_ref",
-    "raw_contact_threshold_label",
-    "source_exp",
-    "source_variant",
-    "source_metrics_ref",
-    "notes",
-]
-
-EVIDENCE_FIELDS = [
-    "case_id",
-    "object_key",
-    "object_name",
-    "date",
-    "seq",
-    "person",
-    "person_idx",
-    "retarget_variant_id",
-    "target_variant_id",
-    "hand_collision_variant_id",
-    "source_exp_id",
-    "spider_method_id",
-    "cem_status",
-    "rl_status",
-    "downstream_failure_mode",
-    "downstream_notes",
-    "cem_run_id",
-    "cem_result_npz",
-    "cem_video",
-    "cem_metrics_ref",
-]
 
 SOURCE_FIELDS = [
     "short_case_id",
@@ -128,8 +67,13 @@ SOURCE_FIELDS = [
     "raw_contact_in_mask",
     "inmask_contact_3mm",
     "phys_penetration_3mm",
-    "release_false_3mm",
-    "leg_penetration_frac",
+    "hand_geom_penetration_2mm",
+    "peak_margin_valid_frac",
+    "peak_margin_selected_valid_frac",
+    "peak_margin_fallback_used",
+    "peak_margin_ee_peak_mean",
+    "peak_margin_anchor_peak_mean",
+    "peak_margin_violation_mean",
     "obj_err_mean_m",
 ]
 
@@ -159,58 +103,42 @@ def read_tsv(path: Path) -> list[dict[str, str]]:
 
 
 def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t", lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: "" if row.get(field) is None else row.get(field, "") for field in fields})
+    e163_export.write_tsv(path, rows, fields)
 
 
 def write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    e163_export.write_json(path, data)
 
 
 def parse_identity(row: dict[str, str]) -> tuple[str, str, str, str]:
-    case_id = row["case_id"]
-    object_key = row["object_key"]
-    if row["short_case_id"] == "box023_person2":
-        task_info = repo_path(row["target_scene"]).parent / "task_info.json"
-        info = json.loads(task_info.read_text(encoding="utf-8"))
-        source_qpos = Path(info["source_qpos"]).name
-        match = re.match(r"(?P<date>\d{8})-(?P<seq>\d{3})-(?P<person>person[12])-(?P<object>[^_]+)_with_obj", source_qpos)
-        if not match:
-            raise ValueError(f"cannot parse box023 source identity from {source_qpos}")
-        return match.group("date"), match.group("seq"), match.group("person"), match.group("object")
+    date, seq, person, object_name = e163_export.parse_identity(row)
+    if object_name in {"box021", "box023", "box004"}:
+        object_name = OBJECT_NAME.get(object_name, object_name)
+    return date, seq, person, object_name
 
-    pattern = rf".*_{re.escape(object_key)}_(?P<date>\d{{8}}(?:_\d+)?)_(?P<seq>\d{{3}})_p(?P<person_idx>[12])$"
-    match = re.match(pattern, case_id)
-    if not match:
-        raise ValueError(f"cannot parse identity from case_id={case_id}")
-    person = f"person{match.group('person_idx')}"
-    object_name = OBJECT_NAME.get(object_key, object_key)
-    return match.group("date"), match.group("seq"), person, object_name
+
+def metric_value(row: dict[str, str], key: str) -> str:
+    return row.get(key, "")
 
 
 def load_sources() -> list[dict[str, str]]:
     variants = {
         row["short_case_id"]: row
-        for row in read_tsv(E163_VARIANTS)
-        if row.get("short_case_id") in TARGET_SHORT_CASES and row.get("method_group") == "narrowSurfaceBand"
+        for row in read_tsv(E165_VARIANTS)
+        if row.get("short_case_id") in TARGET_SHORT_CASES and row.get("method_group") == "peakMarginRerank025"
     }
     missing = [case for case in TARGET_SHORT_CASES if case not in variants]
     if missing:
-        raise SystemExit(f"missing E163 narrowSurfaceBand variants: {missing}")
+        raise SystemExit(f"missing E165D variants: {missing}")
 
     metrics = {
         row["short_case_id"]: row
-        for row in read_tsv(E163_METRICS)
-        if row.get("short_case_id") in TARGET_SHORT_CASES and row.get("method_label") == "E163 narrowSurfaceBand"
+        for row in read_tsv(E165_METRICS)
+        if row.get("short_case_id") in TARGET_SHORT_CASES and row.get("method") == METHOD_LABEL
     }
     missing_metrics = [case for case in TARGET_SHORT_CASES if case not in metrics]
     if missing_metrics:
-        raise SystemExit(f"missing E163 narrowSurfaceBand metrics: {missing_metrics}")
+        raise SystemExit(f"missing E165D metrics: {missing_metrics}")
 
     rows: list[dict[str, str]] = []
     for short_case in TARGET_SHORT_CASES:
@@ -238,15 +166,20 @@ def load_sources() -> list[dict[str, str]]:
                 "cem_result_npz": variant["result_npz"],
                 "cem_outdir_npz": variant["outdir_npz"],
                 "cem_video": variant["video"],
-                "success_tracked": metric.get("success_tracked", ""),
-                "fall_flag": metric.get("fall_flag", ""),
-                "track_pelvis_z_err_terminal_m": metric.get("track_pelvis_z_err_terminal_m", ""),
-                "raw_contact_in_mask": metric.get("hand_object_physics_contact_in_mask_frac", ""),
-                "inmask_contact_3mm": metric.get("hand_object_physics_contact_3mm_in_mask_frac", ""),
-                "phys_penetration_3mm": metric.get("hand_object_physics_penetration_3mm_frame_frac", ""),
-                "release_false_3mm": metric.get("hand_object_release_false_contact_3mm_frac", ""),
-                "leg_penetration_frac": metric.get("leg_penetration_frac", ""),
-                "obj_err_mean_m": metric.get("obj_err_mean_m", ""),
+                "success_tracked": metric_value(metric, "success_tracked"),
+                "fall_flag": metric_value(metric, "fall_flag"),
+                "track_pelvis_z_err_terminal_m": metric_value(metric, "track_pelvis_z_err_terminal_m"),
+                "raw_contact_in_mask": metric_value(metric, "hand_object_physics_contact_in_mask_frac"),
+                "inmask_contact_3mm": metric_value(metric, "hand_object_physics_contact_3mm_in_mask_frac"),
+                "phys_penetration_3mm": metric_value(metric, "hand_object_physics_penetration_3mm_frame_frac"),
+                "hand_geom_penetration_2mm": metric_value(metric, "hand_geom_penetration_2mm_frac"),
+                "peak_margin_valid_frac": metric_value(metric, "peak_margin_valid_frac"),
+                "peak_margin_selected_valid_frac": metric_value(metric, "peak_margin_selected_valid_frac"),
+                "peak_margin_fallback_used": metric_value(metric, "peak_margin_fallback_used"),
+                "peak_margin_ee_peak_mean": metric_value(metric, "peak_margin_ee_peak_mean"),
+                "peak_margin_anchor_peak_mean": metric_value(metric, "peak_margin_anchor_peak_mean"),
+                "peak_margin_violation_mean": metric_value(metric, "peak_margin_violation_mean"),
+                "obj_err_mean_m": metric_value(metric, "obj_err_mean_m"),
             }
         )
     return rows
@@ -254,14 +187,19 @@ def load_sources() -> list[dict[str, str]]:
 
 def source_notes(row: dict[str, str]) -> str:
     return (
-        f"E163 narrowSurfaceBand export source_ref={SOURCE_REF}; "
+        "E165D peakMargin025 three-case diagnostic export; "
         f"tracked={row['success_tracked']}; fall={row['fall_flag']}; "
         f"pelvis_z_terminal={row['track_pelvis_z_err_terminal_m']}; "
         f"rawContact={row['raw_contact_in_mask']}; "
         f"inmaskC3={row['inmask_contact_3mm']}; "
         f"physPen3={row['phys_penetration_3mm']}; "
-        f"releaseF3={row['release_false_3mm']}; "
-        f"legPen={row['leg_penetration_frac']}; "
+        f"geomPen2={row['hand_geom_penetration_2mm']}; "
+        f"pmValid={row['peak_margin_valid_frac']}; "
+        f"pmSelectedValid={row['peak_margin_selected_valid_frac']}; "
+        f"pmFallback={row['peak_margin_fallback_used']}; "
+        f"pmEePeak={row['peak_margin_ee_peak_mean']}; "
+        f"pmAnchorPeak={row['peak_margin_anchor_peak_mean']}; "
+        f"pmViolation={row['peak_margin_violation_mean']}; "
         f"objErr={row['obj_err_mean_m']}"
     )
 
@@ -300,7 +238,7 @@ def build_handoff_rows(source_rows: list[dict[str, str]]) -> list[dict[str, str]
                 "source_exp_id": SOURCE_EXP_ID,
                 "spider_method_id": SPIDER_METHOD_ID,
                 "handoff_decision": "HANDOFF_READY",
-                "candidate_decision": "E163_NARROW_SURFACE_BAND_READY",
+                "candidate_decision": "E165D_PEAK_MARGIN_DIAGNOSTIC_READY",
                 "target_gate_status": "pass",
                 "visual_qc_status": "pass",
                 "target_scene": source["target_scene"],
@@ -308,12 +246,12 @@ def build_handoff_rows(source_rows: list[dict[str, str]]) -> list[dict[str, str]
                 "scene_act": source["scene_act"],
                 "contact_mask": source["contact_mask"],
                 "stage2b_target_task": source["derived_task"],
-                "stage2b_result_root": "workspace/core4d/results/E163/narrow_surface_band",
-                "stage2b_manifest_ref": "workspace/core4d/scripts/experiments/E163/variants.tsv",
+                "stage2b_result_root": "workspace/core4d/results/E165/peak_margin_rerank",
+                "stage2b_manifest_ref": "workspace/core4d/scripts/experiments/E165/variants.tsv",
                 "raw_contact_threshold_label": "3cm",
                 "source_exp": SOURCE_EXP_ID,
                 "source_variant": source["variant"],
-                "source_metrics_ref": E163_METRICS_REF,
+                "source_metrics_ref": E165_METRICS_REF,
                 "notes": source_notes(source),
             }
         )
@@ -344,161 +282,14 @@ def build_evidence_rows(source_rows: list[dict[str, str]]) -> list[dict[str, str
                 "cem_run_id": source["variant"],
                 "cem_result_npz": source["cem_result_npz"],
                 "cem_video": source["cem_video"],
-                "cem_metrics_ref": E163_METRICS_REF,
+                "cem_metrics_ref": E165_METRICS_REF,
             }
         )
     return rows
 
 
 def run_cmd(cmd: list[Any]) -> None:
-    print("+ " + " ".join(str(x) for x in cmd), flush=True)
-    subprocess.run([str(x) for x in cmd], cwd=REPO, check=True)
-
-
-def partner_base_cmd(args: argparse.Namespace, rl_export_dir: Path, partner_dir: Path) -> list[Any]:
-    return [
-        sys.executable,
-        S6_ROOT / "export_rl_partner_omnirt.py",
-        "--rl-export-input-tsv",
-        rl_export_dir / "rl_export_input.tsv",
-        "--out-dir",
-        partner_dir,
-        "--spider-repo",
-        REPO,
-        "--holosoma-repo",
-        args.holosoma_repo,
-        "--core4d-raw-root",
-        args.core4d_raw_root,
-        "--smplx-model-dir",
-        args.smplx_model_dir,
-        "--python-bin",
-        args.python_bin,
-    ]
-
-
-def path_exists(path_text: str) -> bool:
-    if not path_text:
-        return False
-    path = repo_path(path_text)
-    return path.exists() and path.stat().st_size > 0
-
-
-def finalize_partner_manifest(partner_manifest: Path, partner_dir: Path) -> None:
-    rows = read_tsv(partner_manifest)
-    if not rows:
-        return
-    fields = list(rows[0].keys())
-    for row in rows:
-        if row.get("pipeline_enabled") != "1":
-            continue
-        required = ["converted_npz", "omniretarget_output_npz", "trimmed_npz", "trim_window_json"]
-        missing = [field for field in required if not path_exists(row.get(field, ""))]
-        if missing:
-            row["partner_status"] = "missing_outputs"
-            row["failure_mode"] = "partner_omnirt_outputs_missing"
-            row["decision_notes"] = "missing outputs: " + ",".join(missing)
-        else:
-            row["partner_status"] = "pass"
-            row["failure_mode"] = ""
-            row["decision_notes"] = "temporary partner OmniRetarget outputs exist"
-    write_tsv(partner_manifest, rows, fields)
-    write_json(partner_manifest.with_suffix(".json"), rows)
-    summary = {
-        "stage": "S6_rl_partner_omnirt_finalized",
-        "created_at": now(),
-        "rows": len(rows),
-        "partner_status_counts": dict(Counter(row.get("partner_status", "") for row in rows)),
-        "manifest_tsv": str(partner_manifest),
-        "out_dir": str(partner_dir),
-    }
-    write_json(partner_dir / "rl_partner_omnirt_summary.json", summary)
-
-
-def run_partner_export(args: argparse.Namespace, source_rows: list[dict[str, str]], rl_export_dir: Path, partner_dir: Path) -> None:
-    base_cmd = partner_base_cmd(args, rl_export_dir, partner_dir)
-    if not args.execute_partner:
-        run_cmd(base_cmd)
-        return
-
-    if not args.allow_partner_failure:
-        cmd = [*base_cmd, "--execute"]
-        if args.force_partner:
-            cmd.append("--force")
-        run_cmd(cmd)
-        return
-
-    failures: list[str] = []
-    for source in source_rows:
-        cmd = [*base_cmd, "--case-id", source["case_id"], "--execute"]
-        if args.force_partner:
-            cmd.append("--force")
-        try:
-            run_cmd(cmd)
-        except subprocess.CalledProcessError as exc:
-            failures.append(f"{source['short_case_id']}:{source['case_id']}:returncode={exc.returncode}")
-            print(f"partner OmniRetarget failed for {source['short_case_id']}; continuing", file=sys.stderr)
-
-    run_cmd(base_cmd)
-    finalize_partner_manifest(partner_dir / "rl_partner_omnirt_manifest.tsv", partner_dir)
-    if failures:
-        print("partner OmniRetarget failures recorded:\n" + "\n".join(failures), file=sys.stderr)
-
-
-def summarize(source_rows: list[dict[str, str]], rl_export_input: Path, partner_manifest: Path, out_path: Path) -> dict[str, Any]:
-    rl_rows = read_tsv(rl_export_input)
-    partner_rows = read_tsv(partner_manifest) if partner_manifest.is_file() else []
-    summary = {
-        "experiment": SOURCE_EXP_ID,
-        "created_at": now(),
-        "source": SOURCE_REF,
-        "source_case_count": len(source_rows),
-        "result_root": rel(RESULT_ROOT),
-        "source_cases": [row["short_case_id"] for row in source_rows],
-        "rl_export_rows": len(rl_rows),
-        "rl_export_decision_counts": dict(Counter(row.get("rl_export_decision", "") for row in rl_rows)),
-        "partner_rows": len(partner_rows),
-        "partner_status_counts": dict(Counter(row.get("partner_status", "") for row in partner_rows)),
-        "partner_cases": [
-            {
-                "source_case_id": row.get("source_case_id", ""),
-                "partner_case_id": row.get("partner_case_id", ""),
-                "partner_status": row.get("partner_status", ""),
-                "failure_mode": row.get("failure_mode", ""),
-                "trimmed_npz": row.get("trimmed_npz", ""),
-            }
-            for row in partner_rows
-        ],
-    }
-    write_json(out_path.with_suffix(".json"), summary)
-    lines = [
-        "# E163 narrowSurfaceBand RL export summary",
-        "",
-        f"- created_at: `{summary['created_at']}`",
-        f"- source: `{summary['source']}`",
-        f"- source case count: `{summary['source_case_count']}`",
-        f"- result_root: `{summary['result_root']}`",
-        f"- RL export rows: `{summary['rl_export_rows']}`",
-        f"- RL export decisions: `{summary['rl_export_decision_counts']}`",
-        f"- partner statuses: `{summary['partner_status_counts']}`",
-        "",
-        "## Source cases",
-        "",
-        "| short case | case_id | person | object | scene_act | CEM result |",
-        "|---|---|---|---|---|---|",
-    ]
-    for row in source_rows:
-        lines.append(
-            f"| `{row['short_case_id']}` | `{row['case_id']}` | `{row['person']}` | `{row['object_name']}` | "
-            f"`{row['scene_act']}` | `{row['cem_result_npz']}` |"
-        )
-    lines.extend(["", "## Partner OmniRetarget", "", "| source | partner | status | failure | trimmed_npz |", "|---|---|---|---|---|"])
-    for row in partner_rows:
-        lines.append(
-            f"| `{row.get('source_case_id', '')}` | `{row.get('partner_case_id', '')}` | "
-            f"`{row.get('partner_status', '')}` | `{row.get('failure_mode', '')}` | `{row.get('trimmed_npz', '')}` |"
-        )
-    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return summary
+    e163_export.run_cmd(cmd)
 
 
 def validate_exports(rl_export_input: Path, partner_manifest: Path, *, require_partner_pass: bool) -> None:
@@ -531,18 +322,64 @@ def validate_exports(rl_export_input: Path, partner_manifest: Path, *, require_p
             raise SystemExit(f"partner OmniRetarget failed rows: {failed}")
 
 
+def summarize(source_rows: list[dict[str, str]], rl_export_input: Path, partner_manifest: Path, out_path: Path) -> dict[str, Any]:
+    rl_rows = read_tsv(rl_export_input)
+    partner_rows = read_tsv(partner_manifest) if partner_manifest.is_file() else []
+    summary = {
+        "experiment": SOURCE_EXP_ID,
+        "created_at": now(),
+        "source": "E165D peakMargin025 three-case",
+        "result_root": rel(RESULT_ROOT),
+        "source_cases": [row["short_case_id"] for row in source_rows],
+        "rl_export_rows": len(rl_rows),
+        "rl_export_decision_counts": dict(Counter(row.get("rl_export_decision", "") for row in rl_rows)),
+        "partner_rows": len(partner_rows),
+        "partner_status_counts": dict(Counter(row.get("partner_status", "") for row in partner_rows)),
+        "partner_cases": [
+            {
+                "source_case_id": row.get("source_case_id", ""),
+                "partner_case_id": row.get("partner_case_id", ""),
+                "partner_status": row.get("partner_status", ""),
+                "failure_mode": row.get("failure_mode", ""),
+                "trimmed_npz": row.get("trimmed_npz", ""),
+            }
+            for row in partner_rows
+        ],
+    }
+    write_json(out_path.with_suffix(".json"), summary)
+    lines = [
+        "# E165D peakMargin025 RL export summary",
+        "",
+        f"- created_at: `{summary['created_at']}`",
+        f"- result_root: `{summary['result_root']}`",
+        f"- RL export rows: `{summary['rl_export_rows']}`",
+        f"- RL export decisions: `{summary['rl_export_decision_counts']}`",
+        f"- partner statuses: `{summary['partner_status_counts']}`",
+        "",
+        "## Source cases",
+        "",
+        "| short case | case_id | person | object | scene_act | CEM result |",
+        "|---|---|---|---|---|---|",
+    ]
+    for row in source_rows:
+        lines.append(
+            f"| `{row['short_case_id']}` | `{row['case_id']}` | `{row['person']}` | `{row['object_name']}` | "
+            f"`{row['scene_act']}` | `{row['cem_result_npz']}` |"
+        )
+    lines.extend(["", "## Partner OmniRetarget", "", "| source | partner | status | failure | trimmed_npz |", "|---|---|---|---|---|"])
+    for row in partner_rows:
+        lines.append(
+            f"| `{row.get('source_case_id', '')}` | `{row.get('partner_case_id', '')}` | "
+            f"`{row.get('partner_status', '')}` | `{row.get('failure_mode', '')}` | `{row.get('trimmed_npz', '')}` |"
+        )
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return summary
+
+
 def main() -> None:
-    global E163_METRICS, E163_METRICS_REF, RESULT_ROOT, SOURCE_REF, TARGET_SHORT_CASES
+    global RESULT_ROOT
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-root", type=Path, default=RESULT_ROOT)
-    parser.add_argument("--case-set", choices=["three", "clean8"], default="three")
-    parser.add_argument("--target-short-cases", default="")
-    parser.add_argument("--metrics-tsv", type=Path, default=E163_METRICS)
-    parser.add_argument("--source-ref", default=SOURCE_REF)
-    parser.add_argument("--manifest-subdir", default="manifest")
-    parser.add_argument("--handoff-subdir", default="s5_handoff")
-    parser.add_argument("--evidence-subdir", default="s6_downstream/evidence")
-    parser.add_argument("--rl-export-subdir", default="s6_downstream/rl_export")
     parser.add_argument("--core4d-raw-root", type=Path, default=RAW_ROOT)
     parser.add_argument("--smplx-model-dir", type=Path, default=SMPLX_DIR)
     parser.add_argument("--holosoma-repo", type=Path, default=HOLOSOMA_REPO)
@@ -553,30 +390,23 @@ def main() -> None:
     args = parser.parse_args()
 
     RESULT_ROOT = args.out_root.expanduser().resolve()
-    if args.target_short_cases:
-        TARGET_SHORT_CASES = [case.strip() for case in args.target_short_cases.split(",") if case.strip()]
-    elif args.case_set == "clean8":
-        TARGET_SHORT_CASES = CLEAN8_SHORT_CASES
-    E163_METRICS = args.metrics_tsv.expanduser().resolve()
-    E163_METRICS_REF = rel(E163_METRICS)
-    SOURCE_REF = args.source_ref
     source_rows = load_sources()
     validate_source_rows(source_rows)
 
-    manifest_dir = RESULT_ROOT / args.manifest_subdir
-    handoff_dir = RESULT_ROOT / args.handoff_subdir
-    evidence_dir = RESULT_ROOT / args.evidence_subdir
-    rl_export_dir = RESULT_ROOT / args.rl_export_subdir
+    manifest_dir = RESULT_ROOT / "manifest"
+    handoff_dir = RESULT_ROOT / "s5_handoff"
+    evidence_dir = RESULT_ROOT / "s6_downstream/evidence"
+    rl_export_dir = RESULT_ROOT / "s6_downstream/rl_export"
     partner_dir = rl_export_dir / "partner_omnirt"
     for path in [manifest_dir, handoff_dir, evidence_dir, rl_export_dir, partner_dir]:
         path.mkdir(parents=True, exist_ok=True)
 
-    source_path = manifest_dir / "narrowSurfaceBand_source_rows.tsv"
+    source_path = manifest_dir / "peakMargin025_source_rows.tsv"
     handoff_path = handoff_dir / "handoff_manifest.tsv"
     evidence_input = evidence_dir / "downstream_evidence_input.tsv"
     write_tsv(source_path, source_rows, SOURCE_FIELDS)
-    write_tsv(handoff_path, build_handoff_rows(source_rows), HANDOFF_FIELDS)
-    write_tsv(evidence_input, build_evidence_rows(source_rows), EVIDENCE_FIELDS)
+    write_tsv(handoff_path, build_handoff_rows(source_rows), e163_export.HANDOFF_FIELDS)
+    write_tsv(evidence_input, build_evidence_rows(source_rows), e163_export.EVIDENCE_FIELDS)
 
     run_cmd(
         [
@@ -610,7 +440,7 @@ def main() -> None:
         ]
     )
 
-    run_partner_export(args, source_rows, rl_export_dir, partner_dir)
+    e163_export.run_partner_export(args, source_rows, rl_export_dir, partner_dir)
 
     partner_manifest = partner_dir / "rl_partner_omnirt_manifest.tsv"
     validate_exports(

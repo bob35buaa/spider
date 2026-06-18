@@ -426,6 +426,16 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         if gate_enabled:
             fallback_score = None
             if (
+                config.cem_peak_margin_enabled
+                and "sample_peak_margin_violation" in rollout_info
+            ):
+                fallback_score = rews - (
+                    float(config.cem_peak_margin_lambda)
+                    * rollout_info["sample_peak_margin_violation"].to(rews.device)
+                )
+            if (
+                fallback_score is None
+                and
                 config.cem_posture_gate_enabled
                 and "sample_posture_violation" in rollout_info
             ):
@@ -551,6 +561,17 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     else 0.0
                 )
                 info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
+            if "sample_peak_margin_valid_mask" in rollout_info:
+                peak_mask = rollout_info["sample_peak_margin_valid_mask"]
+                info["cem_peak_margin_valid_frac"] = (
+                    peak_mask.float().mean().item()
+                )
+                info["cem_peak_margin_selected_valid_frac"] = (
+                    peak_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                info["cem_peak_margin_fallback_used"] = float(gate_fallback_used)
 
         if "trace" in rollout_info:
             info["trace_sample"] = rollout_info["trace"][sel_idx].cpu().numpy()
