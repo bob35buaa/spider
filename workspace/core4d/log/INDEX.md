@@ -1,13 +1,25 @@
 # 实验日志索引
 
-> 自动生成，共 210 个日志文件。
+> 自动生成，共 218 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 29 (E166-E166)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 214 | E166 |  | Redline predictive results | [214_E166_redline_predictive_results.md](214_E166_redline_predictive_results.md) |
+| 215 | E166 |  | R3b redline pathology split results | [215_E166_R3b_redline_pathology_split_res...](215_E166_R3b_redline_pathology_split_results.md) |
+| 216 | E166 |  | R3c two stage redline results | [216_E166_R3c_two_stage_redline_results.m...](216_E166_R3c_two_stage_redline_results.md) |
+| 217 | E166, e1 |  | Pathology split phase1 prep | [217_E166_pathology_split_phase1_prep.md](217_E166_pathology_split_phase1_prep.md) |
+| 218 | E166 |  | Foot smooth cem results | [218_E166_foot_smooth_cem_results.md](218_E166_foot_smooth_cem_results.md) |
+| 219 | E166 | 2026-06-19 | Remaining4 A/B2 SUGAR results | [219_E166_remaining4_A_B2_sugar_results.md](219_E166_remaining4_A_B2_sugar_results.md) |
 
 ## Phase 28 (E165-E165)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
 | 211 | E165, e0 |  | Phase0 offline audit results | [211_E165_phase0_offline_audit_results.md](211_E165_phase0_offline_audit_results.md) |
+| 212 | E165D |  | D peak margin rerank results | [212_E165D_peak_margin_rerank_results.md](212_E165D_peak_margin_rerank_results.md) |
 
 ## Phase 27 (E147-E164)
 
@@ -38,6 +50,7 @@
 | 208 | E163 | 2026-06-14 | Narrow surface band clean8 results | [208_E163_narrow_surface_band_clean8_resu...](208_E163_narrow_surface_band_clean8_results.md) |
 | 209 | E163 | 2026-06-14 | Box004 082 p1 failure analysis | [209_E163_box004_082_p1_failure_analysis....](209_E163_box004_082_p1_failure_analysis.md) |
 | 210 | E164 | 2026-06-15 | Bimanual global mask reward results | [210_E164_bimanual_global_mask_reward_res...](210_E164_bimanual_global_mask_reward_results.md) |
+| 213 | E163 | 2026-06-14 | Clean8 rl export results | [213_E163_clean8_rl_export_results.md](213_E163_clean8_rl_export_results.md) |
 
 ## Phase 26 (E145-E145)
 

@@ -25,7 +25,9 @@ from spider.math import quat_sub
 from spider.optimizers.sampling import (
     _cem_any_gate_enabled,
     _cem_min_valid_frac,
+    _compute_sample_foot_info,
     _compute_sample_gate_info,
+    _compute_sample_smooth_info,
     _compute_weights_compiled,
     _compute_weights_impl,
     _compute_weights_with_gate_impl,
@@ -330,6 +332,12 @@ def make_rollout_fn_fast(  # noqa: D103
         gate_info = _compute_sample_gate_info(config, info_combined)
         if gate_info is not None:
             info.update(gate_info)
+        smooth_info = _compute_sample_smooth_info(config, info_combined)
+        if smooth_info is not None:
+            info.update(smooth_info)
+        foot_info = _compute_sample_foot_info(config, info_combined)
+        if foot_info is not None:
+            info.update(foot_info)
 
         if record_states:
             info["recorded_qpos"] = recorded_qpos
@@ -365,6 +373,8 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         combined_gate_min_sdf = None
         combined_gate_violation_pct = None
         combined_gate_violation_depth_mean = None
+        combined_smooth_penalty = None
+        combined_foot_penalty = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
                 config,
@@ -405,7 +415,30 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                         combined_gate_violation_depth_mean, violation_depth
                     )
                 )
+            if config.cem_smooth_enabled and "sample_smooth_penalty" in rollout_info:
+                smooth_penalty = rollout_info["sample_smooth_penalty"]
+                combined_smooth_penalty = (
+                    smooth_penalty
+                    if combined_smooth_penalty is None
+                    else torch.maximum(combined_smooth_penalty, smooth_penalty)
+                )
+            if (
+                (config.foot_slip_enabled or config.foot_ground_enabled)
+                and "sample_foot_penalty" in rollout_info
+            ):
+                foot_penalty = rollout_info["sample_foot_penalty"]
+                combined_foot_penalty = (
+                    foot_penalty
+                    if combined_foot_penalty is None
+                    else torch.maximum(combined_foot_penalty, foot_penalty)
+                )
         rews = min_rew
+        if combined_smooth_penalty is not None:
+            rollout_info["sample_smooth_penalty"] = combined_smooth_penalty
+            rews = rews - combined_smooth_penalty
+        if combined_foot_penalty is not None:
+            rollout_info["sample_foot_penalty"] = combined_foot_penalty
+            rews = rews - combined_foot_penalty
         if (
             _cem_any_gate_enabled(config)
             and combined_gate_valid_mask is not None

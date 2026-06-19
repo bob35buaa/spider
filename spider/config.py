@@ -363,6 +363,18 @@ class Config:
     cem_peak_margin_w_anchor: float = 0.5
     cem_peak_margin_w_posture: float = 1.0
     cem_peak_margin_lambda: float = 3.0
+    # E166: temporal smoothness hooks for CEM rollouts. Defaults are inert;
+    # body names are resolved only when the smoothness path is enabled.
+    cem_smooth_enabled: bool = False
+    cem_smooth_body_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+        ]
+    )
+    cem_smooth_body_ids: list[int] = field(default_factory=list)
+    cem_smooth_accel_weight: float = 0.0
+    cem_smooth_jerk_weight: float = 0.0
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
@@ -464,6 +476,16 @@ class Config:
         default_factory=lambda: [23, 30]
     )  # left/right wrist_yaw_link
     local_frame_wrist_weight: float = 1.0  # 1.0 = no extra weight
+    # E166: foot/ankle hooks. All defaults are behavior-preserving.
+    local_frame_ankle_ids: list[int] = field(
+        default_factory=lambda: [7, 13]
+    )  # left/right ankle_roll_link
+    local_frame_ankle_weight: float = 1.0  # 1.0 = no extra weight
+    foot_slip_enabled: bool = False
+    foot_slip_weight: float = 0.0
+    foot_slip_contact_height_m: float = 0.05
+    foot_ground_enabled: bool = False
+    foot_ground_weight: float = 0.0
     contact_guidance: bool = False
     euler_convention: str = "XYZ"  # Intrinsic euler convention for object hinge joints
     use_scene_act: str = ""  # Path to scene_act.xml (bypass _make_contact_guidance_model)
@@ -1058,6 +1080,7 @@ def process_config(config: Config):
         or config.cem_safety_gate_enabled
         or config.cem_hand_gate_enabled
         or config.cem_peak_margin_enabled
+        or config.cem_smooth_enabled
         or config.object_clearance_rew_scale > 0.0
         or config.object_clearance_penalty_scale > 0.0
         or config.carry_corridor_rew_scale > 0.0
@@ -1293,6 +1316,18 @@ def process_config(config: Config):
                 len(body_ids),
                 anchor_id,
             )
+        if config.cem_smooth_enabled:
+            body_ids = []
+            for name in config.cem_smooth_body_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "cem_smooth_body_names: body '{}' not found.", name
+                    )
+            config.cem_smooth_body_ids = body_ids
+            loguru.logger.info("CEM smoothness: {} bodies resolved.", len(body_ids))
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:

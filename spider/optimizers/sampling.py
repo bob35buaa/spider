@@ -44,6 +44,98 @@ def _cem_min_valid_frac(config: Config) -> float:
     return max(vals) if vals else float(config.cem_safety_gate_min_valid_frac)
 
 
+def _compute_sample_smooth_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Compute E166 sample-level body-trajectory smoothness penalties."""
+    if (
+        not config.cem_smooth_enabled
+        or (
+            float(config.cem_smooth_accel_weight) <= 0.0
+            and float(config.cem_smooth_jerk_weight) <= 0.0
+        )
+        or "cem_smooth_body_pos" not in info_combined
+    ):
+        return None
+
+    pos = info_combined["cem_smooth_body_pos"]
+    if pos.ndim != 4 or pos.shape[0] < 3:
+        return None
+    dt = max(float(config.sim_dt), 1e-8)
+    penalty = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
+    out: dict[str, torch.Tensor] = {}
+
+    accel = (pos[2:] - 2.0 * pos[1:-1] + pos[:-2]) / (dt * dt)
+    accel_norm = accel.norm(dim=-1).mean(dim=-1)
+    accel_p95 = torch.quantile(accel_norm, 0.95, dim=0)
+    out["sample_smooth_accel_p95"] = accel_p95
+    if float(config.cem_smooth_accel_weight) > 0.0:
+        penalty = penalty + float(config.cem_smooth_accel_weight) * accel_p95
+
+    if pos.shape[0] >= 4:
+        jerk = (pos[3:] - 3.0 * pos[2:-1] + 3.0 * pos[1:-2] - pos[:-3]) / (
+            dt * dt * dt
+        )
+        jerk_norm = jerk.norm(dim=-1).mean(dim=-1)
+        jerk_p95 = torch.quantile(jerk_norm, 0.95, dim=0)
+    else:
+        jerk_p95 = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
+    out["sample_smooth_jerk_p95"] = jerk_p95
+    if float(config.cem_smooth_jerk_weight) > 0.0:
+        penalty = penalty + float(config.cem_smooth_jerk_weight) * jerk_p95
+
+    out["sample_smooth_penalty"] = penalty
+    return out
+
+
+def _compute_sample_foot_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Compute E166 foot-slip and foot-ground sample penalties."""
+    slip_active = config.foot_slip_enabled and float(config.foot_slip_weight) > 0.0
+    ground_active = config.foot_ground_enabled and float(config.foot_ground_weight) > 0.0
+    if (
+        (not slip_active and not ground_active)
+        or "foot_body_pos" not in info_combined
+        or "foot_body_ref_pos" not in info_combined
+    ):
+        return None
+
+    pos = info_combined["foot_body_pos"]
+    ref = info_combined["foot_body_ref_pos"]
+    if pos.ndim != 4 or ref.shape != pos.shape or pos.shape[0] < 2:
+        return None
+
+    grounded = ref[..., 2] <= float(config.foot_slip_contact_height_m)
+    penalty = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
+    out: dict[str, torch.Tensor] = {}
+    dt = max(float(config.sim_dt), 1e-8)
+
+    if slip_active:
+        xy_speed = (pos[1:, :, :, :2] - pos[:-1, :, :, :2]).norm(dim=-1) / dt
+        grounded_pair = grounded[1:] & grounded[:-1]
+        slip_values = torch.where(grounded_pair, xy_speed, torch.zeros_like(xy_speed))
+        denom = grounded_pair.to(pos.dtype).sum(dim=(0, 2)).clamp_min(1.0)
+        slip_mean = slip_values.sum(dim=(0, 2)) / denom
+        slip_peak = slip_values.amax(dim=(0, 2))
+        out["sample_foot_slip_speed_mean"] = slip_mean
+        out["sample_foot_slip_speed_peak"] = slip_peak
+        penalty = penalty + float(config.foot_slip_weight) * slip_mean
+
+    if ground_active:
+        z_dev = (pos[..., 2] - ref[..., 2]).abs()
+        grounded_z = torch.where(grounded, z_dev, torch.zeros_like(z_dev))
+        denom = grounded.to(pos.dtype).sum(dim=(0, 2)).clamp_min(1.0)
+        ground_mean = grounded_z.sum(dim=(0, 2)) / denom
+        ground_peak = grounded_z.amax(dim=(0, 2))
+        out["sample_foot_ground_dev_mean"] = ground_mean
+        out["sample_foot_ground_dev_peak"] = ground_peak
+        penalty = penalty + float(config.foot_ground_weight) * ground_mean
+
+    out["sample_foot_penalty"] = penalty
+    return out
+
+
 def _sample_ctrls_impl(
     config, ctrls: torch.Tensor, sample_params: dict | None = None
 ) -> torch.Tensor:
@@ -430,6 +522,12 @@ def make_rollout_fn(
         gate_info = _compute_sample_gate_info(config, info_combined)
         if gate_info is not None:
             info.update(gate_info)
+        smooth_info = _compute_sample_smooth_info(config, info_combined)
+        if smooth_info is not None:
+            info.update(smooth_info)
+        foot_info = _compute_sample_foot_info(config, info_combined)
+        if foot_info is not None:
+            info.update(foot_info)
         return ctrls, mean_rew, terminate, info
 
     return rollout
@@ -578,6 +676,8 @@ def make_optimize_once_fn(
         combined_gate_min_sdf = None
         combined_gate_violation_pct = None
         combined_gate_violation_depth_mean = None
+        combined_smooth_penalty = None
+        combined_foot_penalty = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
                 config,
@@ -617,8 +717,31 @@ def make_optimize_once_fn(
                         combined_gate_violation_depth_mean, violation_depth
                     )
                 )
+            if config.cem_smooth_enabled and "sample_smooth_penalty" in rollout_info:
+                smooth_penalty = rollout_info["sample_smooth_penalty"]
+                combined_smooth_penalty = (
+                    smooth_penalty
+                    if combined_smooth_penalty is None
+                    else torch.maximum(combined_smooth_penalty, smooth_penalty)
+                )
+            if (
+                (config.foot_slip_enabled or config.foot_ground_enabled)
+                and "sample_foot_penalty" in rollout_info
+            ):
+                foot_penalty = rollout_info["sample_foot_penalty"]
+                combined_foot_penalty = (
+                    foot_penalty
+                    if combined_foot_penalty is None
+                    else torch.maximum(combined_foot_penalty, foot_penalty)
+                )
         # Use worst-case rewards across DR parameter sets
         rews = min_rew
+        if combined_smooth_penalty is not None:
+            rollout_info["sample_smooth_penalty"] = combined_smooth_penalty
+            rews = rews - combined_smooth_penalty
+        if combined_foot_penalty is not None:
+            rollout_info["sample_foot_penalty"] = combined_foot_penalty
+            rews = rews - combined_foot_penalty
         if (
             _cem_any_gate_enabled(config)
             and combined_gate_valid_mask is not None
