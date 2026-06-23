@@ -2142,6 +2142,48 @@ def get_reward(
             e166_aux_info["cem_smooth_body_pos"] = xpos_sim[:, smooth_ids]
 
     if (
+        config.e167_body_z_enabled
+        and config.e167_body_z_ids
+        and body_xpos_ref is not None
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        body_ids = [
+            bid
+            for bid in config.e167_body_z_ids
+            if bid < xpos_sim.shape[1] and bid < body_xpos_ref.shape[0]
+        ]
+        if body_ids:
+            body_pos = xpos_sim[:, body_ids]
+            body_ref = body_xpos_ref[body_ids].to(
+                device=config.device, dtype=body_pos.dtype
+            )
+            e166_aux_info["e167_body_z_pos"] = body_pos
+            e166_aux_info["e167_body_z_ref_pos"] = body_ref.unsqueeze(0).expand(
+                N, -1, -1
+            )
+
+    if (
+        config.e167_ground_z_enabled
+        and config.e167_ground_z_ids
+        and body_xpos_ref is not None
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        ground_ids = [
+            bid
+            for bid in config.e167_ground_z_ids
+            if bid < xpos_sim.shape[1] and bid < body_xpos_ref.shape[0]
+        ]
+        if ground_ids:
+            ground_pos = xpos_sim[:, ground_ids]
+            ground_ref = body_xpos_ref[ground_ids].to(
+                device=config.device, dtype=ground_pos.dtype
+            )
+            e166_aux_info["e167_ground_z_pos"] = ground_pos
+            e166_aux_info["e167_ground_z_ref_pos"] = ground_ref.unsqueeze(0).expand(
+                N, -1, -1
+            )
+
+    if (
         (config.foot_slip_enabled or config.foot_ground_enabled)
         and config.local_frame_ankle_ids
         and body_xpos_ref is not None

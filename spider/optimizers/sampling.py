@@ -61,6 +61,11 @@ def _compute_sample_smooth_info(
     pos = info_combined["cem_smooth_body_pos"]
     if pos.ndim != 4 or pos.shape[0] < 3:
         return None
+    axis = str(getattr(config, "cem_smooth_axis", "xyz")).lower()
+    if axis == "z":
+        pos = pos[..., 2:3]
+    elif axis != "xyz":
+        raise ValueError(f"unsupported cem_smooth_axis={config.cem_smooth_axis!r}")
     dt = max(float(config.sim_dt), 1e-8)
     penalty = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
     out: dict[str, torch.Tensor] = {}
@@ -85,6 +90,78 @@ def _compute_sample_smooth_info(
         penalty = penalty + float(config.cem_smooth_jerk_weight) * jerk_p95
 
     out["sample_smooth_penalty"] = penalty
+    return out
+
+
+def _sample_p95_over_time_body(values: torch.Tensor) -> torch.Tensor:
+    """Return per-sample p95 for a tensor shaped (time, sample, body)."""
+    flat = values.permute(1, 0, 2).reshape(values.shape[1], -1)
+    return torch.quantile(flat, 0.95, dim=1)
+
+
+def _compute_sample_e167_z_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Compute E167 Holosoma-style z-only body/ground penalties."""
+    body_active = (
+        config.e167_body_z_enabled
+        and float(config.e167_body_z_weight) > 0.0
+        and "e167_body_z_pos" in info_combined
+        and "e167_body_z_ref_pos" in info_combined
+    )
+    ground_active = (
+        config.e167_ground_z_enabled
+        and float(config.e167_ground_z_weight) > 0.0
+        and "e167_ground_z_pos" in info_combined
+        and "e167_ground_z_ref_pos" in info_combined
+    )
+    if not body_active and not ground_active:
+        return None
+
+    template = (
+        info_combined["e167_body_z_pos"]
+        if body_active
+        else info_combined["e167_ground_z_pos"]
+    )
+    if template.ndim != 4:
+        return None
+    penalty = torch.zeros(template.shape[1], device=template.device, dtype=template.dtype)
+    out: dict[str, torch.Tensor] = {}
+
+    if body_active:
+        pos = info_combined["e167_body_z_pos"]
+        ref = info_combined["e167_body_z_ref_pos"]
+        if pos.ndim == 4 and ref.shape == pos.shape:
+            z_err = (pos[..., 2] - ref[..., 2]).abs()
+            over = torch.clamp(z_err - float(config.e167_body_z_threshold_m), min=0.0)
+            out["sample_e167_body_z_err_mean"] = z_err.mean(dim=(0, 2))
+            out["sample_e167_body_z_err_p95"] = _sample_p95_over_time_body(z_err)
+            out["sample_e167_body_z_err_peak"] = z_err.amax(dim=(0, 2))
+            out["sample_e167_body_z_over_frac"] = (
+                z_err > float(config.e167_body_z_threshold_m)
+            ).to(z_err.dtype).mean(dim=(0, 2))
+            out["sample_e167_body_z_over_mean"] = over.mean(dim=(0, 2))
+            penalty = penalty + float(config.e167_body_z_weight) * out[
+                "sample_e167_body_z_err_mean"
+            ]
+
+    if ground_active:
+        pos = info_combined["e167_ground_z_pos"]
+        ref = info_combined["e167_ground_z_ref_pos"]
+        if pos.ndim == 4 and ref.shape == pos.shape:
+            grounded = ref[..., 2] <= float(config.e167_ground_contact_height_m)
+            z_dev = (pos[..., 2] - ref[..., 2]).abs()
+            grounded_z = torch.where(grounded, z_dev, torch.zeros_like(z_dev))
+            denom = grounded.to(pos.dtype).sum(dim=(0, 2)).clamp_min(1.0)
+            ground_mean = grounded_z.sum(dim=(0, 2)) / denom
+            out["sample_e167_ground_z_dev_mean"] = ground_mean
+            out["sample_e167_ground_z_dev_peak"] = grounded_z.amax(dim=(0, 2))
+            out["sample_e167_ground_z_frame_frac"] = grounded.to(pos.dtype).mean(
+                dim=(0, 2)
+            )
+            penalty = penalty + float(config.e167_ground_z_weight) * ground_mean
+
+    out["sample_e167_z_penalty"] = penalty
     return out
 
 
@@ -525,6 +602,9 @@ def make_rollout_fn(
         smooth_info = _compute_sample_smooth_info(config, info_combined)
         if smooth_info is not None:
             info.update(smooth_info)
+        e167_z_info = _compute_sample_e167_z_info(config, info_combined)
+        if e167_z_info is not None:
+            info.update(e167_z_info)
         foot_info = _compute_sample_foot_info(config, info_combined)
         if foot_info is not None:
             info.update(foot_info)
@@ -677,6 +757,7 @@ def make_optimize_once_fn(
         combined_gate_violation_pct = None
         combined_gate_violation_depth_mean = None
         combined_smooth_penalty = None
+        combined_e167_z_penalty = None
         combined_foot_penalty = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
@@ -725,6 +806,16 @@ def make_optimize_once_fn(
                     else torch.maximum(combined_smooth_penalty, smooth_penalty)
                 )
             if (
+                (config.e167_body_z_enabled or config.e167_ground_z_enabled)
+                and "sample_e167_z_penalty" in rollout_info
+            ):
+                e167_z_penalty = rollout_info["sample_e167_z_penalty"]
+                combined_e167_z_penalty = (
+                    e167_z_penalty
+                    if combined_e167_z_penalty is None
+                    else torch.maximum(combined_e167_z_penalty, e167_z_penalty)
+                )
+            if (
                 (config.foot_slip_enabled or config.foot_ground_enabled)
                 and "sample_foot_penalty" in rollout_info
             ):
@@ -739,6 +830,9 @@ def make_optimize_once_fn(
         if combined_smooth_penalty is not None:
             rollout_info["sample_smooth_penalty"] = combined_smooth_penalty
             rews = rews - combined_smooth_penalty
+        if combined_e167_z_penalty is not None:
+            rollout_info["sample_e167_z_penalty"] = combined_e167_z_penalty
+            rews = rews - combined_e167_z_penalty
         if combined_foot_penalty is not None:
             rollout_info["sample_foot_penalty"] = combined_foot_penalty
             rews = rews - combined_foot_penalty

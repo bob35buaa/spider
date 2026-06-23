@@ -25,6 +25,7 @@ from spider.math import quat_sub
 from spider.optimizers.sampling import (
     _cem_any_gate_enabled,
     _cem_min_valid_frac,
+    _compute_sample_e167_z_info,
     _compute_sample_foot_info,
     _compute_sample_gate_info,
     _compute_sample_smooth_info,
@@ -335,6 +336,9 @@ def make_rollout_fn_fast(  # noqa: D103
         smooth_info = _compute_sample_smooth_info(config, info_combined)
         if smooth_info is not None:
             info.update(smooth_info)
+        e167_z_info = _compute_sample_e167_z_info(config, info_combined)
+        if e167_z_info is not None:
+            info.update(e167_z_info)
         foot_info = _compute_sample_foot_info(config, info_combined)
         if foot_info is not None:
             info.update(foot_info)
@@ -374,6 +378,7 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         combined_gate_violation_pct = None
         combined_gate_violation_depth_mean = None
         combined_smooth_penalty = None
+        combined_e167_z_penalty = None
         combined_foot_penalty = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
@@ -423,6 +428,16 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     else torch.maximum(combined_smooth_penalty, smooth_penalty)
                 )
             if (
+                (config.e167_body_z_enabled or config.e167_ground_z_enabled)
+                and "sample_e167_z_penalty" in rollout_info
+            ):
+                e167_z_penalty = rollout_info["sample_e167_z_penalty"]
+                combined_e167_z_penalty = (
+                    e167_z_penalty
+                    if combined_e167_z_penalty is None
+                    else torch.maximum(combined_e167_z_penalty, e167_z_penalty)
+                )
+            if (
                 (config.foot_slip_enabled or config.foot_ground_enabled)
                 and "sample_foot_penalty" in rollout_info
             ):
@@ -436,6 +451,9 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         if combined_smooth_penalty is not None:
             rollout_info["sample_smooth_penalty"] = combined_smooth_penalty
             rews = rews - combined_smooth_penalty
+        if combined_e167_z_penalty is not None:
+            rollout_info["sample_e167_z_penalty"] = combined_e167_z_penalty
+            rews = rews - combined_e167_z_penalty
         if combined_foot_penalty is not None:
             rollout_info["sample_foot_penalty"] = combined_foot_penalty
             rews = rews - combined_foot_penalty

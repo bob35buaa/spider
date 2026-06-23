@@ -373,8 +373,32 @@ class Config:
         ]
     )
     cem_smooth_body_ids: list[int] = field(default_factory=list)
+    cem_smooth_axis: str = "xyz"  # xyz | z
     cem_smooth_accel_weight: float = 0.0
     cem_smooth_jerk_weight: float = 0.0
+    # E167: Holosoma-style z-only body tracking hooks. Defaults are inert.
+    e167_body_z_enabled: bool = False
+    e167_body_z_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+            "left_wrist_yaw_link",
+            "right_wrist_yaw_link",
+        ]
+    )
+    e167_body_z_ids: list[int] = field(default_factory=list)
+    e167_body_z_weight: float = 0.0
+    e167_body_z_threshold_m: float = 0.25
+    e167_ground_z_enabled: bool = False
+    e167_ground_z_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+        ]
+    )
+    e167_ground_z_ids: list[int] = field(default_factory=list)
+    e167_ground_z_weight: float = 0.0
+    e167_ground_contact_height_m: float = 0.05
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
@@ -1328,6 +1352,30 @@ def process_config(config: Config):
                     )
             config.cem_smooth_body_ids = body_ids
             loguru.logger.info("CEM smoothness: {} bodies resolved.", len(body_ids))
+        if config.e167_body_z_enabled:
+            body_ids = []
+            for name in config.e167_body_z_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "e167_body_z_names: body '{}' not found.", name
+                    )
+            config.e167_body_z_ids = body_ids
+            loguru.logger.info("E167 body-z: {} bodies resolved.", len(body_ids))
+        if config.e167_ground_z_enabled:
+            body_ids = []
+            for name in config.e167_ground_z_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "e167_ground_z_names: body '{}' not found.", name
+                    )
+            config.e167_ground_z_ids = body_ids
+            loguru.logger.info("E167 ground-z: {} bodies resolved.", len(body_ids))
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:
