@@ -1,9 +1,0 @@
-# Scene snapshot for E081
-# Captured: 2026-05-16T00:36:35+08:00
-# Git HEAD: f26e3be (feat/dual-robot-retarget)
-
-case                             file                       size  sha256
-box023_person2_legobj            scene.xml                 30354  7006c2b222130460240e570715a2615d3d5a3f7d0c80de36bf3b7b6ffbaacbbc
-box023_person2_legobj            scene_act.xml             33299  078930abf6a9cbf48c94d56307c99e67ae903c25384061c803c55353dbf3030b
-box023_person2_legobj            scene_act_meta.json          27  40cb82c8fe5a3dc06685d3f06832592d5b7db7cd447fd4061c468f4b8e2f4edb
-box023_person2_legobj            task_info.json              540  be3fe553d6d58d0ba4718a04b29faee9da04ded62e6869715996c4fdafd8f02d

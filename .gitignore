@@ -269,3 +269,5 @@ logs/
 
 MUJOCO_LOG.TXT
 nohup.out
+/workspace/core4d/results
+/workspace/core4d_collab_retarget/results

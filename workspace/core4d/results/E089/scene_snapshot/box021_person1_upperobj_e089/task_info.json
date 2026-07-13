@@ -1,7 +1,0 @@
-{
-  "e083_note": "Derived for E083; source task files are not modified.",
-  "e089_note": "Derived from older box021_person1 lacking meta; XYZ assumed.",
-  "source_task": "box021_person1",
-  "source_task_e083": "box021_person1",
-  "task": "box021_person1_upperobj_e089"
-}

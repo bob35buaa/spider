@@ -1,6 +1,0 @@
-{
-  "case": "box022_20231022_001_p2",
-  "status": "missing_raw",
-  "person_npz": "/mnt/ali-sh-1/usr/xiayibo/xyb_data_tidal_alsh/other-datasets/mocap_data/CORE4D/CORE4D_Real/human_object_motions/20231022/001/person2_poses.npz",
-  "obj_poses": "/mnt/ali-sh-1/usr/xiayibo/xyb_data_tidal_alsh/other-datasets/mocap_data/CORE4D/CORE4D_Real/human_object_motions/20231022/001/smooth_objposes.npy"
-}

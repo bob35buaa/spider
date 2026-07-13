@@ -1,9 +1,0 @@
-{
-  "untrimmed": "workspace/core4d/results/E079/holosoma_box021_person2/retargeted/20231018-030-person2-Box021_with_obj_original.npz",
-  "trimmed": "workspace/core4d/results/E079/holosoma_box021_person2/trimmed/20231018-030-person2-Box021_with_obj_original.npz",
-  "untrimmed_frames": 172,
-  "trimmed_frames": 75,
-  "trim_start": 97,
-  "trim_end": 172,
-  "trim_frames": 75
-}

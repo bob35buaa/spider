@@ -1,5 +1,0 @@
-label,T,intent_start,intent_end,L_contact_pct,R_contact_pct,both_contact_pct,stable_intent_pct,pelvis_min,pelvis_min_intent,pelvis_mean_intent,L_main_face,L_med_cm,L_close_pct,R_main_face,R_med_cm,R_close_pct,final_obj_pos_err_cm,obj_err_mean_cm,B1_pre_contact_max_foot_z_m,B2_single_foot_runs
-E063_box023 (baseline),136,21,78,0.914,0.966,0.879,0.672,0.192,0.192,0.540,+yz,+3.02,0.76,+xz,+2.12,0.95,0.81,11.68,0.481,4
-E065A_box023,136,21,78,0.897,0.845,0.793,0.638,0.088,0.122,0.484,+yz,+3.38,0.71,+xz,+3.57,0.67,3.10,12.83,0.305,1
-E063_box023 (baseline),136,21,78,0.914,0.966,0.879,0.672,0.192,0.192,0.540,+yz,+3.02,0.76,+xz,+2.12,0.95,0.81,11.68,0.481,4
-E065D_box023,136,21,78,0.966,0.914,0.897,0.603,0.052,0.107,0.474,+yz,+2.58,0.78,+xz,+2.81,0.83,1.75,10.44,0.687,2
