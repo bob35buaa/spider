@@ -13,6 +13,19 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 
 ---
 
+## Active: E168 — 同物体多轨迹 E167A z-only 数据扩展计划 (2026-07-16)
+
+- [x] planning-only 上下文恢复：读取 `experiment0716.md`、data-construction-v3/experiment-planning skills、tracker/progress、E167 计划/manifest/eval/export、E107 Box021 与 E145 bucket004 历史证据；未修改训练/数据代码，未启动本地或远程任务。
+- [x] 范围确认：seed 只用于召回精确 `object_key={box004,box021,bucket004}`；仅纳入官方 action label `move1/move2`，覆盖 `obs0/obs1/obs3`；完全排除 `pass/raise/rot/strike`，不为这些动作设计本轮 gate。
+- [x] 只读 inventory 盘点：三个物体共 `102` 条 person-case，其中 `72` 条为 move，排除 6 条 seed 后最多 `66` 条新召回；按无障碍优先可分为 `22` 条非 seed `obs0` 与 `44` 条非 seed `obs1/obs3`。
+- [x] 版本口径确认（2026-07-17 再修正）：`omnirt_v1` 表示原版 OmniRetarget；`omnirt_v2` 表示 Phase4 flags 改进版；`replace` 是独立 input rewrite 后缀。本版 E168 primary 为 `omnirt_v1/ref_fk`，仅当 v1 infeasible 时 rescue 为 `omnirt_v2/ref_fk`；明确不启用 `replace` / fingertip replacement。
+- [x] 写入并修正 `plan/184_E168_same_object_E167A_zonly_expansion_plan.md`，更新 tracker planning row。计划固定 102 raw / 72 move / 6 seed / 66 non-seed accounting，22 条 obs0 production-first + 44 条 obs1/obs3 review-to-production，限定 E167A single arm 和 v1-infeasible-only `omnirt_v2` rescue。
+- [x] Planning 验证：逐 object 的 Tier A/Tier B 数量加总与 22/44 一致；计划脚本路径符合 CORE4D canonical layout；`git diff --check` 通过。
+- [x] 2026-07-17 多机计划修订：按 `remote-execution.md` 更新 A100 8 卡规则为启动时动态选择显存占用 `<5000MB` 的空闲 GPU，哪个空闲用哪个、最多 4 张；E168 计划已改为 `a100` dynamic worker pool，记录 GPU snapshot、execution manifest 字段、preflight、pull/audit，不使用固定 A800/GPU0-3。
+- [ ] 下一步：用户确认 plan 后再进入 implementation；当前未创建 E168 builder/launcher/evaluator，未运行 S1-S6/CEM/RL。
+
+---
+
 ## Active: E167 — Holosoma z-only 终止对齐计划 (2026-06-20)
 
 - [x] 启动 planning-only 调研：按用户要求不改训练代码、不启动实验；已恢复 tracker/latest plan/progress。最新 E166 结论为 remaining4 `A_B2_postSmooth` 下游 mixed，下一步需要核对 Holosoma `ee_body_pos` 终止是否 z-only，以及 E166 A/B1/B2 是否在 CEM/后处理侧隐含限制 xy。
