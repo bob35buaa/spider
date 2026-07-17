@@ -2,21 +2,12 @@
 
 ## 概述
 
-当本地 GPU 不足以并行运行 RL 实验时，可以使用两台远程机器：
-
-- `spider-remote`：常用两卡 A6000/RTX 6000 Ada 机器。
-- `61.172.170.106:30409`：8 卡 A100 机器，启动时动态选择空闲 GPU；空闲定义为显存占用 `<5000MB`，最多使用 4 张。
-
-本文档是 agent 启动远程实验前必须遵循的标准流程。目标是：
-
-1. 远程代码与本地当前分支、当前 commit 严格一致。
-2. `.gitignore` 忽略的训练输入只同步本次实验需要的文件。
-3. 不同步历史 `logs/`、历史 `workspace/*/results/` 或无关大文件。
-4. 启动前用 preflight 验证远程输入完整。
+当本地 GPU 资源不足以并行运行多个实验时，使用远程多卡机器并行执行。
+本文档定义了标准流程，确保代码同步、日志收集、结果回传的可复现性。
 
 ## 远程机器配置
 
-### Profile A：常用两卡机
+### 常用两卡机
 
 | 字段 | 值 |
 |------|------|
@@ -25,27 +16,24 @@
 | Host | 10.100.71.70 |
 | Port | 58122 |
 | User | xiayb |
-| GPUs | 2x A6000 / RTX 6000 Ada 级别 GPU |
+| GPUs | 2x NVIDIA RTX 6000 Ada (48GB) |
 | 默认可用 GPU | `0,1` |
-| 当前 holosoma worktree | `/home/xiayb/pHRI_workspace/holosoma_r053` |
+| 项目路径 | `/home/xiayb/pHRI_workspace/spider` |
 | SSH config | `~/.ssh/config` 中配置为 `spider-remote` |
 
-注意：`/home/xiayb/pHRI_workspace/spider` 是 spider 仓库/旧 worktree，不是当前 holosoma RL 实验的默认执行目录。除非用户明确指定，不要在该目录执行 holosoma 训练。
-
-### Profile B：8 卡机
+### A100 8 卡机
 
 | 字段 | 值 |
 |------|------|
 | Profile | `A100-8gpu` |
-| SSH alias | `61.172.170.106` 或本地自定义 alias |
+| 推荐 SSH alias | `tianyiyun-A100` |
 | HostName | `61.172.170.106` |
 | Port | `30409` |
 | User | `batchcom` |
 | IdentityFile | `~/.ssh/id_rsa_tianyiyun` |
 | GPUs | 8x A100，实际型号以 `nvidia-smi` 为准 |
-| 默认可用 GPU | 启动时动态选择，显存占用 `<5000MB` 的 GPU，最多 4 张 |
-| 当前 holosoma worktree | `/home/dataset-assist-0/xiayb/workspace/holosoma` |
-| HOLOSOMA_DEPS_DIR | `/home/dataset-assist-0/xiayb/.holosoma_deps` |
+| 默认可用 GPU | 启动时动态选择，最多 4 张 |
+| 项目路径 | `/home/dataset-assist-0/xiayb/workspace/spider` |
 
 推荐 SSH config：
 
@@ -57,288 +45,359 @@ Host tianyiyun-A100
     IdentityFile ~/.ssh/id_rsa_tianyiyun
 ```
 
-如果本地没有配置 alias，也可以直接用 `ssh -p 30409 -i ~/.ssh/id_rsa_tianyiyun batchcom@61.172.170.106`。
-
-**硬约束**：8 卡机不再固定后四张卡。启动前必须用 `nvidia-smi` 查询 0-7 号 GPU 的显存占用，选择所有显存占用 `<5000MB` 的 GPU，按 GPU index 升序最多取 4 张。示例：如果 GPU `2,3,6,7` 空闲，则本轮使用 `2,3,6,7`。如果没有空闲 GPU，不启动 A100 任务；不要 kill 其他用户进程。
-
-### 远程 profile 选择
-
-启动远程任务前必须先明确使用哪个 profile，并设置统一变量：
+未配置 alias 时可直接连接：
 
 ```bash
-# 常用两卡机
-REMOTE_PROFILE=a6000-2gpu
-REMOTE_HOST=spider-remote
-REMOTE_ROOT=/home/xiayb/pHRI_workspace/holosoma_r053
-ALLOWED_GPUS="0 1"
+ssh -p 30409 -i ~/.ssh/id_rsa_tianyiyun \
+  batchcom@61.172.170.106
+```
 
-# 8 卡机
+#### A100 动态选卡
+
+A100 不固定使用前四张或后四张卡。启动时必须：
+
+1. 查询全部 0-7 号 GPU，显存占用必须 `<5000MB`。
+2. 排除存在其他用户计算任务或不符合机器预约规则的 GPU。
+3. 按 GPU index 升序最多选择 4 张。
+4. selection 和 tmux 启动之间再次检查；状态变化时重建 worker pool。
+5. 没有合格 GPU 时不启动，不 kill 或抢占其他进程。
+
+```bash
 REMOTE_PROFILE=A100-8gpu
 REMOTE_HOST=tianyiyun-A100
-REMOTE_ROOT=/home/dataset-assist-0/xiayb/workspace/holosoma
-HOLOSOMA_DEPS_DIR=/home/dataset-assist-0/xiayb/.holosoma_deps
-GPU_MEMORY_USED_MAX_MB=5000
-MAX_A100_GPUS=4
-ALLOWED_GPUS="$(ssh "$REMOTE_HOST" "nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits | awk -F, -v limit=$GPU_MEMORY_USED_MAX_MB '{gsub(/ /,\"\",\$1); gsub(/ /,\"\",\$2); if (\$2+0 < limit) print \$1}' | head -n $MAX_A100_GPUS | paste -sd' ' -")"
+REMOTE_ROOT=/home/dataset-assist-0/xiayb/workspace/spider
+A100_GPU_MEM_USED_LIMIT_MB=5000
+A100_MAX_GPUS=4
+
+A100_LOW_MEM_GPUS="$(
+  ssh "$REMOTE_HOST" \
+    "nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits" |
+    awk -F, -v limit="$A100_GPU_MEM_USED_LIMIT_MB" '
+      {
+        gsub(/ /, "", $1)
+        gsub(/ /, "", $2)
+        if ($2 + 0 < limit) print $1
+      }
+    '
+)"
+
+ssh "$REMOTE_HOST" \
+  "nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory \
+   --format=csv,noheader,nounits"
+```
+
+最终 `ALLOWED_GPUS` 必须是低显存候选集与机器预约/所有者允许集合的交集。推荐由启动脚本调用 Phase 0 已确认的只读检查入口：
+
+```bash
+: "${A100_AVAILABILITY_CMD:?confirm availability command in Phase 0}"
+
+A100_POLICY_GPUS="$(ssh "$REMOTE_HOST" "$A100_AVAILABILITY_CMD")"
+ALLOWED_GPUS="$(
+  comm -12 \
+    <(printf '%s\n' "$A100_LOW_MEM_GPUS" | tr ', ' '\n' | sed '/^$/d' | sort -n) \
+    <(printf '%s\n' "$A100_POLICY_GPUS" | tr ', ' '\n' | sed '/^$/d' | sort -n) |
+    head -n "$A100_MAX_GPUS" |
+    paste -sd' ' -
+)"
 test -n "$ALLOWED_GPUS"
 ```
 
-如果用户只说“远程跑”但没有指定机器：
+如果机器没有统一预约工具，必须人工核对 `nvidia-smi` 和任务归属后显式提供允许集合，并在 experiment environment manifest 中保存确认时间、GPU snapshot 和最终 `ALLOWED_GPUS`。不能只凭 `<5000MB` 判断可抢占。
 
-1. 默认继续使用 `spider-remote` 两卡机。
-2. 如果本地/两卡机资源不够，询问或明确切到 8 卡机。
-3. 切到 8 卡机时，按显存占用 `<5000MB` 动态选择空闲卡，最多使用 4 张。
-
-## GPU 使用规则
-
-| Profile | 默认 GPU | 规则 |
-|---|---|---|
-| `a6000-2gpu` | `0,1` | 每张 GPU 同时最多 1 个 IsaacSim/RL 训练；多任务同卡串行 |
-| `A100-8gpu` | 动态空闲卡 | 空闲定义为显存占用 `<5000MB`；哪个 GPU 空闲就用哪个，最多 4 张；同卡串行 |
-
-启动任何远程 session 前，必须检查目标 GPU 是否在当前 profile 的允许列表中：
-
-```bash
-if [ "$REMOTE_PROFILE" = "A100-8gpu" ]; then
-  GPU_MEMORY_USED_MAX_MB="${GPU_MEMORY_USED_MAX_MB:-5000}"
-  MAX_A100_GPUS="${MAX_A100_GPUS:-4}"
-  ALLOWED_GPUS="$(ssh "$REMOTE_HOST" "nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits | awk -F, -v limit=$GPU_MEMORY_USED_MAX_MB '{gsub(/ /,\"\",\$1); gsub(/ /,\"\",\$2); if (\$2+0 < limit) print \$1}' | head -n $MAX_A100_GPUS | paste -sd' ' -")"
-  test -n "$ALLOWED_GPUS"
-fi
-
-case " $ALLOWED_GPUS " in
-  *" $GPU "*) ;;
-  *) echo "GPU $GPU is not allowed for $REMOTE_PROFILE; allowed: $ALLOWED_GPUS"; exit 2 ;;
-esac
-```
+示例：低显存候选和预约允许集合的交集为 `2,3,6,7` 时，本轮使用 `2,3,6,7`；如果只剩 `3,7`，就只创建两个 worker。
 
 ## 标准流程
 
-### 1. 确认本次实验输入清单
+以下原有命令默认使用常用两卡机。使用 A100 时，将主机和项目路径替换为上面的 `REMOTE_HOST` / `REMOTE_ROOT`，GPU id 必须来自本轮 `ALLOWED_GPUS`。
 
-启动前先从训练脚本和 plan 中列出本次实验需要的输入，不要同步整个仓库的大文件目录。
-
-常见输入包括：
-
-| 类型 | 示例 |
-|------|------|
-| 轨迹 npz | `workspace/data/spider_best_E018b_E022_E025_for_rl_rename/<TAG>_v2_mj_w_obj_w_partner.npz` |
-| 对象模型 | `src/holosoma_retargeting/holosoma_retargeting/models/<OBJ>/` |
-| base checkpoint | `logs/<base_project>/<base_run>/model_XXXXX.pt` |
-| 训练/eval config | 已提交的 config 走 git；未提交或生成的 `holosoma_config.yaml` 等走 rsync |
-| 本次 eval 输入 | checkpoint、`holosoma_config.yaml`、本次 run 目录下必要文件 |
-
-禁止为了省事同步：
-
-- 整个 `logs/`
-- 整个 `tmp/`
-- 整个 `workspace/v2/results/`
-- 整个 `workspace/v2/artifacts/`
-- 与本次实验无关的历史 checkpoint、视频、metrics
-
-### 2. Git 同步
-
-远程必须跟随本地当前分支，而不是写死分支名。
+### 1. 代码同步 (本地 → 远程)
 
 ```bash
-# 先按“远程 profile 选择”设置 REMOTE_HOST / REMOTE_ROOT / ALLOWED_GPUS
+# 本地提交并推送
+git add <files> && git commit -m "..." && git push
 
-BRANCH="$(git branch --show-current)"
-LOCAL_HEAD="$(git rev-parse HEAD)"
+# 远程拉取
+ssh spider-remote "cd /home/xiayb/pHRI_workspace/spider && git pull"
+```
 
-# 本地先确认要跑的代码已经提交。
-git status --short
+**注意**: gitignore 的文件 (npz 结果、视频) 用 scp 传输。
 
-# 如果本次实验依赖代码/config 改动，先提交并推送。
-git push origin "$BRANCH"
+### 2. 编写远程运行脚本
 
-# 远程只允许 fast-forward 到当前分支，避免 merge commit 或误覆盖 dirty worktree。
+在 `workspace/{exp_name}/scripts/launch/active/` 下创建真实脚本。
+如果需要保留旧命令，再在 `workspace/{exp_name}/scripts/` 根目录放 thin wrapper。
+CORE4D 新实验不要把真实 `run_E*.sh` / `pull_E*.sh` 实现直接写在 `scripts/` 根目录。
+
+模板如下：
+
+```bash
+#!/bin/bash
+# E{NNN}: <实验描述>
+# GPU0: <任务列表> | GPU1: <任务列表>
+set -e
+
+OVERRIDE=core4d_e0XX
+RESULTS_DIR=workspace/core4d/results/E0XX
+LOGS_DIR=logs/E0XX
+mkdir -p "$RESULTS_DIR" "$LOGS_DIR"
+
+run_experiment() {
+    local name=$1 gpu=$2 task=$3
+    # ... 其余参数 ...
+    echo "[$(date '+%H:%M:%S')] Starting $name on GPU $gpu"
+    CUDA_VISIBLE_DEVICES=$gpu MUJOCO_GL=egl uv run examples/run_mjwp.py \
+        +override=$OVERRIDE task=$task \
+        video_output_path="$RESULTS_DIR/${name}.mp4" \
+        > "$LOGS_DIR/${name}.log" 2>&1
+    cp "<output_dir>/trajectory_mjwp_act.npz" "$RESULTS_DIR/${name}.npz"
+    echo "[$(date '+%H:%M:%S')] Finished $name"
+}
+
+# GPU 0: 实验 A (sequential)
+( run_experiment "A1" 0 task1; run_experiment "A2" 0 task2 ) &
+PID0=$!
+
+# GPU 1: 实验 B (sequential)
+( run_experiment "B1" 1 task1; run_experiment "B2" 1 task2 ) &
+PID1=$!
+
+echo "=== Launched: GPU0 PID=$PID0 | GPU1 PID=$PID1 ==="
+wait $PID0; echo "GPU0 done"
+wait $PID1; echo "GPU1 done"
+echo "=== All complete ==="
+```
+
+#### A100 worker queue
+
+A100 脚本不能写死 `0,1` 或 `4,5,6,7`。它必须读取启动时生成的 execution manifest/`ALLOWED_GPUS`，为每张被选中的 GPU 创建一个串行 worker queue：
+
+```bash
+worker_pids=()
+for gpu in $ALLOWED_GPUS; do
+  (
+    while IFS=$'\t' read -r run_id task; do
+      run_experiment "$run_id" "$gpu" "$task"
+    done < "$QUEUE_ROOT/gpu${gpu}.tsv"
+  ) &
+  worker_pids+=("$!")
+done
+
+for pid in "${worker_pids[@]}"; do
+  wait "$pid"
+done
+```
+
+每条 run 的 NPZ、outdir、MP4 和 log 路径必须唯一。每张 GPU 内严格串行，不同 GPU 才并行。
+
+### 3. 部署并启动 (tmux)
+
+```bash
+# 同步代码
+ssh spider-remote "cd /home/xiayb/pHRI_workspace/spider && git pull"
+
+# 在 tmux 中启动 (不会因 SSH 断开而终止)
+ssh spider-remote "cd /home/xiayb/pHRI_workspace/spider && \
+    tmux new-session -d -s <session_name> && \
+    tmux send-keys -t <session_name> 'bash <script_path>' Enter"
+```
+
+A100 使用：
+
+```bash
+ssh "$REMOTE_HOST" "cd '$REMOTE_ROOT' && git pull --ff-only"
 ssh "$REMOTE_HOST" "
-  set -e
   cd '$REMOTE_ROOT'
-  echo 'remote branch:' \$(git branch --show-current)
-  echo 'remote head before:' \$(git rev-parse --short HEAD)
-  git status --short
-  git fetch origin '$BRANCH'
-  if git show-ref --verify --quiet 'refs/heads/$BRANCH'; then
-    git checkout '$BRANCH'
-  else
-    git checkout -b '$BRANCH' 'origin/$BRANCH'
-  fi
-  git merge --ff-only 'origin/$BRANCH'
-  test \"\$(git rev-parse HEAD)\" = '$LOCAL_HEAD'
-  echo 'remote head after:' \$(git rev-parse --short HEAD)
+  tmux new-session -d -s <session_name> -c '$REMOTE_ROOT' \
+    'bash <script_path>'
 "
 ```
 
-如果 `git status --short` 显示远程有未提交代码改动，先停下来判断来源，不要直接 `git pull` 或覆盖。被 `.gitignore` 忽略的运行产物不影响 git 状态。
+A100 启动 tmux 前必须重新执行动态选卡；如果某张卡不再满足条件，重建 worker queues，不能沿用旧 `ALLOWED_GPUS`。
 
-### 3. Rsync 本次实验需要的忽略文件
-
-`.gitignore` 会忽略 npz、模型目录、logs/checkpoints、视频等大文件。它们不会通过 git 到远程，必须按本次实验清单同步。
-
-推荐从 repo root 使用 `rsync -avR`，保留相对路径：
-
-```bash
-# 先按“远程 profile 选择”设置 REMOTE_HOST / REMOTE_ROOT / ALLOWED_GPUS
-
-TAG=20231011-048-person2-Box025
-OBJ=Box025
-
-MOTION_REL="workspace/data/spider_best_E018b_E022_E025_for_rl_rename/${TAG}_v2_mj_w_obj_w_partner.npz"
-MODEL_DIR_REL="src/holosoma_retargeting/holosoma_retargeting/models/${OBJ}"
-BASE_CKPT_REL="logs/core4d_stage1_body_only_20231011-048-person2-Box025/20260522_134654-stage1_body_only_R048-locomotion/model_04000.pt"
-
-rsync -avR "$MOTION_REL" "$REMOTE_HOST:$REMOTE_ROOT/"
-rsync -avR "$MODEL_DIR_REL" "$REMOTE_HOST:$REMOTE_ROOT/"
-rsync -avR "$BASE_CKPT_REL" "$REMOTE_HOST:$REMOTE_ROOT/"
-```
-
-如果本次实验使用新生成或未提交的 config，也只同步对应 config 文件：
-
-```bash
-CONFIG_REL="logs/<project>/<run>/holosoma_config.yaml"
-rsync -avR "$CONFIG_REL" "$REMOTE_HOST:$REMOTE_ROOT/"
-```
-
-如果是本地 checkpoint 触发远程 eval，只同步该 checkpoint 和该 run 的 config，不要同步整个历史 run：
-
-```bash
-LOCAL_RUN="logs/<project>/<run>"
-REMOTE_RUN="$REMOTE_ROOT/logs/<project>/<run>"
-CKPT_FILE="model_00200.pt"
-
-ssh "$REMOTE_HOST" "mkdir -p '$REMOTE_RUN'"
-rsync -av "$LOCAL_RUN/$CKPT_FILE" "$LOCAL_RUN/holosoma_config.yaml" \
-  "$REMOTE_HOST:$REMOTE_RUN/"
-```
-
-### 4. 远程 preflight
-
-启动训练前必须在远程验证本次输入都存在，并确认 GPU 使用符合当前 profile 的允许范围。
-
-```bash
-GPU="${GPU:?set by execution manifest}"
-
-case " $ALLOWED_GPUS " in
-  *" $GPU "*) ;;
-  *) echo "GPU $GPU is not allowed for $REMOTE_PROFILE; allowed: $ALLOWED_GPUS"; exit 2 ;;
-esac
-
-ssh "$REMOTE_HOST" "
-  set -e
-  cd '$REMOTE_ROOT'
-  test -f '$MOTION_REL'
-  test -f 'src/holosoma_retargeting/holosoma_retargeting/models/$OBJ/$OBJ.urdf'
-  test -f '$BASE_CKPT_REL'
-  nvidia-smi -i '$GPU'
-  echo 'preflight ok'
-"
-```
-
-如果训练不需要 base checkpoint，可以删掉对应检查。若脚本中还有额外输入，例如 resume checkpoint、offline eval video source、手写 override config，也必须加入 preflight。
-
-### 5. 部署并启动 tmux
-
-使用 `tmux -c "$REMOTE_ROOT"` 固定工作目录，并显式设置 `HOLOSOMA_ROOT`，避免远端 shell 中残留旧路径。
-
-```bash
-SESSION=r085_train
-SCRIPT=workspace/v2/scripts/train/train_core4d_r084_r086_box023_handbox_stagec.sh
-GPU=4
-
-case " $ALLOWED_GPUS " in
-  *" $GPU "*) ;;
-  *) echo "GPU $GPU is not allowed for $REMOTE_PROFILE; allowed: $ALLOWED_GPUS"; exit 2 ;;
-esac
-
-ssh "$REMOTE_HOST" "
-  cd '$REMOTE_ROOT'
-  tmux kill-session -t '$SESSION' 2>/dev/null || true
-  tmux new-session -d -s '$SESSION' -c '$REMOTE_ROOT' \
-    \"HOLOSOMA_ROOT='$REMOTE_ROOT' HOLOSOMA_DEPS_DIR='${HOLOSOMA_DEPS_DIR:-}' bash '$SCRIPT' R085 '$GPU' 801 8192\"
-"
-```
-
-同一张 GPU 上不要并行跑多个 MuJoCo/IsaacSim RL 训练；需要多个实验时，每张 GPU 内串行排队。
-
-### 6. 监控进度
+### 4. 监控进度
 
 ```bash
 # 查看 tmux 输出
-ssh "$REMOTE_HOST" "tmux capture-pane -t '$SESSION' -p | tail -40"
+ssh spider-remote "tmux capture-pane -t <session_name> -p | tail -10"
 
-# 查看 GPU
+# 检查已完成的结果数量
+ssh spider-remote "ls /home/xiayb/pHRI_workspace/spider/<results_dir>/*.npz | wc -l"
+
+# 查看某个实验的进度
+ssh spider-remote "tail -1 /home/xiayb/pHRI_workspace/spider/<logs_dir>/<name>.log"
+```
+
+A100 监控命令使用 `REMOTE_HOST` / `REMOTE_ROOT`，并同时检查 `nvidia-smi` 和各 worker queue：
+
+```bash
 ssh "$REMOTE_HOST" "nvidia-smi"
-
-# 查看当前训练 log
-ssh "$REMOTE_HOST" "tail -40 '$REMOTE_ROOT/logs/<project>/<run_name>_train.log'"
-
-# 查看 checkpoint
-ssh "$REMOTE_HOST" "find '$REMOTE_ROOT/logs/<project>' -name 'model_*.pt' | sort | tail"
+ssh "$REMOTE_HOST" "tmux capture-pane -t <session_name> -p | tail -20"
 ```
 
-如果 tmux session 很快退出，先查 train log 和 tmux pane，不要直接重复启动同一实验。
-
-### 7. 回收结果
-
-只回收本次实验的 run/project 输出，不要把远端整个 `logs/` 拉回本地。
+### 5. 回收结果
 
 ```bash
-REMOTE_RUN="$REMOTE_ROOT/logs/<project>/<run>"
-LOCAL_RUN="logs/<project>/<run>"
-mkdir -p "$LOCAL_RUN"
+# 优先固化为 pull 脚本
+bash workspace/core4d/scripts/launch/active/pull_E###_remote_results.sh <stage>
 
-rsync -av "$REMOTE_HOST:$REMOTE_RUN/" "$LOCAL_RUN/"
+# 如需兼容历史命令，可通过根目录 wrapper 调用
+bash workspace/core4d/scripts/pull_E###_remote_results.sh <stage>
 ```
 
-如果只需要 eval 结果，优先同步 metrics/video/log 子目录：
+同时使用两台远程机器时，分别固化 pull 脚本，避免主机和结果目录混用：
 
 ```bash
-rsync -av "$REMOTE_HOST:$REMOTE_RUN/eval_metrics_<name>/" "$LOCAL_RUN/eval_metrics_<name>/"
-rsync -av "$REMOTE_HOST:$REMOTE_RUN/eval_videos_<name>/" "$LOCAL_RUN/eval_videos_<name>/"
-rsync -av "$REMOTE_HOST:$REMOTE_RUN/"'eval_*_model_*.log' "$LOCAL_RUN/" || true
+bash workspace/core4d/scripts/launch/active/pull_E###_remote_a6000_results.sh <stage>
+bash workspace/core4d/scripts/launch/active/pull_E###_remote_a100_results.sh <stage>
+```
+
+pull 只回收本次 execution manifest 登记的结果；回收后按 worker 汇总 NPZ、outdir、config、MP4、log 的数量、大小和 SHA。
+
+### 6. 本地评估
+
+```bash
+# 使用当前 eval 结构
+python workspace/core4d/scripts/eval/runners/eval_E###_<topic>.py <stage>
+
+# 若已保留兼容 wrapper，也可使用旧根路径
+python workspace/core4d/scripts/eval/eval_E###_<topic>.py <stage>
+```
+
+### 7. 离线可视化 (不需要重跑实验)
+
+```bash
+MUJOCO_GL=egl python workspace/hdmi_reproduce/scripts/render_trajectory_video.py \
+    --scene <scene.xml> \
+    --kin <kinematic.npz> \
+    --phys <result.npz> \
+    --output <output.mp4> --fps 30
+```
+
+## 自动化回收 (watch_and_pull)
+
+手动轮询远程实验是否完成、拉取结果、校验产物数量、启动 eval 是重复性劳动。
+`watch_and_pull_template.sh` 将此流程自动化为一个后台脚本。
+
+### 模板位置
+
+```
+workspace/core4d/scripts/templates/watch_and_pull_template.sh
+```
+
+### 核心逻辑
+
+1. **循环轮询**: 每 `POLL_INTERVAL` 秒检查本地 tmux session 和远程 tmux session 是否存在
+2. **Hardened SSH**: SSH 不通时保守假定远程仍在运行，避免误判完成
+3. **双重确认**: 连续 2 次检测到双端完成后才视为真正完成
+4. **自动 pull**: 调用 pull 脚本将远程产物同步回本地
+5. **产物校验**: `find $RESULT_ROOT -name '*.npz' | wc -l` 与预期数量比对
+6. **自动 eval**: 产物数量达标后自动调用 eval 脚本
+7. **日志记录**: 全程输出带时间戳写入 `logs/{EXP_ID}/monitor/` 下
+
+同时使用 A6000/A100 时，watcher 必须分别检查两个远程 tmux session、分别调用 pull 脚本；任一 SSH 不通都按“仍在运行”处理。只有所有 manifest row 均有产物或明确 failure 后才启动 eval。
+
+### 占位符说明
+
+| 占位符 | 含义 | 默认值 |
+|--------|------|--------|
+| `{{EXP_ID}}` | 实验编号 | — |
+| `{{REMOTE_HOST}}` | 远程 SSH alias | `spider-remote` |
+| `{{LOCAL_TMUX}}` | 本地 tmux session 名 | `{exp_id_lower}_local` |
+| `{{REMOTE_TMUX}}` | 远程 tmux session 名 | `{exp_id_lower}_remote` |
+| `{{EXPECTED_NPZ_COUNT}}` | 预期 NPZ 产物数 | splits 数量 |
+| `{{PULL_SCRIPT}}` | pull 脚本路径 (repo-relative) | — |
+| `{{EVAL_SCRIPT}}` | eval 脚本路径 (repo-relative) | — |
+| `{{RESULT_ROOT}}` | 结果目录 (repo-relative) | — |
+| `{{POLL_INTERVAL}}` | 轮询间隔秒数 | `600` |
+
+### 使用方式一: gen_experiment.py --with-watcher
+
+最简方式，自动填充模板：
+
+```bash
+python workspace/core4d/scripts/gen_experiment.py \
+    --exp-id E153 \
+    --description "my experiment" \
+    --splits "local-gpu0,remote-gpu0,remote-gpu1" \
+    --with-watcher \
+    --poll-interval 600 \
+    --expected-npz-count 20
+```
+
+这会额外生成 watcher。新脚本应优先放在 `workspace/core4d/scripts/launch/active/`；
+若 generator 仍输出到根目录，后续需要迁移真实实现到 `launch/active/` 并保留根 wrapper。
+
+可选参数：
+- `--remote-host` 覆盖远程主机 (默认 `spider-remote`)
+- `--poll-interval` 轮询间隔秒数 (默认 600)
+- `--expected-npz-count` 预期产物数 (默认从 splits 数量推算)
+
+### 使用方式二: 手动实例化模板
+
+```bash
+# 复制模板并替换占位符
+cp workspace/core4d/scripts/templates/watch_and_pull_template.sh \
+   workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
+sed -i 's/{{EXP_ID}}/E153/g; s/{{REMOTE_HOST}}/spider-remote/g; ...' \
+   workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
+chmod +x workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
+```
+
+### 启动 watcher
+
+```bash
+# 在后台 tmux 中运行 (不怕终端断开)
+tmux new-session -d -s e153_watcher \
+  "bash workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh"
+
+# 或直接前台运行
+bash workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
+```
+
+### 环境变量覆盖
+
+运行时可通过环境变量覆盖模板默认值：
+
+```bash
+INTERVAL_SECONDS=300 EXPECTED_NPZ_COUNT=30 \
+  bash workspace/core4d/scripts/launch/active/watch_and_pull_e153.sh
 ```
 
 ## 并行策略
 
-| 场景 | GPU 分配 | 原则 |
-|------|---------|------|
-| 两卡机 2 个训练 | `GPU0/GPU1` 每卡 1 个 | 并行 |
-| 两卡机 4 个训练 | `GPU0/GPU1` 每卡 2 个 | 每 GPU 内串行 |
-| 8 卡机 4 个以内训练 | 启动时空闲 GPU，例如 `2,3,6,7` | 每卡 1 个，并行 |
-| 8 卡机超过 4 个训练 | 启动时空闲 GPU，最多 4 张 | 每 GPU 内串行；未被选中的 GPU 不使用 |
-| 本地训练 + 远程 eval | eval 等 checkpoint 出现后启动 | 只 rsync checkpoint + config |
-| 多 checkpoint eval | 每个 checkpoint 独立 session | 避免覆盖 video/log 路径 |
+| 场景 | GPU 分配 | 预期时间/原则 |
+|------|---------|---------|
+| 2 个 case, 2 GPU | 每 GPU 1 个 | ~6 min |
+| 4 个 case, 2 GPU | 每 GPU 2 个 (串行) | ~12 min |
+| 6 个 case, 2 GPU | 每 GPU 3 个 (串行) | ~18 min |
+| Sweep 5 configs, 1 case | GPU0: 2+GPU1: 3 | ~18 min |
+| A100 不超过 4 个 case | 动态选择最多 4 张 | 每 GPU 1 个，并行 |
+| A100 超过 4 个 case | 动态选择最多 4 张 | 按长度均衡，每 GPU 内串行 |
+| 本地 + A6000 + A100 | 每个 profile 独立 worker pool | 路径、session、pull 脚本唯一 |
 
 ## 关键约束
 
-1. 远程 profile 必须明确；两卡机默认 `spider-remote`，8 卡机默认 `tianyiyun-A100` 或 `61.172.170.106`。
-2. 两卡机执行目录默认是 `/home/xiayb/pHRI_workspace/holosoma_r053`；8 卡机执行目录默认是 `/home/dataset-assist-0/xiayb/workspace/holosoma`。
-3. 8 卡机必须按显存占用 `<5000MB` 动态选择空闲 GPU，最多 4 张；示例空闲 GPU `2,3,6,7` 时就使用 `2,3,6,7`。
-4. 8 卡机启动训练/eval 时必须显式设置 `HOLOSOMA_DEPS_DIR=/home/dataset-assist-0/xiayb/.holosoma_deps`，否则 `scripts/source_isaacsim_setup.sh` 会找错 conda 路径。
-5. 远程代码必须 fast-forward 到本地当前分支的当前 commit。
-6. git 只同步代码和已提交 config；`.gitignore` 忽略的大输入必须 rsync。
-7. rsync 只同步本次实验 manifest 里的 motion/model/config/checkpoint。
-8. 不要同步整个历史 `logs/` 或 `workspace/v2/results/`。
-9. 启动前必须运行远程 preflight，包括 GPU allowlist 检查。
-10. 每个实验的视频、metrics、log 输出路径必须唯一，避免互相覆盖。
+1. **同一 GPU 上的实验必须串行** — MuJoCo Warp 占满显存
+2. **video_output_path 必须不同** — 否则后跑的覆盖先跑的视频
+3. **trajectory npz 也会互相覆盖** — 每个实验完成后立即 cp 到结果目录
+4. **tmux session 不会主动结束** — 所有实验完成后手动 `tmux kill-session`
+5. **A100 不固定 GPU id** — 每次 launch 动态选择，最多 4 张
+6. **低显存不等于可抢占** — 还必须确认 compute process、所有者和预约规则
+7. **没有可用 GPU 时不启动** — 不 kill 或抢占其他任务
+8. **不同 profile 不共享输出路径** — run id、worker id、log 和 pull 目标必须唯一
 
 ## 故障排除
 
 | 问题 | 解决 |
 |------|------|
-| SSH connection refused | 检查 VPN/网络，`ssh -v spider-remote` |
-| 8 卡机 SSH 失败 | 检查 `ssh -p 30409 -i ~/.ssh/id_rsa_tianyiyun batchcom@61.172.170.106` 或 `ssh -v tianyiyun-A100` |
-| Permission denied | 检查 ssh config 和 key |
-| 远程 git 非 fast-forward | 不要 merge，先确认远端是否有未推送改动 |
-| 远程 dirty worktree | 先 `git status --short` 判断来源，不要覆盖 |
-| 找不到 motion npz | 用 `rsync -avR "$MOTION_REL" "$REMOTE_HOST:$REMOTE_ROOT/"` 同步 |
-| 找不到 URDF/OBJ | 同步 `models/<OBJ>/` 整个目录 |
-| 找不到 base checkpoint | 只同步本次需要的 `model_XXXXX.pt` |
-| `HOLOSOMA_ROOT` 指向旧目录 | tmux 命令里显式 `HOLOSOMA_ROOT=$REMOTE_ROOT` |
-| A100 source conda 失败 | 设置 `HOLOSOMA_DEPS_DIR=/home/dataset-assist-0/xiayb/.holosoma_deps` 后再 source `scripts/source_isaacsim_setup.sh` |
-| CUDA OOM | 降低 `num_envs` 或等待 GPU 空闲 |
-| 8 卡机任务跑到未选中的 GPU | 立即停止对应 session；重新按显存占用 `<5000MB` 选择空闲 GPU，并只在 `ALLOWED_GPUS` 内启动 |
-| tmux session 找不到 | `ssh "$REMOTE_HOST" "tmux list-sessions"` |
-| 脚本快速退出 | 查看 train log 和 `tmux capture-pane`，不要盲目重启 |
+| SSH connection refused | 检查 VPN/网络, `ssh -v spider-remote` |
+| A100 SSH 失败 | 检查 `ssh -v tianyiyun-A100` 或直连端口/key |
+| Permission denied | 重新 `ssh-copy-id` 或检查 A100 IdentityFile |
+| CUDA OOM | 减少 num_samples (1024→512) |
+| EGL error on exit | 无害,忽略 |
+| A100 没有候选 GPU | 不启动 A100；等待资源或只使用本地/A6000 |
+| A100 候选卡存在其他任务 | 从 `ALLOWED_GPUS` 移除并重建 worker pool |
+| A100 selection 后被占用 | 重新查询、重建 queue 和 tmux，不沿用旧选择 |
+| 任务跑到未选中的 GPU | 停止本实验对应 session，修复 allowlist 后重启，不影响其他任务 |
+| tmux session 找不到 | `ssh spider-remote "tmux list-sessions"` |
+| 脚本在远程报错 | 查看 `<logs_dir>/<name>.log` |

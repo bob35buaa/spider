@@ -4,7 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
-| E168 plan | 2026-07-16 | Phase 31 | 同物体 move 扩展：E167A + OmniRT v2 rescue | 📋 计划完成 | [plan](plan/184_E168_same_object_E167A_zonly_expansion_plan.md) |
+| E168-analysis | 2026-07-17 | Phase 31 | Box021失败机制分析；主因是下肢与非法支撑可行域缺失 | ✅ 报告完成 | [227](log/227_E168_box021_failure_analysis.md) |
+| E168 | 2026-07-17 | Phase 31 | Box021人工冻结；13条source及partner完成RL export | ✅ 13/13配对ready | [226](log/226_E168_box021_manual_freeze_rl_export.md) |
 | E167 plan | 2026-06-20 | Phase 30 | Holosoma z-only body tracking 对齐：7case×3arm 计划 | 📋 计划完成 | [plan](plan/183_E167_holosoma_zonly_alignment_plan.md) |
 | E166-rem4 | 2026-06-19 | Phase 29 | remaining4 A/A_B2完成；A_B2 SUGAR 4/4，效果1/4成功 | ✅ 完成，效果mixed | [219](log/219_E166_remaining4_A_B2_sugar_results.md) |
 | E166-SUGAR | 2026-06-19 | Phase 29 | AplusB暂停；A继续，A_B2_postSmooth接替下游验证 | ✅ 完成，见rem4 | [219](log/219_E166_remaining4_A_B2_sugar_results.md) |

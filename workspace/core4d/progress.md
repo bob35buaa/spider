@@ -516,3 +516,119 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 2026-06-20 E167 vs E166 vs E163 xlsx（12:xx CST）：按用户要求参考 E166 remaining4 xlsx，新增 `workspace/core4d/scripts/eval/reports/gen_E167_vs_E166_E163_xlsx.py` 并生成 `/home/ubuntu/Workspace/spider/workspace/core4d/results/E167/holosoma_zonly/eval/comparison/E167_vs_E166_vs_E163_cem_offline_eval.xlsx`。主表包含 `E163 baseline / E166 A / E166 A_B2_postSmooth / E167A / E167A_B1 / E167A_B2` 六行 7case 可比集合；逐case `42` 行；Holosoma z-only gate 离线补算 `42` 行。读回验收：sheets=`主表,逐case,HolosomaZ门,产物与轴审计,说明,原始metrics`；无公式、无公式错误字符串；`py_compile` 与 `git diff --check` 通过。SUGAR downstream 仍未 21/21，xlsx 说明页明确不含最终 SUGAR 成功率。
 - [x] 2026-06-21 E167 RL export partner 补齐：按 `data_construction_v3` S6 sidecar 口径扩展 `scripts/experiments/E167/export_zonly_rl_handoff.py`，在 `workspace/core4d/results/E167/holosoma_zonly/rl_export/s6_downstream/rl_export/partner_omnirt/` 生成 `cases_rl_partner_omnirt.tsv`、`rl_partner_omnirt_manifest.tsv/json`、summary 和 run script。实际执行 7 个 unique partner OmniRetarget，最终 manifest 为 `21` 行 source-to-partner 映射、`7` 个 partner case、`18 pass / 3 missing_outputs`；唯一失败为历史一致的 `box004_20231003_2_082_p2` CVXPY infeasible，对应 `box004_082_p1` 三个 arm。验收：主 `rl_export_input.tsv` 仍 `21/21 RL_EXPORT_READY`，pass partner 行的 converted/retargeted/trimmed/trim_window 文件均存在，`py_compile` 与 `git diff --check` 通过。
 - [x] 2026-06-21 E167 SUGAR 训练按用户要求停止并回收：对本地 `E167_sugar_local_0530`/`E167_sugar_watch_0534` 和远程 `E167_sugar_remote_gpu0_retry_0533`/`E167_sugar_remote_gpu1_0530` 发 `Ctrl-C`，确认本地/远程无残留 E167 `train.py`/launcher/tmux。执行 `scripts/sugar_rl/pull_core4d_e167_refiner_remote.sh` 回收远程增量。停止时 canonical eval 为 `12/21`，partial checkpoint 为 `3/21`（`box004_083_p1/E167A_B1` latest `5000`、`box021_029_p2/E167A_B1` latest `4000`、`box021_035_p2/E167A_B1` latest `2000`），未启动 `6/21`；GPU 回落到本地约 `563MB/3%`、远程约 `1258MB/7%` 和 `22MB/0%`。
+- [x] 2026-07-17 E168 计划按用户决策更新：同一 raw sequence 的 p1/p2 作为独立 source-person SPIDER trajectory；每条最终 RL row 强制绑定 opposite-person OmniRetarget，缺失时先 v1、仅 v1 infeasible 才 v2；E167 `box004_082_p1` 以现有 `RL_EXPORT_READY` 直接导入并保留 `source_exp_id=E167`，partner `box004_082_p2` 缺失时走 v2 rescue。同步固化 raw-contact 阈值、physics fingerprint、canary 隔离、分波 visual QC、A100 进程/预约检查和 `RL_EXPORT_READY + PAIR_COMPLETE` 成功标准。本轮只更新计划/进度，未实现脚本、未运行 S1-S6/CEM/RL。
+- [x] 2026-07-17 remote-execution skill 回溯修订：以 Git `89481b0` 的 SPIDER/CORE4D 版 `.codex/skills/experiment-planning-zh/remote-execution.md` 为基线，移除当前 Holosoma 复制版内容，保留原 run/pull/eval/watch 流程并新增 A100 8 卡机连接、`/home/dataset-assist-0/xiayb/workspace/spider` worktree、动态最多 4 卡、显存/进程/预约 allowlist、A100 worker queue、独立 pull/watcher 和故障处置。仅修改文档，未连接远程或启动任务。
+
+## Active: E168 same-object E167A expansion (2026-07-17)
+
+- [x] 恢复执行上下文：E168 tracker 仍为 `planning-only`，`workspace/core4d/results/E168/` 与 E168 scripts 均不存在；当前工作树只有上一轮的 E168 plan、remote-execution skill 和 progress 文档改动。已读取 experiment-planning、data-construction-v3、E168 plan、tracker、progress 与最新 E166 log。
+- [x] 从 Phase 0 开始推进：先固化 environment/imported E167/E167A profile/recall manifest 脚本并执行只读 preflight；Phase 0 证据未通过前不启动 S1-S6 GPU 作业。
+- [x] Phase 0 本地证据通过：E167 `box004_082_p1/E167A_zOnlyBody` source row 为 `RL_EXPORT_READY`，目标/轨迹/mask/CEM/video/metrics 均存在；source row 指向的 rubber sidecar 在本地 task 目录缺失，但 E147 immutable scene snapshot、E147 hand-collision 输出和 A6000 上 E167 实际 sidecar SHA256 均为 `a285e842f1f5d1366fb611ceeb9ad7568ef83f621f067ab075dd2f64866a9d20`，已显式恢复到 E168 imported snapshot。E167A profile 与 full axis audit 通过。
+- [x] 远程只读 probe 已人工确认连通：A6000 两卡当前约 `8.7/7.4GB` 且高利用率；A100 0/1/4/5 为其他用户高负载，2/3 有计算进程，6/7 无进程但缺预约 allowlist。已固化 probe；未启动或抢占任何 GPU。
+- [x] Phase 0 remote probe 已固化并执行：A6000/A100 连接、repo/Holosoma git、GPU 显存和 compute process snapshot 写入 `results/E168/s0_environment/remote_profiles/`；未提供 A100 policy allowlist，因此 A100 pool 状态为 `disabled_policy_allowlist_missing`，Phase 0 为 `pass_with_a100_disabled`。A6000 snapshot 无可用卡。两台远程机只承担 exact-input CEM worker，不要求挂载 raw/SMPL-X；所有 launcher 仍需启动前重查。
+- [x] E168 recall accounting 通过：从当前 raw 重建 `1840` 行全量 inventory 后，精确召回目标物体 `102` source-person rows；move scope `72`、seed `6`、non-seed candidate `66`，Tier A obs0 `22`、Tier B obs1/obs3 `44`。分物体为 box004 `20/14/12`、box021 `50/36/33`、bucket004 `32/22/21`（recalled/move/candidate），唯一 `(sequence_key,source_person)=66`，p1/p2 未合并。产物在 `results/E168/s1_raw_contact/{inventory,recall}/`。
+
+### 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|------|---------|---------|
+| E167 source row 指向的 task-dir rubber sidecar 本地缺失 | 1 | 用 E147 immutable snapshot 恢复；E147 两份本地证据与 A6000 实际 E167 sidecar SHA256 三方一致，复制到 E168 imported snapshot |
+| 本机无 `jq`，辅助 JSON 摘要命令失败 | 1 | 不安装新依赖；继续使用 Python 产物内建断言和标准文本工具核查 |
+| `video-frames/scripts/frame.sh` 无 executable bit | 1 | 改用 `bash .../frame.sh`，成功提取 E168 Bucket overlay 关键帧 |
+| E168 Stage2b per-case runner 对 results symlink 使用 `Path.relative_to(repo)` 失败 | 1 | 尚未启动 retarget、无产物污染；改用 `os.path.relpath` 保持 legacy pipeline 所需相对路径 |
+| E168 Stage2b runner 将 resolved absolute `RESULT_ROOT` 传给 legacy pipeline，被 relative-path guard 拒绝 | 1 | converter 未启动；将 result root 也规范为 repo-relative，再重试同一尚未真实执行的 row |
+| v1-success row retarget/trim 完成后，SPIDER helper 报 `.venv` 无 NumPy | 2 | 先隔离 retarget conda subshell；最终根因是 runner 对 `.venv/bin/python` 调用 `resolve()`，解引用到无 site-packages 的 uv base interpreter。保留 virtualenv symlink 路径后续跑 |
+| 当前容器 `nvidia-smi` 无法连接 NVIDIA driver | 1 | 未启动 canary，`run_E168_local.sh` 在 GPU preflight 处停止且不改写 manifest；等待本地 driver 恢复或转远程 canary |
+| E168 CEM canary 初次远程运行缺 `trimmed_stage2b_output_contact_mask_3cm` | 1 | 将 CEM override runtime `contact_hdmi_mask_time_axis` 从 handoff provenance label 映射为 `auto`；重建 40 个 override 后 A6000 canary 4/4 执行完成 |
+| A6000 SSH 间歇性 `kex_exchange_identification` 断开 | 多次 | launch/pull 脚本加入 retry；未把 SSH 断开视为 case failure |
+| A100 MuJoCo 视频渲染不可用 | 1 | `egl` 缺 PLATFORM_DEVICE，`osmesa` 缺 GL 绑定，`glfw` 缺 DISPLAY；A100 改为 `save_video=false` compute-only，视频后处理不阻塞 CEM |
+
+- [x] E168 S1 raw-contact 完成：34 unique sequences / 66 source-person rows，3cm 为 `pass=41/fail=5/reject_motion=20`，分物体 pass 为 box004 `4`、box021 `28`、bucket004 `9`；无 raw-contact error。5cm gate 分类同为 41 pass，但 25 rows 的 active fraction 不同，底层共有 389 个 5cm-only mask entries；34 个 NPZ 均满足 3cm mask 是 5cm 子集、sample_count=12000、seed 唯一且覆盖 `203..236`。
+- [x] E168 S2 template audit/review 完成：6 个 source template，box004/box021 person1/person2 为 `clean`，Bucket004 person1/person2 重建后为 `manual_review_required`；重建 proxy 的规范化 physics fingerprint 与 E144 snapshot 一致，导入 E145 两条 `approve_clean` review 后 registry 为 `clean=45/clean_reviewed=21`。本轮 orbit render 6/6、Bucket mesh/collision overlay 2/2 pass。
+- [x] Bucket004 本轮实际视觉观察：横置圆角方桶/壶形 mesh 与 bottom+four-wall 五盒 proxy 身份一致；proxy 覆盖主体底面和四侧壁，圆角/把手端存在 AABB 保守外扩，但未出现套错物体、异常大一圈或碰撞盒穿过主体。person1/person2 scene byte-identical、physics fingerprint 相同。关键帧在 `results/E168/s2_templates/template_mesh_collision_review/keyframes/`。
+- [x] S3 adapter/preflight 实现：通用 retarget registry 新增 `omnirt_v2`（Phase4 五项参数开启、replace=false），legacy adapter 新增默认关闭的 Phase4 env→CLI 透传；v1 manifest 明确五项关闭、replace=false。E168 S3 production input 从 41 个 3cm pass 中排除 E167 direct-import `box004_082_p1`，得到 40 个 new-production rows（box004 3 / box021 28 / bucket004 9），均为 `stage2b_ready`。
+- [x] E168 S3 v1 production 完成：40 rows 中 `36 pass / 4 omniretarget_infeasible`，无 preprocess failure。失败为 `box004_082_p2`、`box021_034_p2`、`box021_028_p1`、`box021_019_p1`；结果已写回 registry。
+- [x] E168 v2 adapter canary 与 production rescue 完成：隔离 canary `bucket004_018_p1` 通过；4 条 production rescue 均以 Phase4 flags 开启、replace=false 的 `omnirt_v2/ref_fk` 通过，独立目录未覆盖 v1。关键 imported source `box004_082_p1` 的 opposite partner `box004_082_p2` 已救回。
+- [x] E168 S4 完成：effective 40 rows target gate `40/40 pass`，visual QC `40/40 pass`；v1 为 36、v2 为 4。生成 40 个 replay MP4/8-frame sheet，并逐页审查 6 个 montage，未见错物体、爆姿、物体瞬移或大尺度穿插。分布为 box004/box021/bucket004=`3/28/9`，obs0/obs1/obs3=`18/12/10`。
+- [x] E168 Phase0-S4 阶段记录：新增 `log/220_E168_phase0_s4_data_results.md`，tracker 更新为 S0-S4 完成；未启动 CEM 或下游 RL。
+- [ ] E168 S5/CEM/pair export：当前 source bank 为 40 条 E168 S4 pass + 1 条 E167 direct import。按已有 S3 artifact 反向复用后仍有 6 个唯一 partner case 缺失；必须等 source CEM release 后按 reuse→v1→仅 infeasible 才 v2 生成 pair queue，最终只导出 `RL_EXPORT_READY + PAIR_COMPLETE`。
+- [x] E168 S5/CEM manifest 与 local runner 固化：`rubber_hull` handoff 为 `40/40 HANDOFF_READY`，MuJoCo sidecar load 与 E167A config audit 均 `40/40 pass`；已生成 CEM production manifest `40` rows 和隔离 canary manifest `4` rows。新增 `run_cem_queue.py` 与 `launch/active/run_E168_local.sh`，canary dry-run 输出 4 条 `64 samples × 4 iterations` 命令，`py_compile`、`bash -n`、`git diff --check` 均通过。
+- [x] E168 local canary 改走 A6000：执行 `bash workspace/core4d/scripts/launch/active/run_E168_local.sh canary` 时当前容器 `nvidia-smi` 报 driver 不可用；本轮未把环境问题记为 case failure，改用 A6000 exact-input canary。
+- [x] E168 S5/CEM path portability 修复：`export_cem_overrides.py`、`build_s5_rubber_handoff.py` 和 `run_cem_queue.py` 增加 symlink-aware repo-relative path 写法；重新生成 rubber handoff、CEM overrides、override install manifest、E167A config audit 和 CEM production/canary manifest。验证结果：override YAML 的 `contact_hdmi_mask_path`、handoff/CEM manifest 的 `target_scene`、`trajectory`、`scene_act`、`contact_mask` 均为 repo-relative；config audit 仍 `40/40 pass`，production manifest `40 not_run`，canary manifest `4 not_run`。
+- [x] E168 remote canary 只读 probe：A6000 2026-07-17 16:xx 快照为 GPU0 `1276MiB/16%`、GPU1 `22MiB/0%` 且无 compute process；A100 仍因缺 policy allowlist 禁用。
+- [x] E168 A6000 exact-input canary 完成：新增 `run_E168_remote_a6000.sh` 和 `pull_E168_remote_a6000_results.sh`，同步 canary manifest、4 个 task dir、contact mask、E168/E167/E163/E15/E16 override chain、runtime code 和 object/robot assets。A6000 GPU1 跑 4 条 canary，manifest 为 `4/4 run_complete_pending_eval`，root NPZ/video/outdir NPZ/config/log 均 `4/4`。初次失败的 mask-axis 问题已修复并重跑通过。
+- [x] E168 用户决策更新：用户明确 canary 能跑通即可，不需要先补量化 canary eval；A100 可用 GPU allowlist 为 `0,1,2,3`，要求先 A100 canary，再按 `box021 -> box004 -> bucket004` 启动 40 条正式队列。
+- [x] E168 A100 compute-only canary 通过：首次 A100 canary 4/4 在视频渲染阶段因 EGL/OSMesa/GLFW 不可用失败；已将 A100 runner 改为 `save_video=false --allow-missing-video`。第二次 session `E168_a100_canary_20260717_170653` 在 GPU0-3 各跑 1 条，manifest 合并后 `4/4 run_complete_pending_eval`，root NPZ/outdir NPZ/config 均齐。
+- [x] E168 A100-only full 已停止并改为 6 卡重分片：旧 session `E168_a100_production_20260717_171706` 停止时无 root/outdir NPZ，仅有 4 个 partial config，不计完成。新增 `run_E168_remote_6gpu_full.sh` / `pull_E168_remote_6gpu_results.sh`，将 40 条按 `box021 -> box004 -> bucket004` 重新分到 A100 0/1/2/3 + A6000 0/1。
+- [ ] E168 6 卡 full production 已启动：shard root `remote6_production_20260717_173420`，A100 session `E168_6gpu_a100_20260717_173420` 正在 GPU0-3 跑 `box021_034_p1/p2`、`box021_036_p1/p2`；A6000 session `E168_6gpu_a6000_20260717_173420` 正在 GPU0/1 跑 `box021_037_p1/p2`。A100 compute-only 不出 MP4，A6000 正常 full 输出；回收命令为 `bash workspace/core4d/scripts/launch/active/pull_E168_remote_6gpu_results.sh production 20260717_173420`。
+- [ ] E168 remote6 watcher 已启动：新增 `watch_E168_remote6_full.sh` 并在本地 tmux `E168_remote6_watch_20260717_173420` 运行，每 600s 自动 pull/merge shard status。首轮 `17:47` 成功：A100/A6000 session 均 alive，`running=6/not_run=34`，`config_act=6/40`，root/outdir NPZ 仍 `0/40`，当前 running 为 6 条 `box021_034/036/037`。
+- [x] 2026-07-17 用户准备重启本机，已按要求停止本地 watcher `E168_remote6_watch_20260717_173420`；确认远程 full CEM session 仍 alive：A100 `E168_6gpu_a100_20260717_173420`、A6000 `E168_6gpu_a6000_20260717_173420`。重启后可用 pull 脚本继续回收：`bash workspace/core4d/scripts/launch/active/pull_E168_remote_6gpu_results.sh production 20260717_173420`。
+- [ ] 2026-07-17 本机重启后已恢复 remote6 watcher：本地 tmux `E168_remote6_watch_20260717_173420` 以 `POLL_INTERVAL=600`、`E168_REMOTE_RETRY_MAX=8` 重新启动。首轮 `18:35` 确认 A100/A6000 session 均 alive，自动 pull/merge 成功；当前 `run_complete_pending_eval=5/running=6/not_run=29`，root/outdir NPZ=`5/40`、config=`11/40`、video=`5/40`。完成与运行中的 11 条均为 box021；box004 3 条、bucket004 9 条尚未开始。A6000 SSH 仍偶发 kex 断开，但本轮 retry 1/8 后成功，不计 case failure。
+- [x] 2026-07-17 E168 A100 离线视频渲染完成：新增 `scripts/experiments/E168/render_a100_cem_videos.py`，默认从 production manifest 选择 `preferred_pool=a100` rows，使用回收后的 `config_act + scene_act + reference trajectory + outdir NPZ` 在本地重建历史 CEM 风格 `ref|sim` 1440x480 replay，并原子写入 manifest 的 `*_full.mp4`。系统 Python 可 dry-run，真实渲染使用 `.venv/bin/python`/`uv run python`。已先用 A6000 同契约做 12-frame smoke，再对首批 A100 完成 rows `box021_034_p1/p2`、`box021_036_p1/p2` 实际渲染 `4/4`，帧数 `286/298/286/288`、均为 50fps。抽查 `visual_review/a100_render_check/E168_box021_20231011_034_p1_E167A_mid.png`：非黑屏，ref/sim 双栏、机器人和物体完整入镜、接触点可见；该抽查只验证渲染链路，不替代 CEM release eval。
+- [ ] 2026-07-17 E168 partial comprehensive eval 开始：用户反馈部分 CEM replay 重定向质量差，要求对已有 rows 全面计算并对齐 E167A 指标。当前 watcher 已回收 `16/40 complete + 6 running + 18 not_run`。评测将直接使用 `eval.core.core_metrics` 的 E154+ contact/penetration/Table4 tracking、E167/E166 motion health 和 E168 计划 absolute release gates；新 case 无同 case baseline，relative delta 明确记为 unavailable。方法学审计发现 E167 legacy zgate 将 NPZ `(control_tick,2 sim_steps,nq)` 的第二个 sim step误当 reference，z error 会被低估；E168 保留四 body/0.25m 阈值，但改用 manifest 固定 kinematic trajectory 作为权威 reference，并在结果说明中记录该差异。
+- [ ] 2026-07-17 E168 partial eval 首轮完成 `18/40`：评测错误 `0`，numeric pass `2/18`。审计发现 `box021_20231020_020_p2` 的 reference contact 持续到序列末帧，实际没有 trailing release window；原实现把 release false-contact 的 `NaN` 当作失败。E168 evaluator 已改为显式输出 `release_window_frame_count/release_gate_applicable/release_gate_status`，无尾部窗口标记 `NOT_APPLICABLE_NO_RELEASE_WINDOW` 并从 release failure count 排除，绝不将空值填 0；待重跑全量现有 rows。
+- [x] 2026-07-17 E168 available-case comprehensive eval 更新至最新 `20/40` 完整产物：errors `0`，numeric pass `2/20`；tracking `20/20`、fixed-reference z `14/20`、contact `19/20`、release `19/19 applicable + 1 N/A`、penetration `15/20`、lower-body `6/20`、fall `0/20`。主失败源为 lower-body `14`，其次 z `6`、penetration `5`、contact `1`。E167 legacy intra-tick zgate 为 `20/20 pass`，会漏掉 fixed-reference 的 6 条失败。20 个 full MP4 已生成 8-frame sheets/4 页总览并逐页检查；`028/030/033` 的明显 ref/sim 偏离与 EEF/object/lower-body 指标一致，两条 numeric-pass sheet 未见明显失败。结果写入 `results/E168/s6_downstream/cem/eval/e167a_aligned_available/` 与 `log/222_E168_partial_cem_comprehensive_eval.md`；production watcher 继续运行，40/40 后需重跑冻结最终结论。
+- [x] 2026-07-17 E168 20-case 完整指标 xlsx：新增 `scripts/eval/reports/gen_E168_available_metrics_xlsx.py`，生成 `results/E168/s6_downstream/cem/eval/e167a_aligned_available/E168_E167A_aligned_available_case_metrics.xlsx`。工作簿含 `门控总览/完整指标/指标统计/分组统计/最差样本/未就绪/评测错误/评测快照/说明` 9 sheets；“完整指标”为 `20 rows × 182 columns`，路径列可点击，首屏门控用公式动态汇总。LibreOffice recalc 扫描 `0` errors；data-only 读回为 numeric `2/20`、tracking `20/20`、z `14/20`、contact `19/20`、release `19/19 + 1 N/A`、penetration `15/20`、lower-body `6/20`，与 `summary.json` 一致。
+
+### E168 partial eval 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|---|---:|---|
+| E168 evaluator 首次 single-case smoke 因静态 import E166 runner 间接要求当前 `.venv` 不含的 `openpyxl` 而启动失败 | 1 | 未安装无关依赖；将 E167 使用的纯数值 motion-health 逻辑抽到 `eval/core/motion_health.py`，E168 直接 import 公共模块，不再依赖历史实验 runner |
+| E168 20-case visual page 首次用 ffmpeg `xstack` 合并 6 张同尺寸 sheet 时 output pad 初始化失败 | 1 | 单 case 18 张 sheet 均未受影响；改用等宽输入的 `vstack`，成功生成 3 页，新增 2 条 bucket 后重建为 4 页/20 sheets |
+
+### 2026-07-17 E168 门槛重标定与人工核验
+
+- [x] 用户人工核验已固化到 `results/E168/s6_downstream/cem/eval/manual_review/e168_user_visual_review.tsv`：Box021 共 16 条，`USE/NO_ISSUE=5`、`USE/MINOR_ACCEPTABLE=3`、`DO_NOT_USE/MAJOR_ISSUE=8`。
+- [x] evaluator 门槛已改为：`body_z_err_p95_m<=0.20`（peak 仅诊断）、lower-body `<=0.10`、>3mm physics penetration frame frac `<=0.30`、raw in-mask contact `>=0.50`；release 仍为 `<=0.30`。
+- [x] xlsx 已更新：总览增加人工字段与公式汇总，新增“人工核验”sheet，并刷新所有阈值说明。
+- [x] 人工 `USE` 是用户视觉结论，和 numeric gates 正交；未用 numeric fail 覆盖 8 条人工可用标签。
+- [x] 按新门槛重评当前可评测产物 `29/40`：`numeric pass=8`、errors `0`；人工已核验 `16`、USE `8`、DO_NOT_USE `8`、新增待核验 `13`。
+- [x] 8 条人工 USE 中 numeric pass `5`；三条保留人工 USE 但仍显示数值告警：`034_p1` lower-body `0.266`，`034_p2` penetration `0.517`，`038_p2` penetration/lower-body `0.462/0.521`。
+- [x] 工作簿最终快照为 10 sheets、完整指标 `29x192`；人工页公式读回 `16/8/8`，LibreOffice 重算 `876` formulas、`0` errors。详细记录见 `log/223_E168_gate_recalibration_manual_review.md`。
+
+### 2026-07-17 E168 Box021 剩余 case 独立评测
+
+- [x] 范围固定为 production Box021 `28` 条减去上一批 canonical 人工核验 `16` 条，得到不重叠的 `12` 条。
+- [x] 2026-07-17 21:3x 手动 pull 后 Box021 为 `27 complete / 1 running`；`022_p1` 已完成，`022_p2` 仍在运行。用户要求不等待，本轮将输出 `11` 条完整指标，并在“未就绪”sheet 保留 `022_p2`。
+- [x] 新增 `eval/wrappers/eval_E168_box021_remaining_available.sh`；scoped evaluator 的人工 review snapshot 只保留范围内记录，避免新 xlsx 重复上一批 16 条。
+- [x] 11 条 A100 视频补渲染完成：rendered `11/11`、failed `0`，均写回 manifest video 路径。
+- [x] scoped eval 为 `11/12`、numeric pass `2`、errors `0`；通过 case 为 `023_p1/p2`，`022_p2` 仅进入“未就绪”。
+- [x] 独立 xlsx 为 10 sheets、完整指标 `11x192`；与上一批 16 条交集 `0`，人工页 `0/0/0`，LibreOffice 重算 `334` formulas、`0` errors。见 `log/224_E168_box021_remaining_available_eval.md`。
+
+### 2026-07-17 E168 Box021 022 p1/p2 独立表
+
+- [x] watcher 与显式 production pull 均确认 `box021_20231020_022_p1/p2` 为 `run_complete_pending_eval`，root/outdir NPZ 与 config 已回收；Box021 总体 `28/28 complete`。
+- [x] 新增固定双 case 入口 `eval/wrappers/eval_E168_box021_022_pair.sh`，输出目录与前两张 xlsx 隔离。
+- [x] `022_p2` 视频补渲染完成：`210` frames、`50fps`；p1 复用现有视频，双 case artifact 均完整。
+- [x] 双 case eval 为 `2/2`、errors `0`、numeric pass `0/2`：p1 lower-body `0.173>0.10`，p2 penetration `0.333>0.30`；其余 hard gates 均通过。
+- [x] 独立 xlsx 为 10 sheets、完整指标 `2x192`；LibreOffice 重算 `90` formulas、`0` errors。见 `log/225_E168_box021_022_pair_eval.md`。
+
+### 2026-07-17 E168 Box021 全量人工冻结与 RL export
+
+- [x] 用户完成第二批 12 条人工核验：`USE=5`（`019_p2/022_p1/022_p2/023_p1/023_p2`），其余 `7` 条为 `DO_NOT_USE`。
+- [x] canonical review 现覆盖 Box021 `28/28`：累计 `USE=13 / DO_NOT_USE=15`；RL export 只消费 13 条人工批准 source，拒绝 rows 不伪装为 ready。
+- [x] 刷新 remaining12、022 pair、all28 三份评测/xlsx：人工统计分别为 `12/5/7`、`2/2/0`、`28/13/15`（reviewed/USE/DO_NOT_USE）；LibreOffice 重算公式分别为 `396/96/874`，均为 `0` errors。
+- [x] 对齐 E167 S6 contract 生成 E168 Box021 RL export：13 条人工批准 source 全部 `RL_EXPORT_READY`，13 个相反 person partner 全部 `PAIR_COMPLETE/pass`；partner 复用 E168 Stage2b，variant 为 `omnirt_v1=11/omnirt_v2=2`，65 个文件 SHA 逐一复算一致，15 条人工拒绝项混入为 `0`。见 `log/226_E168_box021_manual_freeze_rl_export.md`。
+- [ ] 2026-07-17 22:33 E168 full production 显式 pull 后为 `35/40 complete`，剩余 5 条均为 Bucket004：A100 上运行 4 条（`018_p1=212/322`、`021_p2=142/286`、`012_p1=182/250`、`012_p2=26/260`），`022_p2` 排队未启动；Box021 `28/28`、Box004 `3/3` 已完成，失败 `0`。A100 GPU0-3 均有活跃进程，watcher 保持 600s 自动回收；A6000 分片 `12/12` 完成后 session 已自然退出。
+
+### 本轮错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|---|---:|---|
+| second-batch wrapper 用 `Box021 - canonical review` 动态求 12 条；review 扩展到 28 条后差集变为 0 | 1 | 将已冻结的第二批 12 个 case ID 显式写入 wrapper，避免人工清单扩展改变历史评测范围 |
+
+### 2026-07-17 E168 Box021 失败机制分析
+
+- [x] 以 canonical 人工标签为真值完成 Box021 全 28 条离线分析：`USE=13 / DO_NOT_USE=15`，人工失败率 `53.6%`；未重跑 CEM，未触碰 remote6 watcher/production。
+- [x] 15 条失败 timeline 与 5 条代表 ref/sim timeline 完成逐条复核；人工 taxonomy 首要类型为 invalid lower-body support `9`、balance/root collapse `3`、hard reference feasibility `2`、temporal chatter `1`，重叠症状中 lower-body/invalid support 覆盖 `14/15`。
+- [x] CEM root NPZ 健康度已纳入可复现脚本：失败组 body/posture last-iteration valid frac 的 failure AUC 为 `0.895/0.882`，但 fallback mean AUC 仅 `0.549`；9/15 失败 fallback mean `<=0.10`，证明明显站箱/穿箱并非都由 search exhaustion 引起。
+- [x] 28 条 effective config 审计一致：leg-object/nonhand-support/stability/foot/smooth 关闭，safety gate 不含 lower body，posture 与 E167 body 只约束 z；确定 P0 为 lower-body/nonhand hard feasibility + stance-foot/root support gate。
+- [x] 报告写入 `report/E168/E168_box021_failure_analysis.md`；分析资产写入 `report/E168/assets/box021_failure_analysis/`，脚本为 `scripts/experiments/E168/analyze_box021_failures.py`。脚本 compile/run 通过，15-case taxonomy 精确覆盖，21 个报告链接无缺失，详细记录见 `log/227_E168_box021_failure_analysis.md`。
+
+### E168 Box021 失败分析遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|---|---:|---|
+| `DictWriter` 因源 row 多余字段拒绝写表 | 1 | 使用 `extrasaction="ignore"`，仍以固定输出 schema 控制列 |
+| ffmpeg 在 shell loop 中读取 stdin，导致下一条 case ID 首字符丢失 | 1 | 增加 `-nostdin`，重新生成并核对全部 15 条 timeline |

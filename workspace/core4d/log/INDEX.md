@@ -1,7 +1,20 @@
 # 实验日志索引
 
-> 自动生成，共 218 个日志文件。
+> 自动生成，共 226 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 31 (E168-E168)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 220 | E168, e0 | 2026-07-17 | Phase0 s4 data results | [220_E168_phase0_s4_data_results.md](220_E168_phase0_s4_data_results.md) |
+| 221 | E168 | 2026-07-17 | S5 cem canary results | [221_E168_s5_cem_canary_results.md](221_E168_s5_cem_canary_results.md) |
+| 222 | E168 | 2026-07-17 | Partial cem comprehensive eval | [222_E168_partial_cem_comprehensive_eval....](222_E168_partial_cem_comprehensive_eval.md) |
+| 223 | E168 | 2026-07-17 | Gate recalibration manual review | [223_E168_gate_recalibration_manual_revie...](223_E168_gate_recalibration_manual_review.md) |
+| 224 | E168 | 2026-07-17 | Box021 remaining available eval | [224_E168_box021_remaining_available_eval...](224_E168_box021_remaining_available_eval.md) |
+| 225 | E168 | 2026-07-17 | Box021 022 pair eval | [225_E168_box021_022_pair_eval.md](225_E168_box021_022_pair_eval.md) |
+| 226 | E168 | 2026-07-17 | Box021 manual freeze rl export | [226_E168_box021_manual_freeze_rl_export....](226_E168_box021_manual_freeze_rl_export.md) |
+| 227 | E168 | 2026-07-17 | Box021 failure analysis | [227_E168_box021_failure_analysis.md](227_E168_box021_failure_analysis.md) |
 
 ## Phase 29 (E166-E166)
 
@@ -12,7 +25,7 @@
 | 216 | E166 |  | R3c two stage redline results | [216_E166_R3c_two_stage_redline_results.m...](216_E166_R3c_two_stage_redline_results.md) |
 | 217 | E166, e1 |  | Pathology split phase1 prep | [217_E166_pathology_split_phase1_prep.md](217_E166_pathology_split_phase1_prep.md) |
 | 218 | E166 |  | Foot smooth cem results | [218_E166_foot_smooth_cem_results.md](218_E166_foot_smooth_cem_results.md) |
-| 219 | E166 | 2026-06-19 | Remaining4 A/B2 SUGAR results | [219_E166_remaining4_A_B2_sugar_results.md](219_E166_remaining4_A_B2_sugar_results.md) |
+| 219 | E166 |  | Remaining4 A B2 sugar results | [219_E166_remaining4_A_B2_sugar_results.m...](219_E166_remaining4_A_B2_sugar_results.md) |
 
 ## Phase 28 (E165-E165)
 

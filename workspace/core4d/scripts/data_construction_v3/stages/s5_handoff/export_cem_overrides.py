@@ -59,9 +59,30 @@ def safe_id(text: str) -> str:
 
 def rel_to_repo(path: Path, repo: Path) -> str:
     try:
+        return str(path.absolute().relative_to(repo.absolute()))
+    except ValueError:
+        pass
+    for symlink_root in (repo / "workspace/core4d/results",):
+        if not symlink_root.exists():
+            continue
+        try:
+            suffix = path.resolve().relative_to(symlink_root.resolve())
+            return str(symlink_root.relative_to(repo) / suffix)
+        except ValueError:
+            pass
+    try:
         return str(path.resolve().relative_to(repo.resolve()))
     except ValueError:
         return str(path.resolve())
+
+
+def portable_path(path_text: str, repo: Path) -> str:
+    if not path_text:
+        return ""
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return rel_to_repo(path, repo)
 
 
 def validate_external_target(path_text: str, repo: Path) -> dict[str, str]:
@@ -223,6 +244,13 @@ def write_override(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def runtime_mask_time_axis(axis: str) -> str:
+    axis = (axis or "auto").strip()
+    if axis in {"auto", "raw", "spider", "eval", "method"}:
+        return axis
+    return "auto"
+
+
 def build_rows(handoff_rows: list[dict[str, str]], out_dir: Path, repo: Path, base_override: str) -> list[dict[str, Any]]:
     config_dir = out_dir / "overrides"
     rows: list[dict[str, Any]] = []
@@ -236,6 +264,7 @@ def build_rows(handoff_rows: list[dict[str, str]], out_dir: Path, repo: Path, ba
         mask_label = row.get("contact_mask_label") or row.get("raw_contact_threshold_label", "")
         mask_source = f"core4d_{mask_label}" if mask_path and mask_label else ("core4d_contact_mask" if mask_path else "")
         mask_time_axis = row.get("contact_mask_time_axis", "") or "auto"
+        runtime_axis = runtime_mask_time_axis(mask_time_axis)
         adapter = {
             "target_adapter_status": "skipped",
             "target_adapter_failure": "",
@@ -259,9 +288,9 @@ def build_rows(handoff_rows: list[dict[str, str]], out_dir: Path, repo: Path, ba
                     adapter["target_adapter_failure"] = mask_failure
                     override_status = "fail"
             if override_status == "pass":
-                yaml_target_path = rel_to_repo((repo / target_path) if target_path and not Path(target_path).is_absolute() else Path(target_path), repo) if target_path else ""
-                yaml_mask_path = rel_to_repo((repo / mask_path) if mask_path and not Path(mask_path).is_absolute() else Path(mask_path), repo) if mask_path else ""
-                write_override(config_path, row, base_override, contact_source, yaml_target_path, mask_source, yaml_mask_path, mask_time_axis)
+                yaml_target_path = portable_path(target_path, repo)
+                yaml_mask_path = portable_path(mask_path, repo)
+                write_override(config_path, row, base_override, contact_source, yaml_target_path, mask_source, yaml_mask_path, runtime_axis)
         rows.append(
             {
                 "case_id": row.get("case_id", ""),
@@ -276,17 +305,17 @@ def build_rows(handoff_rows: list[dict[str, str]], out_dir: Path, repo: Path, ba
                 "target_adapter_status": adapter["target_adapter_status"],
                 "target_adapter_failure": adapter["target_adapter_failure"],
                 "contact_target_source": contact_source,
-                "contact_target_path": target_path,
+                "contact_target_path": portable_path(target_path, repo),
                 "contact_target_sha256": adapter["contact_target_sha256"],
                 "contact_target_key": adapter["contact_target_key"],
                 "contact_target_shape": adapter["contact_target_shape"],
                 "contact_target_active_shape": adapter["contact_target_active_shape"],
                 "contact_mask_source": mask_source,
-                "contact_mask_path": mask_path,
+                "contact_mask_path": portable_path(mask_path, repo),
                 "contact_mask_status": row.get("contact_mask_status", ""),
                 "contact_mask_label": mask_label,
                 "contact_mask_person_idx": row.get("contact_mask_person_idx", row.get("person_idx", "")),
-                "contact_mask_time_axis": mask_time_axis,
+                "contact_mask_time_axis": runtime_axis,
                 "scene_name": row.get("scene_name", ""),
                 "base_override": base_override,
                 "schema_version": SCHEMA_VERSION,
