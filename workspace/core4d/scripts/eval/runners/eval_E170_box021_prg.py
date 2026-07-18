@@ -37,6 +37,13 @@ LEG_PEN_MAX = 0.10
 RELEASE_MAX = 0.30
 GATE_FALLBACK_MAX = 0.10
 GATE_VALID_LAST_MIN = 0.05
+VISUAL_BOUNDARY_GATES = {
+    "body_z_err_p95_m": BODY_Z_MAX,
+    "hand_object_physics_contact_in_mask_frac": CONTACT_MIN,
+    "hand_object_release_false_contact_3mm_frac": RELEASE_MAX,
+    "hand_object_physics_penetration_3mm_frame_frac": HAND_PEN_MAX,
+    "leg_penetration_frac": LEG_PEN_MAX,
+}
 
 PAIR_METRICS = {
     "body_z_err_p95_m": "lower",
@@ -182,7 +189,10 @@ def review_fields(case_id: str, reviews: dict[str, dict[str, str]], codex: dict[
     return {
         "codex_metric_verification_status": machine.get("codex_metric_verification_status", "PENDING_METRIC_VERIFICATION"),
         "codex_visual_spotcheck_status": machine.get("codex_visual_spotcheck_status", "NOT_SELECTED"),
+        "codex_visual_selection_reasons": machine.get("codex_visual_selection_reasons", ""),
         "codex_visual_findings": machine.get("codex_visual_findings", ""),
+        "codex_visual_reviewer": machine.get("codex_visual_reviewer", ""),
+        "codex_visual_reviewed_at": machine.get("codex_visual_reviewed_at", ""),
         "user_manual_review_status": status,
         "manual_use_decision": decision,
         "manual_quality_label": manual.get("manual_quality_label", ""),
@@ -285,6 +295,122 @@ def manual_template(manifest_rows: list[dict[str, str]], existing: dict[str, dic
     return output
 
 
+def visual_strata(row: dict[str, Any]) -> set[str]:
+    parts = str(row.get("case_id", "")).split("_")
+    date = parts[1] if len(parts) > 1 else ""
+    return {
+        f"e168:{row.get('e168_manual_use_decision', '')}",
+        f"person:{row.get('source_person', '')}",
+        f"retarget:{row.get('retarget_variant_id', '')}",
+        f"date:{date}",
+        f"sequence:{row.get('sequence_key', '')}",
+    }
+
+
+def visual_selection(rows: list[dict[str, Any]]) -> tuple[dict[str, set[str]], dict[str, Any]]:
+    reasons: dict[str, set[str]] = {}
+
+    def select(case_id: str, reason: str) -> None:
+        reasons.setdefault(case_id, set()).add(reason)
+
+    for row in rows:
+        case_id = str(row["case_id"])
+        if not bool(row.get("numeric_release_pass")):
+            select(case_id, f"numeric_fail:{row.get('numeric_failure_modes', '')}")
+        for metric, threshold in VISUAL_BOUNDARY_GATES.items():
+            if metric == "hand_object_release_false_contact_3mm_frac" and not bool(row.get("release_gate_applicable")):
+                continue
+            value = finite(row.get(metric))
+            if math.isfinite(value) and abs(value - threshold) <= 0.10 * abs(threshold) + 1e-12:
+                select(case_id, f"boundary_10pct:{metric}")
+        if bool(row.get("fall_flag")):
+            select(case_id, "catastrophic_alarm:fall")
+
+    for metric, direction in PAIR_METRICS.items():
+        valid = [row for row in rows if math.isfinite(finite(row.get(metric)))]
+        if not valid:
+            continue
+        worst = max(valid, key=lambda row: finite(row.get(metric))) if direction == "lower" else min(valid, key=lambda row: finite(row.get(metric)))
+        select(str(worst["case_id"]), f"worst:{metric}")
+
+    mandatory_cases = set(reasons)
+    remaining = [row for row in rows if bool(row.get("numeric_release_pass")) and row["case_id"] not in mandatory_cases]
+    remaining.sort(key=lambda row: (finite(row.get("ordinal"), math.inf), str(row["case_id"])))
+    frequencies = Counter(token for row in remaining for token in visual_strata(row))
+    covered: set[str] = set()
+    stratified: list[dict[str, Any]] = []
+    while remaining and len(stratified) < 8:
+        best = max(
+            remaining,
+            key=lambda row: sum(1.0 / frequencies[token] for token in visual_strata(row) if token not in covered),
+        )
+        remaining.remove(best)
+        strata = visual_strata(best)
+        covered.update(strata)
+        stratified.append(best)
+        select(str(best["case_id"]), "stratified_numeric_pass")
+        select(str(best["case_id"]), "strata:" + ",".join(sorted(strata)))
+
+    summary = {
+        "selection_status": "ready",
+        "selected_total": len(reasons),
+        "mandatory_union": len(mandatory_cases),
+        "stratified_numeric_pass": len(stratified),
+        "stratified_shortfall": max(0, 8 - len(stratified)),
+        "strata_covered": sorted(covered),
+    }
+    return reasons, summary
+
+
+def codex_template(
+    manifest_rows: list[dict[str, str]],
+    metrics: list[dict[str, Any]],
+    existing: dict[str, dict[str, str]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    complete = len(metrics) == 28 and len(manifest_rows) == 28
+    reasons, summary = visual_selection(metrics) if complete else ({}, {
+        "selection_status": "pending_full_evaluation",
+        "selected_total": 0,
+        "mandatory_union": 0,
+        "stratified_numeric_pass": 0,
+        "stratified_shortfall": 8,
+        "strata_covered": [],
+    })
+    by_case = {row["case_id"]: row for row in metrics}
+    output = []
+    default_statuses = {"", "NOT_SELECTED", "SELECTED_PENDING_REVIEW", "PENDING_FULL_EVALUATION"}
+    for row in manifest_rows:
+        case_id = row["case_id"]
+        old, metric = existing.get(case_id, {}), by_case.get(case_id, {})
+        selected = case_id in reasons
+        old_status = old.get("codex_visual_spotcheck_status", "")
+        if old_status not in default_statuses:
+            visual_status = old_status
+        elif not complete:
+            visual_status = "PENDING_FULL_EVALUATION"
+        else:
+            visual_status = "SELECTED_PENDING_REVIEW" if selected else "NOT_SELECTED"
+        selection_reasons = ";".join(sorted(reasons.get(case_id, set()))) if complete else old.get("codex_visual_selection_reasons", "")
+        output.append({
+            "case_id": case_id,
+            "codex_metric_verification_status": old.get("codex_metric_verification_status", "PENDING_METRIC_VERIFICATION"),
+            "codex_visual_spotcheck_status": visual_status,
+            "codex_visual_selection_reasons": selection_reasons,
+            "codex_visual_findings": old.get("codex_visual_findings", ""),
+            "codex_visual_reviewer": old.get("codex_visual_reviewer", ""),
+            "codex_visual_reviewed_at": old.get("codex_visual_reviewed_at", ""),
+            "numeric_release_pass": metric.get("numeric_release_pass", ""),
+            "numeric_failure_modes": metric.get("numeric_failure_modes", ""),
+            "e168_manual_use_decision": row.get("e168_manual_use_decision", ""),
+            "source_person": row.get("source_person", ""),
+            "retarget_variant_id": row.get("retarget_variant_id", ""),
+            "sequence_key": row.get("sequence_key", ""),
+            "paired_video": f"workspace/core4d/results/E170/s6_downstream/render/full/paired/{case_id}_E168_vs_E170_PRG.mp4",
+            "keyframe_sheet": f"workspace/core4d/results/E170/s6_downstream/evidence/visual_qc/{case_id}_keyframes.jpg",
+        })
+    return output, summary
+
+
 def recommendation(rows: list[dict[str, Any]]) -> dict[str, Any]:
     reviewed = sum(row["user_manual_review_status"] == "reviewed" for row in rows)
     overall = sum(bool(row["strict_release_usable"]) for row in rows)
@@ -339,10 +465,16 @@ def main() -> int:
             item["e168_manual_use_decision"] = baseline.get("manual_use_decision", "")
             paired.append(add_baseline(item, baseline))
     summaries, rankings = group_summary(metrics), worst_cases(metrics)
+    codex_output, visual_selection_summary = codex_template(manifest_rows, metrics, codex)
+    codex_output_by_case = {row["case_id"]: row for row in codex_output}
+    for item in metrics:
+        machine = codex_output_by_case[item["case_id"]]
+        for key in ("codex_metric_verification_status", "codex_visual_spotcheck_status", "codex_visual_selection_reasons", "codex_visual_findings", "codex_visual_reviewer", "codex_visual_reviewed_at"):
+            item[key] = machine[key]
     rec = recommendation(metrics)
     failures = Counter(mode for row in metrics for mode in row["numeric_failure_modes"].split(",") if mode)
-    payload = {"generated_at": datetime.now().astimezone().isoformat(timespec="seconds"), "metric_standard_id": EVAL_METRIC_STANDARD_ID, "manifest": rel(manifest), "manifest_sha256": sha256(manifest), "baseline": rel(baseline_path), "baseline_sha256": sha256(baseline_path), "counts": {"manifest_rows": len(manifest_rows), "evaluated": len(metrics), "not_ready": len(not_ready), "errors": len(errors), "numeric_pass": sum(bool(row["numeric_release_pass"]) for row in metrics)}, "numeric_failure_counts": dict(failures), "recommendation": rec, "thresholds": {"body_z_err_p95_m_max": BODY_Z_MAX, "raw_contact_min": CONTACT_MIN, "release_false_3mm_max": RELEASE_MAX, "hand_penetration_3mm_max": HAND_PEN_MAX, "leg_penetration_max": LEG_PEN_MAX, "gate_fallback_max": GATE_FALLBACK_MAX, "gate_valid_last_min": GATE_VALID_LAST_MIN}}
-    priority = ["case_id", "variant", "execution_source", "reused_full", "e168_manual_use_decision", "numeric_release_pass", "numeric_failure_modes", "manual_operational_use", "strict_release_usable", "codex_metric_verification_status", "codex_visual_spotcheck_status", "codex_visual_findings", "user_manual_review_status", "manual_use_decision", "manual_quality_label", "manual_failure_taxonomy", "leg_gate_health_pass", *PAIR_METRICS]
+    payload = {"generated_at": datetime.now().astimezone().isoformat(timespec="seconds"), "metric_standard_id": EVAL_METRIC_STANDARD_ID, "manifest": rel(manifest), "manifest_sha256": sha256(manifest), "baseline": rel(baseline_path), "baseline_sha256": sha256(baseline_path), "counts": {"manifest_rows": len(manifest_rows), "evaluated": len(metrics), "not_ready": len(not_ready), "errors": len(errors), "numeric_pass": sum(bool(row["numeric_release_pass"]) for row in metrics)}, "numeric_failure_counts": dict(failures), "visual_selection": visual_selection_summary, "recommendation": rec, "thresholds": {"body_z_err_p95_m_max": BODY_Z_MAX, "raw_contact_min": CONTACT_MIN, "release_false_3mm_max": RELEASE_MAX, "hand_penetration_3mm_max": HAND_PEN_MAX, "leg_penetration_max": LEG_PEN_MAX, "gate_fallback_max": GATE_FALLBACK_MAX, "gate_valid_last_min": GATE_VALID_LAST_MIN}}
+    priority = ["case_id", "variant", "execution_source", "reused_full", "e168_manual_use_decision", "numeric_release_pass", "numeric_failure_modes", "manual_operational_use", "strict_release_usable", "codex_metric_verification_status", "codex_visual_spotcheck_status", "codex_visual_selection_reasons", "codex_visual_findings", "codex_visual_reviewer", "codex_visual_reviewed_at", "user_manual_review_status", "manual_use_decision", "manual_quality_label", "manual_failure_taxonomy", "leg_gate_health_pass", *PAIR_METRICS]
     fields = []
     for key in [*priority, *METRIC_FIELDS, *METRIC_KEYS, *HEALTH_AGGS.keys()]:
         if key not in fields:
@@ -360,6 +492,7 @@ def main() -> int:
     write_tsv(out_dir / "e170_evaluation_errors.tsv", errors)
     write_tsv(out_dir / "evaluated_manifest_snapshot.tsv", ready)
     write_tsv(review_path, manual_template(manifest_rows, reviews))
+    write_tsv(codex_path, codex_output)
     (out_dir / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(payload["counts"], sort_keys=True))
     if errors:

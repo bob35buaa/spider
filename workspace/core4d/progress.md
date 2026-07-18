@@ -816,3 +816,12 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 当前自动续跑再次完整读取两项skill并复核计划/完成条件/最新progress；确认实验仍处于增量回收阶段，tracker的“待实现”文案尚未更新但不作为运行权威，最终完成时必须修正。下一步以远端tmux/log和canonical summary为准检查新状态。
 - [x] 19:05 CST 本地三个watcher与远端主/recovery session均alive；canary与recovery_smoke稳定为`2/2 pass`，full仍`4/24`、recovery_full`0/2`。活动进度主=`104/216,72/148,120/248,64/186`，recovery=`108/286,108/288`，错误扫描0；无新NPZ，未重复pull或启动。
 - [x] 已纠正 tracker 的过期状态：E170 从“计划确认，待实现”更新为“执行中：full/recovery运行与增量回收”；仍只链接计划，最终结果日志与结论待24/24、评测/视觉/用户终审完成后再写。
+- [x] Tracker状态修正与本轮监控记录已提交并推送：commit `b1171a3`（`exp(core4d): mark E170 full validation running`）；`git diff --check`与cached check通过。实验本身仍在运行，未把tracker更新误当作完成。
+- [x] 19:07 CST 两个watcher完成下一轮自动pull：full仍`4/24, 18 files, 20 incomplete`，recovery_full仍`0/2, 2 files, 2 incomplete`；没有新root NPZ，未触发逐row复核或后处理。
+- [x] 19:08 CST 当前自动续跑已完整恢复两项skill、E170计划/8项完成条件、tracker与最新progress；三个本地watcher仍alive，canonical证据保持canary/recovery-smoke各`2/2 pass`、full`4/24`、recovery-full`0/2`。下一步查询远端实时进度与错误扫描。
+- [x] 19:09 CST 远端主/recovery session均alive；活动主进度`118/216,80/148,134/248,72/186`，recovery`116/286,116/288`，GPU0/2约40/38%、GPU1/3叠加约96/99%，错误扫描0。尚无第二波原子完成，保持自动watcher回收。
+- [x] 19:10 CST 当前自动续跑已完整恢复两项skill、计划/8项完成条件、tracker和最新progress；三个本地watcher保持alive，canonical仍为canary/recovery-smoke各`2/2 pass`、full`4/24`、recovery-full`0/2`。下一步查询远端实时状态，不复用上一轮推断。
+- [x] 19:10 CST 远端实时进度主=`122/216,82/148,140/248,74/186`、recovery=`118/286,118/288`，错误扫描0；按当前plan time估计最早下一原子完成约19:33。额外容量审计：远端共享盘虽96%使用但仍有917GB可用，E170当前仅91MB；本地6.4TB可用，无写盘容量风险，不干预其他目录/任务。
+- [x] GPU等待窗口审计视觉后处理发现缺口：计划要求numeric-fail、阈值±10%边界、各核心指标worst-case并集，以及剩余numeric-pass至少8条分层样本；当前evaluator虽输出worst-case和读取`codex_verification.tsv`，却从不生成该模板或确定性选样，现有文件为空。需在evaluator补28-row Codex模板、selection reasons和分层coverage summary，严格不写`manual_*`。
+- [x] 已实现28-row Codex专用模板与确定性视觉选样：全量前统一`PENDING_FULL_EVALUATION`；全量后并集numeric fail、阈值±10%边界、fall alarm、21项paired核心指标worst case，再从剩余numeric pass贪心覆盖E168标签/person/retarget/date/sequence至少8条；输出selection reasons/coverage summary且不含`manual_*`。真实available回归=`8 evaluated/20 not-ready/0 errors`，Codex表28行pending，用户表仍28行pending。首次合成测试因helper间接要求无关`video`字段失败，已去除此耦合，待复测。
+- [x] 视觉选样复测通过：Python compile与`git diff --check`通过；28-row合成集得到`mandatory_union=2 + stratified_numeric_pass=8 = selected_total 10`、shortfall=0，覆盖USE/DNU、p1/p2、v1/v2、3 dates和7 sequences；Codex模板selected计数一致且零`manual_*`字段。该功能只影响本地评测/终审准备，不改变活动CEM。
