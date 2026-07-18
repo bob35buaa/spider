@@ -4,10 +4,13 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 MODE="${1:-canary}"
-if [ "$MODE" != "canary" ] && [ "$MODE" != "full" ]; then
-  echo "usage: $0 {canary|full}" >&2
-  exit 2
-fi
+case "$MODE" in
+  canary) RUN_MODE="canary"; ARTIFACT_STAGE="canary" ;;
+  full) RUN_MODE="full"; ARTIFACT_STAGE="full" ;;
+  recovery_smoke) RUN_MODE="canary"; ARTIFACT_STAGE="recovery_smoke" ;;
+  recovery_full) RUN_MODE="full"; ARTIFACT_STAGE="full" ;;
+  *) echo "usage: $0 {canary|full|recovery_smoke|recovery_full}" >&2; exit 2 ;;
+esac
 
 REMOTE="${REMOTE:-batchcom@61.172.170.106}"
 REMOTE_ROOT="${REMOTE_ROOT:-/home/dataset-assist-0/xiayb/workspace/spider}"
@@ -55,6 +58,12 @@ fields = list(rows[0])
 if mode == "canary":
     variants = {row["retarget_variant_id"] for row in rows}
     if len(rows) != 2 or variants != {"omnirt_v1", "omnirt_v2"}: raise SystemExit(f"invalid dual canary rows={len(rows)} variants={variants}")
+elif mode == "recovery_smoke":
+    if any(row["execution_mode"] != "canary" or row["status"] != "READY_FOR_CANARY" for row in rows):
+        raise SystemExit("recovery smoke manifest contains non-ready rows")
+elif mode == "recovery_full":
+    if any(row["execution_mode"] != "production" or row["status"] != "READY_FOR_FULL" for row in rows):
+        raise SystemExit("recovery full manifest contains non-ready rows")
 else:
     if len(rows) > 24 or any(row["status"] != "READY_FOR_FULL" for row in rows): raise SystemExit("full manifest contains non-READY rows")
 root.mkdir(parents=True, exist_ok=True)
@@ -73,7 +82,7 @@ PY
 
 for gpu in 0 1 2 3; do
   if [ "$(wc -l < "$SHARD_ROOT/gpu${gpu}.tsv")" -gt 1 ]; then
-    "$PYTHON_BIN" "$RUNNER" --mode "$MODE" --manifest-tsv "$SHARD_ROOT/gpu${gpu}.tsv" --all --python-bin "$PYTHON_BIN" --gpu-id "$gpu" --dry-run
+    "$PYTHON_BIN" "$RUNNER" --mode "$RUN_MODE" --manifest-tsv "$SHARD_ROOT/gpu${gpu}.tsv" --all --python-bin "$PYTHON_BIN" --gpu-id "$gpu" --dry-run
   fi
 done > "$SHARD_ROOT/local_dry_run_commands.txt"
 expected="$(($(wc -l < "$MANIFEST") - 1))"
@@ -118,14 +127,14 @@ SYNC_FILES=("$MANIFEST" "$SELECTION_TSV" "$RUNNER" "$GENERIC_RUNNER" "$BUILDER" 
 
 {
   printf '#!/usr/bin/env bash\nset -euo pipefail\ncd %q\n' "$REMOTE_ROOT"
-  printf 'MODE=%q\nPYTHON_BIN=%q\nSHARD_ROOT=%q\nRUNNER=%q\n' "$MODE" "$PYTHON_BIN" "$SHARD_ROOT" "$RUNNER"
+  printf 'MODE=%q\nRUN_MODE=%q\nPYTHON_BIN=%q\nSHARD_ROOT=%q\nRUNNER=%q\n' "$MODE" "$RUN_MODE" "$PYTHON_BIN" "$SHARD_ROOT" "$RUNNER"
   cat <<'EOS'
 echo "E170 ${MODE} started at $(date -Is)"
 pids=()
 for gpu in 0 1 2 3; do
   shard="${SHARD_ROOT}/gpu${gpu}.tsv"
   if [ "$(wc -l < "$shard")" -le 1 ]; then continue; fi
-  ( "$PYTHON_BIN" "$RUNNER" --mode "$MODE" --manifest-tsv "$shard" --all --python-bin "$PYTHON_BIN" --gpu-id "$gpu" ) > "logs/E170/cem/${MODE}/$(basename "$SHARD_ROOT")_gpu${gpu}.worker.log" 2>&1 &
+  ( "$PYTHON_BIN" "$RUNNER" --mode "$RUN_MODE" --manifest-tsv "$shard" --all --python-bin "$PYTHON_BIN" --gpu-id "$gpu" ) > "logs/E170/cem/${MODE}/$(basename "$SHARD_ROOT")_gpu${gpu}.worker.log" 2>&1 &
   pids+=("$!")
 done
 status=0
@@ -152,7 +161,7 @@ with open(sys.argv[1],"w",encoding="utf-8") as stream:
 PY
 SYNC_FILES+=("$SYNC_SHA")
 
-retry ssh_remote "mkdir -p '$REMOTE_ROOT/$SHARD_ROOT' '$REMOTE_ROOT/$RESULT_ROOT/s6_downstream/cem/$MODE' '$REMOTE_ROOT/logs/E170/cem/$MODE'"
+retry ssh_remote "mkdir -p '$REMOTE_ROOT/$SHARD_ROOT' '$REMOTE_ROOT/$RESULT_ROOT/s6_downstream/cem/$ARTIFACT_STAGE' '$REMOTE_ROOT/logs/E170/cem/$MODE' '$REMOTE_ROOT/logs/E170/cem/$ARTIFACT_STAGE'"
 for path in "${INPUT_DIRS[@]}"; do retry ssh_remote "mkdir -p '$REMOTE_ROOT/$path'"; retry rsync -az -e "$RSYNC_RSH" "$path/" "${REMOTE}:${REMOTE_ROOT}/${path}/"; done
 retry rsync -az -e "$RSYNC_RSH" "$SHARD_ROOT/" "${REMOTE}:${REMOTE_ROOT}/${SHARD_ROOT}/"
 for path in "${SYNC_FILES[@]}"; do retry ssh_remote "mkdir -p '$REMOTE_ROOT/$(dirname "$path")'"; retry rsync -az -e "$RSYNC_RSH" "$path" "${REMOTE}:${REMOTE_ROOT}/$(dirname "$path")/"; done

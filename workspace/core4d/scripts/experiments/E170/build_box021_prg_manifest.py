@@ -182,8 +182,17 @@ def build_scene(source: dict[str, str], *, overwrite: bool) -> dict[str, Any]:
     converted = convert_reference_to_scene(reference, output)
     qpos0_min = min_lowerbody_distance(model, model.qpos0[np.newaxis, :])
     reference_min = min_lowerbody_distance(model, converted[:min(5, len(converted))])
-    if min(qpos0_min, reference_min) < -0.005:
-        raise ValueError(f"initial_overlap:qpos0={qpos0_min:.6f}:ref={reference_min:.6f}")
+    # run_mjwp seeds the simulator from qpos_ref[0] (setup_env), not from the
+    # XML model.qpos0.  Keep qpos0 overlap as a diagnostic because it can still
+    # reveal a surprising template default, but hard-block the row on the
+    # actual runtime initialization frames.  A qpos0-only warning must pass a
+    # dedicated runtime smoke before it is admitted to the production queue.
+    if reference_min < -0.005:
+        raise ValueError(
+            f"runtime_initial_overlap:reference_first5={reference_min:.6f}:"
+            f"qpos0_diagnostic={qpos0_min:.6f}"
+        )
+    qpos0_warning = qpos0_min < -0.005
     snapshot_dir = RESULTS / "scene_snapshot" / source["case_id"]
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(base_scene, snapshot_dir / base_scene.name)
@@ -194,6 +203,12 @@ def build_scene(source: dict[str, str], *, overwrite: bool) -> dict[str, Any]:
         "compiled_pair_count": 16, "semantic_diff_only_e170_pairs": "true",
         "qpos0_min_lowerbody_object_distance_m": qpos0_min,
         "reference_first5_min_lowerbody_object_distance_m": reference_min,
+        "runtime_initialization_source": "reference_qpos_frame0",
+        "runtime_init_smoke_required": "true" if qpos0_warning else "false",
+        "diagnostic_warning": (
+            f"unused_xml_qpos0_overlap:{qpos0_min:.6f}"
+            if qpos0_warning else ""
+        ),
     }
 
 
@@ -233,8 +248,12 @@ def audit_reuse(source: dict[str, str], e169: dict[str, str]) -> dict[str, Any]:
 
 
 def artifact_paths(case_id: str, stage: str) -> dict[str, str]:
-    suffix = "smoke" if stage == "canary" else "full"
-    variant = f"E170_{case_id}_PRG" + ("_canary" if stage == "canary" else "")
+    if stage not in {"canary", "recovery_smoke", "full"}:
+        raise ValueError(f"unsupported artifact stage: {stage}")
+    is_smoke = stage in {"canary", "recovery_smoke"}
+    suffix = "smoke" if is_smoke else "full"
+    variant_suffix = "_canary" if stage == "canary" else ("_recovery_smoke" if stage == "recovery_smoke" else "")
+    variant = f"E170_{case_id}_PRG{variant_suffix}"
     root = f"workspace/core4d/results/E170/s6_downstream/cem/{stage}"
     return {
         "variant": variant,
@@ -244,6 +263,40 @@ def artifact_paths(case_id: str, stage: str) -> dict[str, str]:
         "video": f"workspace/core4d/results/E170/s6_downstream/render/{stage}/{variant}_{suffix}.mp4",
         "log": f"logs/E170/cem/{stage}/{variant}.log",
     }
+
+
+def audit_runtime_smoke(row: dict[str, Any]) -> tuple[bool, str]:
+    """Validate a pulled case-specific smoke before production promotion."""
+    paths = {key: repo_path(row[key]) for key in ("result_npz", "outdir_npz", "config_act")}
+    missing = [key for key, path in paths.items() if not path.is_file()]
+    if missing:
+        return False, "missing:" + ",".join(missing)
+    failures: list[str] = []
+    try:
+        with np.load(paths["result_npz"], allow_pickle=True) as root, np.load(paths["outdir_npz"], allow_pickle=True) as out:
+            if "qpos" not in root or "qpos" not in out or not np.array_equal(root["qpos"], out["qpos"]):
+                failures.append("root_outdir_qpos_mismatch")
+            elif not np.isfinite(np.asarray(out["qpos"], dtype=np.float64)).all():
+                failures.append("nonfinite_qpos")
+            required = {
+                "cem_leg_gate_valid_frac", "cem_leg_gate_selected_valid_frac",
+                "cem_leg_gate_fallback_used", "sample_leg_gate_min_sdf_min",
+                "sample_leg_gate_violation_pct_mean", "leg_object_penalty_mean",
+            }
+            failures.extend(f"missing_diag:{key}" for key in sorted(required - set(out.files)))
+        config = yaml.safe_load(paths["config_act"].read_text(encoding="utf-8"))
+        if config.get("scene_name") != SCENE_NAME:
+            failures.append("config_mismatch:scene_name")
+        if config.get("leg_object_penalty_scale") != 2.0:
+            failures.append("config_mismatch:leg_object_penalty_scale")
+        if config.get("cem_leg_gate_enabled") is not True:
+            failures.append("config_mismatch:cem_leg_gate_enabled")
+        scene = repo_path(row["scene_act"])
+        if not scene.is_file() or sha256(scene) != row["effective_scene_sha256"]:
+            failures.append("effective_scene_sha")
+    except Exception as exc:
+        failures.append(f"validation:{type(exc).__name__}:{exc}")
+    return not failures, ";".join(failures)
 
 
 def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
@@ -316,6 +369,8 @@ def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
             "assigned_gpu": CASE_GPU.get(case_id, ""), "gpu_id": "",
             "failure_mode": "",
             "blocker_type": "", "blocker_detail": "", "evidence_path": "",
+            "preflight_warning": "", "runtime_init_smoke_required": "false",
+            "runtime_init_smoke_status": "not_required",
             "first_seen_at": "", "recovery_status": "not_applicable", "updated_at": now(),
         }
         if case_id in REUSE_CASES:
@@ -359,13 +414,36 @@ def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
                 except Exception as exc:
                     failures.append(f"override_parity:{type(exc).__name__}:{exc}")
             paths = artifact_paths(case_id, "full")
-            status = "READY_FOR_FULL" if not failures else "preflight_blocked_local"
+            smoke_required = scene.get("runtime_init_smoke_required") == "true"
+            smoke_status = "not_required"
+            smoke_detail = ""
+            if not failures and smoke_required:
+                smoke_probe = {**base, **paths, **artifact_paths(case_id, "recovery_smoke")}
+                smoke_probe.update({
+                    "scene_act": scene["physical_scene"],
+                    "effective_scene_sha256": scene["physical_scene_sha256"],
+                })
+                smoke_passed, smoke_detail = audit_runtime_smoke(smoke_probe)
+                smoke_status = "pass" if smoke_passed else f"pending:{smoke_detail}"
+            if failures:
+                status = "preflight_blocked_local"
+            elif smoke_required and smoke_status != "pass":
+                status = "READY_FOR_RECOVERY_SMOKE"
+            else:
+                status = "READY_FOR_FULL"
             base.update(paths)
             base.update({
                 "execution_mode": "production", "execution_decision": "a100_user_allowlist_0_1_2_3",
                 "status": status, "blocker_type": "" if not failures else "case_preflight",
                 "blocker_detail": ";".join(failures), "first_seen_at": "" if not failures else now(),
-                "recovery_status": "not_needed" if not failures else "pending_repair",
+                "preflight_warning": scene.get("diagnostic_warning", ""),
+                "runtime_init_smoke_required": "true" if smoke_required else "false",
+                "runtime_init_smoke_status": smoke_status,
+                "recovery_status": (
+                    "pending_runtime_smoke" if status == "READY_FOR_RECOVERY_SMOKE"
+                    else ("runtime_smoke_passed_ready_for_full" if smoke_required and smoke_status == "pass"
+                          else ("not_needed" if not failures else "pending_repair"))
+                ),
                 "override_id": override.stem, "override_path": rel(override),
                 "override_sha256": sha256(override) if override.is_file() else "",
                 "config_audit_status": "pass" if not failures else "fail",
@@ -381,7 +459,11 @@ def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
                 "source_config_sha256": sha256(source["config_act"]) if repo_path(source["config_act"]).is_file() else "",
                 "source_video_sha256": sha256(source["video"]) if repo_path(source["video"]).is_file() else "",
             })
-            scene_audit.append({"case_id": case_id, "status": status, **scene, "failures": ";".join(failures)})
+            scene_audit.append({
+                "case_id": case_id, "status": status, **scene,
+                "runtime_init_smoke_status": smoke_status,
+                "failures": ";".join(failures),
+            })
             config_audit.append({"case_id": case_id, "override_path": rel(override), "status": "pass" if not failures else "fail", "failures": ";".join(failures)})
         if base["status"] == "preflight_blocked_local":
             base["evidence_path"] = "workspace/core4d/results/E170/preflight/local_blockers.tsv"
@@ -399,11 +481,34 @@ def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
             row["status"] = "READY_FOR_CANARY"
             canary.append(row)
 
+    recovery_smoke = []
+    recovery_full = []
+    recovery_rows = []
+    for source_row in rows:
+        if source_row["execution_source"] != "E170" or source_row["runtime_init_smoke_required"] != "true":
+            continue
+        recovery_rows.append(copy.deepcopy(source_row))
+        if source_row["status"] == "READY_FOR_RECOVERY_SMOKE":
+            row = copy.deepcopy(source_row)
+            row.update(artifact_paths(row["case_id"], "recovery_smoke"))
+            row["execution_mode"] = "canary"
+            row["status"] = "READY_FOR_CANARY"
+            recovery_smoke.append(row)
+        elif source_row["status"] == "READY_FOR_FULL" and source_row["runtime_init_smoke_status"] == "pass":
+            row = copy.deepcopy(source_row)
+            row.update(artifact_paths(row["case_id"], "full"))
+            row["execution_mode"] = "production"
+            row["status"] = "READY_FOR_FULL"
+            recovery_full.append(row)
+
     write_tsv(SCRIPT_DIR / "variants.tsv", rows)
     write_tsv(RESULTS / "s6_downstream/manifests/analysis_manifest.tsv", rows)
     write_tsv(RESULTS / "s6_downstream/manifests/cem_full_manifest.tsv", ready)
     write_tsv(RESULTS / "s6_downstream/manifests/cem_canary_manifest.tsv", canary)
-    write_tsv(RESULTS / "s6_downstream/manifests/recovery_manifest.tsv", blocker_rows)
+    fields = list(rows[0]) if rows else []
+    write_tsv(RESULTS / "s6_downstream/manifests/cem_recovery_smoke_manifest.tsv", recovery_smoke, fields)
+    write_tsv(RESULTS / "s6_downstream/manifests/cem_recovery_full_manifest.tsv", recovery_full, fields)
+    write_tsv(RESULTS / "s6_downstream/manifests/recovery_manifest.tsv", recovery_rows + blocker_rows)
     write_tsv(RESULTS / "preflight/local_blockers.tsv", blocker_rows)
     write_tsv(RESULTS / "preflight/scene_audit.tsv", scene_audit)
     write_tsv(RESULTS / "preflight/config_audit.tsv", config_audit)
@@ -426,11 +531,12 @@ def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
     }
     write_json(RESULTS / "s0_environment/environment_manifest.json", environment)
     summary = {
-        "created_at": now(), "status": "pass" if not blocker_rows else "partial_ready",
+        "created_at": now(), "status": "pass" if not blocker_rows and not recovery_smoke else "partial_ready",
         "global_failures": [], "analysis_rows": len(rows), "reuse_rows": sum(row["execution_source"] == "E169" for row in rows),
         "reuse_audited": sum(row["status"] == "REUSE_AUDITED" for row in rows),
         "new_rows": sum(row["execution_source"] == "E170" for row in rows), "ready_for_full": len(ready),
-        "local_blocked": len(blocker_rows), "canary_rows": len(canary),
+        "local_blocked": len(blocker_rows), "runtime_smoke_pending": len(recovery_smoke),
+        "recovery_full_ready": len(recovery_full), "canary_rows": len(canary),
         "retarget_distribution": {"omnirt_v1": variants.count("omnirt_v1"), "omnirt_v2": variants.count("omnirt_v2")},
         "fixed_gpu_queues": GPU_QUEUES,
     }

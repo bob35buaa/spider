@@ -3,7 +3,13 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 MODE="${1:-canary}"
-if [ "$MODE" != "canary" ] && [ "$MODE" != "full" ]; then echo "usage: $0 {canary|full}" >&2; exit 2; fi
+case "$MODE" in
+  canary) ARTIFACT_STAGE="canary" ;;
+  full) ARTIFACT_STAGE="full" ;;
+  recovery_smoke) ARTIFACT_STAGE="recovery_smoke" ;;
+  recovery_full) ARTIFACT_STAGE="full" ;;
+  *) echo "usage: $0 {canary|full|recovery_smoke|recovery_full}" >&2; exit 2 ;;
+esac
 REMOTE="${REMOTE:-batchcom@61.172.170.106}"; REMOTE_ROOT="${REMOTE_ROOT:-/home/dataset-assist-0/xiayb/workspace/spider}"
 REMOTE_SSH_PORT="${REMOTE_SSH_PORT:-30409}"; REMOTE_SSH_KEY="${REMOTE_SSH_KEY:-$HOME/.ssh/id_rsa_tianyiyun}"
 RESULT_ROOT="workspace/core4d/results/E170"; MANIFEST="$RESULT_ROOT/s6_downstream/manifests/cem_${MODE}_manifest.tsv"
@@ -13,9 +19,12 @@ SHARD_ROOT="$RESULT_ROOT/s6_downstream/manifests/a100_${MODE}_${SESSION}"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -p "$REMOTE_SSH_PORT" -i "$REMOTE_SSH_KEY")
 RSYNC_RSH="ssh -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -p $REMOTE_SSH_PORT -i $REMOTE_SSH_KEY"
 retry() { local n=1; while ! "$@"; do [ "$n" -ge 4 ] && return 1; sleep "$((n * 3))"; n=$((n + 1)); done; }
-mkdir -p "$RESULT_ROOT/s6_downstream/cem/$MODE" "logs/E170/cem/$MODE" "$SHARD_ROOT"
-retry rsync -az -e "$RSYNC_RSH" "${REMOTE}:${REMOTE_ROOT}/$RESULT_ROOT/s6_downstream/cem/${MODE}/" "$RESULT_ROOT/s6_downstream/cem/${MODE}/"
+mkdir -p "$RESULT_ROOT/s6_downstream/cem/$ARTIFACT_STAGE" "logs/E170/cem/$MODE" "logs/E170/cem/$ARTIFACT_STAGE" "$SHARD_ROOT"
+retry rsync -az -e "$RSYNC_RSH" "${REMOTE}:${REMOTE_ROOT}/$RESULT_ROOT/s6_downstream/cem/${ARTIFACT_STAGE}/" "$RESULT_ROOT/s6_downstream/cem/${ARTIFACT_STAGE}/"
 retry rsync -az -e "$RSYNC_RSH" "${REMOTE}:${REMOTE_ROOT}/logs/E170/cem/${MODE}/" "logs/E170/cem/${MODE}/"
+if [ "$ARTIFACT_STAGE" != "$MODE" ]; then
+  retry rsync -az -e "$RSYNC_RSH" "${REMOTE}:${REMOTE_ROOT}/logs/E170/cem/${ARTIFACT_STAGE}/" "logs/E170/cem/${ARTIFACT_STAGE}/"
+fi
 retry rsync -az -e "$RSYNC_RSH" "${REMOTE}:${REMOTE_ROOT}/${SHARD_ROOT}/" "$SHARD_ROOT/"
 
 ".venv/bin/python" - "$MODE" "$MANIFEST" "$SHARD_ROOT" <<'PY'
@@ -58,7 +67,8 @@ for row in rows:
 out=Path(f"workspace/core4d/results/E170/s6_downstream/artifacts/{mode}"); out.mkdir(parents=True,exist_ok=True)
 with (out/"artifact_manifest.tsv").open("w",newline="",encoding="utf-8") as stream:
     fields_a=["variant","case_id","artifact","path","size","sha256"]; writer=csv.DictWriter(stream,fieldnames=fields_a,delimiter="\t",lineterminator="\n"); writer.writeheader(); writer.writerows(artifacts)
-complete=len(rows)-len(incomplete); required=2 if mode=="canary" else 24
+complete=len(rows)-len(incomplete)
+required=2 if mode=="canary" else (24 if mode=="full" else len(rows))
 status="pass" if complete==required and len(rows)==required and not incomplete else ("partial_allow_missing" if complete==len(rows) and not incomplete else "incomplete")
 summary={"created_at":datetime.now().astimezone().isoformat(timespec="seconds"),"mode":mode,"required_rows":required,"manifest_rows":len(rows),"complete_rows":complete,"artifact_files":len(artifacts),"incomplete":incomplete,"status":status}
 (out/"artifact_summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n"); print(json.dumps(summary,indent=2,sort_keys=True))

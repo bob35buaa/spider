@@ -767,3 +767,17 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] Full 初始运行健康：四GPU首条分别为 `034_p2/038_p1/034_p1/038_p2`，均已到12 steps并准备进入production `opt_steps=32`；GPU0-3显存约`1.55/1.55/1.55/2.19GB`、util `37-41%`，无错误。本地tmux `E170_full_watch`已启动，5分钟增量回收。
 - [x] 已新增 strict postprocess guard：仅在artifact summary证明`24/24 new`且incomplete为空时才执行24 new render、28 paired montage、28-row eval、xlsx生成与LibreOffice零公式错误验收；当前22-row阶段不会误触发最终结论。
 - [x] Postprocess negative test通过：当前summary=`manifest_rows=22, complete=0, status=incomplete`时明确拒绝启动；Full四条首case已进入production `opt_steps=32`，约`16-18` steps、单次plan `29-30s`，无错误。全部E170 Python/shell compile/syntax与`git diff --check`通过。
+- [x] 评测/渲染/xlsx/postprocess实现已提交并推送：commit `46e8279`。Full监控仍健康，四worker约`20/298,22/228,20/286,22/234`，GPU0-3 util `34-41%`，错误模式扫描为空；本地watcher存活，当前完整产物`0/22`符合尚未到原子写盘点。
+- [x] Full续跑恢复检查（2026-07-18）：远端session与本地watcher均存活，四首case同步推进至`26/286,26/298,26/228,26/234`，4个config已写、root NPZ尚未到原子写盘点；GPU0-3显存`1.55/1.55/1.55/2.19GB`、错误扫描为空。
+- [x] Full后续监控推进至四worker均30 steps，GPU0-3 util约`40-41%`，remote root仍0符合未到写盘点。发现远端环境没有`rg`，此前带`|| true`的远端错误扫描证据不足；后续监控改用远端可用的`grep -R -E`重新核验，不把缺工具误报为“无错误”。
+- [x] Full监控（17:36 CST）：四worker均推进至34 steps，production plan约`29.2-30.5s`，GPU0-3 util均约40%；远端`grep`错误扫描为空。本地watcher已完成第二次增量pull，summary时间17:36、`running=4/not_run=18/complete=0`，符合首批尚未写盘。
+- [x] Full后续监控：`034_p1=36/286,034_p2=36/298,038_p1=38/228,038_p2=36/234`，四worker/GPU仍稳定、远端grep错误扫描为空；watcher等待下一5分钟轮询，当前回收状态未变化。
+- [x] Full监控（17:38 CST）：四worker均到40 steps，plan `29.1-30.3s`，GPU0-3 util约`38-41%`；远端错误扫描为空、root NPZ仍0。watcher session存活，下一增量pull计划约17:41。
+- [x] Full后续监控（17:38:33 CST）：四worker为`42/286,42/298,44/228,42/234`，远端错误扫描为空、root NPZ仍0；watcher最新summary仍为17:36，未到下一轮轮询，不提前触发评测。
+- [x] Watcher 17:41增量pull完成：summary刷新为17:41:10，仍为`running=4/not_run=18/complete=0`、artifact files=4；远端四worker已推进至`54/286,54/298,56/228,54/234`，错误扫描为空。
+- [x] Watcher 17:46增量pull完成：summary刷新为17:46:14，仍为`running=4/not_run=18/complete=0`、artifact files=4；回收前远端进度`72/286,70/298,72/228,72/234`，错误扫描为空。
+- [x] Watcher 17:51增量pull完成：summary刷新为17:51:18，仍为`running=4/not_run=18/complete=0`、artifact files=4；回收前远端进度`92/286,92/298,94/228,94/234`，错误扫描为空。
+- [x] 用户确认graded blocking后落实`036_p1/p2`恢复设计：代码证据确认runtime由`qpos_ref[0]`而非XML `model.qpos0`初始化；计划与builder改为reference-first5真实硬门、qpos0-only诊断告警、case-specific recovery smoke通过后才允许定向full，未改姿态/retarget/PRG配置。
+- [ ] 正在验证新增`recovery_smoke/recovery_full` launcher、pull与manifest契约；验证通过后将在A100 GPU1/3叠加启动两条036专用smoke，不操作其他进程。
+- [x] Recovery静态验证通过：Python compile、3个shell `bash -n`、`git diff --check`均通过；preflight=`22 READY_FOR_FULL + 2 READY_FOR_RECOVERY_SMOKE`，recovery smoke dry-run精确2条（036_p2→GPU1、036_p1→GPU3），full仍精确22条，recovery full在smoke未通过前按预期拒绝启动。
+- [x] 修改后的full pull回归通过：当前主session仍识别22-row manifest、4个running config且无完成NPZ；available evaluator初次误用了不存在的`--mode/--output-dir`参数并安全失败，改用正确`--allow-missing --out-dir`后恢复为28-row authority、4 reuse evaluated、0 errors、24 not-ready、2 numeric pass。

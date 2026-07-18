@@ -261,7 +261,7 @@ GPU 启动前必须完成：
 2. 每条 retarget trajectory、contact mask、base scene 和 E168 baseline artifact 存在且 SHA 固化；
 3. 24条新 physical sidecar 均可被 MuJoCo compile，精确包含16个唯一 pair；
 4. sidecar 与 base scene 的 semantic diff 只包含这16个 pair；
-5. `qpos0` 与 reference 前5帧没有深于5mm的 lower-body/object 初始重叠；
+5. 实际 runtime 初始化所用的 reference 前5帧没有深于5mm的 lower-body/object 初始重叠；XML `model.qpos0` 同项仅作诊断，若单独失败则该 row 必须先通过 case-specific runtime smoke 才能进入 full recovery；
 6. 24个 override 与 E169 PRG 字段级 parity 通过；
 7. 4条 E169 reuse 通过 root/outdir、finite、config、scene和diagnostics审计；
 8. command plan 覆盖24条唯一 full 输出；实际 dry-run 命令数必须精确等于 `READY_FOR_FULL` new rows，local blocker 只进入 recovery manifest，所有输出路径互不覆盖。
@@ -271,9 +271,12 @@ Preflight 采用分级阻断，不把单条数据问题扩大成全批停机：
 | 级别 | 典型问题 | 状态与动作 |
 |---|---|---|
 | 全局 contract blocker | E168 authority 不是28条、case重复或4/24拆分错误；公共 config/schema 与 E169 PRG 不一致；helper regression 改变 E169 语义；远程公共代码 SHA 不一致 | 标记 `global_contract_blocked`，阻断全部 canary/full；修复公共契约并重跑完整28-row preflight |
-| 单 case local blocker | 某条 trajectory/contact mask/base scene/baseline artifact 缺失或 SHA 异常；该 case scene compile 失败、初始深重叠、override parity 失败；某条 E169 reuse artifact 漂移 | 只把该 row 标记为 `preflight_blocked_local`，从当前 canary/full queue 排除；其余通过行标记 `READY_FOR_FULL` 并可继续执行 |
+| 单 case local blocker | 某条 trajectory/contact mask/base scene/baseline artifact 缺失或 SHA 异常；该 case scene compile 失败、reference 前5帧初始深重叠、override parity 失败；某条 E169 reuse artifact 漂移 | 只把该 row 标记为 `preflight_blocked_local`，从当前 canary/full queue 排除；其余通过行标记 `READY_FOR_FULL` 并可继续执行 |
+| qpos0-only 诊断告警 | XML `model.qpos0` 深重叠，但 runtime 实际消费的 reference 前5帧通过硬门 | 标记 `READY_FOR_RECOVERY_SMOKE`，不直接进入 full；使用原 scene/trajectory/config 做 case-specific smoke，产物契约全部通过后才升级为 `READY_FOR_FULL` 并进入 recovery full |
 
 单 case 被隔离时必须保存 `blocker_type/blocker_detail/evidence_path/first_seen_at/recovery_status`，立即列入 recovery manifest；不得把它改成无 P scene、关闭 pair、切换 retarget variant 或修改初始姿态后冒充同一配置。修复后只对 blocked row 重跑 preflight，并在原实验 ID 下定向补跑，不重复计算已经完成的 rows。
+
+`qpos0-only` 告警的降级依据必须可审计：`run_mjwp.py`/`setup_env` 明确从 `qpos_ref[0]` seed simulator；scene audit 同时保存 qpos0 与 reference-first5 clearance；专用 smoke 仍须通过 root/outdir qpos exact match、finite、effective config/scene SHA、PRG reward/gate diagnostics 和无 NaN/OOM/Traceback。它不是对真实 runtime 初始重叠硬门的豁免。
 
 分级阻断只改变执行顺序，不降低 E170 完成标准：允许先取得例如 `23/24 new full` 的阶段性结果并开展 allow-missing 核验，但在全部 local blocker 修复、24/24 new + 4/4 reuse 完整前，不得生成最终 strict conclusion、用户终审包或把 E170 标为完成。
 
@@ -331,6 +334,12 @@ bash workspace/core4d/scripts/launch/active/run_E170_remote_a100.sh canary
 
 # remote A100 0-3: 24 new full
 bash workspace/core4d/scripts/launch/active/run_E170_remote_a100.sh full
+
+# qpos0-only warning rows: isolated smoke, then targeted canonical full recovery
+bash workspace/core4d/scripts/launch/active/run_E170_remote_a100.sh recovery_smoke
+bash workspace/core4d/scripts/launch/active/pull_E170_remote_a100_results.sh recovery_smoke
+python workspace/core4d/scripts/experiments/E170/build_box021_prg_manifest.py --preflight
+bash workspace/core4d/scripts/launch/active/run_E170_remote_a100.sh recovery_full
 
 # local persistent monitor + strict pull/postprocess
 bash workspace/core4d/scripts/launch/active/watch_E170_remote_a100.sh
@@ -538,7 +547,7 @@ E170 本身不自动修改 E168 已冻结的13条 RL export，也不生成新的
 |---|---|---|
 | E169 gate-health 已失败 | PRG好看但G并非可靠hard gate | 质量与机制双轨裁决，保留全部valid/fallback diagnostics |
 | P-on physics contact天然上升 | 把启用碰撞误判为穿透回归 | 主比较用SDF `leg_penetration_frac`；leg physics contact只在P-on内部解释 |
-| 初始深重叠 | 首步爆炸冲量或case无法运行 | 全24 scene前5帧preflight；隔离该 row、其余继续，修复后定向补跑 |
+| runtime 初始深重叠 | 首步爆炸冲量或case无法运行 | 全24 scene reference前5帧硬门；隔离该 row、其余继续，修复后定向补跑；未被 runtime 消费的 XML qpos0 单独作为诊断并强制专用 smoke |
 | 公共契约错误 | 全批结果不可比或远程运行错误代码 | `global_contract_blocked` 阻断全部 canary/full，修复后重跑完整 preflight |
 | 单 case 输入/scene 错误 | 一条数据拖延整批或被静默跳过 | `preflight_blocked_local` 隔离并进入 recovery manifest，其余 READY rows 继续 |
 | v2三条未在E169覆盖 | scene/override路径差异导致运行失败 | v2单独静态审计；强制执行1条v1+1条v2 canary，不切回v1 |
