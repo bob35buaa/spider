@@ -350,9 +350,15 @@ bash workspace/core4d/scripts/launch/active/pull_E170_remote_a100_results.sh ful
 
 # unified 28-row evaluation
 bash workspace/core4d/scripts/eval/wrappers/eval_E170_box021_prg.sh full
+
+# after Codex fills codex_verification.tsv: rebuild the user review package
+bash workspace/core4d/scripts/launch/active/refresh_E170_review_package.sh pre_user
+
+# after the user fills fresh 28/28 labels: validate labels and rebuild metrics/xlsx
+bash workspace/core4d/scripts/launch/active/refresh_E170_review_package.sh final
 ```
 
-launcher、pull、watcher和postprocess在实现后先做 `bash -n` 与 dry-run，不在计划阶段直接执行。
+launcher、pull、watcher、postprocess和review refresh在实现后先做 `bash -n` 与 dry-run/negative gate test，不在相应前置证据未满足时绕过 gate 直接执行。三阶段 review-package audit 持久保存到 `s6_downstream/evidence/completion/review_package_audit_{postprocess,pre_user,final}.json`；`postprocess` 通过只表示自动包齐全，`pre_user` 通过表示 Codex 核验完成，`final` 通过表示用户 28/28 标签已验证，三者都不单独等同于 E170 最终推广裁决。
 
 ---
 
@@ -595,7 +601,7 @@ E170 完成必须同时满足：
 3. 28/28 unified evaluation 无 error/not-ready；
 4. E168完整指标、paired deltas、group summary、worst cases和gate-health齐全；
 5. 24条新视频、4条reuse引用、28条paired montage、Codex 指标核验/视觉抽查证据和用户 28/28 fresh人工标签完成；
-6. xlsx 经 LibreOffice 重算，formula error为0；
+6. xlsx 经 LibreOffice 重算，formula error为0，`xlsx_recalc_validation.json` 与相应阶段 review-package audit 均持久化且通过；
 7. 结果 log 明确裁决 C0-C8、manual operational/strict release 双轨、机器 strong/partial/fail 建议、用户最终裁决和 gate-health独立结论；
 8. 更新 `EXPERIMENT_TRACKER.md` 与 `progress.md`。
 
