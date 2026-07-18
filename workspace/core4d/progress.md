@@ -740,5 +740,17 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 写入 `plan/186_E170_box021_prg_full_validation_plan.md` 并更新 tracker。计划固定 `4 reused E169 PRG + 24 new E170 PRG`，E168 28条B0只作paired baseline。
 - [x] 冻结 E169 PRG 参数：16个P pair、R scale `2.0`/margin `2cm`、G `+5mm/2%/-5mm/least_violation`；不修改simulator/sampling数学逻辑。
 - [x] 评测计划补齐 E168 完整口径：raw contact、clean3 contact、release false-contact 3mm、hand penetration 3mm、body-z p95、lower-body、tracking、motion和gate-health；质量与gate机制分开裁决。
-- [x] A100执行计划固定0-3四卡，每卡6条，按qpos frames平衡为 `638/630/627/631`；默认复用E169 canary，只有代码/runtime/v2 preflight变化时才补 `1 v1 + 1 v2` smoke。
-- [ ] 下一步：用户确认计划后再实现 E170 builder/launcher/pull/watcher/evaluator；当前未生成E170 scene/override，未启动A100任务。
+- [x] A100执行计划固定0-3四卡，每卡6条，按qpos frames平衡为 `638/630/627/631`；用户确认后已改为无条件执行 `1 v1 + 1 v2` smoke，双 canary 通过才允许启动24条full。
+- [x] 用户确认 E170 分工与方法学修订：Codex 负责28/28指标核验、分层视觉抽查与机器建议，用户负责28/28最终人工标签和推广拍板；strong/partial/fail 采用 strict release 主轨，manual operational use 并列报告。
+- [x] E170 计划已改为强制 `1 v1 + 1 v2` canary、完备 `22/9/12` 与 `18/6/10` 决策区间、foundation checkpoint+远程文件SHA冻结，以及标准 S0-S6 结果布局。
+- [x] 用户进一步确认 preflight 分级阻断：公共 authority/config/schema/helper/remote-SHA 错误为 `global_contract_blocked` 并停全批；单 case 输入、scene、初始重叠或 artifact 漂移为 `preflight_blocked_local`，只隔离该 row，其余 READY rows 继续，修复后用 recovery manifest 定向补跑；最终完成标准仍为24/24 new + 4/4 reuse。
+- [ ] 下一步：实现 E170 builder/launcher/pull/watcher/evaluator；当前未生成E170 scene/override，未启动A100任务。
+- [x] 2026-07-18 当前续跑已重新读取 E170 计划、tracker、最新日志、progress 与两项适用 skill；确认现态仍是仅完成计划与分级 preflight 决策，尚无 E170 代码、结果目录或远端 tmux，未发生重复启动。
+- [x] E170 实现映射已完成：E168 reviewed snapshot 可作为28-row authority，E169 的16-geoms/scene审计/override parity/queue runner/0-3 launcher均可复用其已验证契约；E170需独立实现 S0-S6 路径、graded row state、v1/v2双 canary及 `scene_act_E170_lowerbody_physics` runtime审计，不能直接复制E169的固定4-case/7-cell假设。
+- [x] 已新增 E170 common contract 与 graded preflight builder 并通过 Python compile；首次真实 preflight 正确触发 `global_contract_blocked`（`authority_join_case_set_mismatch`），尚未生成/启动任何 GPU 队列。下一步核对 E168 production manifest 的额外行并把 join 约束修正为“28-row reviewed authority 的有损选择”还是确有缺失，不能绕过该全局 blocker。
+- [x] 全局 blocker 根因已确认并修正：E168 production manifest 是40条全对象集合（另含12条 box004/bucket004），28条 Box021 reviewed authority 全部且唯一存在；builder 现显式按28-row authority做唯一 selection，仍对缺行/重复/4+24拆分/25+3分布执行全局阻断。
+- [x] Builder 第二次执行暴露 schema 映射错误：reviewed execution snapshot 不含 `manual_use_decision`，该 authoritative label 位于同目录 `e168_case_metrics.tsv`；已改为按 case 从 metrics snapshot 读取，未降低 authority/cardinality gate。
+- [x] E170 graded preflight 首次完整通过公共契约：28 analysis rows、4/4 E169 reuse audited、25 v1 + 3 v2、双 variant canary=2；24条new中22条 `READY_FOR_FULL`，两条 `036_p1/p2` 因 scene `qpos0` lower-body/object 深重叠约47.8/44.6mm进入 `preflight_blocked_local`，reference前5帧分别有43/118mm净距。按分级方案不阻断其余22条，二者保留在 recovery manifest，未做姿态/retarget/config规避。
+- [x] 已新增 E170 queue wrapper、READY-only A100 launcher、严格 pull 与 watcher，并把E169 runner的scene校验机械改为读取manifest字段；首轮 dry-run 暴露 E170 manifest 缺少运行期 `failure_mode` 列，已补齐。此次失败发生在本地 shard 写入前，未连接/启动远端任务。
+- [x] 修正后静态验证通过：E170 Python compile、3个shell `bash -n`、canary dry-run精确2条、full dry-run精确22条；E169已完成row重新校验仍为 `run_complete_pending_eval`，manifest-driven scene helper未改变历史结果。`git diff --check`通过，当前工作树仅含E170计划/实现/24个override及该E169机械helper改动，可形成独立foundation checkpoint。
+- [x] Foundation commit首次尝试被 `git diff --cached --check` 在提交前安全阻断：5个新文件仅有多余EOF空行，无代码错误、无commit、无push；已移除这些空行，待重新执行cached diff check后提交。

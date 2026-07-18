@@ -6,7 +6,7 @@
 
 Phase：33
 
-状态：计划完成，待实现与执行
+状态：计划经用户确认，待实现与执行
 
 ---
 
@@ -21,6 +21,8 @@ Phase：33
 ```
 
 E168 的 28 条 `E167A_zOnlyBody` 结果作为逐 case frozen baseline，只读复用，不重跑。E170 重新以统一 evaluator 评测 28 条 PRG，并生成 E168 B0 与 PRG 的 paired delta、视频对照和新一轮人工审查。
+
+责任边界已经固定：Codex 负责 28/28 指标核验、分层视觉抽查、异常清单和机器建议；用户负责查看完整 paired review package、给出 28/28 最终人工标签，并对是否推广 PRG 作最终拍板。Codex 的视觉抽查不得写入或覆盖用户的 `manual_*` 字段。
 
 E169 的 gate-health 结论仍然有效：当时 G-on 为 `0/16` health pass。E170 可以验证 PRG 输出的实际可用性，但不能因为视频可用就宣称 hard gate 已健康。轨迹质量和 gate 机制健康度必须分开裁决。
 
@@ -59,6 +61,17 @@ E170 不重新分解 P/R/G 因果，不调 reward/gate/pair 参数，不修复 g
 
 > 冻结的 E169 PRG 配置在 Box021 全 28 person-case 上，能否稳定提高可用率，并保住 E168 已可用轨迹？
 
+### 1.4 双轨裁决与人工 authority
+
+E170 同时保留两套不互相覆盖的结果：
+
+```text
+manual_operational_use = 用户最终 manual_use_decision == USE
+strict_release_usable = 数值硬门全部通过 AND 用户最终 manual_use_decision == USE
+```
+
+用户可以把存在数值告警但视觉可接受的轨迹判为 `manual_operational_use=true`；该判断不会删除数值失败，也不会把该轨迹改写成 `strict_release_usable=true`。全量 strong/partial/fail 的机器建议以 `strict_release_usable` 为主，人工 operational use 率并列报告，最终推广裁决由用户作出。
+
 ---
 
 ## 2. Claims
@@ -67,13 +80,13 @@ E170 不重新分解 P/R/G 因果，不调 reward/gate/pair 参数，不修复 g
 |---|---|
 | C0：28-case provenance 完整 | 28 条均绑定 E168 source row、retarget variant、trajectory/contact-mask/scene SHA；4 条 reuse 额外绑定 E169 artifact SHA |
 | C1：执行完整且无重复计算 | 分析集精确为 `4 reused E169 PRG + 24 new E170 PRG`；E168 baseline 和 E169 reuse 均不重跑 |
-| C2：PRG 改善 E168 失败集 | 对 15 条 E168 `DO_NOT_USE` 报告逐 case paired delta 和 fresh review；至少 `9/15` 恢复为 E170 `USE` 才支持强泛化 |
-| C3：PRG 不破坏 E168 可用集 | 13 条 E168 `USE` 中至少 `12/13` 保持 E170 `USE`，且无新增 fall、明显 object kick、踩箱或借箱支撑 |
+| C2：PRG 改善 E168 失败集 | 对 15 条 E168 `DO_NOT_USE` 报告逐 case paired delta 和用户 fresh review；至少 `9/15 strict_release_usable` 才支持强泛化，人工 operational recovery 另报 |
+| C3：PRG 不破坏 E168 可用集 | 13 条 E168 `USE` 中至少 `12/13 strict_release_usable`，且无新增 fall、明显 object kick、踩箱或借箱支撑；人工 retention 另报 |
 | C4：核心量化质量可接受 | 每条报告 body-z、raw/clean3 contact、release-3mm、hand penetration、lower-body、tracking、fall 和 motion-health 完整指标 |
-| C5：视觉改善不是指标假象 | 28 条均完成 B0-vs-PRG paired video review；无明显穿箱、踩箱、借箱支撑、爆姿或箱体被踢飞 |
+| C5：视觉改善不是指标假象 | Codex 完成分层视觉抽查和异常扩查，用户对 28 条 B0-vs-PRG paired video 给出最终标签；无明显穿箱、踩箱、借箱支撑、爆姿或箱体被踢飞 |
 | C6：gate 输出可诊断 | 24 条新结果和4条 reuse 均有 leg valid/selected/fallback/SDF diagnostics；质量结论与 gate-health 结论分列 |
 | C7：结论覆盖 person/variant 分层 | 分别报告 p1/p2、E168 USE/DNU、omnirt_v1/v2、sequence/action/obstacle 分组，不用 overall mean 掩盖小组失败 |
-| C8：结果可复现 | effective config、scene semantic diff、root/outdir NPZ、日志、视频、评测表和人工标签均有路径与 SHA |
+| C8：结果可复现 | checkpoint commit、dirty-state audit、同步文件 SHA、effective config、scene semantic diff、root/outdir NPZ、日志、视频、评测表和人工标签均有路径与 SHA |
 
 ---
 
@@ -226,6 +239,20 @@ retarget variant 按每条 E168 source row 冻结，不能为了让 E170 通过�
 
 ## 6. Preflight 与 Canary 决策
 
+### 6.0 代码冻结与远程同步
+
+实现与本地验证通过后、任何 canary/full 启动前，创建并 push 一个 E169/E170 foundation checkpoint。只提交 E169/E170 相关实现、配置、计划和记录，不夹带无关工作树文件。E170 `s0_environment/` 必须保存：
+
+```text
+checkpoint git commit
+local git status / diff-stat
+remote git commit
+实际 rsync 文件清单及逐文件 local/remote SHA256
+Python/CUDA/MuJoCo/torch 版本
+```
+
+远程是共享 workspace，不为了 E170 强制切换或重置远程分支；launcher 仍按 manifest 精确 rsync，但 canary 前必须证明远程实际消费文件 SHA 与本地 checkpoint 内容一致。只记录本地或远程 git HEAD、却不记录 dirty/sync 内容，不算可复现。
+
 ### 6.1 全 28-row 静态 preflight
 
 GPU 启动前必须完成：
@@ -237,22 +264,31 @@ GPU 启动前必须完成：
 5. `qpos0` 与 reference 前5帧没有深于5mm的 lower-body/object 初始重叠；
 6. 24个 override 与 E169 PRG 字段级 parity 通过；
 7. 4条 E169 reuse 通过 root/outdir、finite、config、scene和diagnostics审计；
-8. dry-run 精确生成24条 full 命令，输出路径互不覆盖。
+8. command plan 覆盖24条唯一 full 输出；实际 dry-run 命令数必须精确等于 `READY_FOR_FULL` new rows，local blocker 只进入 recovery manifest，所有输出路径互不覆盖。
 
-若某条初始深重叠或 scene compile 失败，标记 `preflight_blocked` 并停止该 row；不得退化为无 P scene、关闭 pair 或修改初始姿态后继续归入同一 E170。
+Preflight 采用分级阻断，不把单条数据问题扩大成全批停机：
 
-### 6.2 Canary 复用规则
+| 级别 | 典型问题 | 状态与动作 |
+|---|---|---|
+| 全局 contract blocker | E168 authority 不是28条、case重复或4/24拆分错误；公共 config/schema 与 E169 PRG 不一致；helper regression 改变 E169 语义；远程公共代码 SHA 不一致 | 标记 `global_contract_blocked`，阻断全部 canary/full；修复公共契约并重跑完整28-row preflight |
+| 单 case local blocker | 某条 trajectory/contact mask/base scene/baseline artifact 缺失或 SHA 异常；该 case scene compile 失败、初始深重叠、override parity 失败；某条 E169 reuse artifact 漂移 | 只把该 row 标记为 `preflight_blocked_local`，从当前 canary/full queue 排除；其余通过行标记 `READY_FOR_FULL` 并可继续执行 |
 
-E169 已在同一 A100、同一 PRG runtime、同一 full budget 上完成4条 canary和4条 PRG full，因此 E170 默认复用这份 runtime canary 证据，不重复跑 smoke。
+单 case 被隔离时必须保存 `blocker_type/blocker_detail/evidence_path/first_seen_at/recovery_status`，立即列入 recovery manifest；不得把它改成无 P scene、关闭 pair、切换 retarget variant 或修改初始姿态后冒充同一配置。修复后只对 blocked row 重跑 preflight，并在原实验 ID 下定向补跑，不重复计算已经完成的 rows。
 
-只有以下任一条件发生时，才增加 E170 canary：
+分级阻断只改变执行顺序，不降低 E170 完成标准：允许先取得例如 `23/24 new full` 的阶段性结果并开展 allow-missing 核验，但在全部 local blocker 修复、24/24 new + 4/4 reuse 完整前，不得生成最终 strict conclusion、用户终审包或把 E170 标为完成。
 
-- simulator/sampling/config schema 有行为变化；
-- lower-body scene helper 抽取后 E169 snapshot regression 不一致；
-- omnirt_v2 sidecar 的 CPU compile/单步检查失败；
-- A100 runtime environment 与 E169 snapshot 不一致。
+### 6.2 强制双 variant Canary
 
-触发时仅跑 `1 omnirt_v1 + 1 omnirt_v2` smoke。Canary 只验证启动、MuJoCo contact、diagnostics、NaN/OOM和产物写盘，不计算质量门槛，也不复用为 full。
+E169 的 v1 runtime 证据保留为历史参考，但 E170 含 3 条未被 E169 PRG runtime 覆盖的 `omnirt_v2` case，因此不再条件式跳过 canary。全局 contract preflight 通过、且 v1/v2 各至少有一条 `READY_FOR_FULL` row 后，必须在 A100 上执行：
+
+```text
+1 omnirt_v1 smoke
+1 omnirt_v2 smoke
+```
+
+两条 smoke 都必须验证启动、MuJoCo contact、16 pairs、reward/gate diagnostics、root/outdir qpos 一致、NaN/OOM和产物写盘。Canary 不计算质量门槛，也不复用为 full。任意一条失败都阻断 24 条 full；诊断修复后必须重新跑完整双 variant canary，不能只补失败的一条。
+
+若 simulator/sampling/config schema 有行为变化、helper regression 不一致或 A100 runtime 漂移，则在上述双 variant canary 之外先修复相应 preflight，不通过时不得用 smoke 结果绕过静态 gate。
 
 ---
 
@@ -282,13 +318,16 @@ remote_render = false
 | 2 | `box021_20231011_034_p1`, `box021_20231011_037_p2`, `box021_20231020_022_p1`, `box021_20231020_019_p1`, `box021_20231018_030_p2`, `box021_20231018_029_p1` | 627 |
 | 3 | `box021_20231011_036_p1`, `box021_20231011_038_p2`, `box021_20231020_022_p2`, `box021_20231018_034_p2`, `box021_20231018_028_p2`, `box021_20231018_032_p2` | 631 |
 
-GPU0-3各自 queue manifest 必须保存完整 case_id、variant、source SHA、override SHA和预期输出路径。
+GPU0-3各自 queue manifest 必须保存完整 case_id、variant、source SHA、override SHA和预期输出路径。正常情况下仍按上表每卡6条；若存在 `preflight_blocked_local`，launcher 只装载 `READY_FOR_FULL` rows，保留其他 case 的原 assigned GPU 和相对顺序，不因缺一条而拒绝整个 shard。recovery manifest 仅包含修复后的 blocked rows，可在 A100 0-3 任一允许 GPU 上定向补跑，并继续使用唯一原输出路径。
 
 ### 7.3 计划命令
 
 ```bash
 # build + static preflight
 python workspace/core4d/scripts/experiments/E170/build_box021_prg_manifest.py --preflight
+
+# mandatory 1 v1 + 1 v2 runtime canary
+bash workspace/core4d/scripts/launch/active/run_E170_remote_a100.sh canary
 
 # remote A100 0-3: 24 new full
 bash workspace/core4d/scripts/launch/active/run_E170_remote_a100.sh full
@@ -380,6 +419,27 @@ E168 manual -> E170 fresh manual transition
 
 不做跨 case 伪显著性检验；输出 overall、E168 USE/DNU、p1/p2、v1/v2和sequence分层的 count、mean、median、p95及worst cases。
 
+### 8.5 双轨状态输出
+
+每条 row 必须同时输出且不得互相覆盖：
+
+```text
+numeric_release_pass
+codex_metric_verification_status
+codex_visual_spotcheck_status
+codex_visual_findings
+user_manual_review_status
+manual_use_decision
+manual_quality_label
+manual_failure_taxonomy
+manual_reviewer
+manual_reviewed_at
+manual_operational_use
+strict_release_usable
+```
+
+Codex 在用户标签回填前只能生成 `PENDING_USER_REVIEW` 的机器建议，不得把自己的抽查结论写成 `manual_use_decision`。用户标签回填后 evaluator 必须重跑，并保存回填前后 manifest SHA。
+
 ---
 
 ## 9. 视频与人工审查
@@ -391,7 +451,16 @@ E168 manual -> E170 fresh manual transition
 - 28条 E168 B0 vs E170 PRG paired montage；
 - 每条接触前、最大 lower-body penetration、最大 hand penetration、最大 object speed和末帧关键帧表。
 
-人工审查必须覆盖28/28，并新建 E170 标签，不直接复制 E168 或 E169 标签：
+审查分两层执行。
+
+Codex 负责 28/28 指标核验，并按以下 fail-open-to-expand 规则做视觉抽查：
+
+1. 必查所有 numeric fail、阈值上下 10% 的边界 case、fall/object-kick/systemic alarm 和各指标 worst case 的并集；
+2. 从剩余 numeric pass 中分层抽取至少 8 条，覆盖 E168 USE/DNU、p1/p2、omnirt_v1/v2、主要 sequence/date；
+3. 若分层样本出现未被指标捕获的 `MAJOR_ISSUE`，扩查同 strata 全部 case；同类异常累计达到 2 条时，Codex 视觉检查扩展为 28/28；
+4. 所有抽查使用 video-frames 提取关键帧并写具体观察，不把空白或“待补充”当作完成。
+
+用户负责最终人工审查 authority。系统向用户交付 28 条 paired montage、关键帧表、完整指标、Codex 抽查发现和待填 label table；用户对 28/28 新建 E170 标签，不直接复制 E168 或 E169 标签：
 
 ```text
 manual_use_decision = USE / DO_NOT_USE
@@ -399,6 +468,7 @@ manual_quality_label = NO_ISSUE / MINOR_ACCEPTABLE / MAJOR_ISSUE
 failure_taxonomy = lower_body / illegal_support / hand_penetration /
                    contact_loss / release_contact / body_z / tracking /
                    object_kick / fall / jitter / other
+manual_reviewer = user
 ```
 
 主观察项：
@@ -409,13 +479,21 @@ failure_taxonomy = lower_body / illegal_support / hand_penetration /
 4. 手部是否深穿、接触丢失或release后仍粘箱；
 5. p1/p2配对中是否出现一侧明显退化。
 
+Codex 在用户标签前可报告“数值核验完成”和“视觉抽查发现”，但不能宣布 PRG strong/partial/fail；最终实验裁决必须等用户标签回填后产生。
+
 ---
 
 ## 10. 成功标准与决策规则
 
-### 10.1 单条轨迹 release candidate
+### 10.1 单条轨迹双轨状态
 
-单条 case 只有同时满足以下条件才计为 E170 usable：
+`manual_operational_use` 只由用户最终标签决定：
+
+```text
+manual_operational_use = (manual_use_decision == USE)
+```
+
+单条 case 只有同时满足以下条件才计为 `strict_release_usable`：
 
 ```text
 fall_flag = false
@@ -428,17 +506,25 @@ manual_use_decision = USE
 无明显下肢穿箱/踩箱/借支撑/object kick/爆姿
 ```
 
-Clean3 contact、root/EEF/object tracking delta和motion-health用于解释边界 case；不得因人工可接受就从表中删除数值失败，也不得因 gate-health fail 自动把视觉可用轨迹改为 DO_NOT_USE。
+Clean3 contact、root/EEF/object tracking delta和motion-health用于解释边界 case；不得因人工可接受就从表中删除数值失败或把 `strict_release_usable` 改为 true，也不得因 gate-health fail 自动把用户认为 operationally usable 的轨迹改为 DO_NOT_USE。
 
 ### 10.2 全量 PRG 裁决
 
-| 结果 | 条件 | 决策 |
-|---|---|---|
-| 强泛化通过 | overall `>=22/28 USE`，E168失败恢复 `>=9/15`，E168可用保留 `>=12/13`，且无系统性新失败类型 | PRG 可作为 Box021 默认候选，下一步再做跨物体验证/人工冻结 |
-| 部分通过 | overall `18-21/28 USE`，或恢复 `6-8/15`，但无严重 control 回归 | PRG 保留为 per-case rescue，不直接成为统一默认 |
-| 失败 | overall `<18/28 USE`，或保留 `<10/13`，或出现系统性 object kick/fall/真实踩箱 | 不推广；按失败分层回到 P/R/G 或 gate calibration |
+下表产生机器建议，最终推广决定由用户拍板：
 
-若质量强泛化通过但 gate-health 仍普遍失败，结论必须写成“PRG operationally usable，G hard-constraint claim unsupported”。若 gate-health 和质量同时通过，才能进一步声称 frozen PRG 的 gate 机制也具备全量稳定性。
+| 结果 | 完备条件 | 机器建议 |
+|---|---|---|
+| 强泛化通过 | overall `>=22/28 strict_release_usable` AND E168失败恢复 `>=9/15` AND E168可用保留 `>=12/13` AND 无 catastrophic/systemic regression | PRG 可作为 Box021 默认候选，下一步再做跨物体验证/人工冻结 |
+| 部分通过 | 未达强通过，但 overall `>=18/28` AND 恢复 `>=6/15` AND 保留 `>=10/13` AND 无 catastrophic/systemic regression | PRG 保留为 per-case rescue，不直接成为统一默认 |
+| 失败 | 不满足以上两档任一完备条件，或出现 catastrophic/systemic regression | 不推广；按失败分层回到 P/R/G 或 gate calibration |
+
+定义：
+
+- `systemic regression`：相同的新增严重 failure taxonomy 在至少 2 条 case 上出现；
+- `catastrophic regression`：任意 1 条新增 fall、明显箱体被踢飞、真实踩箱/借箱支撑导致失稳或爆姿；
+- 上述新增均相对同 case E168 B0 判断，历史已有问题与 PRG 新增问题分列。
+
+若 strict 质量强泛化通过但 gate-health 仍普遍失败，机器结论必须写成“PRG strict quality generalization supported，G hard-constraint claim unsupported”。若仅人工 operational use 较高，则只能写“用户认为 operationally usable”，不能提升为 strict strong pass。只有 gate-health 和 strict quality 同时通过，才能进一步声称 frozen PRG 的 gate 机制也具备全量稳定性。
 
 ### 10.3 RL 边界
 
@@ -452,8 +538,10 @@ E170 本身不自动修改 E168 已冻结的13条 RL export，也不生成新的
 |---|---|---|
 | E169 gate-health 已失败 | PRG好看但G并非可靠hard gate | 质量与机制双轨裁决，保留全部valid/fallback diagnostics |
 | P-on physics contact天然上升 | 把启用碰撞误判为穿透回归 | 主比较用SDF `leg_penetration_frac`；leg physics contact只在P-on内部解释 |
-| 初始深重叠 | 首步爆炸冲量或case无法运行 | 全24 scene前5帧preflight；block而非静默绕过 |
-| v2三条未在E169覆盖 | scene/override路径差异导致运行失败 | v2单独静态审计；必要时触发1条v2 canary，不切回v1 |
+| 初始深重叠 | 首步爆炸冲量或case无法运行 | 全24 scene前5帧preflight；隔离该 row、其余继续，修复后定向补跑 |
+| 公共契约错误 | 全批结果不可比或远程运行错误代码 | `global_contract_blocked` 阻断全部 canary/full，修复后重跑完整 preflight |
+| 单 case 输入/scene 错误 | 一条数据拖延整批或被静默跳过 | `preflight_blocked_local` 隔离并进入 recovery manifest，其余 READY rows 继续 |
+| v2三条未在E169覆盖 | scene/override路径差异导致运行失败 | v2单独静态审计；强制执行1条v1+1条v2 canary，不切回v1 |
 | 复用结果与新结果口径漂移 | 28-row统计不可比 | E170统一重评，记录source experiment和SHA，不复用旧汇总值 |
 | E168 USE回归 | 提高失败集同时破坏好case | 13条control retention单列，paired video逐条复核 |
 | 手部质量被lower-body改善掩盖 | 视觉站姿改善但接触/穿透变差 | raw/clean3/release3mm/penetration四项同时展示 |
@@ -468,15 +556,27 @@ E170 本身不自动修改 E168 已冻结的13条 RL export，也不生成新的
 ```text
 workspace/core4d/results/E170/
   s0_environment/
+  s1_raw_contact/imported_e168_snapshot/
+  s2_templates/imported_e168_snapshot/
+  s3_retarget/imported_e168_snapshot/
+  s4_gate_visual_qc/
+  s5_handoff/
   scene_snapshot/
-  manifests/
-  cem/full/
-  artifacts/full/
-  eval/full/
-  render/full/
+  registries/
+  s6_downstream/
+    manifests/
+    cem/canary/
+    cem/full/
+    artifacts/canary/
+    artifacts/full/
+    eval/full/
+    render/full/
+    evidence/
   execution_manifest.json
   artifact_manifest.json
 ```
+
+E170 不重跑 S1-S5，但必须用小型 imported snapshot 明确引用 E168 authority、retarget route、raw contact、template、rubber-hull handoff 和相应 SHA；不能通过目录扫描隐式继承。E170 新 CEM/eval/render 都属于 S6，不再新建 E169 风格的根级 `cem/`、`eval/`、`render/` 正式目录。
 
 E170 完成必须同时满足：
 
@@ -484,9 +584,9 @@ E170 完成必须同时满足：
 2. 24/24 new full 严格回收，4/4 E169 reuse SHA审计通过；
 3. 28/28 unified evaluation 无 error/not-ready；
 4. E168完整指标、paired deltas、group summary、worst cases和gate-health齐全；
-5. 24条新视频、4条reuse引用、28条paired montage和28/28 fresh人工审查完成；
+5. 24条新视频、4条reuse引用、28条paired montage、Codex 指标核验/视觉抽查证据和用户 28/28 fresh人工标签完成；
 6. xlsx 经 LibreOffice 重算，formula error为0；
-7. 结果 log 明确裁决 C0-C8、strong/partial/fail 和 gate-health独立结论；
+7. 结果 log 明确裁决 C0-C8、manual operational/strict release 双轨、机器 strong/partial/fail 建议、用户最终裁决和 gate-health独立结论；
 8. 更新 `EXPERIMENT_TRACKER.md` 与 `progress.md`。
 
-当前只完成实验计划；尚未实现 E170 脚本，未生成新 scene/override，未启动 A100 或 watcher。
+当前只完成经用户确认的实验计划；尚未实现 E170 脚本，未生成新 scene/override，未启动 A100 或 watcher。

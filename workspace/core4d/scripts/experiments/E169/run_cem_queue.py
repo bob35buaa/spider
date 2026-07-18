@@ -130,9 +130,11 @@ def validate_runtime_outputs(row: dict[str, str]) -> list[str]:
     p_enabled = boolish(row["p_enabled"])
     r_enabled = boolish(row["r_enabled"])
     g_enabled = boolish(row["g_enabled"])
-    expected_scene = (
-        "scene_act_E169_lowerbody_physics" if p_enabled else "scene_act_E168_rubber_hull"
-    )
+    # The manifest is the scene authority.  E169 rows still contain the exact
+    # two historical names; using the row removes an experiment-id hardcode
+    # without changing E169 behavior and lets later PRG manifests reuse this
+    # otherwise generic queue runner.
+    expected_scene = row["scene_name"]
     checks = {
         "scene_name": expected_scene,
         "leg_object_penalty_scale": 2.0 if r_enabled else 0.0,
@@ -253,7 +255,8 @@ def run_one(
     )
     print(f"[start] {row['variant']} case={row['case_id']} cell={row['cell_id']} gpu={gpu_id}")
     with log_path.open("w", encoding="utf-8") as log:
-        log.write(f"# E169 CEM {mode}\n# started_at={now()}\n")
+        experiment_id = row["variant"].split("_", 1)[0]
+        log.write(f"# {experiment_id} CEM {mode}\n# started_at={now()}\n")
         log.write("# command=" + " ".join(command) + "\n\n")
         log.flush()
         process = subprocess.run(
