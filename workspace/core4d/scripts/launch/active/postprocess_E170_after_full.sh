@@ -21,10 +21,12 @@ MUJOCO_GL="${MUJOCO_GL:-egl}" bash workspace/core4d/scripts/eval/wrappers/eval_E
 python3 workspace/core4d/scripts/eval/reports/gen_E170_box021_prg_xlsx.py --eval-dir "$EVAL_DIR" --output "$XLSX" --require-keyframes
 RECALC_JSON="$(python3 "$HOME/.codex/skills/xlsx/scripts/recalc.py" "$XLSX" 120)"
 printf '%s\n' "$RECALC_JSON"
+printf '%s\n' "$RECALC_JSON" > "$EVAL_DIR/xlsx_recalc_validation.json"
 RECALC_JSON="$RECALC_JSON" .venv/bin/python - <<'PY'
 import json,os
 payload=json.loads(os.environ["RECALC_JSON"])
 if payload.get("status")!="success" or payload.get("total_errors")!=0:
     raise SystemExit(f"E170 workbook formula validation failed: {payload}")
 PY
+python3 workspace/core4d/scripts/experiments/E170/audit_review_package.py --stage postprocess
 printf 'completed_at=%s\n' "$(date -Is)" > workspace/core4d/results/E170/POSTPROCESS_COMPLETE.txt
