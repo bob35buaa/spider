@@ -632,3 +632,113 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 |---|---:|---|
 | `DictWriter` 因源 row 多余字段拒绝写表 | 1 | 使用 `extrasaction="ignore"`，仍以固定输出 schema 控制列 |
 | ffmpeg 在 shell loop 中读取 stdin，导致下一条 case ID 首字符丢失 | 1 | 增加 `-nostdin`，重新生成并核对全部 15 条 timeline |
+
+### 2026-07-18 E169 lower-body/object penetration planning
+
+- [x] 用户将 E169 首要目标固定为解决 lower-body/object 穿透，并提出三个正交轴：MuJoCo 下肢-物体物理碰撞、soft reward penalty、CEM candidate hard gate。技术审查确认三轴理解正确；物理轴改变动力学但单独启用可能把穿透变成真实踩箱，reward 可被其他目标换取，gate 才定义硬可行域。
+- [x] 代表集初选为 3 条人工失败 + 1 条人工可用 control：`box021_20231018_033_p1`（低 fallback 的纯 loophole）、`box021_20231018_032_p1`（高动态/高 jerk/高穿透）、`box021_20231020_020_p2`（hand contact 0.814 但 leg penetration 0.419）、`box021_20231020_023_p2`（人工 NO_ISSUE、leg penetration 0.055）。
+- [x] 历史边界：E115/E117 已证明 naive/phase-gated soft leg penalty 可降低 lower-body interference，但常通过丢失 hand contact 或 posture 实现，均为 0 release candidates；E169 不重复权重 sweep，reward-only 仅作为 2^3 因果对照，主要验证 physical/reward/gate 的交互。
+- [x] 已写入 `plan/185_E169_lowerbody_object_penetration_plan.md`：固定 4 case × `2^3` 因子矩阵，复用 4 条 E168 B0、规划 28 条新 full；P 使用 16 个 lower-body/object normal-only pair，R 固定 scale 2.0，G 使用独立 `cem_leg_gate_*` 与 `+5mm/2%/-5mm` clearance 契约。
+- [x] 执行契约固定为远程 A100 GPU0/1/2/3，一 case 一卡、每卡 7 arm 串行；先跑 4 条 PRG canary，只验证 runtime/artifact，不做质量量化，再启动 full。A100 compute-only，结果回收后本地离线 render。
+- [x] E169 planning 已加入 `EXPERIMENT_TRACKER.md` Phase 32。当前没有修改算法、scene、override、launcher 或 eval 代码，也没有连接远程或启动 GPU 作业。
+- [ ] 下一步（等待执行指令）：按计划实现默认关闭的 leg gate、E169 scene/manifest/launch/eval/render 脚本，完成 preflight 后再启动 A100 canary。
+
+### 2026-07-18 E169 implementation and execution
+
+- [x] 恢复执行上下文：当前工作树只有 E169 plan/tracker/progress 文档改动；`spider/`、scene、override、launch/eval 尚未实现 E169。4 条代表 case 的 E168 root NPZ、outdir NPZ、config 和视频均在本地。
+- [x] 代码审计确认：现有 `leg_object_penalty_*` 可直接复用；CEM sampling 已支持 body/hand/posture/peak 的 combined elite gate，但没有独立 leg gate。E169 必须新增默认关闭的 `cem_leg_gate_*`，同时保留 leg-specific valid/violation diagnostics，并将 leg `min_valid_frac` 纳入统一 fallback 触发条件。
+- [x] E169 shared plumbing 首轮完成：`Config` 新增默认关闭的 leg gate，`mjwp` 输出独立 leg SDF/violation，sampling/fast sampling 将其并入 combined elite filter并输出独立 valid/selected/fallback/min-SDF/violation 健康度。`py_compile` 与确定性 tensor 单测通过，disabled path 返回 `None`，旧配置默认行为不变。
+- [x] 真实 preflight 完成：4 个 E169 physical sidecar 各新增 16 个 normal-only pair，MuJoCo compile、semantic XML diff、初始/前5帧 `>-5mm` overlap guard 均通过；32-cell Hydra audit `32/32 pass`，manifest 为 4 reused B0、28 new full、4 isolated PRG canary，GPU 分片固定为 case→0/1/2/3。
+- [x] 已实现 E169 runner 和 A100 fixed-allowlist launch/pull/watch 入口；launch 会拒绝 GPU0-3 上的现存 compute process 或 `>=5GB` 显存，不会使用 GPU4-7；pull 合并 shard 状态并校验 NPZ/config/SHA。
+- [x] 本地验证通过：E169 全部 Python `py_compile`、shell `bash -n`、leg gate 单测、幂等 preflight、`git diff --check` 均通过；runner dry-run 精确生成 4 条 canary 和 28 条 full 命令。
+- [x] A100 直连成功，远程 repo 可访问。首次资源快照显示 GPU0/1/2 空闲，GPU3 有一个 `626MB`、process name `[Not Found]` 的 compute context；GPU4-7 均被其他用户高负载占用。按固定 0-3 契约未启动、未换卡、未 kill，记录为资源复查 attempt 1。
+- [x] A100 资源复查 attempt 2（2026-07-18 02:39 CST）：GPU0/1/2 分别占用 `0/0/4MB` 且无 compute app；GPU3 仍为同一 UUID、`635MB`，存在 PID `1121067` / `[Not Found]` / `626MB` compute context。未启动、未 kill、未切换 GPU4-7。
+- [x] 已新增 E169 evaluator + wrapper：复用 E168/E167A 指标口径，新增独立 leg-gate health、B0 delta、平衡 `2^3` 主效应/交互效应、8-cell 汇总和 28-row 人工审查模板；`e169_acceptance_pass` 将 numeric gates 与 G-on health 分开审计后合并。
+- [x] 已新增 E169 xlsx generator 与本地 render 入口：workbook 包含 case/cell/contrast/review/artifact sheets 和公式总览；render 默认只处理 28 条新 full row，并可生成每 case 的 8-cell montage。
+- [x] E169 静态与 available smoke test：Python compile、shell syntax、`git diff --check` 全通过；4 条 reused B0 真实评测 `4/4`、errors `0`，render dry-run 精确报告 28 条 new full 尚未就绪。
+- [x] E169 available workbook 已由系统 Python 生成并经 xlsx skill LibreOffice 重算：9 sheets、4 case rows、260 formulas、`0` formula errors；data-only 公式值与 summary counts 一致。
+- [x] A100 资源复查 attempt 3（2026-07-18 02:52 CST）：GPU0/1/2 仍为空闲；GPU3 仍为同一 `626MB` compute context，远程容器内 `ps -p 1121067` 无记录，判定为不可见外部 context，未越权处理。远端 `.venv` 的 torch/CUDA/MuJoCo import 通过。
+- [x] E169 evaluator 的 `results` 外置 symlink 路径已规范化为 `workspace/core4d/results/...` 仓库相对路径；重跑 4-B0 smoke test 与 compile/diff check 通过。
+- [x] E169 8-cell montage 真实 smoke test 通过：复用同一现有视频构造 8 输入，ffmpeg 输出 `2560x720`、`220` frames，xstack/drawtext 编码正常。
+- [x] 已启动本地只读资源轮询（exec session `37933`）：仅在 A100 GPU0-3 同时低显存且无 compute app 时调用 canary launcher；一次 SSH handshake 被远端关闭后自动恢复，未误启动。
+- [x] 用户最新覆盖资源策略：远程固定使用 A100 `0,1,2,3`，不论显存或已有程序直接叠加，不 kill 其他程序。已停止我本地的 clean-GPU 轮询 PID `159426`；未操作任何远端进程。
+- [x] E169 launcher 与 plan 已同步新策略：仍保存 GPU/compute 快照并确认 0-3 id 存在，但不再按显存或 active compute 拒绝启动；environment manifest 标记 `user_explicit_overlap_allowed_no_kill`。
+- [x] Canary 首次 launch 的 preflight/config audit/shard 均通过，但同步连续停在整个 `examples/config/override/` 的远端元数据扫描；确认尚未创建 E169 远端 tmux 后，只停止我启动的本地 launcher PID `163834`。
+- [x] Launcher 同步范围已收窄：不再 rsync 整个 override 目录，只传当前 manifest 精确引用的 override 文件；full 同样由 manifest 自动枚举 28 个文件。
+- [x] Canary 第二次 launch 成功：远端 tmux `E169_a100_canary_20260718_031147` 于 `03:12:38 CST` 启动；GPU0/1/2/3 各运行一条 PRG，按用户指令与 GPU3 既有 626MB context 叠加，未 kill 任何程序。
+- [x] Canary 初始运行检查：4 个 `config_act.yaml` 均已生成；四条 `run_mjwp.py` 进程在跑，约推进至 `34-36 / 164-220` sim steps、`opt_steps=4`，GPU0-3 utilization 约 `31-34%`，无 OOM/Traceback。
+- [x] Canary 于 `03:19:13 CST` 全部结束；最长 control runtime 约 `378s`。严格 pull 结果 `complete_rows=4/4`、artifact files `12`、incomplete `[]`、status `pass`。
+- [x] Canary 二次审计：4 条 root/outdir NPZ SHA 完全一致，qpos shape 分别为 `(86,2,42)/(82,2,42)/(86,2,42)/(110,2,42)`；qpos、leg valid/selected/fallback、leg SDF/violation 与 reward diagnostics 全部存在，错误模式扫描为空。
+- [x] Full launch 成功：远端 tmux `E169_a100_full_20260718_032119`，四 GPU 各固定一个 case、7 cell 串行；初始均进入 `P` cell，GPU0-3 utilization 约 `37-39%`，显存约 `1.55/1.55/1.55/2.19GB`。
+- [x] 本地持久回收 watcher `E169_full_watch` 已启动，`E169_WATCH_POLL_SECONDS=300`；每 5 分钟允许 incomplete 增量 pull，远端 session 结束后自动执行严格 28-row pull。
+- [x] Full 首轮真实进度：四条 `P` cell 均约 `sim_steps=20`，进入 production `opt_steps=32`，单次 plan 约 `27-28s`；无 error pattern。按该 budget 预计每 cell 数十分钟、每卡 7 cell 共数小时。
+- [x] 已新增并启动严格 postprocess watcher `E169_post_full`：仅当本地 artifact summary 证明 `status=pass / complete_rows=28 / incomplete=[]` 后，才依次执行 28 条本地 render + 4 个 8-cell montage、32-cell full eval、xlsx 生成与 LibreOffice 重算；重算 JSON 必须 `status=success,total_errors=0` 才写完成标记。
+- [x] Full 监控快照（2026-07-18 03:31 CST）：四条 `P` cell 同步推进至 `sim_steps=50`，单次 plan `26.8-28.3s`，远端 session 与两个本地 watcher 均正常，root NPZ 尚未写出，error pattern 扫描为空。
+- [x] Full 监控快照（2026-07-18 03:42 CST）：四条 `P` cell 分别为 `98/164`、`100/172`、`98/172`、`96/220`，单次 plan 仍约 `27-28s`；四 worker 无掉队，root NPZ 尚未到保存点，error pattern 扫描为空。
+- [x] Full 首批回收（2026-07-18 04:00 CST）：三个 failure case 的 `P` 已完成并自动切换到 `R`；主动 incomplete-safe pull 后本地 `complete_rows=3/28`。三条 qpos 全 finite，root/outdir SHA 一致，shape 为 `(86,2,42)/(82,2,42)/(86,2,42)`；control `P` 为 `172/220`，错误扫描为空。冻结参数不做中途质量评测/调参。
+- [x] Full `P` cell 全部回收（2026-07-18 04:11 CST）：control `P` 完成并切换 `R`，当前四卡均运行 `R`；本地 strict-incomplete audit 为 `complete_rows=4/28`、artifact files `16`。四条 `P` qpos 全 finite、root/outdir SHA 一致，shape 为 `(86,2,42)/(82,2,42)/(86,2,42)/(110,2,42)`，无 error pattern。
+- [x] E169 真实结果 render smoke：用已回收 `box021_20231018_033_p1/P` 渲染 `/tmp` 10 帧，输出 `1440x480@50fps`；按 video-frames skill 抽帧确认 ref/sim、机器人、Box021 与脚部碰撞几何均正常显示，无空白、裁切或资产缺失。仅作管线验收，不作中途质量判断。
+- [x] Full `R` failure-case 回收（2026-07-18 04:38 CST）：三个 failure case 的 `R` 均完成并切换 `G`；本地增量审计为 `complete_rows=7/28`、artifact files `25`。三条 `R` 均 qpos finite、root/outdir SHA 一致且含 `leg_object_penalty_mean`；control `R` 为 `130/220`，无 error pattern。
+- [x] Full `R` control + `G` failure-case 回收（2026-07-18 05:11 CST）：四条 `R` 全部完成，三个 failure `G` 完成并切换 `PR`；本地增量审计 `complete_rows=11/28`、artifact files `37`。三条 `G` root/outdir SHA 一致，leg valid/selected/fallback、sample min-SDF/violation arrays 均存在且全 finite；control `G=84/220`，无 error pattern。未提前解读 gate-health 数值。
+- [x] Full 监控快照（2026-07-18 05:32 CST）：远端 tmux `E169_a100_full_20260718_032119` 与四个 worker 均存活，GPU0-3 utilization `37-42%`、显存约 `1.55/1.55/1.55/2.19GB`；当前 `032_p1 PR=102/164`、`033_p1 PR=88/172`、`020_p2 PR=72/172`、control `023_p2 G=142/220`，完整 root 仍为 `11/28`，错误模式扫描为空。
+- [x] Full 监控快照（2026-07-18 05:44 CST）：当前 `032_p1 PR=148/164`、`033_p1 PR=134/172`、`020_p2 PR=118/172`、control `023_p2 G=188/220`；四个进程与本地 watcher 均存活，完整 root 仍为 `11/28`，错误模式扫描为空。
+- [x] Full 新增回收与审计（2026-07-18 05:59 CST）：本地增量审计达到 `complete_rows=14/28`、artifact files `46`；新增 `032_p1 PR`、`033_p1 PR` 与 control `023_p2 G` 的 qpos 均 finite、root/outdir SHA 一致。两条 PR 的 reward mean/max diagnostics 完整且 finite，control G 的 valid/selected/fallback/min-SDF/violation diagnostics 完整且 finite；P 轴由 `model_path=scene_act_E169_lowerbody_physics.xml` 与 effective scene SHA 编码，不使用不存在的 config boolean。
+- [x] 两条新增 PR physical sidecar 审计：effective scene SHA 均与 manifest 一致，每个 scene 精确包含 `16` 个唯一 E169 lower-body/object explicit pairs，全部指向 `object_collision`。
+- [x] Full `020_p2 PR` 回收（2026-07-18 06:00 CST）：主动 incomplete-safe pull 后达到 `complete_rows=15/28`、artifact files `49`；其余 active cell 为 `032_p1 PG`、`033_p1 PG`、`020_p2 PG`、control `023_p2 PR`，远端错误模式扫描为空。
+- [x] `020_p2 PR` 字段级审计：qpos finite、root/outdir SHA 一致、reward mean/max diagnostics finite；physical sidecar SHA 与 manifest 一致且精确含 16 个 E169 lower-body/object pairs。
+- [x] Full 监控快照（2026-07-18 06:21 CST）：本地仍为 `15/28`；active cell 为 `032_p1 PG=154/164`、`033_p1 PG=136/172`、`020_p2 PG=116/172`、control `023_p2 PR=140/220`，四 worker 正常且错误模式扫描为空。
+- [x] Full `PG` failure-case + control `PR` 回收（2026-07-18 06:42 CST）：本地达到 `complete_rows=19/28`、artifact files `61`。四条新增结果均 qpos finite、root/outdir SHA 一致、physical sidecar SHA 匹配且含 16 个 explicit pairs；3 条 PG 的 5 类 gate diagnostics、control PR 的 reward mean/max diagnostics 全部存在且 finite。
+- [x] Full 后续 cell 已切换：`032_p1 RG=82/164`、`033_p1 RG=64/172`、`020_p2 RG=34/172`、control `023_p2 PG=20/220`；远端 root `19`，错误扫描为空。
+- [x] Full `032_p1 RG` 回收（2026-07-18 07:08 CST）：本地达到 `20/28`、artifact files `64`；当前 `032_p1 PRG=30/164`、`033_p1 RG=168/172`、`020_p2 RG=134/172`、control `023_p2 PG=126/220`，错误扫描为空。
+- [x] `032_p1 RG` 字段级审计：qpos finite、root/outdir SHA 一致，reward mean/max 与 5 类 gate diagnostics 全部存在且 finite。
+- [x] Full `033_p1 RG` + `020_p2 RG` 回收（2026-07-18 07:24 CST）：本地达到 `22/28`、artifact files `70`；两条均 qpos finite、root/outdir SHA 一致，reward mean/max 与 5 类 gate diagnostics 全部存在且 finite。当前 failure cases 已进入最终 `PRG`（`94/164`、`72/172`、`36/172`），control `PG=194/220`，错误扫描为空。
+- [x] Full `032_p1 PRG` + control `023_p2 PG` 回收（2026-07-18 07:44 CST）：本地达到 `24/28`；尚余 `033_p1 PRG=156/172`、`020_p2 PRG=118/172`、control `023_p2 RG=68/220` 与未启动的 control `PRG`，错误扫描为空。
+- [x] `032_p1 PRG` 与 control `023_p2 PG` 字段级审计：qpos finite、root/outdir SHA 一致、physical sidecar SHA 与 16 pairs 正确；两条 gate diagnostics 均完整，PRG 的 reward diagnostics 也完整且全部 finite。
+- [x] Full failure-case 队列完成（2026-07-18 08:01 CST）：远端 root 已 `26/28`，`033_p1 PRG` 与 `020_p2 PRG` 均结束，GPU0-2 queue worker 正常退出；本地 watcher 暂同步到 `25/28`。GPU3 control `RG=130/220`，之后仅余 control `PRG`，错误扫描为空。
+- [x] 主动 incomplete-safe pull 已同步严格 `26/28`、artifact files `79`；仅 control `RG` running、control `PRG` not_run。
+- [x] `033_p1 PRG` 与 `020_p2 PRG` 字段级审计：qpos finite、root/outdir SHA 一致、physical sidecar SHA 与 16 pairs 正确；reward 与 gate 全部 diagnostics 存在且 finite。三条 failure case 的 7 个新 cell 已全部严格回收。
+- [x] Full control `RG` 回收（2026-07-18 08:32 CST）：本地严格 `27/28`、artifact files `82`；control RG qpos finite、root/outdir SHA 一致，reward 与 gate diagnostics 全部存在且 finite。唯一剩余 control `PRG=44/220`，远端 session 正常、错误扫描为空。
+- [x] Full 最后一条监控（2026-07-18 09:13 CST）：control `PRG=200/220`，GPU3 utilization `39%`、显存约 `2.19GB`，远端 session 正常、错误扫描为空；本地仍严格 `27/28`，等待原子写盘。
+- [x] Full 严格回收完成（2026-07-18 09:23 CST）：artifact summary `complete_rows=28/28`、artifact files `84`、`incomplete=[]`、`status=pass`；远端 E169 tmux 已自然退出且无错误模式。最后 control PRG qpos finite、root/outdir SHA 一致、physical sidecar SHA 与 16 pairs 正确，reward + gate diagnostics 全部存在且 finite。
+- [x] 自动 postprocess 已通过 strict guard 并于 `09:23:14 CST` 开始本地 28 条 render；后续依次为 4 个 montage、32-cell eval、xlsx 与 LibreOffice 重算。
+- [x] 自动 postprocess 完成（2026-07-18 09:24 CST）：28/28 单条视频与 4/4 八 cell montage 渲染成功；full evaluator `32/32`、new `28/28`、not_ready `0`、errors `0`；xlsx 写入 32 rows / 9 sheets，LibreOffice 重算 `1157` formulas、`total_errors=0`。
+- [x] Full 量化初读：`numeric_pass=8/32`、`acceptance_pass=2/32`，但 8 个统一 cell 的 `failure_case_pass=0/3`，所有 `16/16` G-on rows 的 gate-health 均未通过；主失败计数为 lower_body `19`、contact `8`、leg_gate_health `16`、hand_penetration `8`。当前参数矩阵不能满足 C4 或作为默认方案，待拆分阈值和视频复核。
+- [x] Per-case 量化拆分初读：`033_p1` 所有 cell raw hand contact 均仅 `0.185-0.278`，为不可救的共同瓶颈；`032_p1` 的 R/G/PG/RG/PRG 已把 leg penetration 从 `0.427` 降至 `0.024/0/0.012/0/0`，但 hand penetration 仍约 `0.329-0.415`；`020_p2` 的 PG/RG/PRG 将 leg penetration 降至 `0` 且 contact/body-z/fall 达标；control 的 P/PR/PG/PRG 出现 `0.10-0.118` leg contact，需结合 control guard 与视频判断。
+- [x] 视觉审查第一轮：按 video-frames skill 从 4 个 8-cell montage 各抽取 5 个时刻，共 20 帧并逐帧查看。`033_p1` 各 arm 仍明显跨箱/站箱；`032_p1` 非 P 组合减少下肢穿箱但仍有手部深穿/姿态差异；`020_p2` 的 PG/RG/PRG 未见明显下肢穿箱；control 未见明显 object kick、爆姿或末端失稳。下一步用 28 条 sim-only 8-frame contact sheets 逐条定人工标签。
+- [x] 视觉审查第二轮完成：为 28/28 新 full 视频生成 sim-only 8-frame contact sheet 并逐条查看；另对 control P/PR/PG/PRG 生成 20-frame dense sheet。`033_p1` 7/7 均为明显跨箱/站箱或借箱支撑；`032_p1` 7/7 均仍有明显手部深穿，P/PR 还保留下肢接触；`020_p2` 仅 PG/RG/PRG 未见明显 lower-body overlap/support；control 7/7 未见 object kick、爆姿或失稳，P/PR/PG/PRG 仅有量化上接近阈值的短时 lower-body contact，视觉归为小瑕疵而非大问题。
+- [x] 28 条新视频人工审查已正式写回 `manual_review_template.tsv`：合计 `10 USE / 18 DO_NOT_USE`。`033_p1=0/7 USE`，`032_p1=0/7 USE`，`020_p2=3/7 USE`（PG/RG/PRG），control `023_p2=7/7 USE`（P-on 四条为 `MINOR_ACCEPTABLE`）。
+- [x] xlsx 已重新生成并读取验收：Manual Review 为 28/28 reviewed；workbook 32 case rows、9 sheets、1157 formulas，LibreOffice `total_errors=0`，data-only 总览值为 evaluated/numeric/acceptance/G/G-health=`32/8/2/16/0`。
+- [x] Claims 裁决完成：C0/C1/C2/C7 支持，C3/C4 不支持，C5/C6 部分支持。G 对 leg penetration 主效应最强（`-0.126`），R 次之（`-0.080`），P 为 `+0.016` 且新增 `+0.156` leg physics contact；当前参数不晋级、不导出 RL。
+- [x] 已写 `log/228_E169_lowerbody_object_factorial_results.md` 并更新 tracker/plan。下一实验优先修复 G 的 selected-valid/fallback contract，再分别处理 `033_p1` reference feasibility/stance support 与 `032_p1` hand penetration。
+- [x] E169 收尾完成：full 严格回收 `28/28`、artifact files `84`、incomplete `[]`；28 视频 + 4 montage + 32/32 eval + xlsx 全部完成；本地无 E169 watcher/tmux。远端 tmux 已在 full 完成后自然退出；收尾冗余 SSH 因临时 DNS 解析失败未重复确认，不影响已回收证据。
+- [x] 最终验证：E169 leg-gate plumbing test、Python `py_compile`、全部 shell `bash -n`、completion audit、日志索引重建（Phase 32 / log 228）、xlsx data-only readback、文档链接检查与 `git diff --check` 均通过。
+- [x] 按用户要求补充 E169 结果日志的可复现因子定义：明确 B0/P/R/G/组合 cell，记录 P 的 16 个 MuJoCo pair 与 `solref/margin/gap/condim`，R 的线性 SDF hinge 公式和完整配置字段，G 的 sample-level 有效性公式、`+5mm/2%/-5mm/2%` 参数、1024 sample 下 21 个 valid 门槛及 combined-gate/fallback 行为。
+- [x] 修正 E169 gate-health 归因边界：leg-valid pool 足够不代表 `body ∧ hand ∧ leg` combined-valid pool 足够；代码在 non-fallback 分支只选 combined-valid，selected leg invalid 更可能来自 combined fallback。日志不再把现象误写成已确认的 non-fallback selector bug。
+- [x] 用户指出 E169 完整指标展示缺少 E168 关键指标。Schema 审计确认首版逐轨迹表已计算大多数值，但 Cell Summary/contrasts 只覆盖 11 项，且缺少 E168 的指标统计/最差样本视图；判断成立。
+- [x] E169 evaluator 已补齐 E168 指标契约：E168 原 192 字段在新版 E169 287 列中缺失为 0；新增 23 项核心指标专表、overall+8-cell 的 216 行 metric summary、60 行 worst-case ranking、47 列 cell summary，并将 factorial contrasts 扩为 24 指标/840 行。
+- [x] 修复 E169 evaluator 的人工标签持久化：默认读取并 merge `manual_review_template.tsv`，重评后仍为 `28/28 reviewed、10 USE / 18 DO_NOT_USE`，不会再被模板生成步骤重置为 pending。
+- [x] 新版 `E169_lowerbody_object_factorial_metrics.xlsx` 已生成：12 sheets，`Complete Metrics=32×287`、`E168 Key Metrics=32×50`、1577 formulas；LibreOffice 重算 `total_errors=0`，data-only overview 保持 `32/8/2/16/0`。
+
+#### E169 遇到的错误
+
+| 错误 | 尝试次数 | 解决方案 |
+|---|---:|---|
+| 用项目 `.venv` 启动 xlsx generator 时缺少 `openpyxl` | 1 | 不改环境；沿用 E168 既有做法，表格生成与 LibreOffice 重算使用系统 Python |
+| A100 资源轮询中 SSH 握手被远端关闭 | 1 | 轮询保留状态并在 60s 后重连；下一次探测成功，未重复启动或绕过资源门槛 |
+| Canary 首次 launch rsync 整个 override 目录时 SSH 超时/元数据扫描卡住 | 2 | 远端 tmux 尚未创建；停止本地 launcher，将同步范围改为 manifest 精确引用的 override 文件后重新启动 |
+| 新增 PR scene 审计首次把 sidecar 定位到 trajectory 的 `0/` 子目录 | 1 | 修正只读审计路径为 `trajectory.parent.parent`，两条 scene SHA 与 16-pair 断言均通过；不影响实验运行或产物 |
+| 系统 Python 读取 TSV 时缺少 pandas | 1 | 不修改环境；改用项目 `.venv` 的 pandas 完成只读分析，评测/xlsx 产物不受影响 |
+| video-frames `frame.sh` 文件无执行权限，首轮抽帧未产出 | 1 | 不改 skill 文件权限；改为 `bash frame.sh ...` 调用后重新抽帧 |
+| 抽帧后尝试用 `identify` 汇总图像尺寸，但 ImageMagick 未安装 | 1 | 放弃非必要的 `identify`；通过 `view_image(detail=original)` 直接检查 20 张 2560x720 抽帧，产物不受影响 |
+
+---
+
+## Active: E170 — Box021 全 28 Case PRG 泛化验证 (2026-07-18)
+
+- [x] 恢复 E168/E169 上下文并核对 scope：E168 Box021 authority 精确为28条，人工基线 `13 USE / 15 DO_NOT_USE`，retarget 为 `25 v1 + 3 v2`。
+- [x] 核对 E169 复用边界：`032_p1/033_p1/020_p2/023_p2` 四条 PRG full 均具备 root NPZ、outdir trajectory、config和视频；E170按SHA引用，不重跑或改写E169。
+- [x] 写入 `plan/186_E170_box021_prg_full_validation_plan.md` 并更新 tracker。计划固定 `4 reused E169 PRG + 24 new E170 PRG`，E168 28条B0只作paired baseline。
+- [x] 冻结 E169 PRG 参数：16个P pair、R scale `2.0`/margin `2cm`、G `+5mm/2%/-5mm/least_violation`；不修改simulator/sampling数学逻辑。
+- [x] 评测计划补齐 E168 完整口径：raw contact、clean3 contact、release false-contact 3mm、hand penetration 3mm、body-z p95、lower-body、tracking、motion和gate-health；质量与gate机制分开裁决。
+- [x] A100执行计划固定0-3四卡，每卡6条，按qpos frames平衡为 `638/630/627/631`；默认复用E169 canary，只有代码/runtime/v2 preflight变化时才补 `1 v1 + 1 v2` smoke。
+- [ ] 下一步：用户确认计划后再实现 E170 builder/launcher/pull/watcher/evaluator；当前未生成E170 scene/override，未启动A100任务。

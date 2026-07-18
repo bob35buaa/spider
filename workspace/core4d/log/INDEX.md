@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 226 个日志文件。
+> 自动生成，共 227 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 32 (E169-E169)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 228 | E169 | 2026-07-18 | Lowerbody object factorial results | [228_E169_lowerbody_object_factorial_resu...](228_E169_lowerbody_object_factorial_results.md) |
 
 ## Phase 31 (E168-E168)
 

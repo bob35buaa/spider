@@ -601,6 +601,37 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
                 )
+            if "sample_leg_gate_valid_mask" in rollout_info:
+                leg_mask = rollout_info["sample_leg_gate_valid_mask"]
+                info["cem_leg_gate_valid_frac"] = leg_mask.float().mean().item()
+                info["cem_leg_gate_selected_valid_frac"] = (
+                    leg_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                leg_min_count = max(
+                    1,
+                    int(
+                        np.ceil(
+                            float(config.cem_leg_gate_min_valid_frac)
+                            * config.num_samples
+                        )
+                    ),
+                )
+                info["cem_leg_gate_fallback_used"] = float(
+                    int(leg_mask.sum().item()) < leg_min_count
+                )
+                leg_min_sdf = rollout_info["sample_leg_gate_min_sdf"]
+                info["cem_leg_gate_min_sdf_min_m"] = leg_min_sdf.min().item()
+                info["cem_leg_gate_min_sdf_p05_m"] = torch.quantile(
+                    leg_min_sdf, 0.05
+                ).item()
+                info["cem_leg_gate_violation_pct_mean"] = rollout_info[
+                    "sample_leg_gate_violation_pct"
+                ].mean().item()
+                info["cem_leg_gate_selected_all_valid"] = float(
+                    info["cem_leg_gate_selected_valid_frac"] == 1.0
+                )
             if "sample_posture_valid_mask" in rollout_info:
                 posture_mask = rollout_info["sample_posture_valid_mask"]
                 info["cem_posture_gate_valid_frac"] = (

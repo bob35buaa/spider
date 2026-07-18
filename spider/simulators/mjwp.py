@@ -1301,6 +1301,9 @@ def get_reward(
     cem_hand_gate_min_sdf = torch.zeros(N, device=config.device)
     cem_hand_gate_violation = torch.zeros(N, device=config.device)
     cem_hand_gate_violation_depth = torch.zeros(N, device=config.device)
+    cem_leg_gate_min_sdf = torch.zeros(N, device=config.device)
+    cem_leg_gate_violation = torch.zeros(N, device=config.device)
+    cem_leg_gate_violation_depth = torch.zeros(N, device=config.device)
     object_clearance_rew = torch.zeros(N, device=config.device)
     object_clearance_penalty = torch.zeros(N, device=config.device)
     object_clearance_m = torch.zeros(N, device=config.device)
@@ -1358,6 +1361,7 @@ def get_reward(
         )
         or (config.cem_safety_gate_enabled and config.cem_safety_gate_geom_ids)
         or (config.cem_hand_gate_enabled and config.cem_hand_gate_geom_ids)
+        or (config.cem_leg_gate_enabled and config.cem_leg_gate_geom_ids)
         or (
             config.object_clearance_rew_scale > 0.0
             or config.object_clearance_penalty_scale > 0.0
@@ -1801,6 +1805,29 @@ def get_reward(
                 cem_gate_violation = torch.maximum(
                     cem_gate_violation, cem_hand_gate_violation
                 )
+            if config.cem_leg_gate_enabled and config.cem_leg_gate_geom_ids:
+                cem_leg_gate_min_sdf = geom_box_sdf_min(
+                    config.cem_leg_gate_geom_ids
+                )
+                cem_leg_gate_violation_depth = torch.clamp(
+                    config.cem_leg_gate_min_sdf_m - cem_leg_gate_min_sdf,
+                    min=0.0,
+                )
+                cem_leg_gate_violation = (cem_leg_gate_violation_depth > 0.0).to(
+                    cem_leg_gate_min_sdf.dtype
+                )
+                if config.cem_safety_gate_enabled or config.cem_hand_gate_enabled:
+                    cem_gate_min_sdf = torch.minimum(
+                        cem_gate_min_sdf, cem_leg_gate_min_sdf
+                    )
+                else:
+                    cem_gate_min_sdf = cem_leg_gate_min_sdf
+                cem_gate_violation_depth = torch.maximum(
+                    cem_gate_violation_depth, cem_leg_gate_violation_depth
+                )
+                cem_gate_violation = torch.maximum(
+                    cem_gate_violation, cem_leg_gate_violation
+                )
             if config.object_lift_rew_scale > 0.0 or config.object_floor_penalty_scale > 0.0:
                 obj_half_z = float(config.hand_approach_obj_half_extents[2])
                 obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
@@ -2236,6 +2263,9 @@ def get_reward(
         "cem_hand_gate_min_sdf": cem_hand_gate_min_sdf,
         "cem_hand_gate_violation": cem_hand_gate_violation,
         "cem_hand_gate_violation_depth": cem_hand_gate_violation_depth,
+        "cem_leg_gate_min_sdf": cem_leg_gate_min_sdf,
+        "cem_leg_gate_violation": cem_leg_gate_violation,
+        "cem_leg_gate_violation_depth": cem_leg_gate_violation_depth,
         "object_clearance_rew": object_clearance_rew,
         "object_clearance_penalty": object_clearance_penalty,
         "object_clearance_m": object_clearance_m,

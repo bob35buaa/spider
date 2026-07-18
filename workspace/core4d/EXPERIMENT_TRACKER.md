@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E170 plan | 2026-07-18 | Phase 33 | Box021全28-case PRG验证；复用4条E169 full | 计划完成，待执行 | [plan](plan/186_E170_box021_prg_full_validation_plan.md) |
+| E169 | 2026-07-18 | Phase 32 | G降下肢穿透最强但gate-health 0/16，无统一方案 | ❌ 28/28完成，不晋级 | [228](log/228_E169_lowerbody_object_factorial_results.md) |
 | E168-analysis | 2026-07-17 | Phase 31 | Box021失败机制分析；主因是下肢与非法支撑可行域缺失 | ✅ 报告完成 | [227](log/227_E168_box021_failure_analysis.md) |
 | E168 | 2026-07-17 | Phase 31 | Box021人工冻结；13条source及partner完成RL export | ✅ 13/13配对ready | [226](log/226_E168_box021_manual_freeze_rl_export.md) |
 | E167 plan | 2026-06-20 | Phase 30 | Holosoma z-only body tracking 对齐：7case×3arm 计划 | 📋 计划完成 | [plan](plan/183_E167_holosoma_zonly_alignment_plan.md) |

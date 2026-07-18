@@ -330,6 +330,17 @@ class Config:
     # E153: see cem_safety_gate_hard_floor_m. NaN (default) => floor = min_sdf_m
     # (legacy, max_violation_pct inert). Set deeper (e.g. -0.020) to activate.
     cem_hand_gate_hard_floor_m: float = float("nan")
+    # E169: dedicated lower-body/object feasibility gate. This remains separate
+    # from body and hand gates because lower-body contact is semantically illegal
+    # while light hand/object contact is intentional.
+    cem_leg_gate_enabled: bool = False
+    cem_leg_gate_geom_names: list[str] = field(default_factory=list)
+    cem_leg_gate_geom_ids: list[int] = field(default_factory=list)
+    cem_leg_gate_min_sdf_m: float = 0.005
+    cem_leg_gate_max_violation_pct: float = 0.02
+    cem_leg_gate_hard_floor_m: float = -0.005
+    cem_leg_gate_min_valid_frac: float = 0.02
+    cem_leg_gate_fallback: str = "least_violation"
     # E160: sample-level posture gate for CEM elite selection. This compares the
     # simulated root height to the reference root height, so naturally crouched
     # reference motions are not rejected by an absolute pelvis-z threshold.
@@ -1313,6 +1324,18 @@ def process_config(config: Config):
                     )
             config.cem_hand_gate_geom_ids = geom_ids
             loguru.logger.info("CEM hand gate: {} geoms resolved.", len(geom_ids))
+        if config.cem_leg_gate_enabled:
+            geom_ids = []
+            for name in config.cem_leg_gate_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "cem_leg_gate_geom_names: geom '{}' not found.", name
+                    )
+            config.cem_leg_gate_geom_ids = geom_ids
+            loguru.logger.info("CEM leg gate: {} geoms resolved.", len(geom_ids))
         if config.cem_peak_margin_enabled:
             body_ids = []
             for name in config.cem_peak_margin_ee_body_names:
