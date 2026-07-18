@@ -16,8 +16,9 @@ if not (payload.get("status")=="pass" and payload.get("required_rows")==24 and p
 PY
 
 MUJOCO_GL="${MUJOCO_GL:-egl}" .venv/bin/python workspace/core4d/scripts/experiments/E170/render_box021_prg_results.py --stage full
+MUJOCO_GL="${MUJOCO_GL:-egl}" .venv/bin/python workspace/core4d/scripts/experiments/E170/build_visual_keyframe_evidence.py --require-all
 MUJOCO_GL="${MUJOCO_GL:-egl}" bash workspace/core4d/scripts/eval/wrappers/eval_E170_box021_prg.sh full
-python3 workspace/core4d/scripts/eval/reports/gen_E170_box021_prg_xlsx.py --eval-dir "$EVAL_DIR" --output "$XLSX"
+python3 workspace/core4d/scripts/eval/reports/gen_E170_box021_prg_xlsx.py --eval-dir "$EVAL_DIR" --output "$XLSX" --require-keyframes
 RECALC_JSON="$(python3 "$HOME/.codex/skills/xlsx/scripts/recalc.py" "$XLSX" 120)"
 printf '%s\n' "$RECALC_JSON"
 RECALC_JSON="$RECALC_JSON" .venv/bin/python - <<'PY'

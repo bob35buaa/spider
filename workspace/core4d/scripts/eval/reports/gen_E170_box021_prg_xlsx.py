@@ -15,6 +15,7 @@ from openpyxl.utils import get_column_letter
 
 
 DEFAULT_EVAL = Path("workspace/core4d/results/E170/s6_downstream/eval/full")
+DEFAULT_KEYFRAMES = Path("workspace/core4d/results/E170/s6_downstream/evidence/visual_qc/keyframe_manifest.tsv")
 SHEETS = (
     ("Case Metrics", "e170_case_metrics.tsv"),
     ("Paired Deltas", "e170_paired_deltas.tsv"),
@@ -89,6 +90,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval-dir", type=Path, default=DEFAULT_EVAL)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--keyframe-manifest", type=Path, default=DEFAULT_KEYFRAMES)
+    parser.add_argument("--require-keyframes", action="store_true")
     args = parser.parse_args()
     eval_dir = args.eval_dir
     output = args.output or eval_dir / "E170_box021_prg_full_validation.xlsx"
@@ -116,6 +119,41 @@ def main() -> int:
     for title, filename in SHEETS:
         _, mapping = add_tsv_sheet(workbook, title, eval_dir / filename)
         mappings[title] = mapping
+    keyframe_fields, keyframe_rows = read_tsv(args.keyframe_manifest)
+    if args.require_keyframes:
+        expected_events = {
+            "pre_contact",
+            "max_lower_body_penetration",
+            "max_hand_penetration",
+            "max_object_speed",
+            "final",
+        }
+        keyframe_cases = {row.get("case_id", "") for row in keyframe_rows}
+        keyframe_events = {row.get("event", "") for row in keyframe_rows}
+        events_by_case: dict[str, list[str]] = {}
+        for row in keyframe_rows:
+            events_by_case.setdefault(row.get("case_id", ""), []).append(row.get("event", ""))
+        invalid_cases = {
+            case_id: events
+            for case_id, events in events_by_case.items()
+            if not case_id or len(events) != 5 or set(events) != expected_events
+        }
+        if (
+            len(keyframe_rows) != 140
+            or len(keyframe_cases) != 28
+            or keyframe_events != expected_events
+            or invalid_cases
+        ):
+            raise RuntimeError(
+                "strict keyframe workbook gate failed: "
+                f"rows={len(keyframe_rows)} cases={len(keyframe_cases)} "
+                f"events={sorted(keyframe_events)} invalid_cases={invalid_cases}"
+            )
+    _, mappings["Keyframe Evidence"] = add_tsv_sheet(
+        workbook,
+        "Keyframe Evidence",
+        args.keyframe_manifest,
+    )
     case = mappings["Case Metrics"]
     required = ("case_id", "numeric_release_pass", "user_manual_review_status", "manual_operational_use", "strict_release_usable", "e168_manual_use_decision", "leg_gate_health_pass")
     missing = [field for field in required if field not in case]
@@ -148,7 +186,7 @@ def main() -> int:
     workbook.calculation.forceFullCalc = True
     output.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output)
-    print(json.dumps({"output": str(output), "sheets": workbook.sheetnames, "case_rows": overview["B3"].value, "formulas": 9}, ensure_ascii=False))
+    print(json.dumps({"output": str(output), "sheets": workbook.sheetnames, "case_rows": overview["B3"].value, "keyframe_rows": len(keyframe_rows), "keyframe_fields": len(keyframe_fields), "formulas": 9}, ensure_ascii=False))
     return 0
 
 
