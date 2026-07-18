@@ -793,3 +793,5 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] Builder已修正为按`GPU_QUEUES[0..3]`生成full manifest；Python compile、preflight及四卡逐卡exact-order断言均通过，后续任何新launch将严格按计划顺序。该修正不改当前远端已生成shard。
 - [x] 主full首波四case已全部自然完成并回收：`034_p1/p2,038_p1/p2`，artifact summary=`4/24 complete, 18 files`；逐row断言均通过root/outdir exact、finite、六项PRG diagnostics、scene/config SHA与PRG effective config，错误扫描为空。
 - [x] 四个主worker均已自然进入下一row：GPU0=`037_p1`、GPU1=`028_p1`、GPU2=`037_p2`、GPU3=`028_p2`；recovery full `036_p1/p2`均到60 steps。所有任务继续，未做中途质量评测。
+- [x] 续跑恢复核验（18:44 CST）：本地`E170_full_watch`与`E170_recovery_full_watch`、远端主/recovery两个tmux均存活；主full仍严格`4/24`，当前`037_p1=20/216,037_p2=34/248,028_p1=26/148,028_p2=18/186`，recovery `036_p1/p2=62/286,64/288`，远端grep错误扫描为空。
+- [x] 识别并消除收尾时序风险：若主session先于recovery结束，主watcher的final full summary可能早于两条036写盘。已新增只读finalizer watcher，要求两个远端session均连续3次确认自然结束后，强制再做一次canonical 24-row full pull，随后才触发strict render/eval/xlsx；不向远端进程发送任何控制操作。

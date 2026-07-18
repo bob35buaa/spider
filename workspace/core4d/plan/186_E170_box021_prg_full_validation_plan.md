@@ -6,7 +6,7 @@
 
 Phase：33
 
-状态：计划经用户确认，待实现与执行
+状态：执行中；A100 主 full 与 qpos0-only recovery full 正在运行
 
 ---
 
@@ -228,6 +228,7 @@ retarget variant 按每条 E168 source row 冻结，不能为了让 E170 通过�
 | `scripts/launch/active/run_E170_remote_a100.sh` | A100 0-3 四 worker full launcher |
 | `scripts/launch/active/pull_E170_remote_a100_results.sh` | 只回收24条 manifest new rows |
 | `scripts/launch/active/watch_E170_remote_a100.sh` | 持续监控、增量回收、严格完成判定 |
+| `scripts/launch/active/watch_E170_postprocess_after_remote.sh` | 等待主/recovery session均自然结束，强制最终24-row pull后执行strict postprocess |
 | `scripts/launch/active/postprocess_E170_after_full.sh` | 24/24 strict 后触发 render/eval/xlsx |
 | `scripts/eval/runners/eval_E170_box021_prg.py` | 统一评测28条PRG并与28条E168 baseline做 paired delta |
 | `scripts/eval/wrappers/eval_E170_box021_prg.sh` | 固化评测入口 |
@@ -598,4 +599,4 @@ E170 完成必须同时满足：
 7. 结果 log 明确裁决 C0-C8、manual operational/strict release 双轨、机器 strong/partial/fail 建议、用户最终裁决和 gate-health独立结论；
 8. 更新 `EXPERIMENT_TRACKER.md` 与 `progress.md`。
 
-当前只完成经用户确认的实验计划；尚未实现 E170 脚本，未生成新 scene/override，未启动 A100 或 watcher。
+当前已完成实现、静态 preflight、双 variant canary、qpos0-only case-specific smoke 与首批 full 严格回收；A100 主 full 和两条 `036_p1/p2` 定向 recovery full 正在运行。最终完成仍须满足上述 1-8 项，不因阶段性结果提前生成结论。
