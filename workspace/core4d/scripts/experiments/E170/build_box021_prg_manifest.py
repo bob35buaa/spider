@@ -470,7 +470,20 @@ def build(*, overwrite_scenes: bool) -> tuple[dict[str, Any], int]:
             blocker_rows.append({key: base[key] for key in ("case_id", "execution_source", "retarget_variant_id", "assigned_gpu", "blocker_type", "blocker_detail", "evidence_path", "first_seen_at", "recovery_status")})
         rows.append(base)
 
-    ready = [copy.deepcopy(row) for row in rows if row["execution_source"] == "E170" and row["status"] == "READY_FOR_FULL"]
+    ready_by_case = {
+        row["case_id"]: copy.deepcopy(row)
+        for row in rows
+        if row["execution_source"] == "E170" and row["status"] == "READY_FOR_FULL"
+    }
+    # Preserve the plan's fixed within-GPU queue order.  The cases are
+    # independent, but deterministic ordering makes queue evidence and timing
+    # directly comparable and avoids an incidental authority-sort schedule.
+    ready = [
+        ready_by_case[case_id]
+        for gpu in ("0", "1", "2", "3")
+        for case_id in GPU_QUEUES[gpu]
+        if case_id in ready_by_case
+    ]
     canary = []
     for retarget in ("omnirt_v1", "omnirt_v2"):
         candidates = [row for row in ready if row["retarget_variant_id"] == retarget]

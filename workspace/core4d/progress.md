@@ -781,3 +781,13 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [ ] 正在验证新增`recovery_smoke/recovery_full` launcher、pull与manifest契约；验证通过后将在A100 GPU1/3叠加启动两条036专用smoke，不操作其他进程。
 - [x] Recovery静态验证通过：Python compile、3个shell `bash -n`、`git diff --check`均通过；preflight=`22 READY_FOR_FULL + 2 READY_FOR_RECOVERY_SMOKE`，recovery smoke dry-run精确2条（036_p2→GPU1、036_p1→GPU3），full仍精确22条，recovery full在smoke未通过前按预期拒绝启动。
 - [x] 修改后的full pull回归通过：当前主session仍识别22-row manifest、4个running config且无完成NPZ；available evaluator初次误用了不存在的`--mode/--output-dir`参数并安全失败，改用正确`--allow-missing --out-dir`后恢复为28-row authority、4 reuse evaluated、0 errors、24 not-ready、2 numeric pass。
+- [x] Recovery gate实现已提交并推送：commit `f9baa37`；随后精确同步142个文件SHA到远端并启动`E170_a100_recovery_smoke_20260718_180209`，仅GPU1=`036_p2`与GPU3=`036_p1`各一条，叠加主full运行，未kill/暂停其他任务。
+- [x] 两条recovery smoke已于18:03:06写入独立日志且无错误扫描命中；本地tmux `E170_recovery_smoke_watch`以60秒周期增量回收，主`E170_full_watch`继续以300秒周期运行。
+- [x] 两条recovery smoke于18:19自然结束并严格回收通过：artifact summary=`2/2 complete, 6 files, incomplete=[]`；两条root/outdir qpos exact、finite、PRG六项diagnostics、effective config与scene SHA均通过，远端错误扫描为空。
+- [x] Smoke证据驱动的preflight重建已晋级为`24 READY_FOR_FULL`、`runtime_smoke_pending=0`、`recovery_full_ready=2`、global status=`pass`；recovery full dry-run精确两条，仍按原GPU1/GPU3和canonical full唯一输出路径。
+- [x] 定向canonical full已启动：远端session `E170_a100_recovery_full_20260718_182013`，仅GPU1=`036_p2`与GPU3=`036_p1`，同步SHA全部OK；本地`E170_recovery_full_watch`每300秒增量回收，与主full watcher并存。
+- [x] Recovery full runtime已完成12-step零优化启动段并将进入production opt32；同时主full四首case为`034_p1=216/286,034_p2=214/298,038_p1=192/228,038_p2=190/234`，GPU1/3因允许叠加为99-100%利用，错误扫描为空。
+- [x] 主full首个原子完成case=`038_p1`；18:37严格增量pull后summary=`1/24 complete, 9 artifact files`。该row root/outdir qpos exact、finite、六项PRG diagnostics、effective config和scene SHA全部通过，无错误扫描命中。
+- [x] GPU1 worker在`038_p1`完成后已自然切换到下一shard row `028_p1`，没有人工重启或重复计算；其余首批继续运行，recovery `036_p1/p2`也保持独立canonical路径。
+- [x] 逐项核对发现主session的GPU分配正确但卡内顺序来自authority case排序，不完全等于计划固定顺序（例如GPU1在`038_p1`后运行`028_p1`）。case独立且唯一输出不影响科学结果，故未中断/重启活动队列；已将本次actual queue_order保留为execution deviation。
+- [x] Builder已修正为按`GPU_QUEUES[0..3]`生成full manifest；Python compile、preflight及四卡逐卡exact-order断言均通过，后续任何新launch将严格按计划顺序。该修正不改当前远端已生成shard。
