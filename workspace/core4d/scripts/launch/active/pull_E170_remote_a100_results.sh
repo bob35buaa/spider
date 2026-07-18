@@ -68,7 +68,14 @@ for row in rows:
                 if "qpos" not in root or "qpos" not in out or not np.array_equal(root["qpos"],out["qpos"]): missing.append("root_outdir_qpos_match")
                 if "qpos" not in out or not np.isfinite(np.asarray(out["qpos"],dtype=float)).all(): missing.append("finite_qpos")
                 required={"cem_leg_gate_valid_frac","cem_leg_gate_selected_valid_frac","cem_leg_gate_fallback_used","sample_leg_gate_min_sdf_min","sample_leg_gate_violation_pct_mean","leg_object_penalty_mean"}
-                missing.extend(f"diag:{key}" for key in sorted(required-set(out.files)))
+                absent=required-set(out.files)
+                missing.extend(f"diag:{key}" for key in sorted(absent))
+                for key in sorted(required-absent):
+                    try:
+                        finite=np.isfinite(np.asarray(out[key],dtype=float)).all()
+                    except (TypeError,ValueError):
+                        finite=False
+                    if not finite: missing.append(f"diag_nonfinite:{key}")
             cfg=yaml.safe_load(paths["config_act"].read_text())
             if cfg.get("scene_name")!="scene_act_E170_lowerbody_physics" or cfg.get("leg_object_penalty_scale")!=2.0 or cfg.get("cem_leg_gate_enabled") is not True: missing.append("effective_config")
             scene=Path(row["scene_act"])
