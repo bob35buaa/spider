@@ -27,17 +27,28 @@ if [ "$ARTIFACT_STAGE" != "$MODE" ]; then
 fi
 retry rsync -az -e "$RSYNC_RSH" "${REMOTE}:${REMOTE_ROOT}/${SHARD_ROOT}/" "$SHARD_ROOT/"
 
-".venv/bin/python" - "$MODE" "$MANIFEST" "$SHARD_ROOT" <<'PY'
+".venv/bin/python" - "$MODE" "$MANIFEST" "$SHARD_ROOT" "$SESSION" <<'PY'
 import csv,hashlib,json,os,sys
 from datetime import datetime
 from pathlib import Path
 import numpy as np, yaml
-mode,manifest_s,shard_s=sys.argv[1:]; manifest=Path(manifest_s); shard_root=Path(shard_s)
+mode,manifest_s,shard_s,session=sys.argv[1:]; manifest=Path(manifest_s); shard_root=Path(shard_s)
 rows=list(csv.DictReader(manifest.open(newline="",encoding="utf-8"),delimiter="\t")); fields=list(rows[0]) if rows else []
 by_variant={row["variant"]:row for row in rows}
+shard_rows=[]
 for shard in sorted(shard_root.glob("gpu*.tsv")):
     for row in csv.DictReader(shard.open(newline="",encoding="utf-8"),delimiter="\t"):
+        shard_rows.append(row)
         if row["variant"] in by_variant: by_variant[row["variant"]].update({key:value for key,value in row.items() if key in fields})
+if not rows and shard_rows:
+    # Recovery-smoke rows are removed from the mutable preflight manifest once
+    # they are promoted to recovery full.  The per-session shard is immutable
+    # execution authority, so use it to preserve the completed smoke evidence.
+    rows=[]; seen=set()
+    for row in shard_rows:
+        if row["variant"] in seen: continue
+        seen.add(row["variant"]); rows.append(row)
+    fields=list(rows[0])
 with manifest.open("w",newline="",encoding="utf-8") as stream:
     writer=csv.DictWriter(stream,fieldnames=fields,delimiter="\t",lineterminator="\n"); writer.writeheader(); writer.writerows(rows)
 def sha(path):
@@ -65,12 +76,19 @@ for row in rows:
         except Exception as exc: missing.append(f"validation:{type(exc).__name__}:{exc}")
     if missing: incomplete.append({"variant":row["variant"],"status":row["status"],"missing":missing})
 out=Path(f"workspace/core4d/results/E170/s6_downstream/artifacts/{mode}"); out.mkdir(parents=True,exist_ok=True)
-with (out/"artifact_manifest.tsv").open("w",newline="",encoding="utf-8") as stream:
+session_out=out/"sessions"/session; session_out.mkdir(parents=True,exist_ok=True)
+def write_rows(path,fieldnames,items):
+    with path.open("w",newline="",encoding="utf-8") as stream:
+        writer=csv.DictWriter(stream,fieldnames=fieldnames,delimiter="\t",lineterminator="\n"); writer.writeheader(); writer.writerows(items)
+write_rows(session_out/"validated_manifest.tsv",fields,rows)
+for artifact_manifest in (out/"artifact_manifest.tsv",session_out/"artifact_manifest.tsv"):
+  with artifact_manifest.open("w",newline="",encoding="utf-8") as stream:
     fields_a=["variant","case_id","artifact","path","size","sha256"]; writer=csv.DictWriter(stream,fieldnames=fields_a,delimiter="\t",lineterminator="\n"); writer.writeheader(); writer.writerows(artifacts)
 complete=len(rows)-len(incomplete)
 required=2 if mode=="canary" else (24 if mode=="full" else len(rows))
 status="pass" if complete==required and len(rows)==required and not incomplete else ("partial_allow_missing" if complete==len(rows) and not incomplete else "incomplete")
 summary={"created_at":datetime.now().astimezone().isoformat(timespec="seconds"),"mode":mode,"required_rows":required,"manifest_rows":len(rows),"complete_rows":complete,"artifact_files":len(artifacts),"incomplete":incomplete,"status":status}
-(out/"artifact_summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n"); print(json.dumps(summary,indent=2,sort_keys=True))
+summary_text=json.dumps(summary,indent=2,sort_keys=True)+"\n"
+(out/"artifact_summary.json").write_text(summary_text); (session_out/"artifact_summary.json").write_text(summary_text); print(summary_text,end="")
 if status=="incomplete" and os.environ.get("ALLOW_INCOMPLETE","0")!="1": raise SystemExit(2)
 PY
