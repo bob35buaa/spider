@@ -6,7 +6,7 @@
 
 Phase：33
 
-状态：执行中；A100 主 full 与 qpos0-only recovery full 正在运行
+状态：已完成；28/28 终审，18 条 operational USE 已完成 source+partner RL-ready 导出
 
 ---
 
@@ -546,6 +546,8 @@ Clean3 contact、root/EEF/object tracking delta和motion-health用于解释边�
 
 E170 本身不自动修改 E168 已冻结的13条 RL export，也不生成新的 RL export。只有 E170 全量人工审查完成后，才另行冻结可用 source rows，并按 sequence 补齐 partner OmniRetarget 信息。p1/p2仍作为独立轨迹处理，任何新 RL export 都必须满足配对完整性。
 
+实际执行中，用户在 28/28 终审完成后明确要求导出正式 RL-ready source 和 partner，因此按本条边界另行冻结了 `18 USE / 10 DO_NOT_USE`。18 条 USE 已形成 `18/18 RL_EXPORT_READY` 和 `18/18 PAIR_COMPLETE`；10 条禁用项零混入。partner 全部复用 E168 已通过的 Stage2b OmniRetarget 产物并重算 SHA，不修改 E168 原有 13 条冻结 export。
+
 ---
 
 ## 11. 风险与缓解
@@ -605,4 +607,4 @@ E170 完成必须同时满足：
 7. 结果 log 明确裁决 C0-C8、manual operational/strict release 双轨、机器 strong/partial/fail 建议、用户最终裁决和 gate-health独立结论；
 8. 更新 `EXPERIMENT_TRACKER.md` 与 `progress.md`。
 
-当前已完成实现、静态 preflight、双 variant canary、qpos0-only case-specific smoke 与首批 full 严格回收；A100 主 full 和两条 `036_p1/p2` 定向 recovery full 正在运行。最终完成仍须满足上述 1-8 项，不因阶段性结果提前生成结论。
+最终完成情况：24/24 new full 与 4/4 E169 reuse 契约通过，统一评测 28/28，用户终审为 `18 USE / 10 DO_NOT_USE`，review-package audit `14/14 pass`，paired RL export audit `8/8 pass`。strict overall/recovery/retention 为 `12/28、3/15、9/13`，机器建议 `FAIL`；gate-health 为 `0/28`。18 条人工 operational USE 已完成 source+partner RL-ready 导出，但不据此把 PRG 提升为 Box021 统一默认配置。
