@@ -13,6 +13,32 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 
 ---
 
+## Active: E172 — Box004 全流程筛选 + Full CEM (E170/E171 算法) 计划 (2026-07-21)
+
+- [x] planning-only 上下文恢复：读取 data-construction-v3 SKILL、experiment-planning-zh、tracker/progress、E170 plan(186)/E171 plan(187)+log(231)、E168 plan(184) box004 accounting、memory `e171-data-paths-and-env`；未改代码、未启动任务。
+- [x] Box004 fresh raw 盘点（live root `.../CORE4D_Real/human_object_motions`，按 object_metadata.json）：**10 seq / 20 person-case**，3 日期。动作：move=7seq/14pc（048 m2, 082 m2, 083 m1, 084 m2, 085 m1, 086 m2, 087 m1）；pass2=2seq/4pc（055,089）；strike=1seq/2pc（116）。与 E168 `box004|20|14|...` 一致。
+- [x] Template：`box004_person1/2` scene.xml+task_info.json 已 git-tracked（无 scene_act，S3 生成）；object mesh `box004_m.obj` raw+processed 均在。
+- [x] 历史 overlap（仅 warning prior，不 reuse）：`082_p1` 有 E167A RL_EXPORT_READY；`082_p2` 历史 v1 infeasible/missing；E166 用 082_p1/083_p2 做平滑诊断。E091/E167 CEM 不计入 E172 fresh completion。
+- [x] 冻结配置沿用 E171 字段级一致：omnirt_v1→v2 rescue + ref_fk + rubber_hull + E170 PRG(16-pair, scale2.0/margin0.02) + candidate gate + CEM(1024/32, canary 64/4)；method ID `E172_E170PRG_crossObject_candidate_r1`。环境复用 E171 verified paths（tidal raw root, hsretargeting env, 本机 8×L20Y 跑 CEM，不用 dead mount）。
+- [x] 写入 `plan/188_E172_box004_full_pipeline_plan.md`（12 Claims, S0-S6 flow, 分级阻断, completeness contract, 结果树），更新 tracker Phase 35 planning row。§11 记录与 E168 box004 scope 差异并建议 E172 独立推进。
+- [ ] 下一步：**等用户确认 plan 后**再进入 implementation（fork E171 脚本到 `scripts/experiments/E172/` + `launch/active/run_E172_*`）；当前未创建 builder/launcher/evaluator，未运行 S1-S6/CEM。
+
+### E172 执行 (2026-07-21，用户确认 move-only + PRG+rubber + 不导出RL)
+- [x] Fork E171 脚本 → `scripts/experiments/E172/`（e172_common + 7 脚本）、`launch/active/run_E172_box004_data_pipeline.sh` + `run_E172_local_8gpu_cem.sh`、`eval/{runners,wrappers,reports}/*E172*`。全部 py_compile / bash -n 通过。scope=box004，method ID `E172_E170PRG_crossObject_candidate_r1`。
+- [x] S0 preflight PASS：.venv + hsretargeting env + 12 dcv3 stage 脚本 + holosoma + base-override yaml 全在；GPU0 空闲(81GB)，GPU1-7 busy(filler/real)。S0 snapshot + source-template snapshot(person1/2 scene.xml 同 SHA 7b129) 已存 `results/E172/{s0_environment,scene_snapshot}`。
+- [x] **S1 move-only funnel 验证**：box004 inventory=20pc；14 move → raw contact（4 pass_to / 10 review_to）；6 非首选（pass2×4 055/089, strike×2 116）→ `reject_action_not_first_line`（Stage0 reject 保留 registry）✅。14 move 中 **6 条通过 3cm raw contact** → stage2b v1（3cm=5cm 同集）。
+- [ ] S3 v1 retarget 运行中（6 cases OmniRetarget）→ 待 v2 rescue → S4 → S5 → S6 CEM。
+- [x] S3 完成：v1 **5 pass + 1 infeasible**（082_p2，命中历史 prior）；v2 rescue **082_p2 → pass**（dual-infeasible=0）。6 stage2b 行 = 082/083/086 的 p1/p2。
+- [x] S4 完成：target gate v1 5 + v2 1 = 6 pass。**Codex 视觉 QC（强制）**：逐帧看 6 条 target replay keyframe sheet，全部为可信抬箱搬运（无穿箱/趴箱/错接触/爆姿）；086_p2 为深蹲跨箱低位姿（PRG 下肢 watch）。写 codex_visual_review.tsv 提升 6→pass。
+- [x] S5 完成：handoff 6 HANDOFF_READY；build_prg_cem_manifest 首轮报 3 blocked = **missing_dcv3_override 假阳性**（export 写到 s5 dir，Hydra 需在 examples/config/override）；复制 6 个 dcv3 override 到 config dir 后重建 → **6 S5-ready = 6 CEM-eligible，PRG scene contract 0 reject**（首帧 lower-body/object 距离 0.07–0.17m，box004 姿态较直立，优于 E171 box026 的 5 reject）。sidecar/scene XML 已 snapshot + git add -f（30 文件）。
+- [x] S6 canary（082_p1 v1 + 082_p2 v2, 64/4）runtime 健康：PRG 配置全解析（leg gate 16 geoms 等），NPZ 完整，无 NaN/error → 放行 Full。
+- [ ] S6 Full CEM 运行中：6 cases（GPU0-5, 1024/32）。待完成 → eval(core_metrics) → render → Codex 视觉复核 → completion audit → 写 log + tracker。
+- [x] **S6 完成 + 执行收口**：Full CEM 6/6 completed（missing=0）。eval **5/6 numeric pass**；唯一 fail=086_p2（fall+leg_pen0.27+release0.53+body_z0.46，深蹲跨箱低位姿，PRG 下肢 trade-off）。**082_p2(v2) numeric pass + 视觉干净** → v2 真实下游 yield（优于 E171）。PRG scene-contract **0 reject**（box004 起始直立，优于 box026 的 5）。gate-health 0/6（已知弱项）。
+- [x] completion audit **PASS**（raw_closure True, 6=6+0）。修 build_pipeline_authority `in_cem` 判定（READY_FOR_FULL → not preflight_blocked，隔离可逆）。渲染 6 MP4 + montage，Codex 视觉复核写 codex_verification.tsv。报告 gen_E172 改 box004 单物体。写 log/232、更新 tracker（⏳ 待用户终审，倾向 PARTIAL_YIELD）。
+- [x] 结论：box004 = **5/6 numeric pass**，机器倾向 PARTIAL_YIELD；三物体 PRG 证据（box021 18/28、box026 5/12、box004 5/6）显示 PRG 在起始直立搬箱更稳。**待用户对 6 条给 USE/DO_NOT_USE**；未导出 RL/partner。
+
+---
+
 ## Active: E168 — 同物体多轨迹 E167A z-only 数据扩展计划 (2026-07-16)
 
 - [x] planning-only 上下文恢复：读取 `experiment0716.md`、data-construction-v3/experiment-planning skills、tracker/progress、E167 计划/manifest/eval/export、E107 Box021 与 E145 bucket004 历史证据；未修改训练/数据代码，未启动本地或远程任务。

@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E172 | 2026-07-22 | Phase 35 | Box004 move-only 全流程S0-S6：6 S5-ready→6 CEM→5 numeric pass；v2救回082_p2且下游pass；PRG 0 scene-reject | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [232](log/232_E172_box004_screening_full_cem.md) · [plan](plan/188_E172_box004_full_pipeline_plan.md) |
 | E171 | 2026-07-21 | Phase 34 | Box026 5/12 numeric pass；Box022 DATA_NEGATIVE；PRG跨物体contact trade-off显著 | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [231](log/231_E171_box022_box026_screening_full_cem.md) · [plan](plan/187_E171_box022_box026_full_pipeline_plan.md) |
 | E170 | 2026-07-20 | Phase 33 | PRG净恢复5条；下肢显著改善但存在contact trade-off | ✅ 18/28 operational；strict FAIL | [230](log/230_E170_box021_prg_final_rl_export.md) · [plan](plan/186_E170_box021_prg_full_validation_plan.md) |
 | E169 | 2026-07-18 | Phase 32 | G降下肢穿透最强但gate-health 0/16，无统一方案 | ❌ 28/28完成，不晋级 | [228](log/228_E169_lowerbody_object_factorial_results.md) |
