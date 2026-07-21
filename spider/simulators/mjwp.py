@@ -791,6 +791,26 @@ def get_reward(
             ref_root_quat,
             config.local_frame_pos_sigma,
         )
+        # E166: extra weight for ankle bodies, mirroring the wrist hook above.
+        if config.local_frame_ankle_weight != 1.0 and config.local_frame_ankle_ids:
+            ankle_ids = [
+                aid for aid in config.local_frame_ankle_ids if aid in lower_ids
+            ]
+            if ankle_ids:
+                ankle_pos_extra = _local_pos_tracking(
+                    xpos_sim,
+                    xquat_sim,
+                    ankle_ids,
+                    root_id,
+                    body_xpos_ref[ankle_ids],
+                    ref_root_pos,
+                    ref_root_quat,
+                    config.local_frame_pos_sigma,
+                )
+                lower_pos_rew = (
+                    lower_pos_rew
+                    + (config.local_frame_ankle_weight - 1.0) * ankle_pos_extra
+                )
         lower_ori_rew = _local_ori_tracking(
             xquat_sim,
             lower_ids,
@@ -1281,6 +1301,9 @@ def get_reward(
     cem_hand_gate_min_sdf = torch.zeros(N, device=config.device)
     cem_hand_gate_violation = torch.zeros(N, device=config.device)
     cem_hand_gate_violation_depth = torch.zeros(N, device=config.device)
+    cem_leg_gate_min_sdf = torch.zeros(N, device=config.device)
+    cem_leg_gate_violation = torch.zeros(N, device=config.device)
+    cem_leg_gate_violation_depth = torch.zeros(N, device=config.device)
     object_clearance_rew = torch.zeros(N, device=config.device)
     object_clearance_penalty = torch.zeros(N, device=config.device)
     object_clearance_m = torch.zeros(N, device=config.device)
@@ -1310,6 +1333,10 @@ def get_reward(
     surface_band_bimanual_score = torch.zeros(N, device=config.device)
     cem_posture_z_err = torch.zeros(N, device=config.device)
     cem_posture_z_drop = torch.zeros(N, device=config.device)
+    cem_peak_margin_ee_body_err = torch.zeros(N, device=config.device)
+    cem_peak_margin_anchor_pos_err = torch.zeros(N, device=config.device)
+    cem_peak_margin_anchor_ori_err = torch.zeros(N, device=config.device)
+    e166_aux_info: dict[str, torch.Tensor] = {}
     nonhand_support_penalty = torch.zeros(N, device=config.device)
     nonhand_support_gate = torch.ones(N, device=config.device)
     nonhand_support_sdf = torch.zeros(N, device=config.device)
@@ -1334,6 +1361,7 @@ def get_reward(
         )
         or (config.cem_safety_gate_enabled and config.cem_safety_gate_geom_ids)
         or (config.cem_hand_gate_enabled and config.cem_hand_gate_geom_ids)
+        or (config.cem_leg_gate_enabled and config.cem_leg_gate_geom_ids)
         or (
             config.object_clearance_rew_scale > 0.0
             or config.object_clearance_penalty_scale > 0.0
@@ -1777,6 +1805,29 @@ def get_reward(
                 cem_gate_violation = torch.maximum(
                     cem_gate_violation, cem_hand_gate_violation
                 )
+            if config.cem_leg_gate_enabled and config.cem_leg_gate_geom_ids:
+                cem_leg_gate_min_sdf = geom_box_sdf_min(
+                    config.cem_leg_gate_geom_ids
+                )
+                cem_leg_gate_violation_depth = torch.clamp(
+                    config.cem_leg_gate_min_sdf_m - cem_leg_gate_min_sdf,
+                    min=0.0,
+                )
+                cem_leg_gate_violation = (cem_leg_gate_violation_depth > 0.0).to(
+                    cem_leg_gate_min_sdf.dtype
+                )
+                if config.cem_safety_gate_enabled or config.cem_hand_gate_enabled:
+                    cem_gate_min_sdf = torch.minimum(
+                        cem_gate_min_sdf, cem_leg_gate_min_sdf
+                    )
+                else:
+                    cem_gate_min_sdf = cem_leg_gate_min_sdf
+                cem_gate_violation_depth = torch.maximum(
+                    cem_gate_violation_depth, cem_leg_gate_violation_depth
+                )
+                cem_gate_violation = torch.maximum(
+                    cem_gate_violation, cem_leg_gate_violation
+                )
             if config.object_lift_rew_scale > 0.0 or config.object_floor_penalty_scale > 0.0:
                 obj_half_z = float(config.hand_approach_obj_half_extents[2])
                 obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
@@ -2060,6 +2111,125 @@ def get_reward(
         ref_root_z = qpos_ref[2]
         cem_posture_z_err = torch.abs(sim_root_z - ref_root_z)
         cem_posture_z_drop = ref_root_z - sim_root_z
+    if (
+        config.cem_peak_margin_enabled
+        and config.cem_peak_margin_ee_body_ids
+        and config.cem_peak_margin_anchor_body_id >= 0
+        and body_xpos_ref is not None
+        and body_xpos_ref.shape[0] > config.cem_peak_margin_anchor_body_id
+        and body_xpos_ref.shape[0] > max(config.cem_peak_margin_ee_body_ids)
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        anchor_id = int(config.cem_peak_margin_anchor_body_id)
+        ee_ids = config.cem_peak_margin_ee_body_ids
+        ref_anchor_pos = body_xpos_ref[anchor_id].to(
+            device=config.device, dtype=xpos_sim.dtype
+        )
+        ref_ee_pos = body_xpos_ref[ee_ids].to(
+            device=config.device, dtype=xpos_sim.dtype
+        )
+        anchor_pos = xpos_sim[:, anchor_id]
+        ee_pos = xpos_sim[:, ee_ids]
+        cem_peak_margin_anchor_pos_err = (anchor_pos - ref_anchor_pos.unsqueeze(0)).norm(
+            dim=-1
+        )
+        if body_xquat_ref is not None and body_xquat_ref.shape[0] > anchor_id:
+            xquat_sim = wp.to_torch(env.data_wp.xquat)
+            anchor_yaw = _lf_yaw_quat(xquat_sim[:, anchor_id])
+            ref_anchor_quat = body_xquat_ref[anchor_id].to(
+                device=config.device, dtype=xquat_sim.dtype
+            )
+            ref_anchor_yaw = _lf_yaw_quat(ref_anchor_quat.unsqueeze(0)).squeeze(0)
+            sim_local = _lf_quat_apply_inverse(
+                anchor_yaw.unsqueeze(1).expand(-1, len(ee_ids), -1),
+                ee_pos - anchor_pos.unsqueeze(1),
+            )
+            ref_local = _lf_quat_apply_inverse(
+                ref_anchor_yaw.unsqueeze(0).unsqueeze(0).expand(N, len(ee_ids), -1),
+                ref_ee_pos.unsqueeze(0).expand(N, -1, -1)
+                - ref_anchor_pos.unsqueeze(0).unsqueeze(0),
+            )
+            ee_err = (ref_local - sim_local).norm(dim=-1)
+            anchor_quat = xquat_sim[:, anchor_id]
+            ref_anchor_quat_batch = ref_anchor_quat.unsqueeze(0).expand(N, -1)
+            anchor_diff = _lf_quat_mul(
+                _lf_quat_conjugate(ref_anchor_quat_batch), anchor_quat
+            )
+            cem_peak_margin_anchor_ori_err = _lf_axis_angle_from_quat(
+                anchor_diff
+            ).norm(dim=-1)
+        else:
+            ee_err = (ee_pos - ref_ee_pos.unsqueeze(0)).norm(dim=-1)
+        cem_peak_margin_ee_body_err = ee_err.max(dim=1).values
+
+    if config.cem_smooth_enabled and config.cem_smooth_body_ids:
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        smooth_ids = [bid for bid in config.cem_smooth_body_ids if bid < xpos_sim.shape[1]]
+        if smooth_ids:
+            e166_aux_info["cem_smooth_body_pos"] = xpos_sim[:, smooth_ids]
+
+    if (
+        config.e167_body_z_enabled
+        and config.e167_body_z_ids
+        and body_xpos_ref is not None
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        body_ids = [
+            bid
+            for bid in config.e167_body_z_ids
+            if bid < xpos_sim.shape[1] and bid < body_xpos_ref.shape[0]
+        ]
+        if body_ids:
+            body_pos = xpos_sim[:, body_ids]
+            body_ref = body_xpos_ref[body_ids].to(
+                device=config.device, dtype=body_pos.dtype
+            )
+            e166_aux_info["e167_body_z_pos"] = body_pos
+            e166_aux_info["e167_body_z_ref_pos"] = body_ref.unsqueeze(0).expand(
+                N, -1, -1
+            )
+
+    if (
+        config.e167_ground_z_enabled
+        and config.e167_ground_z_ids
+        and body_xpos_ref is not None
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        ground_ids = [
+            bid
+            for bid in config.e167_ground_z_ids
+            if bid < xpos_sim.shape[1] and bid < body_xpos_ref.shape[0]
+        ]
+        if ground_ids:
+            ground_pos = xpos_sim[:, ground_ids]
+            ground_ref = body_xpos_ref[ground_ids].to(
+                device=config.device, dtype=ground_pos.dtype
+            )
+            e166_aux_info["e167_ground_z_pos"] = ground_pos
+            e166_aux_info["e167_ground_z_ref_pos"] = ground_ref.unsqueeze(0).expand(
+                N, -1, -1
+            )
+
+    if (
+        (config.foot_slip_enabled or config.foot_ground_enabled)
+        and config.local_frame_ankle_ids
+        and body_xpos_ref is not None
+    ):
+        xpos_sim = wp.to_torch(env.data_wp.xpos)
+        foot_ids = [
+            bid
+            for bid in config.local_frame_ankle_ids
+            if bid < xpos_sim.shape[1] and bid < body_xpos_ref.shape[0]
+        ]
+        if foot_ids:
+            foot_pos = xpos_sim[:, foot_ids]
+            foot_ref = body_xpos_ref[foot_ids].to(
+                device=config.device, dtype=foot_pos.dtype
+            )
+            e166_aux_info["foot_body_pos"] = foot_pos
+            e166_aux_info["foot_body_ref_pos"] = foot_ref.unsqueeze(0).expand(
+                N, -1, -1
+            )
 
     info = {
         "qpos_dist": qpos_dist,
@@ -2093,6 +2263,9 @@ def get_reward(
         "cem_hand_gate_min_sdf": cem_hand_gate_min_sdf,
         "cem_hand_gate_violation": cem_hand_gate_violation,
         "cem_hand_gate_violation_depth": cem_hand_gate_violation_depth,
+        "cem_leg_gate_min_sdf": cem_leg_gate_min_sdf,
+        "cem_leg_gate_violation": cem_leg_gate_violation,
+        "cem_leg_gate_violation_depth": cem_leg_gate_violation_depth,
         "object_clearance_rew": object_clearance_rew,
         "object_clearance_penalty": object_clearance_penalty,
         "object_clearance_m": object_clearance_m,
@@ -2122,6 +2295,9 @@ def get_reward(
         "surface_band_bimanual_score": surface_band_bimanual_score,
         "cem_posture_z_err": cem_posture_z_err,
         "cem_posture_z_drop": cem_posture_z_drop,
+        "cem_peak_margin_ee_body_err": cem_peak_margin_ee_body_err,
+        "cem_peak_margin_anchor_pos_err": cem_peak_margin_anchor_pos_err,
+        "cem_peak_margin_anchor_ori_err": cem_peak_margin_anchor_ori_err,
         "nonhand_support_penalty": nonhand_support_penalty,
         "nonhand_support_gate": nonhand_support_gate,
         "nonhand_support_sdf": nonhand_support_sdf,
@@ -2133,6 +2309,7 @@ def get_reward(
         "terminal_carry_gate_obj_rot_err": terminal_carry_gate_obj_rot_err,
         "terminal_carry_gate_nonhand_sdf": terminal_carry_gate_nonhand_sdf,
         "terminal_carry_gate_hand_near_frac": terminal_carry_gate_hand_near_frac,
+        **e166_aux_info,
     }
     return reward, info
 

@@ -17,6 +17,11 @@ REF_FPS="${REF_FPS:-30.0}"
 EVAL_FPS="${EVAL_FPS:-50.0}"
 TRIM_MODE="${TRIM_MODE:-holosoma}"
 REPLACE_WRIST_WITH_FINGERTIP="${REPLACE_WRIST_WITH_FINGERTIP:-1}"
+RETARGET_ENABLE_CONSTRAINT_RELAXATION="${RETARGET_ENABLE_CONSTRAINT_RELAXATION:-0}"
+RETARGET_ENABLE_FOOT_Z_CONSTRAINT="${RETARGET_ENABLE_FOOT_Z_CONSTRAINT:-0}"
+RETARGET_FOOT_SLIDE_PENALTY_WEIGHT="${RETARGET_FOOT_SLIDE_PENALTY_WEIGHT:-0.0}"
+RETARGET_ENABLE_CONTACT_PRESERVATION="${RETARGET_ENABLE_CONTACT_PRESERVATION:-0}"
+RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE="${RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE:-1.0}"
 CASE_FILE="workspace/core4d/data_preprocess/cases_box023.tsv"
 FORCE=0
 DRY_RUN=0
@@ -40,7 +45,10 @@ Options:
 
 Environment overrides:
   HOLOSOMA_DIR, CORE4D_REAL_ROOT, SMPLX_MODEL_DIR, RESULT_ROOT, PYTHON_BIN,
-  RETARGET_PYTHON_BIN, REF_FPS, EVAL_FPS, TRIM_MODE, REPLACE_WRIST_WITH_FINGERTIP, REPO
+  RETARGET_PYTHON_BIN, REF_FPS, EVAL_FPS, TRIM_MODE, REPLACE_WRIST_WITH_FINGERTIP,
+  RETARGET_ENABLE_CONSTRAINT_RELAXATION, RETARGET_ENABLE_FOOT_Z_CONSTRAINT,
+  RETARGET_FOOT_SLIDE_PENALTY_WEIGHT, RETARGET_ENABLE_CONTACT_PRESERVATION,
+  RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE, REPO
 
 External absolute paths:
   HOLOSOMA_DIR       Absolute path to the Holosoma repo.
@@ -58,6 +66,11 @@ TRIM_MODE:
 REPLACE_WRIST_WITH_FINGERTIP:
   1          Preserve legacy convert behavior and pass --replace_wrist_with_fingertip (default).
   0          Use wrist targets directly; useful for medium-box H2/E091 ablations.
+
+RETARGET_*:
+  Explicit OmniRetarget Phase4 controls. Defaults preserve v1 behavior. E168
+  omnirt_v2 enables all boolean controls, slide weight 1.0, and penetration
+  tolerance scale 0.8.
 USAGE
 }
 
@@ -281,25 +294,27 @@ process_case() {
     run_cmd mkdir -p "$converted_dir" "$retargeted_dir" "$trimmed_dir"
     if [ "$FORCE" -eq 1 ] || [ ! -f "$converted_dir/${task_name}.npz" ]; then
       echo "+ source $HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
-      if [ "$DRY_RUN" -eq 0 ]; then
-        # shellcheck disable=SC1090
-        source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
-      fi
-      convert_args=(
-        python "$HOLOSOMA_DIR/workspace/pipeline/convert_core4d_to_omniretarget.py" \
-        --core4d_dir "$core4d_motion_root" \
-        --smplx_model_dir "$SMPLX_MODEL_DIR" \
-        --output_dir "$converted_dir" \
-        --date "$date" \
-        --seq "$seq" \
-        --person "$person" \
-        --with_object
+      (
+        if [ "$DRY_RUN" -eq 0 ]; then
+          # shellcheck disable=SC1090
+          source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
+        fi
+        convert_args=(
+          python "$HOLOSOMA_DIR/workspace/pipeline/convert_core4d_to_omniretarget.py" \
+          --core4d_dir "$core4d_motion_root" \
+          --smplx_model_dir "$SMPLX_MODEL_DIR" \
+          --output_dir "$converted_dir" \
+          --date "$date" \
+          --seq "$seq" \
+          --person "$person" \
+          --with_object
+        )
+        if [ "$REPLACE_WRIST_WITH_FINGERTIP" = "1" ]; then
+          convert_args+=(--replace_wrist_with_fingertip)
+        fi
+        convert_args[0]="$(retarget_python)"
+        run_cmd "${convert_args[@]}"
       )
-      if [ "$REPLACE_WRIST_WITH_FINGERTIP" = "1" ]; then
-        convert_args+=(--replace_wrist_with_fingertip)
-      fi
-      convert_args[0]="$(retarget_python)"
-      run_cmd "${convert_args[@]}"
     else
       echo "skip convert: $converted_dir/${task_name}.npz exists"
     fi
@@ -308,19 +323,35 @@ process_case() {
 
     if [ "$FORCE" -eq 1 ] || [ ! -f "$retargeted_npz" ]; then
       echo "+ source $HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
-      if [ "$DRY_RUN" -eq 0 ]; then
-        # shellcheck disable=SC1090
-        source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
-      fi
       (
+        if [ "$DRY_RUN" -eq 0 ]; then
+          # shellcheck disable=SC1090
+          source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
+        fi
         cd "$HOLOSOMA_DIR/src/holosoma_retargeting/holosoma_retargeting"
-        run_cmd "$(retarget_python)" examples/robot_retarget.py \
+        retarget_args=(
+          "$(retarget_python)" examples/robot_retarget.py \
           --data_path "$converted_abs" \
           --task-type object_interaction \
           --task-name "$task_name" \
           --data_format smplx \
           --task-config.object-name "$object_name" \
           --save_dir "$retargeted_abs"
+        )
+        if [ "$RETARGET_ENABLE_CONSTRAINT_RELAXATION" = "1" ]; then
+          retarget_args+=(--retargeter.enable-constraint-relaxation)
+        fi
+        if [ "$RETARGET_ENABLE_FOOT_Z_CONSTRAINT" = "1" ]; then
+          retarget_args+=(--retargeter.enable-foot-z-constraint)
+        fi
+        if [ "$RETARGET_ENABLE_CONTACT_PRESERVATION" = "1" ]; then
+          retarget_args+=(--retargeter.enable-contact-preservation)
+        fi
+        retarget_args+=(
+          --retargeter.foot-slide-penalty-weight "$RETARGET_FOOT_SLIDE_PENALTY_WEIGHT"
+          --retargeter.object-penetration-tolerance-scale "$RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE"
+        )
+        run_cmd "${retarget_args[@]}"
       )
     else
       echo "skip retarget: $retargeted_npz exists"
@@ -330,13 +361,15 @@ process_case() {
       case "$TRIM_MODE" in
         holosoma)
           echo "+ source $HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
-          if [ "$DRY_RUN" -eq 0 ]; then
-            # shellcheck disable=SC1090
-            source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
-          fi
-          run_cmd "$(retarget_python)" "$HOLOSOMA_DIR/workspace/pipeline/trim_no_contact.py" \
-            --input_dir "$retargeted_abs" \
-            --output_dir "$trimmed_abs"
+          (
+            if [ "$DRY_RUN" -eq 0 ]; then
+              # shellcheck disable=SC1090
+              source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
+            fi
+            run_cmd "$(retarget_python)" "$HOLOSOMA_DIR/workspace/pipeline/trim_no_contact.py" \
+              --input_dir "$retargeted_abs" \
+              --output_dir "$trimmed_abs"
+          )
           ;;
         *)
           echo "Unsupported TRIM_MODE=$TRIM_MODE" >&2

@@ -1,9 +1,53 @@
 # 实验日志索引
 
-> 自动生成，共 209 个日志文件。
+> 自动生成，共 229 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
-## Phase 27 (E147-E163)
+## Phase 33 (E170-E170)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 229 | E170 | 2026-07-20 | Box021 prg pre user review | [229_E170_box021_prg_pre_user_review.md](229_E170_box021_prg_pre_user_review.md) |
+| 230 | E170 | 2026-07-20 | Box021 prg final rl export | [230_E170_box021_prg_final_rl_export.md](230_E170_box021_prg_final_rl_export.md) |
+
+## Phase 32 (E169-E169)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 228 | E169 | 2026-07-18 | Lowerbody object factorial results | [228_E169_lowerbody_object_factorial_resu...](228_E169_lowerbody_object_factorial_results.md) |
+
+## Phase 31 (E168-E168)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 220 | E168, e0 | 2026-07-17 | Phase0 s4 data results | [220_E168_phase0_s4_data_results.md](220_E168_phase0_s4_data_results.md) |
+| 221 | E168 | 2026-07-17 | S5 cem canary results | [221_E168_s5_cem_canary_results.md](221_E168_s5_cem_canary_results.md) |
+| 222 | E168 | 2026-07-17 | Partial cem comprehensive eval | [222_E168_partial_cem_comprehensive_eval....](222_E168_partial_cem_comprehensive_eval.md) |
+| 223 | E168 | 2026-07-17 | Gate recalibration manual review | [223_E168_gate_recalibration_manual_revie...](223_E168_gate_recalibration_manual_review.md) |
+| 224 | E168 | 2026-07-17 | Box021 remaining available eval | [224_E168_box021_remaining_available_eval...](224_E168_box021_remaining_available_eval.md) |
+| 225 | E168 | 2026-07-17 | Box021 022 pair eval | [225_E168_box021_022_pair_eval.md](225_E168_box021_022_pair_eval.md) |
+| 226 | E168 | 2026-07-17 | Box021 manual freeze rl export | [226_E168_box021_manual_freeze_rl_export....](226_E168_box021_manual_freeze_rl_export.md) |
+| 227 | E168 | 2026-07-17 | Box021 failure analysis | [227_E168_box021_failure_analysis.md](227_E168_box021_failure_analysis.md) |
+
+## Phase 29 (E166-E166)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 214 | E166 |  | Redline predictive results | [214_E166_redline_predictive_results.md](214_E166_redline_predictive_results.md) |
+| 215 | E166 |  | R3b redline pathology split results | [215_E166_R3b_redline_pathology_split_res...](215_E166_R3b_redline_pathology_split_results.md) |
+| 216 | E166 |  | R3c two stage redline results | [216_E166_R3c_two_stage_redline_results.m...](216_E166_R3c_two_stage_redline_results.md) |
+| 217 | E166, e1 |  | Pathology split phase1 prep | [217_E166_pathology_split_phase1_prep.md](217_E166_pathology_split_phase1_prep.md) |
+| 218 | E166 |  | Foot smooth cem results | [218_E166_foot_smooth_cem_results.md](218_E166_foot_smooth_cem_results.md) |
+| 219 | E166 |  | Remaining4 A B2 sugar results | [219_E166_remaining4_A_B2_sugar_results.m...](219_E166_remaining4_A_B2_sugar_results.md) |
+
+## Phase 28 (E165-E165)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 211 | E165, e0 |  | Phase0 offline audit results | [211_E165_phase0_offline_audit_results.md](211_E165_phase0_offline_audit_results.md) |
+| 212 | E165D |  | D peak margin rerank results | [212_E165D_peak_margin_rerank_results.md](212_E165D_peak_margin_rerank_results.md) |
+
+## Phase 27 (E147-E164)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
@@ -28,9 +72,11 @@
 | 204 | E161 | 2026-06-13 | Surface release ablation results | [204_E161_surface_release_ablation_result...](204_E161_surface_release_ablation_results.md) |
 | 205 | E162, e147 | 2026-06-14 | Post e147 rl safe reeval results | [205_E162_post_e147_rl_safe_reeval_result...](205_E162_post_e147_rl_safe_reeval_results.md) |
 | 206 | E163 | 2026-06-14 | Narrow surface band results | [206_E163_narrow_surface_band_results.md](206_E163_narrow_surface_band_results.md) |
-| 207 | E163 | 2026-06-15 | Narrow surface band rl export results | [207_E163_narrow_surface_band_rl_export_r...](207_E163_narrow_surface_band_rl_export_results.md) |
-| 208 | E163 | 2026-06-15 | Narrow surface band clean8 results | [208_E163_narrow_surface_band_clean8_resu...](208_E163_narrow_surface_band_clean8_results.md) |
-| 209 | E163 | 2026-06-15 | Box004 082 p1 failure analysis | [209_E163_box004_082_p1_failure_analysis.md](209_E163_box004_082_p1_failure_analysis.md) |
+| 207 | E163 | 2026-06-14 | Narrow surface band rl export results | [207_E163_narrow_surface_band_rl_export_r...](207_E163_narrow_surface_band_rl_export_results.md) |
+| 208 | E163 | 2026-06-14 | Narrow surface band clean8 results | [208_E163_narrow_surface_band_clean8_resu...](208_E163_narrow_surface_band_clean8_results.md) |
+| 209 | E163 | 2026-06-14 | Box004 082 p1 failure analysis | [209_E163_box004_082_p1_failure_analysis....](209_E163_box004_082_p1_failure_analysis.md) |
+| 210 | E164 | 2026-06-15 | Bimanual global mask reward results | [210_E164_bimanual_global_mask_reward_res...](210_E164_bimanual_global_mask_reward_results.md) |
+| 213 | E163 | 2026-06-14 | Clean8 rl export results | [213_E163_clean8_rl_export_results.md](213_E163_clean8_rl_export_results.md) |
 
 ## Phase 26 (E145-E145)
 

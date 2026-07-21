@@ -4,6 +4,28 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E171 | 2026-07-20 | Phase 34 | Box022/026筛选；v1→v2 rescue后全量Full CEM | 📋 计划完成，待实现 | [plan](plan/187_E171_box022_box026_full_pipeline_plan.md) |
+| E170 | 2026-07-20 | Phase 33 | PRG净恢复5条；下肢显著改善但存在contact trade-off | ✅ 18/28 operational；strict FAIL | [230](log/230_E170_box021_prg_final_rl_export.md) · [plan](plan/186_E170_box021_prg_full_validation_plan.md) |
+| E169 | 2026-07-18 | Phase 32 | G降下肢穿透最强但gate-health 0/16，无统一方案 | ❌ 28/28完成，不晋级 | [228](log/228_E169_lowerbody_object_factorial_results.md) |
+| E168-analysis | 2026-07-17 | Phase 31 | Box021失败机制分析；主因是下肢与非法支撑可行域缺失 | ✅ 报告完成 | [227](log/227_E168_box021_failure_analysis.md) |
+| E168 | 2026-07-17 | Phase 31 | Box021人工冻结；13条source及partner完成RL export | ✅ 13/13配对ready | [226](log/226_E168_box021_manual_freeze_rl_export.md) |
+| E167 plan | 2026-06-20 | Phase 30 | Holosoma z-only body tracking 对齐：7case×3arm 计划 | 📋 计划完成 | [plan](plan/183_E167_holosoma_zonly_alignment_plan.md) |
+| E166-rem4 | 2026-06-19 | Phase 29 | remaining4 A/A_B2完成；A_B2 SUGAR 4/4，效果1/4成功 | ✅ 完成，效果mixed | [219](log/219_E166_remaining4_A_B2_sugar_results.md) |
+| E166-SUGAR | 2026-06-19 | Phase 29 | AplusB暂停；A继续，A_B2_postSmooth接替下游验证 | ✅ 完成，见rem4 | [219](log/219_E166_remaining4_A_B2_sugar_results.md) |
+| E166-CEM | 2026-06-18 | Phase 29 | foot/smooth 3case×6臂；A_B2后平滑最强，B2-only一例回归 | ✅ CEM完成，待SUGAR | [218](log/218_E166_foot_smooth_cem_results.md) |
+| E166-Phase1-prep | 2026-06-18 | Phase 29 | pathology-split后SPIDER默认关闭plumbing+验证 | ✅ CPU验证通过 | [217](log/217_E166_pathology_split_phase1_prep.md) |
+| E166-R3d | 2026-06-18 | Phase 29 | 用户终止box026补标签；Phase0采用7标签结论 | ⛔ 已终止 | [plan](plan/179_E166_R3d_box026_downstream_label_plan.md) |
+| E166-R3d plan | 2026-06-18 | Phase 29 | 补box026 staggered标签以验证8-label红线稳健性 | 📋 计划完成 | [plan](plan/179_E166_R3d_box026_downstream_label_plan.md) |
+| E166-R3c | 2026-06-18 | Phase 29 | two-stage红线拟合过但leave-one仅3/7，仍不放行GPU | ❌ 稳健性不足 | [216](log/216_E166_R3c_two_stage_redline_results.md) |
+| E166-R3b | 2026-06-18 | Phase 29 | 分病因后平滑预测力成立，但Tier1 precision不足 | ⚠️ 部分支持，不放行GPU | [215](log/215_E166_R3b_redline_pathology_split_results.md) |
+| E166-R3b plan | 2026-06-18 | Phase 29 | R3未过后分病因红线重审：先隔离pathology再评估脚/平滑 | 📋 计划完成 | [plan](plan/178_E166_redline_replan_after_r3_fail_plan.md) |
+| E166-R3 | 2026-06-18 | Phase 29 | 红线预测力：Tier1产物8/8，但C-R3相关性硬门未过 | ❌ 暂停GPU | [214](log/214_E166_redline_predictive_results.md) |
+| E166 plan | 2026-06-18 | Phase 29 | 脚约束+平滑重定向: R3红线预测力→B平滑→A脚约束→C下游staggered验证 | 📋 计划完成 | [plan](plan/177_E166_foot_smooth_retarget_plan.md) |
+| E163-export-clean8 | 2026-06-18 | Phase 27 | E163 clean8 RL export；8case ready，partner 6/8 pass | ✅ RL主输入8/8 ready | [213](log/213_E163_clean8_rl_export_results.md) |
+| E165D-export | 2026-06-18 | Phase 28 | E165D 诊断性 RL export；三case ready，partner全pass | ⚠️ export ready但不推广 | [212](log/212_E165D_peak_margin_rerank_results.md) |
+| E165D | 2026-06-18 | Phase 28 | CEM peak-margin025 rerank 3case；tracking改善但contact/penetration回归 | ⚠️ 管线通过，不推广 | [212](log/212_E165D_peak_margin_rerank_results.md) |
+| E165-P0 | 2026-06-18 | Phase 28 | Phase0离线审计A/C/E1: box004标签虚高(recall0.06)/box023自碰撞INHERITED/三标量分病 | ✅ 3/3 claim坐实 | [211](log/211_E165_phase0_offline_audit_results.md) |
+| E165 plan | 2026-06-18 | Phase 28 | RL可恢复性杠杆: on-rails探针preflight/RL抬升reward/peak-margin rerank | 📋 计划完成 | [plan](plan/176_E165_rl_safe_eval_levers_plan.md) |
 | E164 | 2026-06-15 | Phase 27 | bimanual global mask + bimanual reward | ❌ 产物3/3且tracking 3/3；raw contact gate 0/3，不导出RL | [210](log/210_E164_bimanual_global_mask_reward_results.md) |
 | E163-clean8 | 2026-06-15 | Phase 27 | E163 narrowSurfaceBand clean8 extension | ❌ 产物8/8，tracking 8/8，但 raw contact gate 7/8；box004_082_p1 退化 | [208](log/208_E163_narrow_surface_band_clean8_results.md) |
 | E163-export | 2026-06-15 | Phase 27 | E163 narrowSurfaceBand RL-ready export | ✅ RL_EXPORT_READY 3/3；partner OmniRetarget 3/3 pass | [207](log/207_E163_narrow_surface_band_rl_export_results.md) |

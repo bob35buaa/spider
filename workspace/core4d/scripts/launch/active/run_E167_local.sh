@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# E167 local CEM runner for Holosoma z-only arms.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+STAGE="${1:-full}"
+LOCAL_GPU="${LOCAL_GPU:-0}"
+E167_SPLIT="${E167_SPLIT:-local-gpu0}"
+PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
+BUILDER="workspace/core4d/scripts/experiments/E167/build_zonly_manifest.py"
+VARIANTS="workspace/core4d/scripts/experiments/E167/variants.tsv"
+RESULTS="workspace/core4d/results/E167/holosoma_zonly/cem/${STAGE}"
+LOGS="logs/E167/cem/${STAGE}"
+CASE_ARMS="${CASE_ARMS:-}"
+WAIT_FOR_GPU_IDLE="${WAIT_FOR_GPU_IDLE:-0}"
+E167_SKIP_SCENE_SNAPSHOT="${E167_SKIP_SCENE_SNAPSHOT:-0}"
+GPU_IDLE_MAX_MEM_MB="${E167_GPU_IDLE_MAX_MEM_MB:-3000}"
+GPU_IDLE_MAX_UTIL_PCT="${E167_GPU_IDLE_MAX_UTIL_PCT:-20}"
+GPU_IDLE_POLL_SEC="${E167_GPU_IDLE_POLL_SEC:-120}"
+GPU_IDLE_STABLE_POLLS="${E167_GPU_IDLE_STABLE_POLLS:-2}"
+
+if [ "$STAGE" != "smoke" ] && [ "$STAGE" != "full" ]; then
+  echo "Invalid STAGE=$STAGE (use smoke|full)" >&2
+  exit 2
+fi
+
+"$PYTHON_BIN" "$BUILDER" >/dev/null
+mkdir -p "$RESULTS" "$LOGS"
+
+mapfile -t SNAPSHOT_TASKS < <("$PYTHON_BIN" - "$VARIANTS" <<'PY'
+import csv
+import sys
+
+seen = []
+with open(sys.argv[1], newline="", encoding="utf-8") as f:
+    for row in csv.DictReader(f, delimiter="\t"):
+        task = row["derived_task"]
+        if task and task not in seen:
+            seen.append(task)
+for task in seen:
+    print(task)
+PY
+)
+if [ "$E167_SKIP_SCENE_SNAPSHOT" != "1" ] && [ "${#SNAPSHOT_TASKS[@]}" -gt 0 ]; then
+  bash workspace/core4d/scripts/convert/snapshot_scenes.sh E167 "${SNAPSHOT_TASKS[@]}" >/dev/null
+fi
+
+is_complete() {
+  local variant=$1
+  [ -f "$RESULTS/${variant}.npz" ] \
+    && [ -f "$RESULTS/${variant}_${STAGE}.mp4" ] \
+    && [ -f "$RESULTS/${variant}_outdir_${STAGE}/trajectory_mjwp_act.npz" ] \
+    && [ -f "$RESULTS/${variant}_outdir_${STAGE}/config_act.yaml" ]
+}
+
+selected_rows() {
+  "$PYTHON_BIN" - "$VARIANTS" "$E167_SPLIT" "$CASE_ARMS" <<'PY'
+import csv
+import sys
+from pathlib import Path
+
+variants = Path(sys.argv[1])
+split = sys.argv[2]
+spec_text = sys.argv[3].strip()
+specs = set()
+if spec_text:
+    for item in spec_text.split():
+        specs.add(tuple(item.split(":", 1)) if ":" in item else (item, ""))
+
+fields = ["variant", "short_case_id", "arm", "derived_task", "override"]
+with variants.open("r", encoding="utf-8", newline="") as f:
+    for row in csv.DictReader(f, delimiter="\t"):
+        if row["arm_kind"] != "cem" or row["run_status"] != "to_run":
+            continue
+        if specs:
+            if (row["short_case_id"], row["arm"]) not in specs and (row["short_case_id"], "") not in specs:
+                continue
+        elif row["split"] != split:
+            continue
+        print("\t".join(row[field] for field in fields))
+PY
+}
+
+wait_for_gpu_idle() {
+  if [ "$WAIT_FOR_GPU_IDLE" != "1" ]; then
+    return 0
+  fi
+  local stable=0
+  echo "[$(date '+%H:%M:%S')] waiting for GPU ${LOCAL_GPU} idle: mem<=${GPU_IDLE_MAX_MEM_MB}MiB util<=${GPU_IDLE_MAX_UTIL_PCT}% stable=${GPU_IDLE_STABLE_POLLS}"
+  while true; do
+    local stat mem util
+    stat="$(nvidia-smi --id="$LOCAL_GPU" --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits | head -1 | tr -d ' ' || true)"
+    mem="${stat%%,*}"
+    util="${stat##*,}"
+    if [ -n "$mem" ] && [ -n "$util" ] && [ "$mem" -le "$GPU_IDLE_MAX_MEM_MB" ] && [ "$util" -le "$GPU_IDLE_MAX_UTIL_PCT" ]; then
+      stable=$((stable + 1))
+      echo "[$(date '+%H:%M:%S')] GPU ${LOCAL_GPU} idle poll ${stable}/${GPU_IDLE_STABLE_POLLS}: mem=${mem}MiB util=${util}%"
+      if [ "$stable" -ge "$GPU_IDLE_STABLE_POLLS" ]; then
+        return 0
+      fi
+    else
+      stable=0
+      echo "[$(date '+%H:%M:%S')] GPU ${LOCAL_GPU} busy: mem=${mem:-NA}MiB util=${util:-NA}%"
+    fi
+    sleep "$GPU_IDLE_POLL_SEC"
+  done
+}
+
+run_one() {
+  local variant=$1
+  local case_id=$2
+  local arm=$3
+  local task=$4
+  local override_path=$5
+  local override
+  override="$(basename "$override_path" .yaml)"
+  local out_dir="$RESULTS/${variant}_outdir_${STAGE}"
+
+  if is_complete "$variant"; then
+    echo "[$(date '+%H:%M:%S')] === ${variant} complete; skip ==="
+    return 0
+  fi
+
+  wait_for_gpu_idle
+
+  local smoke_args=()
+  if [ "$STAGE" = "smoke" ]; then
+    smoke_args=(num_samples=64 max_num_iterations=4)
+  fi
+
+  mkdir -p "$out_dir"
+  echo "[$(date '+%H:%M:%S')] === START ${variant} case=${case_id} arm=${arm} GPU=${LOCAL_GPU} stage=${STAGE} ==="
+
+  CUDA_VISIBLE_DEVICES="$LOCAL_GPU" MUJOCO_GL=egl PYTHONUNBUFFERED=1 \
+    "$PYTHON_BIN" -u examples/run_mjwp.py \
+      +override="$override" task="$task" \
+      +use_torch_compile=false video_camera=auto \
+      "${smoke_args[@]}" \
+      output_dir="$out_dir" \
+      video_output_path="$RESULTS/${variant}_${STAGE}.mp4" \
+      > "$LOGS/${variant}.log" 2>&1
+
+  cp "$out_dir/trajectory_mjwp_act.npz" "$RESULTS/${variant}.npz"
+  echo "[$(date '+%H:%M:%S')] === DONE ${variant} ==="
+}
+
+echo "=== E167 ${STAGE} local runner split=${E167_SPLIT} GPU=${LOCAL_GPU} ==="
+if [ -n "$CASE_ARMS" ]; then
+  echo "CASE_ARMS=${CASE_ARMS}"
+fi
+
+row_count=0
+while IFS=$'\t' read -r variant case_id arm task override; do
+  row_count=$((row_count + 1))
+  run_one "$variant" "$case_id" "$arm" "$task" "$override"
+done < <(selected_rows)
+
+echo "=== E167 ${STAGE} local runner complete; selected_rows=${row_count} ==="

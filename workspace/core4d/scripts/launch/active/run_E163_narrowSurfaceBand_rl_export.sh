@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# E163: export narrowSurfaceBand three-case rows for downstream RL, including partner OmniRetarget.
+# E163: export narrowSurfaceBand rows for downstream RL, including partner OmniRetarget.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 

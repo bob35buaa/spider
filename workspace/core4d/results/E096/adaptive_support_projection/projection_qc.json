@@ -1,9 +1,0 @@
-{
-  "keep_old_distance_m": 0.3,
-  "num_cases": 2,
-  "num_per_frame_rows": 422,
-  "num_png": 4,
-  "num_png_nonblank": 4,
-  "num_summary_rows": 4,
-  "reward_mode": "adaptive_support"
-}

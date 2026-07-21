@@ -203,6 +203,7 @@ def build_rows(
     core4d_raw_root: Path,
     smplx_model_dir: str,
     python_bin: str,
+    retarget_python_bin: str,
     force: bool,
 ) -> tuple[list[dict[str, Any]], list[list[str]]]:
     params = variant_params(variant)
@@ -212,6 +213,13 @@ def build_rows(
     result_root_rel = rel_to_repo(result_root, spider_repo)
     case_file_rel = rel_to_repo(out_dir / f"cases_stage2b_ready_{run_slug}.tsv", spider_repo)
     replace_wrist = "1" if bool(params.get("replace_wrist_with_fingertip", False)) else "0"
+    enable_constraint_relaxation = "1" if bool(params.get("enable_constraint_relaxation", False)) else "0"
+    enable_foot_z_constraint = "1" if bool(params.get("enable_foot_z_constraint", False)) else "0"
+    foot_slide_penalty_weight = str(float(params.get("foot_slide_penalty_weight", 0.0)))
+    enable_contact_preservation = "1" if bool(params.get("enable_contact_preservation", False)) else "0"
+    object_penetration_tolerance_scale = str(
+        float(params.get("object_penetration_tolerance_scale", 1.0))
+    )
     command = [
         "env",
         f"REPO={spider_repo}",
@@ -220,7 +228,13 @@ def build_rows(
         f"SMPLX_MODEL_DIR={smplx_model_dir}",
         f"RESULT_ROOT={result_root_rel}",
         f"PYTHON_BIN={python_bin}",
+        f"RETARGET_PYTHON_BIN={retarget_python_bin}",
         f"REPLACE_WRIST_WITH_FINGERTIP={replace_wrist}",
+        f"RETARGET_ENABLE_CONSTRAINT_RELAXATION={enable_constraint_relaxation}",
+        f"RETARGET_ENABLE_FOOT_Z_CONSTRAINT={enable_foot_z_constraint}",
+        f"RETARGET_FOOT_SLIDE_PENALTY_WEIGHT={foot_slide_penalty_weight}",
+        f"RETARGET_ENABLE_CONTACT_PRESERVATION={enable_contact_preservation}",
+        f"RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE={object_penetration_tolerance_scale}",
         f"TARGET_VARIANT_ID={target_variant_id}",
         "bash",
         "workspace/core4d/data_preprocess/pipeline.sh",
@@ -356,6 +370,8 @@ def build_rows(
             "converter_script": variant.get("converter_script", ""),
             "converter_git_sha": variant.get("converter_git_sha", ""),
             "replace_wrist_with_fingertip": replace_wrist,
+            "python_bin": python_bin,
+            "retarget_python_bin": retarget_python_bin,
             "params_json": variant.get("params_json", ""),
             "result_root": str(result_root),
             "command_line": " ".join(shlex.quote(x) for x in command),
@@ -512,6 +528,10 @@ def main() -> int:
     parser.add_argument("--core4d-raw-root", type=Path, default=None)
     parser.add_argument("--smplx-model-dir", default=os.environ.get("SMPLX_MODEL_DIR", ""))
     parser.add_argument("--python-bin", default=".venv/bin/python")
+    parser.add_argument(
+        "--retarget-python-bin",
+        default=os.environ.get("RETARGET_PYTHON_BIN", ""),
+    )
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--allow-legacy-stage2b-wrapper", action="store_true")
@@ -545,6 +565,7 @@ def main() -> int:
         core4d_raw_root=raw_root.expanduser().resolve(),
         smplx_model_dir=args.smplx_model_dir,
         python_bin=args.python_bin,
+        retarget_python_bin=args.retarget_python_bin,
         force=args.force,
     )
     run_slug = safe_id(f"{args.retarget_variant_id}_{args.target_variant_id}")

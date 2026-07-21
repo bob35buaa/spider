@@ -1,3 +1,0 @@
-name,T,intent_start,intent_end,L_contact_pct,R_contact_pct,both_contact_pct,stable_pct,stable_intent_pct,pelvis_min,pelvis_min_intent,L_main_face,L_med_cm,L_close_pct,R_main_face,R_med_cm,R_close_pct,expected_L,expected_R,L_match,R_match,pelvis_min_intent_pass
-E060_1_box023,136,21,78,0.103,0.293,0.069,0.728,0.534,0.105,0.146,,+11.69,0.02,,+14.70,0.17,-xy,-yz,False,False,False
-E060_1_bucket005_s2,148,19,107,0.348,0.270,0.101,0.716,0.539,0.210,0.210,,+14.70,0.27,,+19.47,0.19,-yz,+yz,False,False,False

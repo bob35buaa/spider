@@ -1,8 +1,0 @@
-# Scene snapshot for E065
-# Captured: 2026-05-14T04:03:40+08:00
-# Git HEAD: 4b46d6d (feat/dual-robot-retarget)
-
-case                             file                       size  sha256
-box023_person1                   scene.xml                 30305  19601d7df1676b6f0cf570670462ab3deebca001eb4d33deb0ddc849225e1eab
-box023_person1                   scene_act.xml             31174  89c0d31b3bb971e2f59e89ccd969d4860315647be3878cc2abdaf308415d2368
-box023_person1                   scene_act_meta.json          27  40cb82c8fe5a3dc06685d3f06832592d5b7db7cd447fd4061c468f4b8e2f4edb

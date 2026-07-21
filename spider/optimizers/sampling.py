@@ -28,7 +28,9 @@ def _cem_any_gate_enabled(config: Config) -> bool:
     return (
         config.cem_safety_gate_enabled
         or config.cem_hand_gate_enabled
+        or config.cem_leg_gate_enabled
         or config.cem_posture_gate_enabled
+        or config.cem_peak_margin_enabled
     )
 
 
@@ -36,9 +38,182 @@ def _cem_min_valid_frac(config: Config) -> float:
     vals = []
     if config.cem_safety_gate_enabled or config.cem_hand_gate_enabled:
         vals.append(float(config.cem_safety_gate_min_valid_frac))
+    if config.cem_leg_gate_enabled:
+        vals.append(float(config.cem_leg_gate_min_valid_frac))
     if config.cem_posture_gate_enabled:
         vals.append(float(config.cem_posture_gate_min_valid_frac))
+    if config.cem_peak_margin_enabled:
+        vals.append(float(config.cem_peak_margin_min_valid_frac))
     return max(vals) if vals else float(config.cem_safety_gate_min_valid_frac)
+
+
+def _compute_sample_smooth_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Compute E166 sample-level body-trajectory smoothness penalties."""
+    if (
+        not config.cem_smooth_enabled
+        or (
+            float(config.cem_smooth_accel_weight) <= 0.0
+            and float(config.cem_smooth_jerk_weight) <= 0.0
+        )
+        or "cem_smooth_body_pos" not in info_combined
+    ):
+        return None
+
+    pos = info_combined["cem_smooth_body_pos"]
+    if pos.ndim != 4 or pos.shape[0] < 3:
+        return None
+    axis = str(getattr(config, "cem_smooth_axis", "xyz")).lower()
+    if axis == "z":
+        pos = pos[..., 2:3]
+    elif axis != "xyz":
+        raise ValueError(f"unsupported cem_smooth_axis={config.cem_smooth_axis!r}")
+    dt = max(float(config.sim_dt), 1e-8)
+    penalty = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
+    out: dict[str, torch.Tensor] = {}
+
+    accel = (pos[2:] - 2.0 * pos[1:-1] + pos[:-2]) / (dt * dt)
+    accel_norm = accel.norm(dim=-1).mean(dim=-1)
+    accel_p95 = torch.quantile(accel_norm, 0.95, dim=0)
+    out["sample_smooth_accel_p95"] = accel_p95
+    if float(config.cem_smooth_accel_weight) > 0.0:
+        penalty = penalty + float(config.cem_smooth_accel_weight) * accel_p95
+
+    if pos.shape[0] >= 4:
+        jerk = (pos[3:] - 3.0 * pos[2:-1] + 3.0 * pos[1:-2] - pos[:-3]) / (
+            dt * dt * dt
+        )
+        jerk_norm = jerk.norm(dim=-1).mean(dim=-1)
+        jerk_p95 = torch.quantile(jerk_norm, 0.95, dim=0)
+    else:
+        jerk_p95 = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
+    out["sample_smooth_jerk_p95"] = jerk_p95
+    if float(config.cem_smooth_jerk_weight) > 0.0:
+        penalty = penalty + float(config.cem_smooth_jerk_weight) * jerk_p95
+
+    out["sample_smooth_penalty"] = penalty
+    return out
+
+
+def _sample_p95_over_time_body(values: torch.Tensor) -> torch.Tensor:
+    """Return per-sample p95 for a tensor shaped (time, sample, body)."""
+    flat = values.permute(1, 0, 2).reshape(values.shape[1], -1)
+    return torch.quantile(flat, 0.95, dim=1)
+
+
+def _compute_sample_e167_z_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Compute E167 Holosoma-style z-only body/ground penalties."""
+    body_active = (
+        config.e167_body_z_enabled
+        and float(config.e167_body_z_weight) > 0.0
+        and "e167_body_z_pos" in info_combined
+        and "e167_body_z_ref_pos" in info_combined
+    )
+    ground_active = (
+        config.e167_ground_z_enabled
+        and float(config.e167_ground_z_weight) > 0.0
+        and "e167_ground_z_pos" in info_combined
+        and "e167_ground_z_ref_pos" in info_combined
+    )
+    if not body_active and not ground_active:
+        return None
+
+    template = (
+        info_combined["e167_body_z_pos"]
+        if body_active
+        else info_combined["e167_ground_z_pos"]
+    )
+    if template.ndim != 4:
+        return None
+    penalty = torch.zeros(template.shape[1], device=template.device, dtype=template.dtype)
+    out: dict[str, torch.Tensor] = {}
+
+    if body_active:
+        pos = info_combined["e167_body_z_pos"]
+        ref = info_combined["e167_body_z_ref_pos"]
+        if pos.ndim == 4 and ref.shape == pos.shape:
+            z_err = (pos[..., 2] - ref[..., 2]).abs()
+            over = torch.clamp(z_err - float(config.e167_body_z_threshold_m), min=0.0)
+            out["sample_e167_body_z_err_mean"] = z_err.mean(dim=(0, 2))
+            out["sample_e167_body_z_err_p95"] = _sample_p95_over_time_body(z_err)
+            out["sample_e167_body_z_err_peak"] = z_err.amax(dim=(0, 2))
+            out["sample_e167_body_z_over_frac"] = (
+                z_err > float(config.e167_body_z_threshold_m)
+            ).to(z_err.dtype).mean(dim=(0, 2))
+            out["sample_e167_body_z_over_mean"] = over.mean(dim=(0, 2))
+            penalty = penalty + float(config.e167_body_z_weight) * out[
+                "sample_e167_body_z_err_mean"
+            ]
+
+    if ground_active:
+        pos = info_combined["e167_ground_z_pos"]
+        ref = info_combined["e167_ground_z_ref_pos"]
+        if pos.ndim == 4 and ref.shape == pos.shape:
+            grounded = ref[..., 2] <= float(config.e167_ground_contact_height_m)
+            z_dev = (pos[..., 2] - ref[..., 2]).abs()
+            grounded_z = torch.where(grounded, z_dev, torch.zeros_like(z_dev))
+            denom = grounded.to(pos.dtype).sum(dim=(0, 2)).clamp_min(1.0)
+            ground_mean = grounded_z.sum(dim=(0, 2)) / denom
+            out["sample_e167_ground_z_dev_mean"] = ground_mean
+            out["sample_e167_ground_z_dev_peak"] = grounded_z.amax(dim=(0, 2))
+            out["sample_e167_ground_z_frame_frac"] = grounded.to(pos.dtype).mean(
+                dim=(0, 2)
+            )
+            penalty = penalty + float(config.e167_ground_z_weight) * ground_mean
+
+    out["sample_e167_z_penalty"] = penalty
+    return out
+
+
+def _compute_sample_foot_info(
+    config: Config, info_combined: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor] | None:
+    """Compute E166 foot-slip and foot-ground sample penalties."""
+    slip_active = config.foot_slip_enabled and float(config.foot_slip_weight) > 0.0
+    ground_active = config.foot_ground_enabled and float(config.foot_ground_weight) > 0.0
+    if (
+        (not slip_active and not ground_active)
+        or "foot_body_pos" not in info_combined
+        or "foot_body_ref_pos" not in info_combined
+    ):
+        return None
+
+    pos = info_combined["foot_body_pos"]
+    ref = info_combined["foot_body_ref_pos"]
+    if pos.ndim != 4 or ref.shape != pos.shape or pos.shape[0] < 2:
+        return None
+
+    grounded = ref[..., 2] <= float(config.foot_slip_contact_height_m)
+    penalty = torch.zeros(pos.shape[1], device=pos.device, dtype=pos.dtype)
+    out: dict[str, torch.Tensor] = {}
+    dt = max(float(config.sim_dt), 1e-8)
+
+    if slip_active:
+        xy_speed = (pos[1:, :, :, :2] - pos[:-1, :, :, :2]).norm(dim=-1) / dt
+        grounded_pair = grounded[1:] & grounded[:-1]
+        slip_values = torch.where(grounded_pair, xy_speed, torch.zeros_like(xy_speed))
+        denom = grounded_pair.to(pos.dtype).sum(dim=(0, 2)).clamp_min(1.0)
+        slip_mean = slip_values.sum(dim=(0, 2)) / denom
+        slip_peak = slip_values.amax(dim=(0, 2))
+        out["sample_foot_slip_speed_mean"] = slip_mean
+        out["sample_foot_slip_speed_peak"] = slip_peak
+        penalty = penalty + float(config.foot_slip_weight) * slip_mean
+
+    if ground_active:
+        z_dev = (pos[..., 2] - ref[..., 2]).abs()
+        grounded_z = torch.where(grounded, z_dev, torch.zeros_like(z_dev))
+        denom = grounded.to(pos.dtype).sum(dim=(0, 2)).clamp_min(1.0)
+        ground_mean = grounded_z.sum(dim=(0, 2)) / denom
+        ground_peak = grounded_z.amax(dim=(0, 2))
+        out["sample_foot_ground_dev_mean"] = ground_mean
+        out["sample_foot_ground_dev_peak"] = ground_peak
+        penalty = penalty + float(config.foot_ground_weight) * ground_mean
+
+    out["sample_foot_penalty"] = penalty
+    return out
 
 
 def _sample_ctrls_impl(
@@ -98,7 +273,7 @@ def sample_ctrls(
 def _compute_sample_gate_info(
     config: Config, info_combined: dict[str, torch.Tensor]
 ) -> dict[str, torch.Tensor] | None:
-    """Build sample-level gate masks with independent body/hand thresholds."""
+    """Build sample-level gate masks with independent body/hand/leg thresholds."""
     if not _cem_any_gate_enabled(config):
         return None
 
@@ -183,6 +358,14 @@ def _compute_sample_gate_info(
             config.cem_hand_gate_max_violation_pct,
             config.cem_hand_gate_hard_floor_m,
         )
+    if config.cem_leg_gate_enabled:
+        add_gate(
+            "cem_leg_gate",
+            "sample_leg_gate",
+            config.cem_leg_gate_min_sdf_m,
+            config.cem_leg_gate_max_violation_pct,
+            config.cem_leg_gate_hard_floor_m,
+        )
     if config.cem_posture_gate_enabled and {
         "cem_posture_z_err",
         "cem_posture_z_drop",
@@ -233,6 +416,60 @@ def _compute_sample_gate_info(
                 "sample_posture_max_z_drop": max_z_drop,
                 "sample_posture_violation": violation,
                 "sample_posture_valid_mask": valid_mask,
+            }
+        )
+
+    if config.cem_peak_margin_enabled and {
+        "cem_peak_margin_ee_body_err",
+        "cem_peak_margin_anchor_pos_err",
+    }.issubset(info_combined):
+        ee_peak = info_combined["cem_peak_margin_ee_body_err"].max(dim=0).values
+        anchor_peak = info_combined["cem_peak_margin_anchor_pos_err"].max(dim=0).values
+        ee_margin = float(config.cem_peak_margin_ee_threshold_m) - ee_peak
+        anchor_margin = float(config.cem_peak_margin_anchor_threshold_m) - anchor_peak
+        buffer_m = max(float(config.cem_peak_margin_buffer_m), 1e-6)
+        ee_violation = torch.clamp(buffer_m - ee_margin, min=0.0) / buffer_m
+        anchor_violation = torch.clamp(buffer_m - anchor_margin, min=0.0) / buffer_m
+        posture_violation = out.get(
+            "sample_posture_violation",
+            torch.zeros_like(ee_violation),
+        )
+        violation = (
+            float(config.cem_peak_margin_w_ee) * ee_violation
+            + float(config.cem_peak_margin_w_anchor) * anchor_violation
+            + float(config.cem_peak_margin_w_posture) * posture_violation
+        )
+        valid_mask = (
+            (ee_peak <= float(config.cem_peak_margin_ee_threshold_m))
+            & (anchor_peak <= float(config.cem_peak_margin_anchor_threshold_m))
+        )
+        gate_masks.append(valid_mask)
+        min_margin = torch.minimum(ee_margin, anchor_margin)
+        sample_gate_min_sdf = (
+            min_margin
+            if sample_gate_min_sdf is None
+            else torch.minimum(sample_gate_min_sdf, min_margin)
+        )
+        sample_gate_violation_pct = (
+            violation
+            if sample_gate_violation_pct is None
+            else torch.maximum(sample_gate_violation_pct, violation)
+        )
+        sample_gate_violation_depth_mean = (
+            violation
+            if sample_gate_violation_depth_mean is None
+            else torch.maximum(sample_gate_violation_depth_mean, violation)
+        )
+        out.update(
+            {
+                "sample_peak_margin_ee_peak": ee_peak,
+                "sample_peak_margin_anchor_peak": anchor_peak,
+                "sample_peak_margin_ee_margin": ee_margin,
+                "sample_peak_margin_anchor_margin": anchor_margin,
+                "sample_peak_margin_ee_violation": ee_violation,
+                "sample_peak_margin_anchor_violation": anchor_violation,
+                "sample_peak_margin_violation": violation,
+                "sample_peak_margin_valid_mask": valid_mask,
             }
         )
 
@@ -373,6 +610,15 @@ def make_rollout_fn(
         gate_info = _compute_sample_gate_info(config, info_combined)
         if gate_info is not None:
             info.update(gate_info)
+        smooth_info = _compute_sample_smooth_info(config, info_combined)
+        if smooth_info is not None:
+            info.update(smooth_info)
+        e167_z_info = _compute_sample_e167_z_info(config, info_combined)
+        if e167_z_info is not None:
+            info.update(e167_z_info)
+        foot_info = _compute_sample_foot_info(config, info_combined)
+        if foot_info is not None:
+            info.update(foot_info)
         return ctrls, mean_rew, terminate, info
 
     return rollout
@@ -521,6 +767,9 @@ def make_optimize_once_fn(
         combined_gate_min_sdf = None
         combined_gate_violation_pct = None
         combined_gate_violation_depth_mean = None
+        combined_smooth_penalty = None
+        combined_e167_z_penalty = None
+        combined_foot_penalty = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
                 config,
@@ -560,8 +809,44 @@ def make_optimize_once_fn(
                         combined_gate_violation_depth_mean, violation_depth
                     )
                 )
+            if config.cem_smooth_enabled and "sample_smooth_penalty" in rollout_info:
+                smooth_penalty = rollout_info["sample_smooth_penalty"]
+                combined_smooth_penalty = (
+                    smooth_penalty
+                    if combined_smooth_penalty is None
+                    else torch.maximum(combined_smooth_penalty, smooth_penalty)
+                )
+            if (
+                (config.e167_body_z_enabled or config.e167_ground_z_enabled)
+                and "sample_e167_z_penalty" in rollout_info
+            ):
+                e167_z_penalty = rollout_info["sample_e167_z_penalty"]
+                combined_e167_z_penalty = (
+                    e167_z_penalty
+                    if combined_e167_z_penalty is None
+                    else torch.maximum(combined_e167_z_penalty, e167_z_penalty)
+                )
+            if (
+                (config.foot_slip_enabled or config.foot_ground_enabled)
+                and "sample_foot_penalty" in rollout_info
+            ):
+                foot_penalty = rollout_info["sample_foot_penalty"]
+                combined_foot_penalty = (
+                    foot_penalty
+                    if combined_foot_penalty is None
+                    else torch.maximum(combined_foot_penalty, foot_penalty)
+                )
         # Use worst-case rewards across DR parameter sets
         rews = min_rew
+        if combined_smooth_penalty is not None:
+            rollout_info["sample_smooth_penalty"] = combined_smooth_penalty
+            rews = rews - combined_smooth_penalty
+        if combined_e167_z_penalty is not None:
+            rollout_info["sample_e167_z_penalty"] = combined_e167_z_penalty
+            rews = rews - combined_e167_z_penalty
+        if combined_foot_penalty is not None:
+            rollout_info["sample_foot_penalty"] = combined_foot_penalty
+            rews = rews - combined_foot_penalty
         if (
             _cem_any_gate_enabled(config)
             and combined_gate_valid_mask is not None
@@ -588,6 +873,16 @@ def make_optimize_once_fn(
         if gate_enabled:
             fallback_score = None
             if (
+                config.cem_peak_margin_enabled
+                and "sample_peak_margin_violation" in rollout_info
+            ):
+                fallback_score = rews - (
+                    float(config.cem_peak_margin_lambda)
+                    * rollout_info["sample_peak_margin_violation"].to(rews.device)
+                )
+            if (
+                fallback_score is None
+                and
                 config.cem_posture_gate_enabled
                 and "sample_posture_violation" in rollout_info
             ):
@@ -714,6 +1009,37 @@ def make_optimize_once_fn(
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
                 )
+            if "sample_leg_gate_valid_mask" in rollout_info:
+                leg_mask = rollout_info["sample_leg_gate_valid_mask"]
+                info["cem_leg_gate_valid_frac"] = leg_mask.float().mean().item()
+                info["cem_leg_gate_selected_valid_frac"] = (
+                    leg_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                leg_min_count = max(
+                    1,
+                    int(
+                        np.ceil(
+                            float(config.cem_leg_gate_min_valid_frac)
+                            * config.num_samples
+                        )
+                    ),
+                )
+                info["cem_leg_gate_fallback_used"] = float(
+                    int(leg_mask.sum().item()) < leg_min_count
+                )
+                leg_min_sdf = rollout_info["sample_leg_gate_min_sdf"]
+                info["cem_leg_gate_min_sdf_min_m"] = leg_min_sdf.min().item()
+                info["cem_leg_gate_min_sdf_p05_m"] = torch.quantile(
+                    leg_min_sdf, 0.05
+                ).item()
+                info["cem_leg_gate_violation_pct_mean"] = rollout_info[
+                    "sample_leg_gate_violation_pct"
+                ].mean().item()
+                info["cem_leg_gate_selected_all_valid"] = float(
+                    info["cem_leg_gate_selected_valid_frac"] == 1.0
+                )
             if "sample_posture_valid_mask" in rollout_info:
                 posture_mask = rollout_info["sample_posture_valid_mask"]
                 info["cem_posture_gate_valid_frac"] = (
@@ -725,6 +1051,17 @@ def make_optimize_once_fn(
                     else 0.0
                 )
                 info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
+            if "sample_peak_margin_valid_mask" in rollout_info:
+                peak_mask = rollout_info["sample_peak_margin_valid_mask"]
+                info["cem_peak_margin_valid_frac"] = (
+                    peak_mask.float().mean().item()
+                )
+                info["cem_peak_margin_selected_valid_frac"] = (
+                    peak_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                info["cem_peak_margin_fallback_used"] = float(gate_fallback_used)
 
         # Downsample and store trace site positions for selected sample trajectories
         if "trace" in rollout_info:

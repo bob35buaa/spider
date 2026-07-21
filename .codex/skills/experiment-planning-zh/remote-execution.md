@@ -7,17 +7,108 @@
 
 ## 远程机器配置
 
+### 常用两卡机
+
 | 字段 | 值 |
 |------|------|
+| Profile | `a6000-2gpu` |
 | SSH alias | `spider-remote` |
 | Host | 10.100.71.70 |
 | Port | 58122 |
 | User | xiayb |
 | GPUs | 2x NVIDIA RTX 6000 Ada (48GB) |
+| 默认可用 GPU | `0,1` |
 | 项目路径 | `/home/xiayb/pHRI_workspace/spider` |
 | SSH config | `~/.ssh/config` 中配置为 `spider-remote` |
 
+### A100 8 卡机
+
+| 字段 | 值 |
+|------|------|
+| Profile | `A100-8gpu` |
+| 推荐 SSH alias | `tianyiyun-A100` |
+| HostName | `61.172.170.106` |
+| Port | `30409` |
+| User | `batchcom` |
+| IdentityFile | `~/.ssh/id_rsa_tianyiyun` |
+| GPUs | 8x A100，实际型号以 `nvidia-smi` 为准 |
+| 默认可用 GPU | 启动时动态选择，最多 4 张 |
+| 项目路径 | `/home/dataset-assist-0/xiayb/workspace/spider` |
+
+推荐 SSH config：
+
+```sshconfig
+Host tianyiyun-A100
+    HostName 61.172.170.106
+    Port 30409
+    User batchcom
+    IdentityFile ~/.ssh/id_rsa_tianyiyun
+```
+
+未配置 alias 时可直接连接：
+
+```bash
+ssh -p 30409 -i ~/.ssh/id_rsa_tianyiyun \
+  batchcom@61.172.170.106
+```
+
+#### A100 动态选卡
+
+A100 不固定使用前四张或后四张卡。启动时必须：
+
+1. 查询全部 0-7 号 GPU，显存占用必须 `<5000MB`。
+2. 排除存在其他用户计算任务或不符合机器预约规则的 GPU。
+3. 按 GPU index 升序最多选择 4 张。
+4. selection 和 tmux 启动之间再次检查；状态变化时重建 worker pool。
+5. 没有合格 GPU 时不启动，不 kill 或抢占其他进程。
+
+```bash
+REMOTE_PROFILE=A100-8gpu
+REMOTE_HOST=tianyiyun-A100
+REMOTE_ROOT=/home/dataset-assist-0/xiayb/workspace/spider
+A100_GPU_MEM_USED_LIMIT_MB=5000
+A100_MAX_GPUS=4
+
+A100_LOW_MEM_GPUS="$(
+  ssh "$REMOTE_HOST" \
+    "nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits" |
+    awk -F, -v limit="$A100_GPU_MEM_USED_LIMIT_MB" '
+      {
+        gsub(/ /, "", $1)
+        gsub(/ /, "", $2)
+        if ($2 + 0 < limit) print $1
+      }
+    '
+)"
+
+ssh "$REMOTE_HOST" \
+  "nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory \
+   --format=csv,noheader,nounits"
+```
+
+最终 `ALLOWED_GPUS` 必须是低显存候选集与机器预约/所有者允许集合的交集。推荐由启动脚本调用 Phase 0 已确认的只读检查入口：
+
+```bash
+: "${A100_AVAILABILITY_CMD:?confirm availability command in Phase 0}"
+
+A100_POLICY_GPUS="$(ssh "$REMOTE_HOST" "$A100_AVAILABILITY_CMD")"
+ALLOWED_GPUS="$(
+  comm -12 \
+    <(printf '%s\n' "$A100_LOW_MEM_GPUS" | tr ', ' '\n' | sed '/^$/d' | sort -n) \
+    <(printf '%s\n' "$A100_POLICY_GPUS" | tr ', ' '\n' | sed '/^$/d' | sort -n) |
+    head -n "$A100_MAX_GPUS" |
+    paste -sd' ' -
+)"
+test -n "$ALLOWED_GPUS"
+```
+
+如果机器没有统一预约工具，必须人工核对 `nvidia-smi` 和任务归属后显式提供允许集合，并在 experiment environment manifest 中保存确认时间、GPU snapshot 和最终 `ALLOWED_GPUS`。不能只凭 `<5000MB` 判断可抢占。
+
+示例：低显存候选和预约允许集合的交集为 `2,3,6,7` 时，本轮使用 `2,3,6,7`；如果只剩 `3,7`，就只创建两个 worker。
+
 ## 标准流程
+
+以下原有命令默认使用常用两卡机。使用 A100 时，将主机和项目路径替换为上面的 `REMOTE_HOST` / `REMOTE_ROOT`，GPU id 必须来自本轮 `ALLOWED_GPUS`。
 
 ### 1. 代码同步 (本地 → 远程)
 
@@ -76,6 +167,28 @@ wait $PID1; echo "GPU1 done"
 echo "=== All complete ==="
 ```
 
+#### A100 worker queue
+
+A100 脚本不能写死 `0,1` 或 `4,5,6,7`。它必须读取启动时生成的 execution manifest/`ALLOWED_GPUS`，为每张被选中的 GPU 创建一个串行 worker queue：
+
+```bash
+worker_pids=()
+for gpu in $ALLOWED_GPUS; do
+  (
+    while IFS=$'\t' read -r run_id task; do
+      run_experiment "$run_id" "$gpu" "$task"
+    done < "$QUEUE_ROOT/gpu${gpu}.tsv"
+  ) &
+  worker_pids+=("$!")
+done
+
+for pid in "${worker_pids[@]}"; do
+  wait "$pid"
+done
+```
+
+每条 run 的 NPZ、outdir、MP4 和 log 路径必须唯一。每张 GPU 内严格串行，不同 GPU 才并行。
+
 ### 3. 部署并启动 (tmux)
 
 ```bash
@@ -87,6 +200,19 @@ ssh spider-remote "cd /home/xiayb/pHRI_workspace/spider && \
     tmux new-session -d -s <session_name> && \
     tmux send-keys -t <session_name> 'bash <script_path>' Enter"
 ```
+
+A100 使用：
+
+```bash
+ssh "$REMOTE_HOST" "cd '$REMOTE_ROOT' && git pull --ff-only"
+ssh "$REMOTE_HOST" "
+  cd '$REMOTE_ROOT'
+  tmux new-session -d -s <session_name> -c '$REMOTE_ROOT' \
+    'bash <script_path>'
+"
+```
+
+A100 启动 tmux 前必须重新执行动态选卡；如果某张卡不再满足条件，重建 worker queues，不能沿用旧 `ALLOWED_GPUS`。
 
 ### 4. 监控进度
 
@@ -101,6 +227,13 @@ ssh spider-remote "ls /home/xiayb/pHRI_workspace/spider/<results_dir>/*.npz | wc
 ssh spider-remote "tail -1 /home/xiayb/pHRI_workspace/spider/<logs_dir>/<name>.log"
 ```
 
+A100 监控命令使用 `REMOTE_HOST` / `REMOTE_ROOT`，并同时检查 `nvidia-smi` 和各 worker queue：
+
+```bash
+ssh "$REMOTE_HOST" "nvidia-smi"
+ssh "$REMOTE_HOST" "tmux capture-pane -t <session_name> -p | tail -20"
+```
+
 ### 5. 回收结果
 
 ```bash
@@ -110,6 +243,15 @@ bash workspace/core4d/scripts/launch/active/pull_E###_remote_results.sh <stage>
 # 如需兼容历史命令，可通过根目录 wrapper 调用
 bash workspace/core4d/scripts/pull_E###_remote_results.sh <stage>
 ```
+
+同时使用两台远程机器时，分别固化 pull 脚本，避免主机和结果目录混用：
+
+```bash
+bash workspace/core4d/scripts/launch/active/pull_E###_remote_a6000_results.sh <stage>
+bash workspace/core4d/scripts/launch/active/pull_E###_remote_a100_results.sh <stage>
+```
+
+pull 只回收本次 execution manifest 登记的结果；回收后按 worker 汇总 NPZ、outdir、config、MP4、log 的数量、大小和 SHA。
 
 ### 6. 本地评估
 
@@ -151,6 +293,8 @@ workspace/core4d/scripts/templates/watch_and_pull_template.sh
 5. **产物校验**: `find $RESULT_ROOT -name '*.npz' | wc -l` 与预期数量比对
 6. **自动 eval**: 产物数量达标后自动调用 eval 脚本
 7. **日志记录**: 全程输出带时间戳写入 `logs/{EXP_ID}/monitor/` 下
+
+同时使用 A6000/A100 时，watcher 必须分别检查两个远程 tmux session、分别调用 pull 脚本；任一 SSH 不通都按“仍在运行”处理。只有所有 manifest row 均有产物或明确 failure 后才启动 eval。
 
 ### 占位符说明
 
@@ -221,12 +365,15 @@ INTERVAL_SECONDS=300 EXPECTED_NPZ_COUNT=30 \
 
 ## 并行策略
 
-| 场景 | GPU 分配 | 预期时间 |
+| 场景 | GPU 分配 | 预期时间/原则 |
 |------|---------|---------|
 | 2 个 case, 2 GPU | 每 GPU 1 个 | ~6 min |
 | 4 个 case, 2 GPU | 每 GPU 2 个 (串行) | ~12 min |
 | 6 个 case, 2 GPU | 每 GPU 3 个 (串行) | ~18 min |
 | Sweep 5 configs, 1 case | GPU0: 2+GPU1: 3 | ~18 min |
+| A100 不超过 4 个 case | 动态选择最多 4 张 | 每 GPU 1 个，并行 |
+| A100 超过 4 个 case | 动态选择最多 4 张 | 按长度均衡，每 GPU 内串行 |
+| 本地 + A6000 + A100 | 每个 profile 独立 worker pool | 路径、session、pull 脚本唯一 |
 
 ## 关键约束
 
@@ -234,14 +381,23 @@ INTERVAL_SECONDS=300 EXPECTED_NPZ_COUNT=30 \
 2. **video_output_path 必须不同** — 否则后跑的覆盖先跑的视频
 3. **trajectory npz 也会互相覆盖** — 每个实验完成后立即 cp 到结果目录
 4. **tmux session 不会主动结束** — 所有实验完成后手动 `tmux kill-session`
+5. **A100 不固定 GPU id** — 每次 launch 动态选择，最多 4 张
+6. **低显存不等于可抢占** — 还必须确认 compute process、所有者和预约规则
+7. **没有可用 GPU 时不启动** — 不 kill 或抢占其他任务
+8. **不同 profile 不共享输出路径** — run id、worker id、log 和 pull 目标必须唯一
 
 ## 故障排除
 
 | 问题 | 解决 |
 |------|------|
 | SSH connection refused | 检查 VPN/网络, `ssh -v spider-remote` |
-| Permission denied | 重新 `ssh-copy-id` |
+| A100 SSH 失败 | 检查 `ssh -v tianyiyun-A100` 或直连端口/key |
+| Permission denied | 重新 `ssh-copy-id` 或检查 A100 IdentityFile |
 | CUDA OOM | 减少 num_samples (1024→512) |
 | EGL error on exit | 无害,忽略 |
+| A100 没有候选 GPU | 不启动 A100；等待资源或只使用本地/A6000 |
+| A100 候选卡存在其他任务 | 从 `ALLOWED_GPUS` 移除并重建 worker pool |
+| A100 selection 后被占用 | 重新查询、重建 queue 和 tmux，不沿用旧选择 |
+| 任务跑到未选中的 GPU | 停止本实验对应 session，修复 allowlist 后重启，不影响其他任务 |
 | tmux session 找不到 | `ssh spider-remote "tmux list-sessions"` |
 | 脚本在远程报错 | 查看 `<logs_dir>/<name>.log` |

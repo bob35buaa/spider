@@ -25,7 +25,10 @@ from spider.math import quat_sub
 from spider.optimizers.sampling import (
     _cem_any_gate_enabled,
     _cem_min_valid_frac,
+    _compute_sample_e167_z_info,
+    _compute_sample_foot_info,
     _compute_sample_gate_info,
+    _compute_sample_smooth_info,
     _compute_weights_compiled,
     _compute_weights_impl,
     _compute_weights_with_gate_impl,
@@ -330,6 +333,15 @@ def make_rollout_fn_fast(  # noqa: D103
         gate_info = _compute_sample_gate_info(config, info_combined)
         if gate_info is not None:
             info.update(gate_info)
+        smooth_info = _compute_sample_smooth_info(config, info_combined)
+        if smooth_info is not None:
+            info.update(smooth_info)
+        e167_z_info = _compute_sample_e167_z_info(config, info_combined)
+        if e167_z_info is not None:
+            info.update(e167_z_info)
+        foot_info = _compute_sample_foot_info(config, info_combined)
+        if foot_info is not None:
+            info.update(foot_info)
 
         if record_states:
             info["recorded_qpos"] = recorded_qpos
@@ -365,6 +377,9 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         combined_gate_min_sdf = None
         combined_gate_violation_pct = None
         combined_gate_violation_depth_mean = None
+        combined_smooth_penalty = None
+        combined_e167_z_penalty = None
+        combined_foot_penalty = None
         for env_param in env_params:
             ctrls_samples, rews, terminate, rollout_info = rollout(
                 config,
@@ -405,7 +420,43 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                         combined_gate_violation_depth_mean, violation_depth
                     )
                 )
+            if config.cem_smooth_enabled and "sample_smooth_penalty" in rollout_info:
+                smooth_penalty = rollout_info["sample_smooth_penalty"]
+                combined_smooth_penalty = (
+                    smooth_penalty
+                    if combined_smooth_penalty is None
+                    else torch.maximum(combined_smooth_penalty, smooth_penalty)
+                )
+            if (
+                (config.e167_body_z_enabled or config.e167_ground_z_enabled)
+                and "sample_e167_z_penalty" in rollout_info
+            ):
+                e167_z_penalty = rollout_info["sample_e167_z_penalty"]
+                combined_e167_z_penalty = (
+                    e167_z_penalty
+                    if combined_e167_z_penalty is None
+                    else torch.maximum(combined_e167_z_penalty, e167_z_penalty)
+                )
+            if (
+                (config.foot_slip_enabled or config.foot_ground_enabled)
+                and "sample_foot_penalty" in rollout_info
+            ):
+                foot_penalty = rollout_info["sample_foot_penalty"]
+                combined_foot_penalty = (
+                    foot_penalty
+                    if combined_foot_penalty is None
+                    else torch.maximum(combined_foot_penalty, foot_penalty)
+                )
         rews = min_rew
+        if combined_smooth_penalty is not None:
+            rollout_info["sample_smooth_penalty"] = combined_smooth_penalty
+            rews = rews - combined_smooth_penalty
+        if combined_e167_z_penalty is not None:
+            rollout_info["sample_e167_z_penalty"] = combined_e167_z_penalty
+            rews = rews - combined_e167_z_penalty
+        if combined_foot_penalty is not None:
+            rollout_info["sample_foot_penalty"] = combined_foot_penalty
+            rews = rews - combined_foot_penalty
         if (
             _cem_any_gate_enabled(config)
             and combined_gate_valid_mask is not None
@@ -426,6 +477,16 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
         if gate_enabled:
             fallback_score = None
             if (
+                config.cem_peak_margin_enabled
+                and "sample_peak_margin_violation" in rollout_info
+            ):
+                fallback_score = rews - (
+                    float(config.cem_peak_margin_lambda)
+                    * rollout_info["sample_peak_margin_violation"].to(rews.device)
+                )
+            if (
+                fallback_score is None
+                and
                 config.cem_posture_gate_enabled
                 and "sample_posture_violation" in rollout_info
             ):
@@ -540,6 +601,37 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
                 )
+            if "sample_leg_gate_valid_mask" in rollout_info:
+                leg_mask = rollout_info["sample_leg_gate_valid_mask"]
+                info["cem_leg_gate_valid_frac"] = leg_mask.float().mean().item()
+                info["cem_leg_gate_selected_valid_frac"] = (
+                    leg_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                leg_min_count = max(
+                    1,
+                    int(
+                        np.ceil(
+                            float(config.cem_leg_gate_min_valid_frac)
+                            * config.num_samples
+                        )
+                    ),
+                )
+                info["cem_leg_gate_fallback_used"] = float(
+                    int(leg_mask.sum().item()) < leg_min_count
+                )
+                leg_min_sdf = rollout_info["sample_leg_gate_min_sdf"]
+                info["cem_leg_gate_min_sdf_min_m"] = leg_min_sdf.min().item()
+                info["cem_leg_gate_min_sdf_p05_m"] = torch.quantile(
+                    leg_min_sdf, 0.05
+                ).item()
+                info["cem_leg_gate_violation_pct_mean"] = rollout_info[
+                    "sample_leg_gate_violation_pct"
+                ].mean().item()
+                info["cem_leg_gate_selected_all_valid"] = float(
+                    info["cem_leg_gate_selected_valid_frac"] == 1.0
+                )
             if "sample_posture_valid_mask" in rollout_info:
                 posture_mask = rollout_info["sample_posture_valid_mask"]
                 info["cem_posture_gate_valid_frac"] = (
@@ -551,6 +643,17 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     else 0.0
                 )
                 info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
+            if "sample_peak_margin_valid_mask" in rollout_info:
+                peak_mask = rollout_info["sample_peak_margin_valid_mask"]
+                info["cem_peak_margin_valid_frac"] = (
+                    peak_mask.float().mean().item()
+                )
+                info["cem_peak_margin_selected_valid_frac"] = (
+                    peak_mask[selected_indices].float().mean().item()
+                    if selected_indices is not None and selected_indices.numel() > 0
+                    else 0.0
+                )
+                info["cem_peak_margin_fallback_used"] = float(gate_fallback_used)
 
         if "trace" in rollout_info:
             info["trace_sample"] = rollout_info["trace"][sel_idx].cpu().numpy()

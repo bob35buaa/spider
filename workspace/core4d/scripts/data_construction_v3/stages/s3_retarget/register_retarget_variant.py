@@ -140,6 +140,28 @@ def default_variants(spider_repo: Path, holosoma_repo: Path) -> list[dict[str, s
             "target_route_contract": "selected_at_stage2b",
             "notes": "显式 input rewrite/retarget 分支；target route 仍由 S3 选择。只有选择 fingertip_aware target 时才要求 E099-E101。",
         },
+        {
+            **common,
+            "retarget_variant_id": "omnirt_v2",
+            "display_name": "OmniRetarget v2 Phase4 rescue",
+            "solver_version": "v2_phase4_current",
+            "params_json": stable_params_json(
+                {
+                    "replace_wrist_with_fingertip": False,
+                    "include_fingertip_centers": False,
+                    "enable_constraint_relaxation": True,
+                    "enable_foot_z_constraint": True,
+                    "foot_slide_penalty_weight": 1.0,
+                    "enable_contact_preservation": True,
+                    "object_penetration_tolerance_scale": 0.8,
+                    "target_variant_id_default": "ref_fk",
+                    "spider_repo_sha": spider_git.get("git_sha", ""),
+                }
+            ),
+            "input_rewrite_policy": "wrist",
+            "target_route_contract": "selected_at_stage2b",
+            "notes": "E168 rescue-only variant: Phase4 flags enabled, fingertip replacement disabled. Do not use before an explicit omnirt_v1 infeasible result.",
+        },
     ]
 
 

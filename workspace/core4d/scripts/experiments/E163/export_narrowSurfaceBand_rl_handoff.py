@@ -30,6 +30,16 @@ SPIDER_METHOD_ID = "gateA_surfaceBandA2_postureRerankA_narrowSurfaceBandReleaseD
 SOURCE_REF = "E163_narrowSurfaceBand_three_case"
 
 TARGET_SHORT_CASES = ["box023_person2", "box021_029_p2", "box004_083_p2"]
+CLEAN8_SHORT_CASES = [
+    "box023_person2",
+    "box021_029_p2",
+    "box004_083_p2",
+    "box021_035_p1",
+    "box021_035_p2",
+    "box004_083_p1",
+    "box004_082_p1",
+    "box026_139_p1",
+]
 
 OBJECT_NAME = {
     "box021": "Box021",
@@ -244,7 +254,7 @@ def load_sources() -> list[dict[str, str]]:
 
 def source_notes(row: dict[str, str]) -> str:
     return (
-        "E163 narrowSurfaceBand three-case export; "
+        f"E163 narrowSurfaceBand export source_ref={SOURCE_REF}; "
         f"tracked={row['success_tracked']}; fall={row['fall_flag']}; "
         f"pelvis_z_terminal={row['track_pelvis_z_err_terminal_m']}; "
         f"rawContact={row['raw_contact_in_mask']}; "
@@ -440,7 +450,8 @@ def summarize(source_rows: list[dict[str, str]], rl_export_input: Path, partner_
     summary = {
         "experiment": SOURCE_EXP_ID,
         "created_at": now(),
-        "source": "E163 narrowSurfaceBand three-case",
+        "source": SOURCE_REF,
+        "source_case_count": len(source_rows),
         "result_root": rel(RESULT_ROOT),
         "source_cases": [row["short_case_id"] for row in source_rows],
         "rl_export_rows": len(rl_rows),
@@ -463,6 +474,8 @@ def summarize(source_rows: list[dict[str, str]], rl_export_input: Path, partner_
         "# E163 narrowSurfaceBand RL export summary",
         "",
         f"- created_at: `{summary['created_at']}`",
+        f"- source: `{summary['source']}`",
+        f"- source case count: `{summary['source_case_count']}`",
         f"- result_root: `{summary['result_root']}`",
         f"- RL export rows: `{summary['rl_export_rows']}`",
         f"- RL export decisions: `{summary['rl_export_decision_counts']}`",
@@ -519,9 +532,17 @@ def validate_exports(rl_export_input: Path, partner_manifest: Path, *, require_p
 
 
 def main() -> None:
-    global RESULT_ROOT
+    global E163_METRICS, E163_METRICS_REF, RESULT_ROOT, SOURCE_REF, TARGET_SHORT_CASES
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-root", type=Path, default=RESULT_ROOT)
+    parser.add_argument("--case-set", choices=["three", "clean8"], default="three")
+    parser.add_argument("--target-short-cases", default="")
+    parser.add_argument("--metrics-tsv", type=Path, default=E163_METRICS)
+    parser.add_argument("--source-ref", default=SOURCE_REF)
+    parser.add_argument("--manifest-subdir", default="manifest")
+    parser.add_argument("--handoff-subdir", default="s5_handoff")
+    parser.add_argument("--evidence-subdir", default="s6_downstream/evidence")
+    parser.add_argument("--rl-export-subdir", default="s6_downstream/rl_export")
     parser.add_argument("--core4d-raw-root", type=Path, default=RAW_ROOT)
     parser.add_argument("--smplx-model-dir", type=Path, default=SMPLX_DIR)
     parser.add_argument("--holosoma-repo", type=Path, default=HOLOSOMA_REPO)
@@ -532,13 +553,20 @@ def main() -> None:
     args = parser.parse_args()
 
     RESULT_ROOT = args.out_root.expanduser().resolve()
+    if args.target_short_cases:
+        TARGET_SHORT_CASES = [case.strip() for case in args.target_short_cases.split(",") if case.strip()]
+    elif args.case_set == "clean8":
+        TARGET_SHORT_CASES = CLEAN8_SHORT_CASES
+    E163_METRICS = args.metrics_tsv.expanduser().resolve()
+    E163_METRICS_REF = rel(E163_METRICS)
+    SOURCE_REF = args.source_ref
     source_rows = load_sources()
     validate_source_rows(source_rows)
 
-    manifest_dir = RESULT_ROOT / "manifest"
-    handoff_dir = RESULT_ROOT / "s5_handoff"
-    evidence_dir = RESULT_ROOT / "s6_downstream/evidence"
-    rl_export_dir = RESULT_ROOT / "s6_downstream/rl_export"
+    manifest_dir = RESULT_ROOT / args.manifest_subdir
+    handoff_dir = RESULT_ROOT / args.handoff_subdir
+    evidence_dir = RESULT_ROOT / args.evidence_subdir
+    rl_export_dir = RESULT_ROOT / args.rl_export_subdir
     partner_dir = rl_export_dir / "partner_omnirt"
     for path in [manifest_dir, handoff_dir, evidence_dir, rl_export_dir, partner_dir]:
         path.mkdir(parents=True, exist_ok=True)

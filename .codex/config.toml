@@ -1,13 +1,13 @@
 # ~/.codex/config.toml
 
 # 默认模型
-model = "gpt-5.5"
+model = "gpt-5.6-sol"
 
 # Web 搜索
 web_search = "live"    # "cached" | "live" | "disabled"
 
 # 推理强度
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 
 # 代码审查 Profile
 [profiles.review]

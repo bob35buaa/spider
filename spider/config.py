@@ -330,6 +330,17 @@ class Config:
     # E153: see cem_safety_gate_hard_floor_m. NaN (default) => floor = min_sdf_m
     # (legacy, max_violation_pct inert). Set deeper (e.g. -0.020) to activate.
     cem_hand_gate_hard_floor_m: float = float("nan")
+    # E169: dedicated lower-body/object feasibility gate. This remains separate
+    # from body and hand gates because lower-body contact is semantically illegal
+    # while light hand/object contact is intentional.
+    cem_leg_gate_enabled: bool = False
+    cem_leg_gate_geom_names: list[str] = field(default_factory=list)
+    cem_leg_gate_geom_ids: list[int] = field(default_factory=list)
+    cem_leg_gate_min_sdf_m: float = 0.005
+    cem_leg_gate_max_violation_pct: float = 0.02
+    cem_leg_gate_hard_floor_m: float = -0.005
+    cem_leg_gate_min_valid_frac: float = 0.02
+    cem_leg_gate_fallback: str = "least_violation"
     # E160: sample-level posture gate for CEM elite selection. This compares the
     # simulated root height to the reference root height, so naturally crouched
     # reference motions are not rejected by an absolute pelvis-z threshold.
@@ -340,6 +351,65 @@ class Config:
     cem_posture_gate_terminal_frac: float = 0.15
     cem_posture_gate_min_valid_frac: float = 0.05
     cem_posture_gate_fallback_lambda: float = 5.0
+    # E165-D: sample-level peak-margin rerank for downstream SUGAR hard gates.
+    # Disabled by default. It tracks worst-frame key-body and anchor deviations
+    # during CEM rollouts and filters/reranks samples before elite selection.
+    cem_peak_margin_enabled: bool = False
+    cem_peak_margin_ee_body_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+            "left_wrist_yaw_link",
+            "right_wrist_yaw_link",
+        ]
+    )
+    cem_peak_margin_ee_body_ids: list[int] = field(default_factory=list)
+    cem_peak_margin_anchor_body_name: str = "torso_link"
+    cem_peak_margin_anchor_body_id: int = -1
+    cem_peak_margin_ee_threshold_m: float = 0.25
+    cem_peak_margin_anchor_threshold_m: float = 0.25
+    cem_peak_margin_buffer_m: float = 0.03
+    cem_peak_margin_min_valid_frac: float = 0.05
+    cem_peak_margin_w_ee: float = 1.0
+    cem_peak_margin_w_anchor: float = 0.5
+    cem_peak_margin_w_posture: float = 1.0
+    cem_peak_margin_lambda: float = 3.0
+    # E166: temporal smoothness hooks for CEM rollouts. Defaults are inert;
+    # body names are resolved only when the smoothness path is enabled.
+    cem_smooth_enabled: bool = False
+    cem_smooth_body_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+        ]
+    )
+    cem_smooth_body_ids: list[int] = field(default_factory=list)
+    cem_smooth_axis: str = "xyz"  # xyz | z
+    cem_smooth_accel_weight: float = 0.0
+    cem_smooth_jerk_weight: float = 0.0
+    # E167: Holosoma-style z-only body tracking hooks. Defaults are inert.
+    e167_body_z_enabled: bool = False
+    e167_body_z_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+            "left_wrist_yaw_link",
+            "right_wrist_yaw_link",
+        ]
+    )
+    e167_body_z_ids: list[int] = field(default_factory=list)
+    e167_body_z_weight: float = 0.0
+    e167_body_z_threshold_m: float = 0.25
+    e167_ground_z_enabled: bool = False
+    e167_ground_z_names: list[str] = field(
+        default_factory=lambda: [
+            "left_ankle_roll_link",
+            "right_ankle_roll_link",
+        ]
+    )
+    e167_ground_z_ids: list[int] = field(default_factory=list)
+    e167_ground_z_weight: float = 0.0
+    e167_ground_contact_height_m: float = 0.05
     # E088: absolute object bottom clearance shaping. This uses world-frame
     # object_collision bottom height instead of relative-to-reference bottom.
     object_clearance_rew_scale: float = 0.0
@@ -441,6 +511,16 @@ class Config:
         default_factory=lambda: [23, 30]
     )  # left/right wrist_yaw_link
     local_frame_wrist_weight: float = 1.0  # 1.0 = no extra weight
+    # E166: foot/ankle hooks. All defaults are behavior-preserving.
+    local_frame_ankle_ids: list[int] = field(
+        default_factory=lambda: [7, 13]
+    )  # left/right ankle_roll_link
+    local_frame_ankle_weight: float = 1.0  # 1.0 = no extra weight
+    foot_slip_enabled: bool = False
+    foot_slip_weight: float = 0.0
+    foot_slip_contact_height_m: float = 0.05
+    foot_ground_enabled: bool = False
+    foot_ground_weight: float = 0.0
     contact_guidance: bool = False
     euler_convention: str = "XYZ"  # Intrinsic euler convention for object hinge joints
     use_scene_act: str = ""  # Path to scene_act.xml (bypass _make_contact_guidance_model)
@@ -1034,6 +1114,8 @@ def process_config(config: Config):
         or config.object_floor_penalty_scale > 0.0
         or config.cem_safety_gate_enabled
         or config.cem_hand_gate_enabled
+        or config.cem_peak_margin_enabled
+        or config.cem_smooth_enabled
         or config.object_clearance_rew_scale > 0.0
         or config.object_clearance_penalty_scale > 0.0
         or config.carry_corridor_rew_scale > 0.0
@@ -1242,6 +1324,81 @@ def process_config(config: Config):
                     )
             config.cem_hand_gate_geom_ids = geom_ids
             loguru.logger.info("CEM hand gate: {} geoms resolved.", len(geom_ids))
+        if config.cem_leg_gate_enabled:
+            geom_ids = []
+            for name in config.cem_leg_gate_geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    geom_ids.append(gid)
+                else:
+                    loguru.logger.warning(
+                        "cem_leg_gate_geom_names: geom '{}' not found.", name
+                    )
+            config.cem_leg_gate_geom_ids = geom_ids
+            loguru.logger.info("CEM leg gate: {} geoms resolved.", len(geom_ids))
+        if config.cem_peak_margin_enabled:
+            body_ids = []
+            for name in config.cem_peak_margin_ee_body_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "cem_peak_margin_ee_body_names: body '{}' not found.", name
+                    )
+            config.cem_peak_margin_ee_body_ids = body_ids
+            anchor_id = mujoco.mj_name2id(
+                model,
+                mujoco.mjtObj.mjOBJ_BODY,
+                config.cem_peak_margin_anchor_body_name,
+            )
+            config.cem_peak_margin_anchor_body_id = anchor_id
+            if anchor_id == -1:
+                loguru.logger.warning(
+                    "cem_peak_margin_anchor_body_name: body '{}' not found.",
+                    config.cem_peak_margin_anchor_body_name,
+                )
+            loguru.logger.info(
+                "CEM peak-margin: {} ee bodies resolved, anchor_id={}.",
+                len(body_ids),
+                anchor_id,
+            )
+        if config.cem_smooth_enabled:
+            body_ids = []
+            for name in config.cem_smooth_body_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "cem_smooth_body_names: body '{}' not found.", name
+                    )
+            config.cem_smooth_body_ids = body_ids
+            loguru.logger.info("CEM smoothness: {} bodies resolved.", len(body_ids))
+        if config.e167_body_z_enabled:
+            body_ids = []
+            for name in config.e167_body_z_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "e167_body_z_names: body '{}' not found.", name
+                    )
+            config.e167_body_z_ids = body_ids
+            loguru.logger.info("E167 body-z: {} bodies resolved.", len(body_ids))
+        if config.e167_ground_z_enabled:
+            body_ids = []
+            for name in config.e167_ground_z_names:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                if bid != -1:
+                    body_ids.append(bid)
+                else:
+                    loguru.logger.warning(
+                        "e167_ground_z_names: body '{}' not found.", name
+                    )
+            config.e167_ground_z_ids = body_ids
+            loguru.logger.info("E167 ground-z: {} bodies resolved.", len(body_ids))
 
     # output dir: write artifacts alongside the trial unless explicitly overridden
     if not config.output_dir:

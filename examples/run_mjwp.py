@@ -843,10 +843,11 @@ def main(config: Config):
                 config.hand_approach_contact_threshold,
             )
 
-    # E035: precompute full body xpos + xquat for local-frame tracking
+    # E035/E165-D: precompute full body xpos + xquat for local-frame tracking
+    # and peak-margin CEM rerank diagnostics.
     body_xquat_ref_t = None
     body_xpos_full_ref_t = None
-    if config.use_local_frame_reward:
+    if config.use_local_frame_reward or config.cem_peak_margin_enabled:
         T_full = qpos_ref.shape[0]
         nbody = mj_model.nbody
         body_xpos_full_np = np.zeros((T_full, nbody, 3), dtype=np.float32)
