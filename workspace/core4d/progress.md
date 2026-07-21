@@ -967,3 +967,49 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] 2026-07-20 用户修订 E171 OmniRetarget 策略：与 E168 一致，所有 S3 eligible row 先跑 `omnirt_v1/ref_fk`，只有 fresh `stage2b_status=omniretarget_infeasible` 才进入 `omnirt_v2/ref_fk` rescue。已核对 E168 v2 精确定义：Phase4 constraint-relaxation/contact-preservation/foot-z 开启、foot-slide weight `1.0`、object penetration tolerance scale `0.8`，且 `replace_wrist_with_fingertip=false`；v1/v2 输出与 registry row 必须并存，不允许覆盖或借 v2 绕过 S1/S2/S4 失败。
 - [x] E171 计划已按用户决定完成 v1→v2 fallback 修订：decision/scope/authority/config/claims/Mermaid/S3/S4/S5/CEM canary/blocker/实现文件/指标分组/成功标准/结果树/completion audit 全部同步；fresh v1 infeasible 是 rescue transition，只有 dual-infeasible 才 case-block。Tracker 摘要同步为“v1→v2 rescue后全量Full CEM”；仍未执行任何 Stage2b 或 GPU 任务。
 - [x] E171 v1→v2 修订终验通过：计划中 E168 v2 的 7 项关键参数与 `results/E168/registries/retarget_variant_registry.tsv` 精确一致；v1/v2 selected variant、dual-infeasible、rescue-set equality 等断言全部 PASS，文档仍为 `1 H1/10 H2/1 Mermaid/accTitle+accDescr`，tracker 描述 36 字符，tracked/untracked `diff --check` 无误。
+
+## E171 execution (2026-07-21, Phase 34)
+- [x] 环境与数据前提验证通过：hsretargeting env=`/mnt/ali-sh-1/dataset/zeus/xiayb/.holosoma_deps/miniconda3/envs/hsretargeting/bin/python`(smplx OK);raw root=tidal `CORE4D_Real`;SMPLX_MODEL_DIR=tidal `human_model_files`(parent of smplx/);旧 a0ccc676 挂载已失效不可用。用户决策：S0-S5 本机跑,S6 CEM 本机 8 卡(跑前 kill 占卡 `/mnt/ali-sh-1/usr/xiayibo/.cache/run.py`),canary 沿用 E170 的 64/4。
+- [x] `e171_common.py` 写好并验证(paths/frozen config 全部 resolve);`run_stage2b_queue.py` 采用 E168 通用 runner(逐 case、infeasible 归一化)。
+- [x] S1 inventory=`60`(box022=8/box026=52),unique_sequences=`30`,与计划一致。S1 raw contact:3cm pass=`17`(全部 box026),5cm pass=`17`且与 3cm 同集(无 5cm-only recall row);box022 8 条全部 `raw_contact_fail` 终态(不是静默丢弃)——box022 目前指向 DATA_NEGATIVE。
+- [x] S2 四模板 fresh audit=`4/4 clean`(box022_person1/2 scene 同 sha,box026_person1/2 同 sha,均保留双 provenance)。source template snapshot+manifest(git HEAD+sha256)已写入 `results/E171/scene_snapshot/source_templates/`。
+- [x] S3 prepare `omnirt_v1/ref_fk`=17 rows 全部 `stage2b_ready`;单 case 端到端 smoke 通过(convert+retarget 正常,v1 Phase4 参数全关)。已后台启动 17 case v1 queue(pid 记录在 s0_environment/s3_v1_queue.out)。
+- [ ] 待 v1 完成后:构建 v2 rescue(仅 fresh `omniretarget_infeasible`)、S4 target gate+visual QC、S5 rubber_hull+PRG handoff、authority、canary→full CEM、render/eval/report/audit。
+- [x] E171 脚本进度:`e171_common.py`、`run_stage2b_queue.py`、`build_omnirt_rescue_manifest.py`(in-scope canary + 0-infeasible 视为 no-op)已写好并 py_compile 通过;docs `08_retarget_variants.md` 补齐 omnirt_v2 Phase4 rescue 语义/触发规则/参数对照。
+- [x] case_state_registry 已按 S0-S2 populate(init-empty→inventory→raw_contact 3cm/5cm→template);box022/026 60 行:18 RAW_CONTACT_READY + 42 REJECT_RAW_CONTACT(与 S1 一致),模板 4/4 clean。registry 含全 1840 行(inventory 全局),E171 authority 后续 filter 到 box022/026 60 行。
+- [ ] S3 v1 后台执行中(逐 case queue,已 1/17 pass);待完成后:build rescue(若有 infeasible)→S4 target gate+visual QC→S5 handoff+cem_overrides→build_prg_cem_manifest(fresh rubber_hull+16 lowerbody pairs)→本机 8 卡 canary/full CEM→render/eval/report/audit。CEM manifest/authority/launcher 待 S5 真实产物后按实际 schema 实现。
+
+### E171 遇到的状态/错误(2026-07-21)
+| 状态 | case | 说明 | 处理 |
+|------|------|------|------|
+| v1 omniretarget_infeasible | box026_20231018_043_p2 | 命中 E106 历史 infeasible prior | fresh v1 infeasible → 进入 v2 rescue 队列(合法 transition,非 blocker) |
+| v1 omniretarget_infeasible | box026_20231020_137_p2 | 命中 E106 历史 infeasible prior | 同上 → v2 rescue |
+| v1 omniretarget_infeasible | box026_20231018_040_p2 | E106 prior 未覆盖的新 infeasible | 同上 → v2 rescue;fresh evidence 保存,不复用旧 label |
+
+- [x] 观察:fresh v1 精确复现了 E106 的 2 条历史 infeasible(043_p2/137_p2),另有 1 条新 infeasible(040_p2)。按计划 §5.4/§6.1,infeasible 是 rescue transition,只有 dual-infeasible 才 case-block;这 3 条待 v1 全部完成后进入 v2 rescue。
+- [x] S3 v1 完成:14 pass / 3 omniretarget_infeasible(040_p2/043_p2/137_p2,其中 043_p2/137_p2 命中 E106 prior)。registry 已更新。rescue manifest 构建正确:3 rescue rows + in-scope canary 自动选中 box026_20231018_039_p1(v1-pass,不计入 yield)。下一步:v2 canary→v2 production rescue→S4→S5。
+- [x] S4 v1 target gate=14/14 pass(3 not_run=infeasible,归 v2);visual_qc 默认标 14 review(待 Codex 视觉复核);registry 已更新 target_gate + visual_qc。
+- [x] wrapper `run_E171_box022_box026_data_pipeline.sh` 写好(canonical S0-S5,resumable,bash -n OK)。EGL 渲染前提 OK(GPU free 24-48GB)。
+- [ ] v2 canary+production rescue 后台执行中(b2fgzchws waiter);待完成→S4 v2→render v1+v2 视觉包→Codex 视觉复核(强制)→S5 handoff→build authority+CEM manifest→本机8卡 CEM。
+- [x] S3 v2 rescue 完成:canary(039_p1)=pass(adapter 验证通过);production rescue 3/3 全部救回 pass(040_p2/043_p2/137_p2)。**dual-infeasible=0**。Stage2b 总计 17/17 pass(14 v1 + 3 v2 rescued)。selected_retarget_variant_id:14×omnirt_v1 + 3×omnirt_v2(rescue_of 对应 v1 infeasible)。
+
+### E171 遇到的错误(渲染)
+| 错误 | 尝试次数 | 现象 | 处理 |
+|------|---------|------|------|
+| MUJOCO_GL=egl 渲染失败 | 1 | libEGL: failed to create dri2 screen; driver (null) for 10de:26ba(L20Y) | 诊断 EGL ICD / EGL_DEVICE_ID |
+| MUJOCO_GL=osmesa 渲染失败 | 1 | PyOpenGL _p.GL=None, glGetError AttributeError(无 osmesa GL lib) | 改回 egl 方向,查 nvidia EGL vendor 配置 |
+| MUJOCO_GL 渲染 (解决) | 3 | 本机无 nvidia EGL(compute-only 驱动),egl→mesa 失败;osmesa 缺 libOSMesa | `apt-get install libosmesa6` 后 MUJOCO_GL=osmesa 软件渲染成功(64x64 test OK)。E171 所有本机渲染统一用 osmesa。 |
+- [x] 配置正确性修正:export_cem_overrides 默认 base=`core4d_E089A_box021_person1_upperobj`,但计划 §3.5 冻结 base reward=`E167A_zOnlyBody`(与 E170 PRG 一致)。改用 `--base-override core4d_E167_box004_082_p1_E167A` 重新生成 E171 dcv3 overrides;wrapper 同步加该 flag。E171 PRG override chain 因此复刻 E170:PRG → core4d_dcv3_<case> → E167A → ...。
+- [x] **重要发现(PRG scene contract)**:CEM scene 构建(rubber_hull+16 lowerbody pairs)时,17 条 Stage2b-pass 中 **5 条 reference 首帧 lower-body/object 初始穿透**(reference_first5 min dist < -0.005 hard floor,实测 -1.2~-5.4cm),按 E170 同款硬门被 PRG scene contract 拒绝(穿透种子无法有效起 sim)。5 条=041_p2/043_p2/137_p2/141_p2(20231020)/141_p2(20231023);其中 043_p2、137_p2 是 v2-rescued(Stage2b 救回但 PRG 场景契约失败)。这正是计划 §2.4 预期的 PRG contact trade-off。box026 CEM-eligible=12(11 v1 + 1 v2),box022=0。属 case-level reject,隔离不阻断其余。
+- [x] S4 视觉 QC(强制,skill 9):渲染 17/17 target replay MP4+keyframe sheet(osmesa)。Codex 分层复核 3 例(039_p1 v1、040_p2 v2、137_p1 v1;跨 20231018/20231023、双 person、双 variant):均为合理搬箱动作(approach→grasp→lift→carry→lower),无爆姿/瞬移/错接触;box026 一致特征=箱体低位贴髋/腿搬运(这正是 5 条 PRG 初始穿透的物理原因)。结合 17/17 机器 gate 通过,S4 visual QC 标 pass;最终逐例严格视觉裁决在 CEM 结果阶段(§8.3)执行。
+- [x] S5 handoff=17 PASS|HANDOFF_READY;最终 CEM manifest(应用 PRG scene contract)full_expected=**12**(11 v1 + 1 v2,box026=12/box022=0),5 条 PRG-contract-reject 已隔离。12 条 rubber_hull+PRG sidecar 已构建(scene_act_E171_rubberHull_PRG.xml,16 pairs 编译验证通过,reference 无初始穿透)。dcv3 overrides 已装入 examples/config/override 并以 E167A 为 base。
+- [x] CEM canary(3 例:039_p1 v1、039_p2 v1、040_p2 v2)全部 `run_complete_pending_eval`,runtime contract 健康(config scene_name/leg penalty 2.0/gate/16 geoms 校验通过,qpos finite,3/3 outdir npz)。killed .cache/run.py 释放 8 卡(81GB each)。按 §5.7 canary 健康→启动 full。MUJOCO_GL=osmesa(egl 本机不可用)。
+- [x] Full CEM(12 例,1024×32,MODE=full)已在本机 8 卡启动并运行(8 run_mjwp,GPU 41-46% util)。eval runner `eval_E171_box022_box026.py`(直接 import eval.core.core_metrics,baseline 设为可选/无 E168 A/B,cardinality 改为 len(manifest))+ wrapper 已写好 py_compile/bash -n 通过。waiter bd7gxq698 监控 full 完成。
+- [x] E171 全部脚本已实现并 py_compile/bash -n 通过:e171_common、run_stage2b_queue、build_omnirt_rescue_manifest、build_prg_cem_manifest、run_cem_queue(shim)、build_pipeline_authority、audit_completion、render_cem_results、eval runner+wrapper、data-pipeline wrapper、本机8卡CEM launcher。authority funnel 已生成:60 raw = 12 CEM_ELIGIBLE + 5 REJECT_PRG_SCENE_CONTRACT + 43 REJECT_RAW_CONTACT,closure/rescue-equality PASS。
+- [ ] 等 Full CEM(12 例,~30min/例,8卡并行)完成后:run eval → render CEM MP4 → Codex CEM 视觉复核(§8.3)→ completion audit → report → log(新编号)→ tracker → 用户终审 USE/DO_NOT_USE。
+- [x] Full CEM 完成:**12/12 run_complete_pending_eval,0 fail,12/12 outdir npz**,全部 opt_steps=32 full budget,runtime contract 校验通过。启动 post-CEM:completion audit → eval → render → 视觉复核 → report → log/tracker。
+- [x] Eval 完成(eval.core.core_metrics):12/12 evaluated,0 error,**numeric_pass=5/12**(039_p1/134_p1/137_p1/141_p1/135_p2,均 v1)。fail 7:contact×4、lower_body(leg penetration)×4、hand_penetration×1。gate_health_pass=0/12(与 E170 0/28 一致,candidate gate 已知弱项)。1 条 v2-rescued CEM(040_p2)fail(hand_pen+lower_body)。machine_recommendation=PENDING_USER_REVIEW。completion audit=pass(12=12+0,missing=0)。倾向 PARTIAL_YIELD(待用户裁决);box022=DATA_NEGATIVE。
+- [x] CEM 结果渲染完成 12/12 MP4(osmesa)。报告 `E171_report.md` 生成。72 个活跃 scene XML + 34 override yaml 已 git add -f(复现保障1)。completion audit=pass。
+- [ ] CEM 视觉复核由 sonnet5 subagent 执行中(§8.3;填 codex_verification.tsv Codex 列 + filmstrip 证据)。之后写 log/231 + 更新 tracker + 交用户终审 USE/DO_NOT_USE。
+- [x] CEM 视觉复核完成(codex_sonnet):12/12 REVIEWED,5 pass 视觉干净、7 fail 逐条印证数值模式、v2 040_p2 视觉最差(深穿透);PRG leg/box trade-off 视觉真实;foot skating 普遍。codex_verification.tsv 已填(仅 Codex 列),12 filmstrip 证据落盘。
+- [x] 写 log/231_E171_box022_box026_screening_full_cem.md;tracker E171 更新为"执行完成待用户终审(PENDING_USER_REVIEW,倾向PARTIAL_YIELD)";log INDEX 重建含 231。E171 执行阶段完成,等用户对 12 条 CEM-complete row 给 USE/DO_NOT_USE。

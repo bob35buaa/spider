@@ -1,0 +1,23 @@
+{
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/box026_person2/scene.xml",
+  "source_qpos": "workspace/core4d/results/E171/s3_retarget/omnirt_v2/ref_fk/results/omnirt_v2_ref_fk/holosoma_dcv3_omnirt_v2_ref_fk_box026_20231018_040_p2/trimmed/20231018-040-person2-Box026_with_obj_original.npz",
+  "task": "dcv3_omnirt_v2_ref_fk_box026_20231018_040_p2",
+  "data_id": "0",
+  "date": "20231018",
+  "seq": "040",
+  "person": "person2",
+  "object_name": "Box026",
+  "object_model_rel": "box/box026_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    -0.692085862159729,
+    0.43932101130485535,
+    0.19807353615760803
+  ],
+  "object_initial_quat": [
+    0.5056911706924438,
+    0.5077293515205383,
+    0.4940812885761261,
+    0.49231189489364624
+  ]
+}
