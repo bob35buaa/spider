@@ -1105,3 +1105,10 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [ ] CEM 视觉复核由 sonnet5 subagent 执行中(§8.3;填 codex_verification.tsv Codex 列 + filmstrip 证据)。之后写 log/231 + 更新 tracker + 交用户终审 USE/DO_NOT_USE。
 - [x] CEM 视觉复核完成(codex_sonnet):12/12 REVIEWED,5 pass 视觉干净、7 fail 逐条印证数值模式、v2 040_p2 视觉最差(深穿透);PRG leg/box trade-off 视觉真实;foot skating 普遍。codex_verification.tsv 已填(仅 Codex 列),12 filmstrip 证据落盘。
 - [x] 写 log/231_E171_box022_box026_screening_full_cem.md;tracker E171 更新为"执行完成待用户终审(PENDING_USER_REVIEW,倾向PARTIAL_YIELD)";log INDEX 重建含 231。E171 执行阶段完成,等用户对 12 条 CEM-complete row 给 USE/DO_NOT_USE。
+
+### 审阅可视化工具(review player · viser · 2026-07-22)
+- [x] 新建交互式 viser 审阅播放器,跨 E170–E173 统一浏览 99 个 CEM-complete case:按物体/数值达标/失败原因/v1·v2 变体筛选;实时 3D 回放机器人+物体轨迹(MuJoCo,可选参考残影);在线标注 USE/DO_NOT_USE/quality→写非破坏性 `user_manual_review_filled.tsv`(不动 template)。
+- [x] 复用:`spider.viewers.viser_viewer` 无状态 geom→trimesh helper;E168 `render_a100_cem_videos`(load_render_config/rollout_qpos/converted_reference_qpos)——与已复核 MP4 完全同一加载路径,故 3D 保真度=已复核 montage。自建可切换 server + 播放引擎,规避 `log_frame` 全局单例不可切换问题。
+- [x] 文件:`scripts/eval/review/{review_index.py,viser_review_player.py}` + `scripts/eval/wrappers/review_player.sh`。
+- [x] 验证:`--check` case 数与 summary.json 完全一致(E170 28/12·E171 12/5·E172 6/5·E173 53/26,共 99,playable 95/99——E170 4 条 3D 归档缺失优雅降级仍可标注);headless 实测 E173 pass/fail + E170(snapshot 场景)+ E172 加载、31 body 全动 max_disp 2.04m 非静止、标注往返落盘且 template 不变。E170 场景走 `scene_snapshot/{case}/`,outdir 走 `spider_workdirs/`→`workspace/` 归一。viser 1.0.26 已装。
+- [ ] 待用户在浏览器逐 case 给 USE/DO_NOT_USE(填 filled TSV);回填后再定最终 yield 分级(machine 仍 PENDING_USER_REVIEW,回填前不导 RL)。
