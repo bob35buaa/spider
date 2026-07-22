@@ -85,7 +85,7 @@ evaluator 直接 import `eval.core.core_metrics`，阈值 launch 前冻结。com
   - box001_039_p1（大箱 v1 **pass**）：直立推大箱、脚着地、全程稳定 → 视觉印证 numeric pass。
   - box001_040_p1（大箱 v1 **fail** lower_body）：推箱时腿压入大箱低位底面 → 视觉印证 lower_body 穿透。
   - box001_2_039_p1（大箱 **v2** pass）：直立推箱干净 → v2 大箱下游有效产出。
-  - box023/box024 CEM montage 见 spotcheck 目录（渲染 osmesa 较慢，补充中；S4 target 已全部视觉核验）。
+- **S6 CEM 全量渲染（`s6_downstream/render/full/`，2026-07-22 补全）**：**53/53 MP4 全部渲染完成，0 fail**（box001 28 + box023 16 + box024 9，171M）。此前仅 box001 12 条（上轮渲染器回退时中断）；用户要求全量可视化后，用 `run_E173_render_all.sh`（osmesa 纯 CPU，按 case round-robin 8-shard 并行，resume-safe）补齐全部 box023/box024 + 剩余 box001。box023 全部 squat-lift-carry 干净；box024 fail 集中在 hand_penetration（手陷大平面）。
 - 视觉结论与数值一致：大箱失败集中在手陷入大平面 + 腿贴箱，非 reward hacking。
 
 ## 8. Claims 验证
@@ -121,8 +121,8 @@ evaluator 直接 import `eval.core.core_metrics`，阈值 launch 前冻结。com
 - metrics：`results/E173/s6_downstream/eval/full/{e173_case_metrics.tsv,summary.json}`
 - Codex 核验：`.../eval/full/codex_verification.tsv`；用户模板：`.../user_manual_review_template.tsv`
 - CEM manifest/scenes：`.../manifests/cem_full_manifest.tsv`、`scene_snapshot/{source_templates,cem_sidecars}/`
-- 报告：`.../eval/full/E173_report.md`；MP4：`.../render/full/`；montage：`.../evidence/visual_qc/codex_cem_spotcheck/`
-- 脚本：`scripts/experiments/E173/`、`scripts/launch/active/run_E173_*`、`scripts/eval/{runners,wrappers,reports}/*E173*`
+- 报告：`.../eval/full/E173_report.md`；MP4：`.../render/full/`（**53/53 全渲染**，box001 28+box023 16+box024 9）；montage：`.../evidence/visual_qc/codex_cem_spotcheck/`
+- 脚本：`scripts/experiments/E173/`、`scripts/launch/active/run_E173_*`（含 `run_E173_render_all.sh` 全量渲染 launcher）、`scripts/eval/{runners,wrappers,reports}/*E173*`
 
 ## 11. 下一步
 

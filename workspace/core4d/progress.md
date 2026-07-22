@@ -76,6 +76,7 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - **v2**：14/14 Stage2b 救回(大箱v1更易infeasible)，下游 4/12 numeric pass。视觉：box001 pass=直立推箱干净/fail=腿压箱穿透/v2=干净；box023=squat-lift-carry干净。与数值一致，非reward hacking。
 - 结论倾向 **PARTIAL_YIELD**（小箱强，大箱弱）；**PRG 不宜作大箱默认**。machine=PENDING_USER_REVIEW，待用户对 53 row 给 USE/DO_NOT_USE。
 - 产物：log/233、report、tracker Phase36、6模板 git add -f+snapshot、56 sidecar snapshot。
+- **全量 CEM 渲染完成 (2026-07-22)**：用户指出 render/full 只有 box001。新建 `run_E173_render_all.sh`（osmesa 纯CPU，按 case round-robin 8-shard 并行，resume-safe skip 已存在 MP4）→ **53/53 MP4 全部渲染,0 fail**（box001 28 + box023 16 + box024 9，171M，最小~750KB 均有效）。清理 1 个上轮中断的孤儿 tmp。log/233 §7 更新为 53/53 完整渲染。
 ---
 
 ## Active: E172 — Box004 全流程筛选 + Full CEM (E170/E171 算法) 计划 (2026-07-21)
