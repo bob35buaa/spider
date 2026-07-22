@@ -1,15 +1,37 @@
 {
-  "source_scene": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
-  "source_qpos": "/home/ubuntu/Workspace/spider/workspace/core4d/results/E077/holosoma_box023_person2/trimmed/20231008-045-person2-Box023_with_obj_original.npz",
-  "object_initial_pos": [
-    -0.7826600074768066,
-    -1.1213067770004272,
-    0.14026491343975067
+  "asset_path": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/assets/objects/box023/box023_m.obj",
+  "base_scene": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "build_mode": "apply",
+  "clean_robot_inertial_source": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "collision_policy": "mesh_aabb_box",
+  "created_at": "2026-07-22T02:43:41+08:00",
+  "data_construction_v3_built": true,
+  "diaginertia": [
+    0.10201341250067708,
+    0.10218023263249809,
+    0.0767848287581231
   ],
-  "object_initial_quat": [
-    -0.006451329682022333,
-    -0.0007823040941730142,
-    0.7010128498077393,
-    0.7131190299987793
-  ]
+  "extents_m": [
+    0.30387823,
+    0.30321875,
+    0.39101224999999995
+  ],
+  "half_extents_m": [
+    0.151939115,
+    0.151609375,
+    0.19550612499999998
+  ],
+  "inertia_formula": "box: Ixx=m/12*(y^2+z^2), Iyy=m/12*(x^2+z^2), Izz=m/12*(x^2+y^2)",
+  "manual_review_required": false,
+  "mass_kg": 5.0,
+  "mesh_sha256": "ec53d6ad3507bd12e2eaccca396391cd7ec712db2580fc7ad55bcea2a7c76489",
+  "object_category": "box",
+  "object_key": "box023",
+  "object_mass_policy": "assumed_uniform_5kg_v3_no_real_mass_source",
+  "person": "person2",
+  "proxy_template": false,
+  "raw_object_mesh": "/mnt/tidal-alsh01/dataset/zeus/xiayb/other-datasets/mocap_data/CORE4D/CORE4D_Real/object_models/box/box023_m.obj",
+  "schema_version": "core4d_data_construction_v3.0",
+  "source_template_pose_policy": "neutral placeholder from clean base; target scene must patch object pose from trimmed qpos first frame",
+  "task": "box023_person2"
 }

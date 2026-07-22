@@ -134,7 +134,7 @@
     <mesh name="right_wrist_yaw_link" file="right_wrist_yaw_link.STL" />
     <mesh name="right_rubber_hand" file="right_rubber_hand.STL" />
     <mesh name="box023" file="../../../../../example_datasets/processed/core4d/assets/objects/box023/box023_m.obj" scale="1 1 1" />
-    <material name="box_material" rgba="0.6 0.4 0.2 1" />
+    <material name="box023_material" rgba="0.40 0.50 0.60 1" />
   </asset>
   <worldbody>
     <light pos="0 0 5" dir="0 0 -1" type="directional" />
@@ -338,9 +338,9 @@
     </body>
     <body name="object" pos="0.155 -0.124 0.310">
       <freejoint name="object_joint" />
-      <inertial pos="0 0 0" mass="5.0" diaginertia="0.15 0.15 0.1" />
-      <geom name="object_visual" type="mesh" mesh="box023" material="box_material" group="2" contype="0" conaffinity="0" />
-      <geom name="object_collision" type="box" size="0.1531 0.1568 0.1766" rgba="0.6 0.4 0.2 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <inertial pos="0 0 0" mass="5.000" diaginertia="0.10201341 0.10218023 0.07678483" />
+      <geom name="object_visual" type="mesh" mesh="box023" material="box023_material" group="2" contype="0" conaffinity="0" />
+      <geom name="object_collision" type="box" size="0.151939 0.151609 0.195506" rgba="0.40 0.50 0.60 0.3" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
       <site name="trace_object" size="0.02" rgba="0 0 1 1" />
     </body>
   </worldbody>

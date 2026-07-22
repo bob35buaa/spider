@@ -13,6 +13,71 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 
 ---
 
+## Active: E173 — box024/box023/box001 move-only 全流程 + Full CEM (E170 算法) 计划 (2026-07-22)
+
+- [x] 上下文恢复：读 tracker + E172 plan(188)/log(232) + memory；确认 E170/E171/E172 冻结算法与 move-only funnel 自动化（dcv3 `HIGH_RISK_ACTION_PREFIXES` 含 join/leave/rot/pass/strike/raise → `reject_action_not_first_line`）。
+- [x] Fresh raw 盘点（live root，obj_name 大小写合并，action 取自 action_labels.json）：
+  - **box024**：23 seq/46 pc → move 5 seq/**10 pc**（其余 18 seq 为 join/leave 交接）；非首选 36 pc。日期 20231011/20231108。
+  - **box023**：23 seq/46 pc → move 16 seq/**32 pc**；非首选 14 pc（pass2×3/pass1×2/rot×2）。日期 20231008/11/20。
+  - **box001**：51 seq/102 pc → move 23 seq/**46 pc**；非首选 56 pc（join/leave/pass/rot）。6 日期。
+  - 合计 **97 seq / 194 raw pc → 88 move pc production**。
+- [x] 尺寸（mesh AABB）：box024 0.253 m³/对角1.22m（大）、box001 0.256 m³/1.14m（大）、box023 0.036 m³/0.58m（小）。E173 **首次纳入大箱**（此前 box021/026/004 均 ≤0.12 m³），box023 作小箱对照。
+- [x] Template 差异（关键）：box023 person1/2 已 git-tracked clean；**box024/box001 仅 person1 存在、untracked、无 task_info，person2 缺失** → S2 需 dcv3 clean flow 补建 person2 + task_info，只阻断该物体不牵连 box023。box023 历史 `_e0**` 污染变体不作 base。
+- [x] 历史：box024 完全无实验；box023 有 pre-PRG（E055–E072/E163）多次 FAIL，仅 warning 不作基线/completion；box025 邻近大箱(E041/E080)仅定性参考。
+- [x] 写入 `plan/189_E173_box024_box023_box001_full_pipeline_plan.md`（12 Claims、per-object funnel、S0-S6、分级阻断按物体隔离、逐物体+全批 completeness、优先级 box024→box023→box001、本机8卡、不导出RL），更新 tracker Phase 36 planning row。
+- [ ] 下一步：**等用户确认 plan 后**再进入 implementation（fork E172 脚本 → `scripts/experiments/E173/` + `launch/active/run_E173_*`，OBJECT_KEYS=3物体，method `E173_E170PRG_crossObject_candidate_r1`）；当前未创建任何 builder/launcher，未跑 S1-S6。
+
+### E173 执行 (2026-07-22，/goal 授权持续推进 + 可 kill .cache/run.py)
+- [x] Fork E172→E173：`scripts/experiments/E173/`(e173_common+7脚本)、`launch/active/run_E173_data_pipeline.sh`+`run_E173_local_8gpu_cem.sh`、`eval/{runners,wrappers,reports}/*E173*`。py_compile+bash -n 全过。e173_common: OBJECT_KEYS=(box024,box023,box001)+OBJECT_PRIORITY、EXPECTED 194/97/88/44、per-object RAW_INVENTORY_PRIOR、SCENE_NAME=scene_act_E173_rubberHull_PRG、method E173_E170PRG_crossObject_candidate_r1。
+- [x] base-override 决策：沿用 E171 多物体先例，用 object-agnostic `core4d_E167_box004_082_p1_E167A`（zOnlyBody reward 与物体无关，per-case scene/task 由 handoff 逐行注入）。plan §3.5 "per-object base override" 简化为单一冻结 base（与 E170/E171/E172 字段级一致，避免 confound）。
+- [x] S0 PASS：check_environment overall=PASS；registries 初始化。GPU 8卡均被授权 filler `.cache/run.py`(9 PID) 占用(98-100%util, 各用33-49GB/81GB)；按 plan filler 留到 S6 CEM 前再 kill，S0-S5 retarget/preprocess 用剩余 ~35GB/卡。
+- [x] **S1 move-only funnel 验证通过（194 raw 闭合）**：box024 46→10 move(→raw_contact)+36 Stage0 reject；box023 46→32+14；box001 102→44+56 reject+**2 reject_motion_weak**（move 但物体运动弱，合法额外 gate）。合计 86 review_to_raw_contact + 106 high_risk reject + 2 motion_weak = 194。inventory 自带 size_band：box024/box001=`near_box025_large_review`（**PRG 系列首个大箱**），box023=`small_above_bucket001_to_box023`（小箱对照）。
+- [ ] 进行中：raw_contact 3cm/5cm（86 move cases）→ S2 template（box024/box001 person2 补建）→ S3 v1/v2 → S4 → S5 → S6 CEM。
+
+### E173 execution errors + fixes (2026-07-22)
+| 问题 | 诊断 | 修复 |
+|---|---|---|
+| **move-only leak**：raw_contact_pass_3cm 含 28 条非首选(join/leave/pass)通过3cm | raw_contact 对所有 candidate 算接触；run_stage2b `stage2b_decision` 只 gate raw_contact_pass+template，不 gate move。E172 未触发（box004 非move自然接触fail） | 在 pipeline S1 后加 move-only 过滤：只保留 inventory_decision∈{pass,review}_to_raw_contact → `raw_contact_pass_3cm_moveonly.tsv`，RCPASS 指向它。在 S3 retarget 启动前 kill 掉误启的 queue（0 case 已执行，无污染） |
+| **S2 template audit_fail**：box023 p1/p2、box024 p1 geometry_review（碰撞盒偏离mesh AABB >8%），box024/box001 p2 缺失 | 默认 audit 不rebuild；碰撞盒与mesh AABB rel_error>0.08 判 geometry_review | S2 加 `--apply-build --overwrite-existing` 重建所有box模板→碰撞盒=mesh AABB(rel_err~0)。box001/box023 6→clean |
+| **box024 mujoco_load_error**：重建后 material `box024_material` not found | builder 默认 base=box023_person1（含`box023_material`），rename 正则找`box_material`不匹配→材质定义没改名，geom却引用box024_material | 直接改 box024_person1/person2 scene.xml line137 材质定义名→box024_material。两 scene MuJoCo load OK。**builder bug 记录**（base scene 材质名与rename正则不一致，影响新建非box023物体） |
+
+- [x] S2 最终：6/6 template clean（box001/box023/box024 × p1/p2，碰撞盒=mesh AABB）。git add -f 6 scene.xml+task_info.json。
+- [x] Snapshot：`results/E173/scene_snapshot/source_templates/`（manifest.txt=git HEAD+sha256；注 p1/p2 scene 同SHA，源模板为中性占位，person差异在S3轨迹）。
+- [x] S3 v1 manifest（move-only 56 ready：box001:30/box023:16/box024:10；raw-contact 3cm gate 已把 box023 32→16、box001 44→30）。
+- [x] **S3 v1 并行化**：192核/2TB 主机串行浪费数小时；case 独立且确定（固定OmniRetarget seed+SPIDER preprocess），分片只改wall-clock不改结果。新建 `run_E173_stage2b_parallel.sh`（分片→并行→合并manifest），24 shard 跑 53 eligible（3已pass）。串行queue先kill(3 case已pass无损)。
+- [ ] 进行中：v1 24-shard 并行 retarget（~10min）→ 合并 → v2 rescue → S4 → S5 → S6 CEM。
+
+### E173 S3–S4 结果 (2026-07-22)
+- **S3 v1**（并行 24-shard，~11min）：**42 pass / 14 omniretarget_infeasible**。box001 21p/9inf、box023 15p/1inf、box024 6p/4inf。大箱 v1-infeasible 率显著更高（box024 40%、box001 30% vs box023 6%）——大物体 OmniRetarget 更难。
+- **S3 v2 rescue**（14 cases 并行）：**14/14 全部救回 pass，dual-infeasible=0**（box001 9/9、box024 4/4、box023 1/1）。v2 Phase4 在大箱上收益极强（远超 E172 的 1/1、E171 的 0 净产出）。
+- **Stage2b 最终：56/56 move case pass**（42 v1 + 14 v2 selected）。
+- **S4 target gate：56/56 pass**（v1 42 + v2 14；14 v1 not_run 是被 v2 接管的 infeasible）。
+- S4 visual QC：56 全 review（默认态，待视觉核验）；keyframe render 进行中。
+- [ ] 待办：S4 视觉核验→apply pass；S5 rubber+PRG handoff；S6 CEM。
+
+### E173 S4–S6 结果 (2026-07-22)
+- **S4 visual QC：56/56 pass**。Codex 分层视觉抽查（大箱/小箱×v1/v2 共4条 keyframe sheet 全干净）：小箱 box023 squat-lift-carry（可举），大箱 box024/box001 lean-over-push（太大只能推）——尺寸驱动的合理差异，无穿透/浮空/爆姿。target_gate 56/56 机器pass。绑定视觉评在 S6 CEM 视频。spotcheck 存 `s4_gate_visual_qc/codex_review/`。
+- **S5 handoff：56 HANDOFF_READY**（box001:30/box023:16/box024:10）。CEM overrides 56（object-agnostic E167A base，dcv3 override 已复制到 Hydra 路径避免假 missing）。
+- **S5 PRG scene-contract：53 eligible / 3 blocked**（box001:28/box023:16/box024:9）。3 blocked 全大箱（box001×2, box024×1, box023×0）：`runtime_initial_overlap` 首5帧 lower-body/object 距离负值(-0.016/-0.011/-0.009m < hard floor -0.005m)——腿起始已与大箱重叠。**大箱 lower-body/object trade-off，随箱体尺寸放大**（E171 box026低位5 reject、E172 box004 0、E173 大箱3）。56 sidecar git add -f + snapshot。
+- **S6 canary：5/5 complete, launcher fail=0**（runtime 契约健康）→ 放行 Full CEM。
+- [ ] 进行中：Full CEM 53 cases（8卡分片，box024→box023→box001），1024/32。filler 已释放。
+
+### E173 Full CEM 并行化 (2026-07-22)
+- 8卡串行(1 case/GPU)首case ~40min未完，53 case/8卡≈4.7h。诊断：CEM `use_torch_compile=false`(冻结E172配置)→ CPU-bound(run_mjwp 97% CPU/1核, 45% GPU, 1.7GB显存/case)。
+- 192核/8×81GB 空闲 → 新建 `run_E173_full_cem_parallel.sh`：53 单case shard 并发(cap48, OMP=1)，各 pin 到 manifest assigned_gpu。数值不变(同 samples/steps/seed/reward)，只改调度。预计 ~1 case-time(~40-50min) 完成。串行run已kill(0 case完成，无污染)。
+- **修正认知**：48-wide 过饱和 GPU（99%×8，6-7 case/GPU 时分），每 case 慢 ~2-3×（8-wide 时 CPU-bound 45% GPU，48-wide 变 GPU-bound）。净吞吐仅比串行略快。最优并发应 ~8-16(1-2/GPU)。但已 80min in-flight（~sunk），重启代价更高，故等其跑完。完成 artifact = `E173_{case}_PRG.npz`（非 _PRG_full）。4 case 已在串行 round-1 完成经 skip-complete 复用。
+- **48-wide 失败回退**：跑 2h 仅 5/53 完成（48-wide GPU 时分把每 case 拖到 >200min，无 cascade）。kill 48-wide → 回退**8-wide 串行**(`run_E173_local_8gpu_cem.sh` MODE=full，1/GPU，GPU~44% 不饱和，~40min/case 稳定)。5 done 经 skip-complete 复用。48 剩余 /8 = ~6 轮 ≈ 4h。教训：CEM(warp) GPU-bound，最优 1/GPU；不要盲目 pack。
+- [ ] 进行中：8-wide 串行 Full CEM，~4h。完成后 eval+report+audit+log/233。
+
+### E173 完成 (2026-07-22，commit 待推)
+- **Full CEM 53/53 完成**（8-wide 串行 ~5h，launcher fail=0，completion audit PASS）。eval：53 evaluated, 0 error, **26 numeric pass**。
+- **逐物体**：box023(小0.036m³) 13/16=81%；box024(大0.253) 3/9=33%；box001(大0.256) 10/28=36%。v1 22/41, v2 4/12。gate-health 0/53。
+- **核心发现：PRG pass 率随尺寸单调退化**——box004(0.041)83% / box023(0.036)81% / box021(0.059)64% / box026(0.116)42% / box024(0.253)33% / box001(0.256)36%。小箱~80% 大箱~35%。大箱失败主因 hand_penetration(手陷大平面)+lower_body(腿贴箱)+3条起始重叠 scene-reject。
+- **v2**：14/14 Stage2b 救回(大箱v1更易infeasible)，下游 4/12 numeric pass。视觉：box001 pass=直立推箱干净/fail=腿压箱穿透/v2=干净；box023=squat-lift-carry干净。与数值一致，非reward hacking。
+- 结论倾向 **PARTIAL_YIELD**（小箱强，大箱弱）；**PRG 不宜作大箱默认**。machine=PENDING_USER_REVIEW，待用户对 53 row 给 USE/DO_NOT_USE。
+- 产物：log/233、report、tracker Phase36、6模板 git add -f+snapshot、56 sidecar snapshot。
+---
+
 ## Active: E172 — Box004 全流程筛选 + Full CEM (E170/E171 算法) 计划 (2026-07-21)
 
 - [x] planning-only 上下文恢复：读取 data-construction-v3 SKILL、experiment-planning-zh、tracker/progress、E170 plan(186)/E171 plan(187)+log(231)、E168 plan(184) box004 accounting、memory `e171-data-paths-and-env`；未改代码、未启动任务。

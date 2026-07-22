@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 231 个日志文件。
+> 自动生成，共 232 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 36 (E173-E173)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 233 | E173 | 2026-07-22 | Box024 box023 box001 screening full cem | [233_E173_box024_box023_box001_screening_...](233_E173_box024_box023_box001_screening_full_cem.md) |
 
 ## Phase 35 (E172-E172)
 
