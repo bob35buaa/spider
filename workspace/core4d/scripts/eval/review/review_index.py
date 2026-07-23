@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified case index + annotation store for the PRG review player (E170-E173).
+"""Unified case index + annotation store for the PRG review player (E170-E174).
 
 Pure-python (no viser / no spider imports) so it is importable headless for the
 `--check` self-test. Reads each experiment's ``*_case_metrics.tsv`` by column
@@ -19,7 +19,7 @@ from pathlib import Path
 
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_EXPS = ("E170", "E171", "E172", "E173")
+DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174")
 
 GATE_FIELDS = (
     "fall_gate_pass",
@@ -87,6 +87,11 @@ def normalize_path(raw: str) -> str:
     text = str(raw).strip()
     if not text:
         return ""
+    # tidal relocation: results moved under .../spider_workdirs/core4d/results/results/
+    # (workspace/core4d/results is a symlink to that dir), so collapse the double
+    # results/ before the single-results legacy rule below.
+    if "spider_workdirs/core4d/results/results/" in text:
+        return str(REPO / "workspace/core4d/results" / text.split("spider_workdirs/core4d/results/results/", 1)[1])
     # legacy foreign mount: /mnt/<uuid>/spider_workdirs/core4d/results/... -> workspace/core4d/...
     if "spider_workdirs/" in text:
         return str(REPO / "workspace" / text.split("spider_workdirs/", 1)[1])

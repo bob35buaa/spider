@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive viser review player for PRG retargeting results (E170-E173).
+"""Interactive viser review player for PRG retargeting results (E170-E174).
 
 Browse every CEM-complete case across the four experiments, filter by object /
 numeric pass / failure mode / retarget variant, play back the executed 3D
