@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E174 | 2026-07-23 | Phase 37 | 非box首次(bucket×5+desk×2 move2-only凹几何proxy)：Full CEM 39/39,numeric pass 5/39=13%;bucket004(凹0.045)0/4 vs box004(凸0.041,E172)83%→凹几何proxy惩罚(腿穿薄壁+手够不到接触点);bucket010 2/2·desk007 2/9可用;gate-health 0/39 | ✅ 执行完成待用户终审(PENDING_USER_REVIEW,倾向PARTIAL_YIELD,39条USE/DO_NOT_USE) | [100](log/100_E174_bucket_desk_move2_nonbox_results.md) · [plan](plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) |
 | E173 | 2026-07-22 | Phase 36 | box024/box023/box001 move-only全流程；26/53 numeric pass；PRG随尺寸单调退化(小箱~80%大箱~35%)；v2 14/14救回 | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [233](log/233_E173_box024_box023_box001_screening_full_cem.md) · [plan](plan/189_E173_box024_box023_box001_full_pipeline_plan.md) |
 | E172 | 2026-07-22 | Phase 35 | Box004 move-only 全流程S0-S6：6 S5-ready→6 CEM→5 numeric pass；v2救回082_p2且下游pass；PRG 0 scene-reject | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [232](log/232_E172_box004_screening_full_cem.md) · [plan](plan/188_E172_box004_full_pipeline_plan.md) |
 | E171 | 2026-07-21 | Phase 34 | Box026 5/12 numeric pass；Box022 DATA_NEGATIVE；PRG跨物体contact trade-off显著 | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [231](log/231_E171_box022_box026_screening_full_cem.md) · [plan](plan/187_E171_box022_box026_full_pipeline_plan.md) |

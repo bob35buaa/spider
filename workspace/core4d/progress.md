@@ -13,7 +13,35 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 
 ---
 
-## Active: E173 — box024/box023/box001 move-only 全流程 + Full CEM (E170 算法) 计划 (2026-07-22)
+## Active: E174 — bucket/desk 非 box move2 全流程 + Full CEM (E170 PRG+rubber_hull 算法) 计划 (2026-07-23)
+
+- [x] 上下文恢复：读 tracker + E173 plan(189)/log(233) + memory（`box024-box023-box001-inventory-e173`、`nonbox-inrange-move-inventory`、`e171-data-paths-and-env`）。冻结算法与 move-only funnel 沿用 E170–E173。
+- [x] 物体选定：尺寸 ∈ [box023 0.036, box025 0.333] m³ 的 bucket+desk，**move2-only**。7 物体：bucket004(0.045)/bucket009(0.092)/bucket010(0.120)/bucket007(0.179)/bucket003(0.192) + desk005(0.238)/desk007(0.241)。chair 本轮不做（凹度更极端，留 E175）。
+- [x] Fresh raw 盘点（live root，action_labels.json）：7 物体 **120 seq/240 pc → move2 37 seq/74 pc（production）**；move1 32 seq（EXCLUDE_ACTION_NOT_MOVE2）；其它 51 seq（Stage0 reject）。move2 date/seq 明细已入 plan §2.1。
+- [x] Template 差异（关键）：clean base 多数存在（bucket004/010/007/003 双人、bucket009_p2、desk005_p2、desk007 双人）；**bucket009_person1、desk005_person1 目录缺失 → S2 补建**（类 E173 box024/001 person2）；多个 base untracked → git add -f；大量 `_freejoint_legobj_e0**`/`_s2_` pre-PRG 污染变体**禁止作 base**。
+- [x] **核心科学看点**：E170 PRG + rubber_hull 冻结算法首次用于非凸非 box 物体。**凹几何由物体侧 `collision_policy` proxy 表达**（bucket=`bucket_wall_proxy_aabb` 底面+四侧壁；desk=`desk_surface_voxel_multibox_proxy_draft` 表面 voxel 多 box，target_cells=26），**不是 rubber_hull**（rubber_hull 只改机器人手 lh/rh，与物体正交，doc 15）。不改几何参数,用 S2 object-only overlay review + canary + 视觉核验量化「凹几何 proxy 惩罚」(实际通过率 vs E173 尺寸先验之差)。预测:bucket 0.045–0.19 对标小/中 box(~60–80%)、desk 0.24 对标大 box(~35%),proxy 失配再打折扣。
+- [x] **符合性检查（用户要求对照 `.codex/skills/data-construction-v3-zh`）**：读 doc 04(scene template)+doc 15(hand collision)。发现初版 plan 3 处不合规并已修正——① 把凹几何错误归因给 rubber_hull 凸包(实为物体侧 collision_policy proxy)；② S2 当 box 自动 audit(非 box 必须 manual_review_required→`nonbox_template_review.tsv` approve_clean→`clean_reviewed`,禁自动 clean,需 object-only mesh/collision overlay evidence)；③ §3.6 说物体碰撞沿用 box builder(非 box 用 `nonbox_proxy_aabb_review`/`nonbox_surface_voxel_review` adapter)。已核实现有模板确带 `bucket_wall_proxy_aabb`/`desk_surface_voxel_multibox_proxy_draft`。plan §1/§2.2/§2.4/§3.5/§3.6/§5.3/§5.5/§6/§7.2/§8.3/§9.1/§11 + Claims C3/C10 全部更新。
+- [x] 写入 `plan/190_E174_bucket_desk_move2_full_pipeline_plan.md`（13 Claims、per-object funnel、S0–S6、move2-only action scope 断言、非 box proxy template review 流程、分级阻断按物体隔离、bucket→desk 优先级、本机8卡 1case/GPU、不导出RL），更新 tracker Phase 37 planning row。
+- [x] 用户确认 plan → 执行。Fork E173→`scripts/experiments/E174/`（e174_common+8脚本，OBJECT_KEYS=7物体、ACTION_SCOPE=move2_only、method `E174_E170PRG_nonbox_candidate_r1`、SCENE_NAME=scene_act_E174_rubberHull_PRG）+ 新增 `build_nonbox_template_review.py`（doc04 review queue+object-only overlay+explicit approve_clean）+ launch/eval fork。py_compile+bash -n 全过。
+
+### E174 执行 (2026-07-23)
+- [x] S0 PASS；S1 inventory 1840 rows（全数据集），run_raw_contact 7物体。**move2-only funnel**：pass_3cm=122 → move2 kept=44 / move1_excluded=38 / other=40。
+- [x] **S2 非box template review（doc04）**：14 template 全 `manual_review_required`。发现并修复 2 类 load 错误——① bucket004 asset mesh 未拷贝（从 raw 拷入 assets/objects/bucket004）；② bucket009_p1 + desk005_p1（S2 新建 proxy，base=box023_person1）material 定义名残留 `box023_material`（geom 引用 `{obj}_material`）→ 改名（**同 E173 box024 material builder bug**）。修后 14/14 MuJoCo load OK（nq43/nv41/nu29, 2 hand sites, 无29.632污染）。
+- [x] **视觉核验 object-only overlay（4方位，强制）**：bucket wall_proxy 贴合 mesh AABB（圆桶角落 phantom 为 box-hull 固有，非 ballooning）；desk surface_voxel 贴合面板+框架、**未桥接桌腿间隙**；bucket009/desk005 新建 proxy 几何正确。→ 全部 approve_clean（reviewer=codex）。14 template scene.xml+task_info + 7 object asset `git add -f`。
+- [x] **磁盘配额爆掉**：本地 work_dir 有 quota，S3 retarget 写输出触发 Errno122。用户把 results 移到 tidal FS 并要求软链→ `workspace/core4d/results` → `.../spider_workdirs/core4d/results/results`（27P free）。重置 5 preprocess_fail→not_run 重跑。
+- [x] **S3 v1**（24-shard 并行）：**42 pass / 2 omniretarget_infeasible**（bucket007_20231020_055 p1/p2）。**v2 rescue：2/2 救回 pass，dual-infeasible=0**。Stage2b 最终 44/44 pass（42 v1 + 2 v2）。
+- [x] **Fresh authority 修正**：build_pipeline_authority 报 raw_seen=330≠prior240 → 重算 fresh inventory：7物体 **330 pc/165 seq**（bucket007=126pc/63seq，plan prior 严重低估；move2=92pc/46seq）。更新 e174_common EXPECTED_*=330/165/92/46 + bucket007 prior。
+- [x] **S4 target gate 44/44 pass**；**Codex 分层视觉核验（强制）**：7 代表案例覆盖全部6物体+bucket/desk两拓扑+v2，全 clean（手贴物、desk 未桥接桌腿、无穿透/浮空/爆姿）→ codex_s4_review.md，44 提升 visual_qc=pass。S5 handoff **44 HANDOFF_READY**。
+- [x] **S5→S6 CEM manifest**：44 dcv3 override 需拷到 `examples/config/override/`（**E172 假 missing_dcv3_override 复现**，除 bucket004 已存在）。拷 44 yaml 后重建：**39 CEM-ready / 5 blocked**（全 `runtime_initial_overlap` p2 起始腿-物重叠，合法 PRG scene-contract reject，同 E173）。desk005=0（stage2b 无 pass）。
+- [x] **canary 选择器修复**（原 cap=5 漏 desk+v2 → ≥1/object+≥1/category+≥1 v2）：**canary 7/7 run_complete, launcher fail=0**（bucket+desk 两拓扑 runtime 契约健康）→ 放行 Full。
+- [x] **Full CEM 39/39 complete**（8卡 8-wide serial 1024/32，launcher fail=0，completion audit PASS 39=39+0）。eval：39 evaluated 0 error，**numeric pass 5/39=13%**。逐物体：bucket004 0/4、bucket009 0/1、bucket010 **2/2**、bucket007 0/14、bucket003 1/9、desk007 **2/9**（desk005 无 stage2b pass）。分组 bucket 3/30、desk 2/9。gate-health 0/39。
+- [x] **核心发现·凹几何 proxy 惩罚**：bucket004(凹0.045m³)=0/4 vs box004(凸0.041,E172)=83%——同尺寸凸→凹全败。两失败轴：leg_penetration(均值0.165,腿穿空心桶薄壁)+contact loss(hand_contact_in_mask均值0.379,手够不到 ref 接触点，wall/voxel proxy 该处无碰撞面)。
+- [x] **视觉核验（强制，Codex）**：S6 keyframe 抽 2 fail+2 pass——bucket004 抱物腿夹进桶、bucket003 手飘到头没抓桶盖（真实物理，非 reward hacking）；bucket010/desk007 pass sim 紧贴 ref 干净。codex_s6_verification.md + codex_s4_review.md。
+- [x] 修 canary cap=5 bug（漏 desk/v2）、修 fresh authority 330/165（bucket007 prior 低估）、修 missing_dcv3_override（拷 44 override 到 Hydra 路径）。
+- [x] **收口**：log/100（E174）、tracker Phase37（✅ PENDING_USER_REVIEW 倾向 PARTIAL_YIELD）、report、completion audit PASS。倾向 PRG/rubber_hull **不宜作凹几何默认**，改进方向是物体 proxy 保真度（非 reward/hull）。**待用户对 39 条 USE/DO_NOT_USE**；chair(E175) 是否做由用户定。
+
+---
+
 
 - [x] 上下文恢复：读 tracker + E172 plan(188)/log(232) + memory；确认 E170/E171/E172 冻结算法与 move-only funnel 自动化（dcv3 `HIGH_RISK_ACTION_PREFIXES` 含 join/leave/rot/pass/strike/raise → `reject_action_not_first_line`）。
 - [x] Fresh raw 盘点（live root，obj_name 大小写合并，action 取自 action_labels.json）：

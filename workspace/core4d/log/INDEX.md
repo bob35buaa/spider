@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 232 个日志文件。
+> 自动生成，共 233 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 37 (E174-E174)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 100 | E174, e2 | 2026-07-23 | Bucket desk move2 nonbox results | [100_E174_bucket_desk_move2_nonbox_result...](100_E174_bucket_desk_move2_nonbox_results.md) |
 
 ## Phase 36 (E173-E173)
 

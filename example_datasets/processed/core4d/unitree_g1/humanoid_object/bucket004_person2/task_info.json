@@ -1,0 +1,37 @@
+{
+  "asset_path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/assets/objects/bucket004/bucket004_m.obj",
+  "base_scene": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "build_mode": "apply_proxy_review",
+  "clean_robot_inertial_source": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "collision_policy": "bucket_wall_proxy_aabb",
+  "created_at": "2026-06-05T03:57:27+08:00",
+  "data_construction_v3_built": true,
+  "diaginertia": [
+    0.1276391297669449,
+    0.08216517318651255,
+    0.13248653762673443
+  ],
+  "extents_m": [
+    0.32313325000000004,
+    0.46211751,
+    0.30460025999999996
+  ],
+  "half_extents_m": [
+    0.16156662500000002,
+    0.231058755,
+    0.15230012999999998
+  ],
+  "inertia_formula": "box: Ixx=m/12*(y^2+z^2), Iyy=m/12*(x^2+z^2), Izz=m/12*(x^2+y^2)",
+  "manual_review_required": true,
+  "mass_kg": 5.0,
+  "mesh_sha256": "913dece7910b29cff94bec3dfd9fe0bb1924b8caaf08768a91d87c07ea0032fa",
+  "object_category": "bucket",
+  "object_key": "bucket004",
+  "object_mass_policy": "assumed_uniform_5kg_v3_no_real_mass_source",
+  "person": "person2",
+  "proxy_template": true,
+  "raw_object_mesh": "/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real/object_models/bucket/bucket004_m.obj",
+  "schema_version": "core4d_data_construction_v3.0",
+  "source_template_pose_policy": "neutral placeholder from clean base; target scene must patch object pose from trimmed qpos first frame",
+  "task": "bucket004_person2"
+}

@@ -1,0 +1,37 @@
+{
+  "asset_path": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/assets/objects/desk005/desk005_m.obj",
+  "base_scene": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "build_mode": "apply_proxy_review",
+  "clean_robot_inertial_source": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "collision_policy": "desk_surface_voxel_multibox_proxy_draft",
+  "created_at": "2026-07-23T01:20:06+08:00",
+  "data_construction_v3_built": true,
+  "diaginertia": [
+    0.4955680651823221,
+    0.3339471417043268,
+    0.2954376140833156
+  ],
+  "extents_m": [
+    0.40072438,
+    0.74058777,
+    0.800558
+  ],
+  "half_extents_m": [
+    0.20036219,
+    0.370293885,
+    0.400279
+  ],
+  "inertia_formula": "box: Ixx=m/12*(y^2+z^2), Iyy=m/12*(x^2+z^2), Izz=m/12*(x^2+y^2)",
+  "manual_review_required": true,
+  "mass_kg": 5.0,
+  "mesh_sha256": "68ef47787ceeda39d1c5a0988372a810d79f9f9a1290fe4492138138e37e157c",
+  "object_category": "desk",
+  "object_key": "desk005",
+  "object_mass_policy": "assumed_uniform_5kg_v3_no_real_mass_source",
+  "person": "person1",
+  "proxy_template": true,
+  "raw_object_mesh": "/mnt/tidal-alsh01/dataset/zeus/xiayb/other-datasets/mocap_data/CORE4D/CORE4D_Real/object_models/desk/desk005_m.obj",
+  "schema_version": "core4d_data_construction_v3.0",
+  "source_template_pose_policy": "neutral placeholder from clean base; target scene must patch object pose from trimmed qpos first frame",
+  "task": "desk005_person1"
+}
