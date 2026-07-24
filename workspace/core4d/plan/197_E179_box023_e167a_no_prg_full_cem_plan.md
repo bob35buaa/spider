@@ -250,13 +250,14 @@ duplicate = 0
 A100 requested allowlist 精确为 `2,3,6,7`。远程 launch 前两次检查：
 
 1. 四卡显存占用均 `<5000MB`
-2. 四卡无冲突 compute process
-3. 四卡均属于预约/所有者允许集合
-4. selection 与 tmux 启动间再次确认
+2. 保存四卡 compute process 快照；用户于 2026-07-24 明确授权在
+   `2,3,6,7` 上叠加运行，compute process 本身不再阻断
+3. 四卡均属于用户明确允许集合
+4. selection 与 tmux 启动间再次确认卡号和显存
 
-任一卡不满足时，不换用其它 A100 卡、不 kill 其它任务；保持远程 Full
-未启动并等待四卡恢复。本地 canary 可独立完成，但不能据此宣称 E179 Full
-已开始。
+任一卡号、显存或用户允许集合不满足时，不换用其它 A100 卡、不 kill 其它
+任务；保持远程 Full 未启动。已存在 compute context 只记录为 overlap evidence，
+不得清理。本地 canary 可独立完成，但不能据此宣称 E179 Full 已开始。
 
 A100 若无法 EGL/OSMesa 渲染，按 E168 已验证做 compute-only，保留 NPZ、
 config 和 log。回收后在本地统一补渲染，视频缺失不能豁免最终 visual
@@ -510,8 +511,8 @@ MODE=full \
 ```
 
 `run_E179_remote_a100.sh` 还必须要求
-`A100_AVAILABILITY_CMD`，保存显存、compute process、预约允许集合、最终卡集与
-确认时间。最终集合必须精确为 `2,3,6,7`。
+显式 `A100_POLICY_GPUS=2,3,6,7`，保存两次显存、compute process、overlap
+授权、最终卡集与确认时间。最终集合必须精确为 `2,3,6,7`。
 
 ### 回收、渲染与评测
 
@@ -581,7 +582,7 @@ CEM NPZ、config、视频和指标归入 `results/E179/`；执行日志归入
 - [ ] E179 sidecar 无 PRG 16-pair patch
 - [ ] 16/16 resolved config 通过 E167A/no-PRG 审计
 - [ ] 本地 GPU0 launch 前空闲
-- [ ] A100 `2,3,6,7` 二次检查与预约允许均通过
+- [ ] A100 `2,3,6,7` 二次卡号/显存检查通过，compute overlap 授权已记录
 - [ ] 五个 worker queue 无重复、无漏项
 - [ ] scene snapshot 与 manifest SHA 已生成
 - [ ] canary contract 通过

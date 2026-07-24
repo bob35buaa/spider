@@ -4,7 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
-| E179 plan | 2026-07-24 | Phase 42 | box023 E167A no-PRG Full；16条paired+root/EEF/object十二门 | 📋 计划完成 | [plan](plan/197_E179_box023_e167a_no_prg_full_cem_plan.md) |
+| E179 | 2026-07-25 | Phase 42 | box023 16条paired no-PRG退化；保留PRG | ✅ 16/16完成；十二门7→4，PRG_BETTER | [242](log/242_E179_box023_e167a_no_prg_vs_e173_results.md) · [plan](plan/197_E179_box023_e167a_no_prg_full_cem_plan.md) |
 | E178 | 2026-07-24 | Phase 41 | 三bucket主接触端段校准；A100+5090 hybrid Full | 🟡 12门 10/27；人工23/27(USE12/DNU11)，bucket004待审 | [237](log/237_E178_bucket_contact_aligned_proxy_gates.md) · [238](log/238_E178_canary_waiver_full_launch.md) · [239](log/239_E178_local_5090_hybrid_rebalance.md) · [240](log/240_E178_tracking_error_numeric_gates.md) · [241](log/241_E178_bucket_user_manual_review_results.md) |
 | E177 | 2026-07-24 | Phase 40 | 三bucket低geom proxy：003/007五段无盖，004单box | ✅ 本地proxy批准；contact/CEM未启动 | [236](log/236_E177_five_step_no_lid_bucket_proxy_results.md) |
 | E176 | 2026-07-24 | Phase 39 | 个位数proxy 6–9 geom；runtime 6/6；吞吐canary 4/6 | ⛔ Full被3s门阻断，三轮优化后停止 | [235](log/235_E176_lowgeom_proxy_canary_results.md) · [plan](plan/192_E176_lowgeom_nonbox_proxy_plan.md) |

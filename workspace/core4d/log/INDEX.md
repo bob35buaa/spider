@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 240 个日志文件。
+> 自动生成，共 241 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 42 (E179-E179)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 242 | E179, e167a, e173 | 2026-07-25 | Box023 e167a no prg vs e173 results | [242_E179_box023_e167a_no_prg_vs_e173_res...](242_E179_box023_e167a_no_prg_vs_e173_results.md) |
 
 ## Phase 41 (E178-E178)
 

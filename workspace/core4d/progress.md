@@ -1,191 +1,105 @@
 # CORE4D 当前进度
 
-> 历史完整备份：
-> [through E177 proxy](progress_archive/progress_full_backup_through_E177_proxy_20260724.md) ·
-> [through E178 manual review](progress_archive/progress_full_backup_through_E178_manual_review_20260724.md)
+> 完整备份：
+> [E167–E179 初始恢复](progress_archive/E167_E179_20260724_full_backup.md) ·
+> [E179 执行过程](progress_archive/E179_20260724_execution_full_backup.md) ·
+> [E179 最终收尾](progress_archive/E179_20260725_closeout_full_backup.md)
 >
-> 本文件只保留当前活跃实验的最终状态与未决项。
+> 本文件只保留最近完成实验的可靠结论与下一会话入口。
 
-## E178：三 bucket low-geom proxy + Full CEM
+## E179：box023 / E167A no-PRG / Full CEM
 
-### Scope 与产物状态
+### 最终状态
 
-- Authority objects：bucket003=`9`、bucket004=`4`、bucket007=`14`，共 27 条。
-- Proxy：bucket003/007 为 5 段无盖实心 boxes，bucket004 为单 box；
-  geom counts=`5/1/5`。
-- Full CEM 已完成 `27/27`；primary NPZ、config、scene、trajectory、MP4 和
-  case metrics 均为 `27/27`。
-- 正式评测/视频路径：
-  - `workspace/core4d/results/E178/s6_downstream/eval/full/`
-  - `workspace/core4d/results/E178/s6_downstream/render/full/`
-- 主结果日志：
-  - `log/237_E178_bucket_contact_aligned_proxy_gates.md`
-  - `log/238_E178_canary_waiver_full_launch.md`
-  - `log/239_E178_local_5090_hybrid_rebalance.md`
-
-### 12 门 Numeric Evaluation
-
-- 原 6 个物理门 + root/hand/object pos/ori 六门，共 12 门。
-- Tracking thresholds：
-  - root：`20cm / 20°`
-  - hand/EFF：`20cm / 20°`
-  - object：`20cm / 10°`
-- Strict eval：evaluated/paired=`27/27`，error/not-ready=`0/0`。
-- Numeric pass=`10/27`：
-  - bucket003=`3/9`
-  - bucket004=`2/4`
-  - bucket007=`5/14`
-- 新门最强瓶颈是 hand orientation：`13/27 FAIL`。
-- Review player wrapper 与显示红线均已同步为上述阈值；E176 legacy contract
-  保持原 6 门。
-- 详见：
-  - `plan/196_E178_tracking_error_numeric_gates_plan.md`
-  - `log/240_E178_tracking_error_numeric_gates.md`
-
-### 用户人工审查
-
-- 用户已审 bucket003 全 9 条和 bucket007 全 14 条，共 `23/27`。
-- Canonical authority：
-  `results/E178/s6_downstream/eval/full/user_manual_review_filled.tsv`
-- 标签分布：
-  - `USE / CLEAN=8`
-  - `USE / MINOR_ACCEPTABLE=4`
-  - `DO_NOT_USE / UNUSABLE=11`
-  - bucket004 pending=`4`
-- 分物体人工 USE：
-  - bucket003=`5/9`
-  - bucket007=`7/14`
-- 12 门与人工结果在已审 23 条上的关系：
-  - numeric PASS 且人工 USE=`8`
-  - numeric FAIL 且人工 DNU=`11`
-  - numeric FAIL 但人工 USE=`4`
-  - numeric PASS precision=`100%`
-  - 人工 USE recall=`66.7%`
-  - 二分类一致率=`82.6%`
-- 结论：12 门可作为高置信自动通过门，但不能替代人工终审。
-- 完整逐 case 结果、四条人工 rescue 与 failure-mode 分析见
-  `log/241_E178_bucket_user_manual_review_results.md`。
-
-### XLSX / Review Consumer
-
-- Workbook：
-  `results/E178/s6_downstream/eval/full/E178_buckets_prg_full_validation.xlsx`
-- Overview：reviewed=`23`、USE=`12`、DO_NOT_USE=`11`。
-- Manual Review：reviewed/pending=`23/4`。
-- LibreOffice：formulas=`716`、errors=`0`；ZIP integrity PASS。
-- Workbook SHA256：
-  `a379891febdca1def181fcba791baedf6729371c39888e0c75513300fb18d6c9`。
-- Review player headless：E178 indexed/playable=`27/27`、reviewed=`23/27`。
-- Tracker 与 log INDEX 已同步到 log 241；active progress 已压缩为 98 行，
-  718 行完整历史备份保存在 `progress_archive/`。
-
-### 已知校验错误
-
-- 一次综合校验误用缺少 `openpyxl` 的项目 `.venv`，触发
-  `ModuleNotFoundError`；未修改任何产物。
-- 已改用系统 `python3` 复核，annotation/XLSX/log/INDEX/Tracker
-  cross-consumer assertions 与 scoped `git diff --check` 均 PASS。
-
-### 唯一未决项
-
-bucket004 四条尚未收到用户裁决，必须保持 `PENDING`：
-
-1. `bucket004_20231002_021_p1`
-2. `bucket004_20231002_021_p2`
-3. `bucket004_20231003_1_012_p1`
-4. `bucket004_20231003_1_012_p2`
-
-补齐这四条后，重新生成同一 XLSX，并给出 E178 27/27 最终人工 USE 集合与
-release decision；当前不需要重跑 CEM。
-
-## 2026-07-24：E179 box023 / E167A-no-PRG full CEM 计划
-
-- 用户目标：取 box023 全量数据，复用 E167A 算法但明确关闭 PRG，执行 full
-  CEM；完成统一指标评测并与 E173 的 box023 结果逐 case 配对对比。
-- 计算资源固定为本地单卡 + 远程 A100 GPU `2,3,6,7`，共 5 卡并行。
-- 当前处于计划恢复与历史口径核对阶段；尚未生成 manifest、脚本或启动任务。
-- 工作区已有 E175–E178 大量未提交改动；E179 只做增量文件，禁止覆盖这些改动。
-- 编号核对：现有 plan 最大序号为 `196`，新计划使用
+- 计划：
   `plan/197_E179_box023_e167a_no_prg_full_cem_plan.md`。
-- 历史对照入口已定位：
-  `plan/183_E167_holosoma_zonly_alignment_plan.md`、
-  `plan/184_E168_same_object_E167A_zonly_expansion_plan.md`、
-  `plan/189_E173_box024_box023_box001_full_pipeline_plan.md` 与
-  `log/233_E173_box024_box023_box001_screening_full_cem.md`。
-- A100 远程规范要求 launch 前将用户指定 `2,3,6,7` 与实时空闲/预约允许集合
-  求交并二次确认；E179 不会自动换用其他远程卡。
-- E173 box023 authority 已核实：raw move-only inventory `46` 条，S1–S5 后
-  `16` 条 CEM-eligible，Full CEM `16/16` 完成，numeric pass `13/16`；
-  E179 将冻结同一 16 行做严格 paired compare，同时报告 46 行漏斗闭合。
-- E173 box023 的 16 行中 `omnirt_v1=15`、v1 infeasible 后
-  `omnirt_v2 rescue=1`；E179 复用其 target trajectory、raw 3cm mask、
-  `ref_fk` route 与 `rubber_hull` sidecar，只替换 CEM method layer。
-- 算法定义冻结为 `E167A_zOnlyBody`：禁用 E167A+B1/B2，且明确禁用
-  E170 PRG 的 lower-body physics/penalty、candidate gate 与 PRG scene reject；
-  Full budget 保持 seed `0`、samples `1024`、opt steps `32`。
-- 用户追加要求：E179/E173 必须对完整同一 `16/16` case set 做 paired
-  comparison，并统一采用 12 门；在原 6 个物理门上加入 root、EEF、object
-  的 position/orientation tracking 六门。E173 历史 `13/16` 仅保留为原
-  6 门结果，主对照需按 12 门重新计分。
+- 日志：
+  `log/242_E179_box023_e167a_no_prg_vs_e173_results.md`。
+- E173 box023 完整 CEM-eligible authority=`16`；E179 使用同一 `16`
+  条、同 target/retarget/contact mask/rubber hand，paired denominator
+  始终为 `16`。
+- Full budget=`seed 0, 1024 samples × 32 opt steps`。本地 RTX 5090 GPU0
+  完成 `4/4`；A100 GPU `2/3/6/7` 各完成 `3/3`；合计 `16/16`，
+  terminal failure=`0`。
+- E167A profile parity=`16/16`，no-PRG audit=`16/16`，
+  unexpected PRG runtime diagnostics=`0`。
+- 最终 completion audit=`11/11 PASS`：paired metrics=`16/16`、
+  gate cells=`192`、E173/E179/paired videos=`16/16/16`、
+  visual review=`16/16`。
 
-### E179 计划阶段遇到的错误
+### 最终结果
 
-| 错误 | 尝试次数 | 解决方案 |
-|---|---:|---|
-| 本地未安装 `jq`，首次读取 E173 `summary.json` 的组合命令提前退出 | 1 | 后续改用只读 `python3` 解析 JSON/TSV，不重复调用 `jq` |
-| 首次按旧目录猜测 `s6_downstream/cem/manifests/cem_full_manifest.tsv`，文件不存在 | 1 | 按 E173 `summary.json` authority 改读 `s6_downstream/manifests/cem_full_manifest.tsv`；已读到 16 条 box023 row |
-| 首次 SHA 校验误将 `profile_sha256` 对到 profile JSON 文件 | 1 | E168 代码与 JSON 元数据确认该值对应 YAML；YAML 实际 SHA 为 `666c302d...`，与计划一致 |
+| 口径 | E173 PRG | E179 no-PRG |
+|---|---:|---:|
+| Physics 六门 | `13/16` | `9/16` |
+| Physics + tracking 十二门 | `7/16` | `4/16` |
 
-### E179 冻结对照口径
+- 十二门迁移=`PASS_TO_PASS 3 / PASS_TO_FAIL 4 / FAIL_TO_PASS 1 /
+  FAIL_TO_FAIL 8`；McNemar exact `p=0.375`。
+- 唯一救回=`021_p1`；新退化=`041_p1` (hand_ori)、
+  `021_p2` (lower_body)、`040_p2` (lower_body+hand_ori)、
+  `041_p2` (lower_body)。
+- lower-body=`14→10/16`，leg penetration paired mean
+  `Δ=+0.07363`，bootstrap 95% CI=`[+0.03704,+0.11427]`。
+- Object position error paired mean `Δ=-0.752cm`，
+  bootstrap 95% CI=`[-1.540,-0.108]cm`；其它主要 tracking CI 多数跨 `0`。
+- 16 条 paired 视频均抽取 `10/30/50/70/90%` 五帧并实际复核。
+  `021_p2/040_p2/041_p2` 的 no-PRG 下肢更贴近或跨在箱体上方，
+  支持 lower-body 退化。
+- 数值结论=`PRG_BETTER`，视觉结论=`SUPPORTS_PRG_BETTER`。
+  box023 保留 E170 PRG，不晋级 no-PRG。
 
-- E173 metric standard：`core4d-e154-physics-contact-v1`。
-- 正式 contract 改为 12 门：原 6 个物理门，加 root `20cm/20°`、EEF
-  `20cm/20°`、object `20cm/10°` 六个 tracking 门；缺失/非有限值按 FAIL。
-- E173 box023 只读重算结果：原 6 门 `13/16`，新 12 门 `7/16`；tracking
-  单门通过数 root pos/ori=`10/14`、EEF pos/ori=`11/8`、object
-  pos/ori=`15/16`，新增 tracking 门额外拒绝 6 条原物理 PASS。
-- E168 immutable E167A profile 已定位到
-  `results/E168/s0_environment/e167a_profile/e167a_zonly_profile.{yaml,json}`；
-  关键轴为 `foot_slip_enabled=false`、`foot_ground_enabled=false`、
-  `local_frame_ankle_weight=1.0`、`cem_smooth_enabled=false`、
-  `spider_method_id=E167A_zOnlyBody`。
-- E167A 本身仍保留 hand gate 与 posture gate：hand gate
-  `(-0.01, 0.10, hard_floor=-0.02)`，surface band
-  `(rew=1.5,width=0.003,min_sdf=-0.001,sigma=0.0015,symmetric_abs)`；
-  “不要 PRG”不等于关闭这些 E167A 原生组件。
-- E173 PRG 的独有字段已核实：16 个 lower-body geom、penalty
-  `scale=2.0/margin=0.02`，leg candidate gate
-  `(min_sdf=0.005,max_violation=0.02,hard_floor=-0.005,
-  fallback=least_violation)`，且 scene sidecar 添加 16 个 lower-body/object
-  collision pair。E179 必须保证这些字段、pair 与 `cem_leg_gate_*` diagnostics
-  均不进入 effective config/scene。
-- E179 scene 应从每条 E173 selected target 的原始 `scene_act.xml` 重新构建
-  `rubber_hull` hand sidecar，不能直接复用
-  `scene_act_E173_rubberHull_PRG.xml`；semantic diff 仅允许 rubber hand patch。
-- 本地计划卡只读快照：GPU0=`NVIDIA GeForce RTX 5090`，显存
-  `32607MiB`、当前 `160MiB/0%`；正式 launch 仍需重新确认。
-- 16 条按 E173 `qpos_frames` 做 LPT 分片，5 worker 负载可均衡在
-  `339–402` frames；正式 manifest 固定 `local-gpu0 + a100-gpu2/3/6/7`，
-  同卡串行、跨卡并行。建议本地承担 4 个较短/诊断行，四张 A100 各 3 行，
-  或由 manifest builder 在保持 `4+3+3+3+3` 数量约束下做加权 LPT。
-- 文档层采用 Markdown + 单个 Mermaid workflow 作为 canonical plan；
-  仍以 `experiment-planning-zh` 的 Context/Claims/改动/成功标准/命令为主，
-  不引入额外实验臂。
-- Markdown 规范已纳入：单一 H1、H2 单 emoji、表格化配置与成功标准、命令
-  使用带语言的 code fence；Mermaid flowchart 必须包含
-  `accTitle/accDescr`、snake_case node id、无 inline style。
-- E179 计划所需事实与决策已冻结，下一步写正式
-  `plan/197_E179_box023_e167a_no_prg_full_cem_plan.md`，并只给 Tracker 增加
-  planning-only 索引行；本轮不生成执行脚本、不启动 CEM。
-- 已新增正式计划
-  `plan/197_E179_box023_e167a_no_prg_full_cem_plan.md`，包含 16-row paired
-  authority、E167A/no-PRG contract、Full budget、5 卡分片、公共指标、paired
-  统计、结果分级、可视化、命令与 completion audit。
-- `EXPERIMENT_TRACKER.md` 已新增 `E179 plan / Phase 42 / 📋 计划完成`
-  索引；尚未新增结果 log、脚本、override、scene 或 CEM 产物。
-- 首轮结构校验通过：H1=`1`、Mermaid=`1`、`accTitle/accDescr=1/1`、
-  inline style=`0`、Tracker 描述 `40` 字；queue audit 为 16 unique、0 missing、
-  0 extra。`git diff --check` 通过。
-- 用户修订已写入 plan/Tracker：正式主指标为同一 16 条的十二门 paired
-  comparison；E173 历史六门 `13/16` 只作 secondary，十二门只读 baseline
-  为 `7/16`。结构、六门交集、tracking 六门与十二门逐 case 校验均 PASS。
+### Canonical evidence
+
+- 评测：
+  `results/E179/s6_downstream/eval/full/E179_vs_E173_report.md`。
+- Summary：
+  `results/E179/s6_downstream/eval/full/e179_eval_summary.json`。
+- 视觉 authority：
+  `results/E179/s6_downstream/render/full/visual_review.tsv`。
+- Completion：
+  `results/E179/completion_audit/completion_audit.json`。
+- Full manifest：
+  `results/E179/s6_downstream/manifests/cem_full_manifest.tsv`。
+- Runtime logs：`logs/E179/cem/`。
+
+### 已解决问题
+
+- Inactive PRG diagnostics 错误序列化：修复 runtime，fresh canary `3/3`。
+- OSMesa 初始化失败：切换本机已验证的 `egl`。
+- Remote sync inventory 漏传：补传并复用同一 remote run root。
+- `rsync` 连续超时：切换 `scp`，remote runtime `12/12`、merge `16/16`。
+- ffprobe 初始 glob 错误：按 manifest canonical video path 重检，failures=`0`。
+- scp probe 临时 NPZ 与 canonical SHA 一致后已精确删除，正式结果保留。
+
+### 收尾
+
+- Log 242、Tracker、log INDEX 已更新；Tracker 描述长度 `43≤80`。
+- Progress 完整执行记录已归档，活跃页由 `314` 行压缩为 `81` 行。
+- Python compile、shell `bash -n`、`git diff --check` 与最终 completion
+  audit 均 PASS。
+- 提交范围已隔离为 E179 scene/config/runtime/scripts/docs；E172/E173 partner
+  补齐改动与 `finalize_reused_partner_rl.py` 保持 unstaged。scene snapshot
+  本地为 `145` files / `3.0MB`，但 `workspace/core4d/results` 位于仓库 symlink
+  之后，Git 报 `pathspec ... is beyond a symbolic link`，不能从该路径 force-add；
+  active 16-case scene/config 的 `64` 个复现文件已直接 staged。
+- C0–C6 全部通过；实验计算、评测、视频复核和文档均已闭合。
+- 下一会话无需重跑 E179；如继续研究，只做 P/R/G 子组件消融。
+
+### 最终提交前复核
+
+- `01:11` method/no-PRG audit 再次 `16/16 PASS`，completion audit 再次
+  `11/11 PASS`。
+- 首轮 staged `git diff --check` 报告三个新增文件 EOF 多一个空行；需删除
+  `audit_completion.py`、`render_paired_results.py`、`run_E179_local.sh`
+  的冗余 EOF blank line 后以 `set -e` 重跑。
+- 上述三个 EOF blank line 已删除。
+- 以 `set -euo pipefail` 严格重跑 staged whitespace、Python compile、
+  shell syntax、method audit、completion audit、Tracker/INDEX/progress
+  断言，结果 `STRICT_FINAL_VALIDATION=PASS`。
+- 最终 staged scope=`89` files，仅含 E179 的 `64` 个 active scene/config、
+  runtime fix、E179 scripts、plan/log/Tracker/INDEX/progress archives；
+  E172/E173 partner 补齐与 `finalize_reused_partner_rl.py` 未进入 staged diff。
+- 技能自带 `check-complete.sh` 在当前 GNU grep 多文件输出上把两个 `0`
+  拼成 `0\n0`，触发整数表达式错误；这是技能检查脚本问题。Tracker/progress
+  已由独立断言确认更新，不把该辅助脚本输出当作实验失败。

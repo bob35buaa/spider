@@ -2751,6 +2751,24 @@ def get_reward(
         "terminal_carry_gate_hand_near_frac": terminal_carry_gate_hand_near_frac,
         **e166_aux_info,
     }
+    # Do not serialize PRG diagnostics for methods where the corresponding
+    # E170 feature is inactive.  These tensors are initialized above so the
+    # reward implementation can remain branch-safe, but exposing their
+    # zero/default values in every run makes a no-PRG artifact falsely look
+    # as though lower-body PRG participated in optimization.
+    if not (
+        config.leg_object_penalty_scale > 0.0
+        and config.leg_object_penalty_geom_ids
+    ):
+        info.pop("leg_object_penalty", None)
+        info.pop("leg_object_penalty_gate", None)
+    if not (
+        config.cem_leg_gate_enabled
+        and config.cem_leg_gate_geom_ids
+    ):
+        info.pop("cem_leg_gate_min_sdf", None)
+        info.pop("cem_leg_gate_violation", None)
+        info.pop("cem_leg_gate_violation_depth", None)
     return reward, info
 
 
