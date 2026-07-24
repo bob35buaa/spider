@@ -39,6 +39,22 @@ from common import (
 PERSON_PARTNER = {"person1": "person2", "person2": "person1"}
 PERSON_INDEX = {"person1": "0", "person2": "1"}
 PERSON_SHORT = {"person1": "p1", "person2": "p2"}
+RETARGET_ENV_BY_VARIANT = {
+    "omnirt_v1": {
+        "RETARGET_ENABLE_CONSTRAINT_RELAXATION": "0",
+        "RETARGET_ENABLE_FOOT_Z_CONSTRAINT": "0",
+        "RETARGET_FOOT_SLIDE_PENALTY_WEIGHT": "0.0",
+        "RETARGET_ENABLE_CONTACT_PRESERVATION": "0",
+        "RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE": "1.0",
+    },
+    "omnirt_v2": {
+        "RETARGET_ENABLE_CONSTRAINT_RELAXATION": "1",
+        "RETARGET_ENABLE_FOOT_Z_CONSTRAINT": "1",
+        "RETARGET_FOOT_SLIDE_PENALTY_WEIGHT": "1.0",
+        "RETARGET_ENABLE_CONTACT_PRESERVATION": "1",
+        "RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE": "0.8",
+    },
+}
 
 FIELDS = [
     "source_case_id",
@@ -82,6 +98,7 @@ FIELDS = [
     "run_script",
     "command_line",
     "replace_wrist_with_fingertip",
+    "retarget_params_json",
     "source_rl_export_input",
     "schema_version",
     "updated_at",
@@ -148,6 +165,7 @@ def partner_rows(
     retarget_variant_id: str,
     target_variant_id: str,
     replace_wrist: bool,
+    retarget_env: dict[str, str],
     case_ids: set[str],
     include_non_ready: bool,
 ) -> tuple[list[dict[str, Any]], list[list[str]]]:
@@ -207,6 +225,7 @@ def partner_rows(
             f"REPO={spider_repo}",
             f"RESULT_ROOT={result_root_rel}",
             f"REPLACE_WRIST_WITH_FINGERTIP={'1' if replace_wrist else '0'}",
+            *(f"{key}={value}" for key, value in retarget_env.items()),
             "bash",
             "workspace/core4d/data_preprocess/pipeline.sh",
             "--case-file",
@@ -256,6 +275,15 @@ def partner_rows(
             "run_script": str(run_script),
             "command_line": " ".join(shlex.quote(x) for x in command),
             "replace_wrist_with_fingertip": "1" if replace_wrist else "0",
+            "retarget_params_json": json.dumps(
+                {
+                    **retarget_env,
+                    "REPLACE_WRIST_WITH_FINGERTIP": "1" if replace_wrist else "0",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
             "source_rl_export_input": str(source_rl_export_input),
             "schema_version": SCHEMA_VERSION,
             "updated_at": timestamp(),
@@ -434,6 +462,14 @@ def main() -> int:
         raise SystemExit(f"invalid CORE4D raw root: {raw_root}")
     if not smplx_model_dir.is_dir():
         raise SystemExit(f"invalid SMPL-X model dir: {smplx_model_dir}")
+    if args.retarget_variant_id not in RETARGET_ENV_BY_VARIANT:
+        raise SystemExit(
+            "partner exporter supports explicit solver parameters only for "
+            f"{sorted(RETARGET_ENV_BY_VARIANT)}, got {args.retarget_variant_id}"
+        )
+    if args.retarget_variant_id == "omnirt_v2" and args.replace_wrist_with_fingertip:
+        raise SystemExit("omnirt_v2 Phase4 rescue requires wrist targets (replacement=0)")
+    retarget_env = RETARGET_ENV_BY_VARIANT[args.retarget_variant_id]
 
     rl_export_input = args.rl_export_input_tsv.expanduser().resolve()
     out_dir = args.out_dir.expanduser().resolve()
@@ -448,6 +484,7 @@ def main() -> int:
         f"REPO={repo}",
         f"RESULT_ROOT={rel_to_repo(result_root, repo)}",
         f"REPLACE_WRIST_WITH_FINGERTIP={'1' if args.replace_wrist_with_fingertip else '0'}",
+        *(f"{key}={value}" for key, value in retarget_env.items()),
         "bash",
         "workspace/core4d/data_preprocess/pipeline.sh",
         "--case-file",
@@ -465,6 +502,7 @@ def main() -> int:
         retarget_variant_id=args.retarget_variant_id,
         target_variant_id=args.target_variant_id,
         replace_wrist=args.replace_wrist_with_fingertip,
+        retarget_env=retarget_env,
         case_ids=set(args.case_id),
         include_non_ready=args.include_non_ready,
     )

@@ -3,7 +3,7 @@ name: data-construction-v3-zh
 description: Core4D data_construction_v3 数据构建工作流。用于从 CORE4D_Real 原始 mocap 构建 inventory/raw-contact/template/OmniRetarget/target gate/visual QC/CEM-RL handoff，维护 case_state_registry，归档 workspace/core4d/results/E###，以及处理非 box template review、retarget variant、target route 和 S6 downstream evidence。触发词：数据构建、data_construction_v3、CORE4D raw、raw contact、scene template、Stage2b、target gate、visual QC、handoff、S6 registry、CEM/RL evidence、非 box 候选。
 allowed-tools: "Read Write Edit Bash Glob Grep"
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Core4D 数据构建 v3
@@ -128,6 +128,38 @@ Box 类：
 - bucket/board/stick 可优先做 proxy；desk/chair 使用 tight surface voxel multi-box review proxy，而不是标准桌/椅语义模板。
 - desk/chair proxy 规范：从 OBJ 表面 voxelization 生成 `object_collision` + `object_collision_voxel_*` 多个 local AABB boxes；默认 policy 为 `desk_surface_voxel_multibox_proxy_draft` / `chair_surface_voxel_multibox_proxy_draft`；必须保持 `manual_review_required`，不能仅凭 MuJoCo load 或 render pass 自动 release。
 - desk/chair review evidence 必须包含 mesh/collision overlay 或 object-only mesh/collision sheet；用 `stages/s2_templates/render_template_mesh_collision_review_package.py --object-only` 生成；确认 proxy 没有明显大一圈、没有套错物体拓扑、没有把圆面三脚凳/侧板 U 架/非标准 chair 误建成标准桌椅。
+
+### Low-geom box proxy 通用准则
+
+当非 box 物体使用多个 box 近似 collision 时，默认目标是以尽量少的
+box 保留物理接触所需的主要轮廓，而不是追求高分辨率表面重建：
+
+1. **少量 geom**：优先将 object collision geoms 控制在个位数。先识别
+   物体的主轴、主要承力面和真实接触区域，再沿主轴分段或按主要部件建模；
+   不要直接把 surface voxels 全量转成几十到上百个 geoms。
+2. **禁止明显外扩**：proxy 不应比原始 mesh 明显大一圈。避免用覆盖整个
+   非规则物体的粗外接 AABB；只有近 box 物体或用户明确接受的对象才允许
+   单 AABB。对圆角、圆截面和截锥，可使用 robust local bounds、适度
+   inward shrink 或少量分段，减少 box 角点形成的大块 phantom collision。
+3. **覆盖与接缝**：减少外扩不能以制造主要接触盲区为代价。相邻分段应有
+   毫米级 overlap，主接触区、承力面和运动路径不能出现贯通漏缝。纯视觉部件
+   不必单独创建 geom，除非 reference contact 或物理执行确实依赖它。
+4. **双向几何 gate**：同时计算 `mesh→proxy union` 与
+   `exposed proxy union→mesh` 距离；后者必须过滤重叠 boxes 的内部面，
+   才能真实反映 proxy 是否大于 mesh。阈值需在计划中预先声明；当前
+   CORE4D bucket low-geom production 可参考双向 p90 `≤4cm`，但应根据
+   物体尺度和接触容差调整。
+5. **视觉 gate**：必须生成 object-only mesh/collision overlay；对分段
+   proxy 追加主轴纵截面和关键横截面。人工审查重点包括：是否明显大一圈、
+   是否存在 phantom bridge、主接触区是否欠覆盖、分段之间是否漏缝。
+6. **物理与 PRG 一致**：每个 proxy geom 都必须同时接入 robot–object
+   collision pairs 和 PRG/object SDF union。若当前 union SDF 只支持 box，
+   不得仅因 MuJoCo 能加载 cylinder/mesh 就切换 geom 类型；必须先补齐并验证
+   runtime SDF、batching 和 gate 解析。
+
+E177 的五段无盖 bucket proxy 是该准则的一次已批准实例，具体参数与证据见
+`workspace/core4d/log/236_E177_five_step_no_lid_bucket_proxy_results.md`；
+后续对象应重新依据自身 mesh 与 contact 分布拟合，不能机械复制 E177 参数。
 
 已知 template 风险：
 

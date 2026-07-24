@@ -24,7 +24,10 @@ import warp as wp
 
 # NOTE: this is a hacky solution to make sure domain randomization works for contact margin. Otherwise, it will create a surrogate memory for all worlds and we cannot override each individual world's contact parameters.
 # mjwarp._src.io.MAX_WORLDS = 1024
-from spider.config import Config
+from spider.config import (
+    Config,
+    resolve_object_collision_geom_ids as _resolve_object_collision_geom_ids,
+)
 from spider.math import quat_sub
 
 MESH_SDF_SAMPLE_COUNT = 800
@@ -161,6 +164,434 @@ def _geom_box_sdf_min(
         candidates.append((outside + inside).min(dim=1).values)
 
     return torch.stack(candidates, dim=1).min(dim=1).values
+
+
+def _geom_box_union_sdf_min(
+    config: Config,
+    env: MJWPEnv,
+    geom_ids: list[int],
+    object_geom_ids: list[int],
+    geom_xpos: torch.Tensor | None = None,
+    geom_xmat: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Minimum adjusted SDF from robot geoms to a union of object boxes.
+
+    Object boxes are processed in chunks so surface-voxel proxies do not issue
+    one Python/Torch kernel sequence per box.  The result remains the exact
+    minimum of the legacy per-box SDF values.
+    """
+    if geom_xpos is None:
+        geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+    if geom_xmat is None:
+        geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
+            geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
+        )
+    if not geom_ids or not object_geom_ids:
+        return torch.full(
+            (geom_xpos.shape[0],),
+            float("inf"),
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+
+    box_type = int(mujoco.mjtGeom.mjGEOM_BOX)
+    non_box = [
+        gid
+        for gid in object_geom_ids
+        if int(env.model_cpu.geom_type[gid]) != box_type
+    ]
+    if non_box:
+        names = [
+            mujoco.mj_id2name(
+                env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, gid
+            )
+            or str(gid)
+            for gid in non_box
+        ]
+        raise ValueError(
+            "Object SDF union currently supports box geoms only; "
+            f"got {','.join(names)}"
+        )
+
+    mesh_type = int(mujoco.mjtGeom.mjGEOM_MESH)
+    mesh_ids = [
+        gid for gid in geom_ids if int(env.model_cpu.geom_type[gid]) == mesh_type
+    ]
+    primitive_ids = [gid for gid in geom_ids if gid not in mesh_ids]
+    candidates: list[torch.Tensor] = []
+    object_chunk_size = 16
+
+    primitive_points: torch.Tensor | None = None
+    primitive_radii: torch.Tensor | None = None
+    if primitive_ids:
+        centers = geom_xpos[:, primitive_ids]
+        mats = geom_xmat[:, primitive_ids]
+        axes = mats[:, :, :, 2]
+        primitive_radii = torch.tensor(
+            [
+                float(env.model_cpu.geom_size[gid, 0])
+                for gid in primitive_ids
+            ],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        half_lens = torch.tensor(
+            [
+                (
+                    float(env.model_cpu.geom_size[gid, 1])
+                    if int(env.model_cpu.geom_type[gid])
+                    == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
+                    else 0.0
+                )
+                for gid in primitive_ids
+            ],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        samples = torch.stack(
+            (-half_lens, torch.zeros_like(half_lens), half_lens), dim=1
+        )
+        primitive_points = centers.unsqueeze(2) + axes.unsqueeze(
+            2
+        ) * samples.view(1, -1, 3, 1)
+
+    mesh_points: list[torch.Tensor] = []
+    for gid in mesh_ids:
+        mesh_id = int(env.model_cpu.geom_dataid[gid])
+        v0 = int(env.model_cpu.mesh_vertadr[mesh_id])
+        nv = int(env.model_cpu.mesh_vertnum[mesh_id])
+        verts_np = env.model_cpu.mesh_vert[v0 : v0 + nv].reshape(-1, 3)
+        if nv > MESH_SDF_SAMPLE_COUNT:
+            idx = np.linspace(0, nv - 1, MESH_SDF_SAMPLE_COUNT).astype(int)
+            verts_np = verts_np[idx]
+        verts = torch.tensor(
+            verts_np, device=config.device, dtype=geom_xpos.dtype
+        )
+        center = geom_xpos[:, gid]
+        mat = geom_xmat[:, gid]
+        mesh_points.append(
+            center[:, None, :] + torch.einsum("nij,sj->nsi", mat, verts)
+        )
+
+    for start in range(0, len(object_geom_ids), object_chunk_size):
+        chunk_ids = object_geom_ids[start : start + object_chunk_size]
+        obj_pos = geom_xpos[:, chunk_ids]
+        obj_mat = geom_xmat[:, chunk_ids]
+        half_ext = torch.tensor(
+            env.model_cpu.geom_size[chunk_ids, :3],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+
+        if primitive_points is not None and primitive_radii is not None:
+            delta = (
+                primitive_points[:, None, :, :, :]
+                - obj_pos[:, :, None, None, :]
+            )
+            local = torch.einsum("nbji,nbrpj->nbrpi", obj_mat, delta)
+            q = torch.abs(local) - half_ext.view(
+                1, len(chunk_ids), 1, 1, 3
+            )
+            outside = torch.clamp(q, min=0.0).norm(dim=-1)
+            inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+            sdf_geom = (outside + inside).min(dim=3).values
+            sdf_geom = sdf_geom - primitive_radii.view(1, 1, -1)
+            candidates.append(sdf_geom.amin(dim=(1, 2)))
+
+        for points in mesh_points:
+            delta = points[:, None, :, :] - obj_pos[:, :, None, :]
+            local = torch.einsum("nbji,nbsj->nbsi", obj_mat, delta)
+            q = torch.abs(local) - half_ext.view(
+                1, len(chunk_ids), 1, 3
+            )
+            outside = torch.clamp(q, min=0.0).norm(dim=-1)
+            inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+            candidates.append((outside + inside).amin(dim=(1, 2)))
+
+    return torch.stack(candidates, dim=1).min(dim=1).values
+
+
+def _cached_geom_box_union_sdf_min(
+    cache: dict[tuple[int, ...], torch.Tensor],
+    config: Config,
+    env: MJWPEnv,
+    geom_ids: list[int],
+    object_geom_ids: list[int],
+    geom_xpos: torch.Tensor | None = None,
+    geom_xmat: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Memoize an exact union-SDF query within one reward tick only."""
+    key = tuple(int(gid) for gid in geom_ids)
+    if key not in cache:
+        cache[key] = _geom_box_union_sdf_min(
+            config,
+            env,
+            geom_ids,
+            object_geom_ids,
+            geom_xpos=geom_xpos,
+            geom_xmat=geom_xmat,
+        )
+    return cache[key]
+
+
+def _geom_box_union_sdf_per_geom(
+    config: Config,
+    env: MJWPEnv,
+    geom_ids: list[int],
+    object_geom_ids: list[int],
+    geom_xpos: torch.Tensor | None = None,
+    geom_xmat: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Return exact object-union SDF independently for every robot geom.
+
+    The output has shape ``(num_worlds, len(geom_ids))``. Primitive robot geoms
+    share one batched object-box calculation; mesh robot geoms retain the same
+    vertex sampling and reductions as :func:`_geom_box_union_sdf_min`.
+    """
+    if geom_xpos is None:
+        geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+    if geom_xmat is None:
+        geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
+            geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
+        )
+    if not geom_ids or not object_geom_ids:
+        return torch.full(
+            (geom_xpos.shape[0], len(geom_ids)),
+            float("inf"),
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+
+    box_type = int(mujoco.mjtGeom.mjGEOM_BOX)
+    non_box = [
+        gid
+        for gid in object_geom_ids
+        if int(env.model_cpu.geom_type[gid]) != box_type
+    ]
+    if non_box:
+        names = [
+            mujoco.mj_id2name(
+                env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, gid
+            )
+            or str(gid)
+            for gid in non_box
+        ]
+        raise ValueError(
+            "Object SDF union currently supports box geoms only; "
+            f"got {','.join(names)}"
+        )
+
+    mesh_type = int(mujoco.mjtGeom.mjGEOM_MESH)
+    mesh_ids = [
+        gid for gid in geom_ids if int(env.model_cpu.geom_type[gid]) == mesh_type
+    ]
+    primitive_ids = [gid for gid in geom_ids if gid not in mesh_ids]
+    object_chunk_size = 16
+
+    primitive_points: torch.Tensor | None = None
+    primitive_radii: torch.Tensor | None = None
+    if primitive_ids:
+        centers = geom_xpos[:, primitive_ids]
+        mats = geom_xmat[:, primitive_ids]
+        axes = mats[:, :, :, 2]
+        primitive_radii = torch.tensor(
+            [
+                float(env.model_cpu.geom_size[gid, 0])
+                for gid in primitive_ids
+            ],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        half_lens = torch.tensor(
+            [
+                (
+                    float(env.model_cpu.geom_size[gid, 1])
+                    if int(env.model_cpu.geom_type[gid])
+                    == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
+                    else 0.0
+                )
+                for gid in primitive_ids
+            ],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+        samples = torch.stack(
+            (-half_lens, torch.zeros_like(half_lens), half_lens), dim=1
+        )
+        primitive_points = centers.unsqueeze(2) + axes.unsqueeze(
+            2
+        ) * samples.view(1, -1, 3, 1)
+
+    mesh_points: dict[int, torch.Tensor] = {}
+    for gid in mesh_ids:
+        mesh_id = int(env.model_cpu.geom_dataid[gid])
+        v0 = int(env.model_cpu.mesh_vertadr[mesh_id])
+        nv = int(env.model_cpu.mesh_vertnum[mesh_id])
+        verts_np = env.model_cpu.mesh_vert[v0 : v0 + nv].reshape(-1, 3)
+        if nv > MESH_SDF_SAMPLE_COUNT:
+            idx = np.linspace(0, nv - 1, MESH_SDF_SAMPLE_COUNT).astype(int)
+            verts_np = verts_np[idx]
+        verts = torch.tensor(
+            verts_np, device=config.device, dtype=geom_xpos.dtype
+        )
+        center = geom_xpos[:, gid]
+        mat = geom_xmat[:, gid]
+        mesh_points[gid] = center[:, None, :] + torch.einsum(
+            "nij,sj->nsi", mat, verts
+        )
+
+    primitive_chunks: list[torch.Tensor] = []
+    mesh_chunks: dict[int, list[torch.Tensor]] = {
+        gid: [] for gid in mesh_ids
+    }
+    for start in range(0, len(object_geom_ids), object_chunk_size):
+        chunk_ids = object_geom_ids[start : start + object_chunk_size]
+        obj_pos = geom_xpos[:, chunk_ids]
+        obj_mat = geom_xmat[:, chunk_ids]
+        half_ext = torch.tensor(
+            env.model_cpu.geom_size[chunk_ids, :3],
+            device=config.device,
+            dtype=geom_xpos.dtype,
+        )
+
+        if primitive_points is not None and primitive_radii is not None:
+            delta = (
+                primitive_points[:, None, :, :, :]
+                - obj_pos[:, :, None, None, :]
+            )
+            local = torch.einsum("nbji,nbrpj->nbrpi", obj_mat, delta)
+            q = torch.abs(local) - half_ext.view(
+                1, len(chunk_ids), 1, 1, 3
+            )
+            outside = torch.clamp(q, min=0.0).norm(dim=-1)
+            inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+            sdf_geom = (outside + inside).min(dim=3).values
+            sdf_geom = sdf_geom - primitive_radii.view(1, 1, -1)
+            primitive_chunks.append(sdf_geom.amin(dim=1))
+
+        for gid, points in mesh_points.items():
+            delta = points[:, None, :, :] - obj_pos[:, :, None, :]
+            local = torch.einsum("nbji,nbsj->nbsi", obj_mat, delta)
+            q = torch.abs(local) - half_ext.view(
+                1, len(chunk_ids), 1, 3
+            )
+            outside = torch.clamp(q, min=0.0).norm(dim=-1)
+            inside = torch.clamp(q.max(dim=-1).values, max=0.0)
+            mesh_chunks[gid].append((outside + inside).amin(dim=(1, 2)))
+
+    if len(primitive_chunks) == 1:
+        primitive_sdf = primitive_chunks[0]
+    elif primitive_chunks:
+        primitive_sdf = torch.stack(primitive_chunks, dim=2).min(dim=2).values
+    else:
+        primitive_sdf = None
+    primitive_columns = {
+        gid: index for index, gid in enumerate(primitive_ids)
+    }
+    mesh_sdf = {
+        gid: (
+            values[0]
+            if len(values) == 1
+            else torch.stack(values, dim=1).min(dim=1).values
+        )
+        for gid, values in mesh_chunks.items()
+    }
+    columns = [
+        (
+            mesh_sdf[gid]
+            if gid in mesh_sdf
+            else primitive_sdf[:, primitive_columns[gid]]
+        )
+        for gid in geom_ids
+    ]
+    return torch.stack(columns, dim=1)
+
+
+def _batched_geom_box_union_sdf_cache(
+    config: Config,
+    env: MJWPEnv,
+    geom_groups: list[list[int]],
+    object_geom_ids: list[int],
+    geom_xpos: torch.Tensor | None = None,
+    geom_xmat: torch.Tensor | None = None,
+) -> dict[tuple[int, ...], torch.Tensor]:
+    """Evaluate all requested robot-geom groups from one per-geom SDF batch."""
+    group_keys = list(
+        dict.fromkeys(
+            tuple(int(gid) for gid in group)
+            for group in geom_groups
+            if group
+        )
+    )
+    if not group_keys:
+        return {}
+    ordered_geom_ids = list(
+        dict.fromkeys(gid for key in group_keys for gid in key)
+    )
+    per_geom_sdf = _geom_box_union_sdf_per_geom(
+        config,
+        env,
+        ordered_geom_ids,
+        object_geom_ids,
+        geom_xpos=geom_xpos,
+        geom_xmat=geom_xmat,
+    )
+    column_by_geom_id = {
+        gid: index for index, gid in enumerate(ordered_geom_ids)
+    }
+    return {
+        key: per_geom_sdf[
+            :,
+            [column_by_geom_id[gid] for gid in key],
+        ].min(dim=1).values
+        for key in group_keys
+    }
+
+
+def _object_sdf_geom_groups_for_tick(config: Config) -> list[list[int]]:
+    """Collect every robot-geom group that this reward tick can query."""
+    groups: list[list[int]] = []
+
+    def add(enabled: bool, geom_ids: list[int]) -> None:
+        if enabled and geom_ids:
+            groups.append(list(geom_ids))
+
+    add(
+        config.robot_object_penalty_scale > 0.0,
+        config.robot_object_penalty_geom_ids,
+    )
+    add(
+        config.leg_object_penalty_scale > 0.0,
+        config.leg_object_penalty_geom_ids,
+    )
+    add(
+        config.hand_object_deep_penalty_scale > 0.0,
+        config.hand_object_deep_penalty_geom_ids,
+    )
+    add(config.hand_support_rew_scale > 0.0, config.hand_support_geom_ids)
+
+    surface_band_enabled = (
+        config.surface_band_rew_scale > 0.0
+        or config.surface_band_penalty_scale > 0.0
+    ) and bool(config.surface_band_geom_ids)
+    if surface_band_enabled and config.surface_band_bimanual_required:
+        add(True, config.surface_band_left_geom_ids)
+        add(True, config.surface_band_right_geom_ids)
+    else:
+        add(surface_band_enabled, config.surface_band_geom_ids)
+
+    add(
+        config.nonhand_support_penalty_scale > 0.0,
+        config.nonhand_support_penalty_geom_ids,
+    )
+    add(config.cem_safety_gate_enabled, config.cem_safety_gate_geom_ids)
+    add(config.cem_hand_gate_enabled, config.cem_hand_gate_geom_ids)
+    add(config.cem_leg_gate_enabled, config.cem_leg_gate_geom_ids)
+    add(
+        config.carry_corridor_rew_scale > 0.0,
+        config.carry_corridor_leg_geom_ids,
+    )
+    return groups
 
 
 def _sample_gate_from_ref_mask(
@@ -1373,31 +1804,40 @@ def get_reward(
             and config.nonhand_support_penalty_geom_ids
         )
     ) and config.hand_approach_obj_half_extents:
-        object_geom_id = mujoco.mj_name2id(
-            env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, "object_collision"
+        object_geom_ids = list(config.object_collision_geom_ids)
+        if not object_geom_ids:
+            object_geom_ids = _resolve_object_collision_geom_ids(
+                env.model_cpu, config.object_collision_sdf_mode
+            )
+        object_geom_id = (
+            object_geom_ids[0] if object_geom_ids else -1
         )
         if object_geom_id != -1:
             geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
             geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
                 geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
             )
-            obj_pos = geom_xpos[:, object_geom_id]
-            obj_mat = geom_xmat[:, object_geom_id]
-            half_ext = torch.tensor(
-                config.hand_approach_obj_half_extents,
-                device=config.device,
-                dtype=geom_xpos.dtype,
-            )
+            if config.object_collision_sdf_batch_groups:
+                union_sdf_cache = _batched_geom_box_union_sdf_cache(
+                    config,
+                    env,
+                    _object_sdf_geom_groups_for_tick(config),
+                    object_geom_ids,
+                    geom_xpos=geom_xpos,
+                    geom_xmat=geom_xmat,
+                )
+            else:
+                union_sdf_cache = {}
 
             def geom_box_sdf_min(geom_ids: list[int]) -> torch.Tensor:
-                return _geom_box_sdf_min(
+                return _cached_geom_box_union_sdf_min(
+                    union_sdf_cache,
                     config,
                     env,
                     geom_ids,
-                    object_geom_id,
+                    object_geom_ids,
                     geom_xpos=geom_xpos,
                     geom_xmat=geom_xmat,
-                    half_ext=half_ext,
                 )
 
             def support_gate(
@@ -2360,8 +2800,13 @@ def _terminal_carry_gate(
         min=0.0,
     )
 
-    object_geom_id = mujoco.mj_name2id(
-        env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, "object_collision"
+    object_geom_ids = list(config.object_collision_geom_ids)
+    if not object_geom_ids:
+        object_geom_ids = _resolve_object_collision_geom_ids(
+            env.model_cpu, config.object_collision_sdf_mode
+        )
+    object_geom_id = (
+        object_geom_ids[0] if object_geom_ids else -1
     )
     nonhand_sdf = torch.full((N,), float("inf"), device=config.device, dtype=dtype)
     hand_near_frac = zeros
@@ -2371,20 +2816,14 @@ def _terminal_carry_gate(
         geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
             geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
         )
-        half_ext = torch.tensor(
-            config.hand_approach_obj_half_extents,
-            device=config.device,
-            dtype=geom_xpos.dtype,
-        )
         if config.nonhand_support_penalty_geom_ids:
-            nonhand_sdf = _geom_box_sdf_min(
+            nonhand_sdf = _geom_box_union_sdf_min(
                 config,
                 env,
                 config.nonhand_support_penalty_geom_ids,
-                object_geom_id,
+                object_geom_ids,
                 geom_xpos=geom_xpos,
                 geom_xmat=geom_xmat,
-                half_ext=half_ext,
             )
             nonhand_violation = torch.clamp(
                 config.terminal_carry_gate_nonhand_margin_m - nonhand_sdf,
@@ -2394,14 +2833,13 @@ def _terminal_carry_gate(
             hand_sdfs = []
             for gid in config.hand_support_geom_ids:
                 hand_sdfs.append(
-                    _geom_box_sdf_min(
+                    _geom_box_union_sdf_min(
                         config,
                         env,
                         [gid],
-                        object_geom_id,
+                        object_geom_ids,
                         geom_xpos=geom_xpos,
                         geom_xmat=geom_xmat,
-                        half_ext=half_ext,
                     )
                 )
             if hand_sdfs:

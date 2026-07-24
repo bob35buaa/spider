@@ -1,0 +1,8 @@
+# @package _global_
+# Auto-generated for E178 semantic bucket proxy.
+defaults:
+- core4d_E174_bucket003_20231018_001_p1_PRG
+- _self_
+scene_name: scene_act_E178_contactAlignedTop
+object_collision_sdf_mode: union
+object_collision_sdf_batch_groups: true

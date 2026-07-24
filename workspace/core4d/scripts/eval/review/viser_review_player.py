@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Interactive viser review player for PRG retargeting results (E170-E174).
+"""Interactive viser review player for PRG retargeting results (E170-E178).
 
-Browse every CEM-complete case across the four experiments, filter by object /
+Browse every CEM-complete case across the registered experiments, filter by object /
 numeric pass / failure mode / retarget variant, play back the executed 3D
 trajectory (robot + object, MuJoCo), and annotate sample quality online. The
 annotation writes ``USE / DO_NOT_USE`` decisions into a non-destructive
@@ -24,10 +24,12 @@ private ViserServer and rebuild the scene under a fresh root on every swap.
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -56,15 +58,51 @@ METRIC_BAR = (
 )
 
 # tracking-error bar: (metric column, 中文, threshold, unit, decimals).
-# These thresholds are display-only (red if value > threshold) and DO NOT affect
-# the numeric pass/fail label (which comes from numeric_release_pass in the TSV).
+# These red lines mirror E178's numeric gates. Legacy experiments may still use
+# them as display-only thresholds because pass/fail always comes from their TSV.
 TRACK_BAR = (
-    ("track_root_pos_err_cm_mean", "根位", 24.0, "cm", 1),
-    ("track_root_ori_err_deg_mean", "根向", 20.0, "°", 1),
-    ("track_eef_pos_err_cm_mean", "手位", 24.0, "cm", 1),
-    ("track_eef_ori_err_deg_mean", "手向", 25.0, "°", 1),
-    ("track_obj_pos_err_cm_mean", "物位", 20.0, "cm", 1),
-    ("track_obj_ori_err_deg_mean", "物向", 10.0, "°", 1),
+    (
+        "track_root_pos_err_cm_mean",
+        "根位",
+        float(os.environ.get("CORE4D_REVIEW_ROOT_POS_MAX_CM", "20")),
+        "cm",
+        1,
+    ),
+    (
+        "track_root_ori_err_deg_mean",
+        "根向",
+        float(os.environ.get("CORE4D_REVIEW_ROOT_ORI_MAX_DEG", "20")),
+        "°",
+        1,
+    ),
+    (
+        "track_eef_pos_err_cm_mean",
+        "手位",
+        float(os.environ.get("CORE4D_REVIEW_HAND_POS_MAX_CM", "20")),
+        "cm",
+        1,
+    ),
+    (
+        "track_eef_ori_err_deg_mean",
+        "手向",
+        float(os.environ.get("CORE4D_REVIEW_HAND_ORI_MAX_DEG", "20")),
+        "°",
+        1,
+    ),
+    (
+        "track_obj_pos_err_cm_mean",
+        "物位",
+        float(os.environ.get("CORE4D_REVIEW_OBJECT_POS_MAX_CM", "20")),
+        "cm",
+        1,
+    ),
+    (
+        "track_obj_ori_err_deg_mean",
+        "物向",
+        float(os.environ.get("CORE4D_REVIEW_OBJECT_ORI_MAX_DEG", "10")),
+        "°",
+        1,
+    ),
     ("foot_slip_max_m", "脚滑", 1.0, "m", 3),
 )
 
@@ -72,9 +110,68 @@ TRACK_BAR = (
 # ---------------------------------------------------------------------------
 # Case loading (MuJoCo) — precompute per-frame body transforms for fast scrub.
 # ---------------------------------------------------------------------------
+ROBOT_MESH_DIR = REPO / "spider/assets/robots/unitree_g1/meshes"
+OBJECT_MESH_ROOT = REPO / "workspace/core4d/object_models/object_models"
+
+
+@functools.lru_cache(maxsize=None)
+def _object_mesh_fallback(filename: str) -> Path | None:
+    """Return an unambiguous canonical object mesh with this basename."""
+    if not OBJECT_MESH_ROOT.is_dir():
+        return None
+    matches = sorted(p.resolve() for p in OBJECT_MESH_ROOT.rglob(filename) if p.is_file())
+    return matches[0] if len(matches) == 1 else None
+
+
+def _repo_asset_candidate(raw: str) -> Path | None:
+    """Resolve a path containing a known repo marker after relocation."""
+    normalized = raw.replace("\\", "/")
+    for marker in ("example_datasets/", "workspace/", "spider/"):
+        if marker in normalized:
+            return (REPO / (marker + normalized.split(marker, 1)[1])).resolve()
+    return None
+
+
+def _load_portable_spec(scene_path: Path):
+    """Load a scene without depending on its original directory depth.
+
+    Archived ``scene_snapshot`` XMLs retain paths relative to their former
+    task directory.  Re-root assets in memory so the snapshots remain
+    read-only and portable after relocation.
+    """
+    import mujoco
+
+    root = ET.parse(scene_path).getroot()
+    compiler = root.find("compiler")
+    if compiler is None:
+        compiler = ET.Element("compiler")
+        root.insert(0, compiler)
+    compiler.set("meshdir", str(ROBOT_MESH_DIR.resolve()))
+
+    for mesh in root.findall("./asset/mesh"):
+        raw = (mesh.get("file") or "").strip()
+        if not raw:
+            continue
+        path = Path(raw)
+        candidates = []
+        if path.is_absolute():
+            candidates.append(path)
+        repo_candidate = _repo_asset_candidate(raw)
+        if repo_candidate is not None:
+            candidates.append(repo_candidate)
+        candidates.extend((ROBOT_MESH_DIR / raw, scene_path.parent / raw))
+
+        resolved = next((p.resolve() for p in candidates if p.is_file()), None)
+        if resolved is None:
+            resolved = _object_mesh_fallback(path.name)
+        if resolved is not None:
+            mesh.set("file", str(resolved))
+
+    return mujoco.MjSpec.from_string(ET.tostring(root, encoding="unicode"))
+
+
 def _load_case_data(rec: idx.CaseRecord, want_ref: bool):
     """Return (spec, model, sim_qpos, ref_qpos|None, frame_ids, fps)."""
-    import mujoco
     from render_a100_cem_videos import (  # noqa: E402
         converted_reference_qpos,
         load_render_config,
@@ -84,7 +181,7 @@ def _load_case_data(rec: idx.CaseRecord, want_ref: bool):
 
     row = {"scene_act": rec.scene_xml, "trajectory": rec.trajectory}
     config = load_render_config(row, Path(rec.config_act))
-    spec = mujoco.MjSpec.from_file(config.model_path)
+    spec = _load_portable_spec(Path(config.model_path))
     _ensure_names(spec)
     model = spec.compile()
 
@@ -608,10 +705,21 @@ class ReviewApp:
             "release_gate_pass": "释放",
             "hand_penetration_gate_pass": "手穿透",
             "lower_body_gate_pass": "下肢",
+            "root_pos_gate_pass": "根位置",
+            "root_ori_gate_pass": "根朝向",
+            "hand_pos_gate_pass": "手位置",
+            "hand_ori_gate_pass": "手朝向",
+            "object_pos_gate_pass": "物位置",
+            "object_ori_gate_pass": "物朝向",
         }
-        total = len(r.gates)
-        n_pass = sum(1 for v in r.gates.values() if v is True)
-        failed = [gate_names.get(k, k) for k, v in r.gates.items() if v is False]
+        known_gates = {key: value for key, value in r.gates.items() if value is not None}
+        total = len(known_gates)
+        n_pass = sum(1 for value in known_gates.values() if value is True)
+        failed = [
+            gate_names.get(key, key)
+            for key, value in known_gates.items()
+            if value is False
+        ]
         if failed:
             gate_line = f"{n_pass}/{total} 通过 · 未过 " + " ".join(f"🔴{n}" for n in failed)
         else:

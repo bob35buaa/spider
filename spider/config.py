@@ -27,6 +27,57 @@ import spider
 from spider.io import get_processed_data_dir
 
 
+def resolve_object_collision_geom_ids(
+    model: mujoco.MjModel, mode: str
+) -> list[int]:
+    """Resolve object proxy geoms for legacy-primary or multi-box union SDF."""
+    if mode not in {"primary", "union"}:
+        raise ValueError(
+            "object_collision_sdf_mode must be 'primary' or 'union', "
+            f"got {mode!r}"
+        )
+    obj_body_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_BODY, "object"
+    )
+    if obj_body_id == -1:
+        return []
+
+    named: list[tuple[int, str]] = []
+    fallback_collision: list[int] = []
+    fallback_object: list[int] = []
+    for gid in range(model.ngeom):
+        if int(model.geom_bodyid[gid]) != obj_body_id:
+            continue
+        fallback_object.append(gid)
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or ""
+        if "collision" in name:
+            fallback_collision.append(gid)
+        if name == "object_collision" or name.startswith("object_collision_"):
+            named.append((gid, name))
+
+    primary = next((gid for gid, name in named if name == "object_collision"), None)
+    if primary is None:
+        candidates = fallback_collision or fallback_object
+        primary = candidates[0] if candidates else None
+    if primary is None:
+        return []
+    if mode == "primary":
+        return [primary]
+
+    union_ids = [gid for gid, _ in named] or [primary]
+    non_box = [
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or str(gid)
+        for gid in union_ids
+        if int(model.geom_type[gid]) != int(mujoco.mjtGeom.mjGEOM_BOX)
+    ]
+    if non_box:
+        raise ValueError(
+            "object_collision_sdf_mode='union' currently requires box geoms; "
+            f"non-box={','.join(non_box)}"
+        )
+    return union_ids
+
+
 @dataclass
 class Config:
     # === TASK CONFIGURATION ===
@@ -174,6 +225,15 @@ class Config:
     hand_approach_obj_half_extents: list[float] = field(
         default_factory=list
     )  # resolved at runtime from geom
+    # E175: proxy-aware object SDF. "primary" preserves the historical exact
+    # object_collision behavior; "union" uses all object_collision* box geoms.
+    object_collision_sdf_mode: str = "primary"
+    object_collision_geom_names: list[str] = field(default_factory=list)
+    object_collision_geom_ids: list[int] = field(default_factory=list)
+    # E176: compute all active robot-geom groups from one per-geom union-SDF
+    # batch. Disabled by default to preserve the memory/performance behavior of
+    # existing experiments.
+    object_collision_sdf_batch_groups: bool = False
     hand_approach_contact_threshold: float = (
         0.3  # ref hand-obj dist below this activates hand_approach (m)
     )
@@ -1114,6 +1174,7 @@ def process_config(config: Config):
         or config.object_floor_penalty_scale > 0.0
         or config.cem_safety_gate_enabled
         or config.cem_hand_gate_enabled
+        or config.cem_leg_gate_enabled
         or config.cem_peak_margin_enabled
         or config.cem_smooth_enabled
         or config.object_clearance_rew_scale > 0.0
@@ -1133,29 +1194,25 @@ def process_config(config: Config):
                     "hand_approach_body_names: body '{}' not found.", name
                 )
         config.hand_approach_body_ids = resolved_ids
-        # Resolve object half-extents from collision geom
-        obj_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
-        if obj_body_id != -1:
-            for g in range(model.ngeom):
-                if model.geom_bodyid[g] == obj_body_id:
-                    gname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g)
-                    if gname and "collision" in gname:
-                        config.hand_approach_obj_half_extents = [
-                            float(x) for x in model.geom_size[g]
-                        ]
-                        break
-            if not config.hand_approach_obj_half_extents:
-                # Fallback: use first object geom size
-                for g in range(model.ngeom):
-                    if model.geom_bodyid[g] == obj_body_id:
-                        config.hand_approach_obj_half_extents = [
-                            float(x) for x in model.geom_size[g]
-                        ]
-                        break
+        config.object_collision_geom_ids = resolve_object_collision_geom_ids(
+            model, config.object_collision_sdf_mode
+        )
+        config.object_collision_geom_names = [
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or str(gid)
+            for gid in config.object_collision_geom_ids
+        ]
+        if config.object_collision_geom_ids:
+            primary_gid = config.object_collision_geom_ids[0]
+            config.hand_approach_obj_half_extents = [
+                float(x) for x in model.geom_size[primary_gid]
+            ]
         loguru.logger.info(
-            "Hand approach: {} bodies, obj half_ext={}",
+            "Hand approach: {} bodies, obj half_ext={}, object_sdf_mode={}, "
+            "object_sdf_geoms={}",
             len(config.hand_approach_body_ids),
             config.hand_approach_obj_half_extents,
+            config.object_collision_sdf_mode,
+            config.object_collision_geom_names,
         )
 
     if config.simulator == "mjwp":

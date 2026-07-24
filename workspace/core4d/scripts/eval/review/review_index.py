@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified case index + annotation store for the PRG review player (E170-E174).
+"""Unified case index + annotation store for the PRG review player (E170-E178).
 
 Pure-python (no viser / no spider imports) so it is importable headless for the
 `--check` self-test. Reads each experiment's ``*_case_metrics.tsv`` by column
@@ -19,7 +19,7 @@ from pathlib import Path
 
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174")
+DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174", "E178")
 
 GATE_FIELDS = (
     "fall_gate_pass",
@@ -28,6 +28,12 @@ GATE_FIELDS = (
     "release_gate_pass",
     "hand_penetration_gate_pass",
     "lower_body_gate_pass",
+    "root_pos_gate_pass",
+    "root_ori_gate_pass",
+    "hand_pos_gate_pass",
+    "hand_ori_gate_pass",
+    "object_pos_gate_pass",
+    "object_ori_gate_pass",
 )
 # continuous metric columns shown in the top metrics bar (raw TSV column names)
 METRIC_COLUMNS = (
@@ -37,7 +43,7 @@ METRIC_COLUMNS = (
     "hand_object_release_false_contact_3mm_frac",
     "hand_object_physics_contact_3mm_in_mask_frac",
     "fall_flag",
-    # tracking errors (no threshold in the metric standard; display-only)
+    # tracking errors (numeric gates for E178; display-only for legacy rows)
     "track_root_pos_err_cm_mean",
     "track_root_ori_err_deg_mean",
     "track_eef_pos_err_cm_mean",

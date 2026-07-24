@@ -1,13 +1,35 @@
 # 实验日志索引
 
-> 自动生成，共 233 个日志文件。
+> 自动生成，共 240 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 41 (E178-E178)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 237 | E178 | 2026-07-24 | Bucket contact aligned proxy gates | [237_E178_bucket_contact_aligned_proxy_ga...](237_E178_bucket_contact_aligned_proxy_gates.md) |
+| 238 | E178 | 2026-07-24 | Canary waiver full launch | [238_E178_canary_waiver_full_launch.md](238_E178_canary_waiver_full_launch.md) |
+| 239 | E178 | 2026-07-24 | Local 5090 hybrid rebalance | [239_E178_local_5090_hybrid_rebalance.md](239_E178_local_5090_hybrid_rebalance.md) |
+| 240 | E178 | 2026-07-24 | Tracking error numeric gates | [240_E178_tracking_error_numeric_gates.md](240_E178_tracking_error_numeric_gates.md) |
+| 241 | E178 | 2026-07-24 | Bucket user manual review results | [241_E178_bucket_user_manual_review_resul...](241_E178_bucket_user_manual_review_results.md) |
+
+## Phase 40 (E177-E177)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 236 | E177 | 2026-07-24 | Five step no lid bucket proxy results | [236_E177_five_step_no_lid_bucket_proxy_r...](236_E177_five_step_no_lid_bucket_proxy_results.md) |
+
+## Phase 39 (E176-E176)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 235 | E176 | 2026-07-24 | Lowgeom proxy canary results | [235_E176_lowgeom_proxy_canary_results.md](235_E176_lowgeom_proxy_canary_results.md) |
 
 ## Phase 37 (E174-E174)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
-| 100 | E174, e2 | 2026-07-23 | Bucket desk move2 nonbox results | [100_E174_bucket_desk_move2_nonbox_result...](100_E174_bucket_desk_move2_nonbox_results.md) |
+| 234 | E174, e2 | 2026-07-23 | Bucket desk move2 nonbox results | [234_E174_bucket_desk_move2_nonbox_result...](234_E174_bucket_desk_move2_nonbox_results.md) |
 
 ## Phase 36 (E173-E173)
 

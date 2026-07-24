@@ -4,7 +4,12 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
-| E174 | 2026-07-23 | Phase 37 | 非box首次(bucket×5+desk×2 move2-only凹几何proxy)：Full CEM 39/39,numeric pass 5/39=13%;bucket004(凹0.045)0/4 vs box004(凸0.041,E172)83%→凹几何proxy惩罚(腿穿薄壁+手够不到接触点);bucket010 2/2·desk007 2/9可用;gate-health 0/39 | ✅ 执行完成待用户终审(PENDING_USER_REVIEW,倾向PARTIAL_YIELD,39条USE/DO_NOT_USE) | [100](log/100_E174_bucket_desk_move2_nonbox_results.md) · [plan](plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) |
+| E179 plan | 2026-07-24 | Phase 42 | box023 E167A no-PRG Full；16条paired+root/EEF/object十二门 | 📋 计划完成 | [plan](plan/197_E179_box023_e167a_no_prg_full_cem_plan.md) |
+| E178 | 2026-07-24 | Phase 41 | 三bucket主接触端段校准；A100+5090 hybrid Full | 🟡 12门 10/27；人工23/27(USE12/DNU11)，bucket004待审 | [237](log/237_E178_bucket_contact_aligned_proxy_gates.md) · [238](log/238_E178_canary_waiver_full_launch.md) · [239](log/239_E178_local_5090_hybrid_rebalance.md) · [240](log/240_E178_tracking_error_numeric_gates.md) · [241](log/241_E178_bucket_user_manual_review_results.md) |
+| E177 | 2026-07-24 | Phase 40 | 三bucket低geom proxy：003/007五段无盖，004单box | ✅ 本地proxy批准；contact/CEM未启动 | [236](log/236_E177_five_step_no_lid_bucket_proxy_results.md) |
+| E176 | 2026-07-24 | Phase 39 | 个位数proxy 6–9 geom；runtime 6/6；吞吐canary 4/6 | ⛔ Full被3s门阻断，三轮优化后停止 | [235](log/235_E176_lowgeom_proxy_canary_results.md) · [plan](plan/192_E176_lowgeom_nonbox_proxy_plan.md) |
+| E175 | 2026-07-23 | Phase 38 | 修复multi-geom接入；41–167 geom导致Full预计52–66h | ⛔ Full慢速中止，canary/部分Full证据保留 | [plan](plan/191_E175_nonbox_proxy_fidelity_diagnostic_plan.md) |
+| E174 | 2026-07-23 | Phase 37 | 非box首次(bucket×5+desk×2 move2-only凹几何proxy)：39/39完成，numeric pass 5/39=13% | ✅ 执行完成待用户终审(PENDING_USER_REVIEW,倾向PARTIAL_YIELD) | [234](log/234_E174_bucket_desk_move2_nonbox_results.md) · [plan](plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) |
 | E173 | 2026-07-22 | Phase 36 | box024/box023/box001 move-only全流程；26/53 numeric pass；PRG随尺寸单调退化(小箱~80%大箱~35%)；v2 14/14救回 | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [233](log/233_E173_box024_box023_box001_screening_full_cem.md) · [plan](plan/189_E173_box024_box023_box001_full_pipeline_plan.md) |
 | E172 | 2026-07-22 | Phase 35 | Box004 move-only 全流程S0-S6：6 S5-ready→6 CEM→5 numeric pass；v2救回082_p2且下游pass；PRG 0 scene-reject | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [232](log/232_E172_box004_screening_full_cem.md) · [plan](plan/188_E172_box004_full_pipeline_plan.md) |
 | E171 | 2026-07-21 | Phase 34 | Box026 5/12 numeric pass；Box022 DATA_NEGATIVE；PRG跨物体contact trade-off显著 | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [231](log/231_E171_box022_box026_screening_full_cem.md) · [plan](plan/187_E171_box022_box026_full_pipeline_plan.md) |
