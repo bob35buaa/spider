@@ -138,3 +138,22 @@ evaluator 直接 import `eval.core.core_metrics`，阈值 launch 前冻结。com
 - **CEM 并行化教训**：CEM(`use_torch_compile=false`, warp) 单 case ~35-45min。先试 48-wide 并发（1 case/GPU×6-7）→ GPU 过饱和(99%×8)每 case 慢 >3×，2h 仅 5/53 → 回退**8-wide 串行**(1/GPU, GPU~44%, ~40min/case 稳定)，~5h 完成 53。教训：Warp CEM GPU-bound，最优 1/GPU。
 - S3 v1/v2 retarget 用 24/14-shard 并行（OmniRetarget CPU-bound，安全提速）。
 - gen_report/eval runner 改为 3 物体 data-driven（避免 E172 单物体硬编码）。
+
+## 14. 2026-07-26 box023 人工审查与 source+partner RL export
+
+- 用户对 box023 的 16 条 CEM-complete row 完成人工分级：
+  `CLEAN=2`、`MINOR_ACCEPTABLE=5`、`UNUSABLE=9`。按 box001/box024
+  operational allowlist 口径，前两档共 7 条进入导出，9 条不可用严格排除。
+- 标准 source 表位于
+  `results/E173/s6_downstream/rl_export/box023_user_approved/rl_export_input.tsv`，
+  `7/7 RL_EXPORT_READY`；人工 snapshot、source audit、S6 downstream
+  evidence 和 SHA256 审计均在同一 canonical S6 目录。
+- partner 使用同一 `(object, date, seq)` 的 opposite person。7 条均复用
+  E173 已通过的 `omnirt_v1` Stage2b 产物，无需新跑 OmniRetarget 或 v2
+  rescue；`partner_omnirt/paired_rl_export_input.tsv` 为
+  `7/7 PAIR_COMPLETE + RL_EXPORT_READY`。
+- 已通过 `update_case_state_registry.py` 记录 7 条
+  `omnirt_v1/ref_fk/rubber_hull` S6 evidence；逐字段核对 S1-S5 状态与原
+  `sphere5cm` base 一致，未用下游人工结论反写数据构建事实。
+- 本次仅完成 RL-ready paired 输入打包，`rl_status=not_run`，不宣称 RL
+  训练成功。
