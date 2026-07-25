@@ -1,0 +1,25 @@
+case_id	scenario_code	selection_reason
+20240412_personA_personB/20240412__C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=12
+20240412_personA_personC/20240412__C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=53
+20240417_personM_personB_finish/20240417__C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=40
+20240417_personM_personC_to3C_finish/20240417_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=45
+20240423_personB_personC_and_C2_all__start-end/20240423_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=99
+20240423_personM_personC_30_skip_all_start-end/20240423__C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=45
+20240424_personB_personD_all_start-end/20240424_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=55
+20240426_personB_personG_all_30skip_start-end/20240426_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=45
+20240426_personL_personC_all_30skip_start-end/20240426_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=42
+20240508_personE_personD_all_30skip_start-end/20240508_C_2K2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=100
+20240508_personJ_personK_30_skip_start-end/20240508_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=40
+20240510_personH_personI/20240510_C_2__30skip	C_2	all-C2 capture; box scene; expected sparse frames=60
+20240412_personA_personB/20240412__C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=91
+20240412_personA_personC/20240412__C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=104
+20240417_personM_personB_finish/20240417__C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=31
+20240418_personB_personC_noC1andC2_all_30_skip_start-end/20240418__C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=22
+20240418_personM_personC_from4C_all_30skip_start-end/20240418__C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=24
+20240423_personM_personC_30_skip_all_start-end/20240423__C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=50
+20240424_personB_personD_all_start-end/20240424_C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=60
+20240426_personB_personG_all_30skip_start-end/20240426_C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=50
+20240426_personL_personC_all_30skip_start-end/20240426_C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=61
+20240508_personE_personD_all_30skip_start-end/20240508_C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=50
+20240508_personJ_personK_30_skip_start-end/20240508_C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=50
+20240510_personH_personI/20240510_C_8__30skip	C_8	all-C8 capture; chair/table scene; expected sparse frames=60

@@ -1,0 +1,2 @@
+case_id	scenario_code	selection_reason
+20240412_personA_personB/20240412__C_8__30skip	C_8	user-example 30fps fast preview: one released sparse RGB per encoded frame, no interpolation

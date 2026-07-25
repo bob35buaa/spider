@@ -1,0 +1,6 @@
+case_id	scenario_code	selection_reason
+20240423_personB_personC_and_C2_all__start-end/20240423_C_2__30skip	C_2	box-high-coverage: 99 sparse frames, 78 active-box, 61 cooperative-box
+20240426_personB_personG_all_30skip_start-end/20240426_C_2__30skip	C_2	box-compact: 45 sparse frames, 35 active-box, 32 cooperative-box
+20240508_personE_personD_all_30skip_start-end/20240508_C_2K2__30skip	C_2	box-second-pair-long: 100 sparse frames, 75 active-box, 56 cooperative-box
+20240412_personA_personB/20240412__C_8__30skip	C_8	user-example: contains frame 00271, 91 sparse frames, 84 cooperative samples
+20240508_personJ_personK_30_skip_start-end/20240508_C_8__30skip	C_8	C8-compact-diverse-pair: 50 sparse frames, 49 cooperative samples
