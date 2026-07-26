@@ -139,6 +139,24 @@ evaluator 直接 import `eval.core.core_metrics`，阈值 launch 前冻结。com
 - S3 v1/v2 retarget 用 24/14-shard 并行（OmniRetarget CPU-bound，安全提速）。
 - gen_report/eval runner 改为 3 物体 data-driven（避免 E172 单物体硬编码）。
 
+## 13. 2026-07-24 用户批准 box024 子集 partner 补齐
+
+- 用户批准的 box024 source RL 输入为
+  `results/E173/s6_downstream/rl_export/box024_user_approved/rl_export_input.tsv`，
+  共 3 条，全部保持标准 `RL_EXPORT_READY`。
+- 已在同目录的 `partner_omnirt/` 生成独立 paired package：
+  `paired_rl_export_input.tsv/json`、`rl_partner_omnirt_manifest.tsv/json`、
+  `paired_rl_export_audit.json` 与 summary。
+- 配对规则为同一 `(object, date, seq)` 的另一位 person；3/3
+  `PAIR_COMPLETE + RL_EXPORT_READY`，partner artifact 与 provenance 均重新计算
+  SHA256。
+- partner variant 为 `omnirt_v1=2`、`omnirt_v2=1`；其中
+  `box024_20231011_027_p1` 的 v1 Stage2b 为
+  `omniretarget_infeasible`，因此只复用已有 v2 pass artifact，没有伪造 v1
+  成功。
+- 该补齐只扩展 S6 paired RL 输入，不回写 E173 的 S1-S5 状态，也不宣称 RL
+  已训练成功。
+
 ## 14. 2026-07-26 box023 人工审查与 source+partner RL export
 
 - 用户对 box023 的 16 条 CEM-complete row 完成人工分级：

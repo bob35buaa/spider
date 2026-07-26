@@ -123,3 +123,21 @@ evaluator 直接 import `eval.core.core_metrics`，阈值 launch 前冻结。
 - `build_pipeline_authority.py`：`in_cem` 判定由 `status=="READY_FOR_FULL"` 改为 `status not in {"", "preflight_blocked"}`，使 authority 在 CEM+eval 后（status=`run_complete_pending_eval`）仍正确计 cem_eligible（隔离、可逆修正）。
 - `gen_E172_box004_report.py`：报告叙述改为 box004 单物体 move-only（原为 box022/box026 硬编码）。
 - S5 修正：dcv3 override 需在 Hydra `examples/config/override/`（export 默认写到 s5 dir），已复制 6 个 dcv3 override 后重建 manifest → 假阳性 `missing_dcv3_override` 消除，PRG 真实 reject=0。
+
+## 13. 2026-07-24 用户批准子集 partner 补齐
+
+- 用户批准的 box004 source RL 输入为
+  `results/E172/s6_downstream/rl_export/box004_user_approved/rl_export_input.tsv`，
+  共 4 条，全部保持标准 `RL_EXPORT_READY`。
+- 已在同目录的 `partner_omnirt/` 生成独立 paired package：
+  `paired_rl_export_input.tsv/json`、`rl_partner_omnirt_manifest.tsv/json`、
+  `paired_rl_export_audit.json` 与 summary。
+- 配对规则为同一 `(object, date, seq)` 的另一位 person；4/4
+  `PAIR_COMPLETE + RL_EXPORT_READY`，partner artifact 与 provenance 均重新计算
+  SHA256。
+- partner variant 为 `omnirt_v1=3`、`omnirt_v2=1`；其中
+  `box004_20231003_2_082_p2` 的 v1 Stage2b 为
+  `omniretarget_infeasible`，因此只复用已有 v2 pass artifact，没有伪造 v1
+  成功。
+- 该补齐只扩展 S6 paired RL 输入，不回写 E172 的 S1-S5 状态，也不宣称 RL
+  已训练成功。
