@@ -248,6 +248,7 @@ logs/
 *.jsonl
 *.jsonl.backup
 *.jpg
+*.png
 *.jpeg
 *.mp4
 *.pkl
