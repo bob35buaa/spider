@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 241 个日志文件。
+> 自动生成，共 242 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 42 (E179-E179)
@@ -18,6 +18,7 @@
 | 239 | E178 | 2026-07-24 | Local 5090 hybrid rebalance | [239_E178_local_5090_hybrid_rebalance.md](239_E178_local_5090_hybrid_rebalance.md) |
 | 240 | E178 | 2026-07-24 | Tracking error numeric gates | [240_E178_tracking_error_numeric_gates.md](240_E178_tracking_error_numeric_gates.md) |
 | 241 | E178 | 2026-07-24 | Bucket user manual review results | [241_E178_bucket_user_manual_review_resul...](241_E178_bucket_user_manual_review_results.md) |
+| 244 | E178 | 2026-07-24 | Nonconvex mujoco collision review | [244_E178_nonconvex_mujoco_collision_revi...](244_E178_nonconvex_mujoco_collision_review.md) |
 
 ## Phase 40 (E177-E177)
 
