@@ -1,7 +1,20 @@
 # 实验日志索引
 
-> 自动生成，共 242 个日志文件。
+> 自动生成，共 245 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 44 (E181-E181)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 245 | E181 | 2026-07-31 | Coacd gate b asset rejected | [245_E181_coacd_gate_b_asset_rejected.md](245_E181_coacd_gate_b_asset_rejected.md) |
+| 246 | E181 | 2026-07-31 | Rejected candidate visual diagnostic | [246_E181_rejected_candidate_visual_diagn...](246_E181_rejected_candidate_visual_diagnostic.md) |
+
+## Phase 43 (E180-E180)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 243 | E180 |  | Rl38 metric linear separability results | [243_E180_rl38_metric_linear_separability...](243_E180_rl38_metric_linear_separability_results.md) |
 
 ## Phase 42 (E179-E179)
 

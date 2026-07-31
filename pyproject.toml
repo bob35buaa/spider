@@ -19,6 +19,8 @@ dependencies = [
   "imageio[ffmpeg]",
   "mediapy",
   "opencv-python",
+  "coacd==1.0.11",
+  "trimesh==4.11.5",
   "mujoco==3.7.0",
   "mujoco-warp==3.7.0.1",
   "warp-lang==1.12.1",

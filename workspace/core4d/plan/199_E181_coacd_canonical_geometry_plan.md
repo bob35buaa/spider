@@ -147,7 +147,7 @@ Variant O 不进入 Full CEM，不与 B 竞争 throughput winner。
 | P | MuJoCo/MJWarp 版本、timestep、friction、`solref`、`condim` 一致 |
 | Object dynamics | compiled `body_mass/body_inertia`、joint damping/armature 一致 |
 | Robot geometry | rubber-hand mesh、18 个 robot collision geoms 与采样规则一致 |
-| Full compute | 本地 1 GPU + `spider-remote` 的 RTX 6000 Ada GPU `0/1`；三个 worker 各 9 条 |
+| Full compute | 本地 1 GPU + `spider-remote` 的 RTX 6000 Ada GPU `0/1`；三个 worker 各 9 条；Ada 允许与用户已有实验共存 |
 | Viewer/eval | 同一 renderer、十二门 evaluator 与 review player |
 
 ### E181 v1 明确不改变的内容
@@ -204,7 +204,8 @@ flowchart LR
 
 bucket004/007 已知含少量零体积退化组件。清洗只能：
 
-- 删除零面积面、未引用顶点和零体积 disconnected fragments；
+- 删除零面积面、未引用顶点，以及同时满足 `faces≤16`、
+  `abs(volume)/main_volume≤1e-6` 的 disconnected numerical-zero fragments；
 - 统一 winding；
 - 保留主组件的顶点坐标与三角面不变。
 
@@ -271,7 +272,8 @@ D_lower(x) = D_C(x) - epsilon_grid
 
 1. 校验 E178 Full manifest SHA，并以不可变投影生成 frozen
    full27、dev3、heldout24；
-2. 记录当前 Git HEAD、dirty scope、MuJoCo/MJWarp/CUDA/GPU 信息；
+2. 记录当前 Git HEAD、dirty scope、MuJoCo/MJWarp/CUDA/GPU、已有 GPU
+   process 与剩余显存；
 3. 在 `pyproject.toml` 明确 pin CoACD 与 trimesh，更新 `uv.lock`；
 4. 运行 CoACD import、real-metric 参数、MuJoCo convex mesh 与 SDF compile
    probe；
@@ -294,11 +296,19 @@ Gate 0：
 对 bucket003/004/007：
 
 1. 输出 raw component inventory；
-2. 删除已识别的零体积 fragments；
+2. 按冻结的 `faces≤16` 且 volume ratio `≤1e-6` 删除已识别的
+   numerical-zero fragments；
 3. 检查 watertight、winding、volume、AABB、scale 和 component 数；
-4. 建立 exact triangle-distance + winding/contains sign query；
-5. 用已知 inside/outside、near-surface 与随机点验证 sign；
-6. 输出主轴切片、component overlay 和清洗前后差异图。
+4. 用 trimesh exact nearest-triangle distance 计算距离幅值，用 Open3D
+   `RaycastingScene.compute_occupancy(nsamples=5)` 计算 deterministic
+   inside/outside sign，冻结 `D_M<0` 为 inside；
+5. 用 Open3D `nsamples=11` 稳定性复判，并以 exact triangle solid-angle
+   generalized winding number 对 stratified random points 和全部跨 backend
+   disagreement points仲裁；trimesh signed-distance sign 只作为交叉诊断，
+   不再作为 `D_M` 的 sign authority；
+6. 用已知 inside/outside、near-surface 与随机点验证 sign，并按 uniform、
+   normal-plus、normal-minus 三类分别记账；
+7. 输出主轴切片、component overlay 和清洗前后差异图。
 
 Gate A：
 
@@ -309,7 +319,8 @@ Gate A：
 | zero-volume components after clean | `0` |
 | watertight / winding-consistent | `true / true` |
 | finite distance queries | `100%` |
-| sign agreement outside 1mm band | `≥99.99%` |
+| Open3D sign vs exact winding outside 1mm band | `≥99.99%` |
+| Open3D `nsamples=5` vs `11` stability | `100%` |
 | visual review | 3/3 approved |
 
 若需要 remesh 或形状修补，必须新版本化 `M*` 并重新经过 Gate A；不允许静默
@@ -335,6 +346,11 @@ Gate A：
 - measured concavity/fidelity；
 - 是否因 max-hull merge 超出 threshold；
 - build wall time 与 peak memory。
+
+实现预检已确认 CoACD 1.0.11 在 `decimate=False` 时不会执行
+`max_ch_vertex` budget（实测单 hull 可达 545 vertices）；因此 S2 全部候选冻结
+`merge=True, decimate=True`。`max_ch_vertex=32/64` 必须由导出 part 的实测顶点
+数再次硬校验，不仅信任 API 参数。
 
 选择规则不用加权总分：
 
@@ -367,6 +383,30 @@ max(0, distance(target, C) - distance(target, M*))
 
 如果三个 object 任一在 `K≤32` 下无候选通过，E181 标记
 `ASSET_REJECTED`，不临时放宽 cavity 或 contact gate。
+
+Compound-union 的相邻 convex parts 在切割面仅零接触，直接拼接 part triangles
+会把机器人不可达的内部 partition faces 误算为外表面；manifold boolean 对
+zero-touch components 也保留这些面。Gate B 因此冻结 `2mm accessibility
+probe`：part surface 点仅在法线外移 2mm 为 free、内移 2mm 为 occupied 时计入
+可达 `C` boundary。该 2mm 进入 evaluator config/SHA，并保留 offset sensitivity
+诊断；不得按候选单独调 offset。
+
+### 2026-07-31 实际执行终点
+
+- S0 / Gate 0：PASS；
+- S1 / Gate A：PASS，三个 object 数值门与视觉 review `3/3`；
+- S2 build：CoACD `54/54 BUILD_PASS`，两次单线程 determinism SHA exact；
+- S2 / Gate B：`ASSET_REJECTED`，bucket003/004/007 的 PASS candidate 数均为
+  `0`；
+- broader cavity 最低 false occupied 分别为 `19.07% / 5.95% / 4.625%`，
+  均远高于冻结的 `0.1%`，且多对象同时失败 C→M、normal、core 或 must-cover；
+- heldout24 保持 `SEALED_NO_C_STAR`，未用于正式 dev-only selection；
+- `C*` 未生成，因此 S3–S6 与三 GPU Full CEM 未获 Gate B 授权、不得启动。
+
+该结果否定的是当前冻结搜索空间
+`CoACD K≤32, max_ch_vertex≤64, threshold=5/10/20mm`，不是否定
+CoACD→canonical SDF 总路线。任何扩大 hull budget、改变 cavity 定义/阈值、
+允许非凸 primitive 或对 hull 做任务化后处理的尝试必须新开实验号。
 
 ### S3：烘焙 `D_C` 与 object-distance backend
 
@@ -469,8 +509,8 @@ E181/E178 ratio 始终在同一 case、同一设备内计算；不同 GPU 的绝
 2. dev3 `64×4` canary；
 3. `1024×2` production-density probe；
 4. post-hoc 重算每个 optimization step 的 body/hand/leg/combined gate；
-5. 校验三台 worker 读取相同 Git HEAD、dependency lock、full manifest、
-   `C*` 与 `D_C` SHA。
+5. 校验三台 worker 读取相同 Git HEAD、source snapshot、dependency lock、
+   full manifest、`C*` 与 `D_C` SHA。
 
 Gate E：
 
@@ -483,7 +523,7 @@ Gate E：
 | density probe ratio | `≤1.10` |
 | peak VRAM 增量 | `≤1GiB` |
 | three-worker deployment | 本地/Ada0/Ada1=`3/3 PASS` |
-| code/input/asset SHA parity | `3/3 exact` |
+| code/input/asset SHA parity | source snapshot/input/asset=`3/3 exact` |
 | combined-valid availability | 每条 `≥90%` opt steps |
 | fallback fraction | 每条 `≤10%` opt steps |
 | selected-valid post-hoc mismatch | `0` |
@@ -532,14 +572,29 @@ worker_slot = (authority_row_index - 1) mod 3
 
 每张 GPU 内严格串行，三张 GPU 之间并行。每条 row 的 result、outdir、config
 和 log 路径必须唯一；不允许 work stealing 或同一 row 双写。三卡 launch
-前必须重新检查本地选定 GPU、远程 GPU `0/1` 的显存、compute process 与
-任务归属；任一 worker 不可用时不以两卡或单卡静默启动正式 Full。
+前必须重新记录本地选定 GPU、远程 GPU `0/1` 的显存、compute process 与
+任务归属。用户已明确授权 E181 与远程现有实验叠加运行：已有 process 不是
+blocker，launcher 禁止 kill、暂停或抢占它们。每张 Ada 的启动门改为：
 
-三台 worker 必须使用同一 Git HEAD、`uv.lock`、authority manifest、
-production asset manifest、`C*` hull SHA 和 `D_C` SHA。设备型号、GPU UUID、
-driver/CUDA、启动时间和 worker PID 写入 execution manifest。远程 pull
-只回收 `remote-ada0/1` 登记的 18 条；最终 merge 要求三个 queue 的并集
-恰为 27、两两交集为空。
+```text
+free_vram_before_launch
+  >= max(1.25 * measured_E181_peak_vram, measured_E181_peak_vram + 4GiB)
+```
+
+`measured_E181_peak_vram` 来自同设备 S5 production-density probe。若剩余
+显存不足则只阻止 E181 启动；若 E181 自身 OOM，只终止/重试 E181 worker，
+不处理既有实验。任一 E181 worker 未启动时不得以两卡或单卡静默冒充三卡
+正式 Full。
+
+远程 E181 不在已有实验使用的共享 checkout 上执行，也不对其做 `git pull`。
+launcher 将 source snapshot 部署到独立的
+`/home/xiayb/pHRI_workspace/e181_runs/<execution_id>/spider/`；snapshot
+manifest 记录 Git HEAD、dirty patch SHA、untracked E181 文件 SHA 与整体
+source SHA。三台 worker 必须使用相同 source snapshot、`uv.lock`、authority
+manifest、production asset manifest、`C*` hull SHA 和 `D_C` SHA。设备型号、
+GPU UUID、driver/CUDA、已有进程快照、启动时间和 worker PID 写入 execution
+manifest。远程 pull 只回收 `remote-ada0/1` 登记的 18 条；最终 merge 要求
+三个 queue 的并集恰为 27、两两交集为空。
 
 Gate F：
 
@@ -601,6 +656,7 @@ non-box 检查后让旧 box query 误读 mesh。
 | `scripts/experiments/E181/build_coacd_candidates.py` | 54 个候选、参数/SHA manifest |
 | `scripts/experiments/E181/evaluate_asset_fidelity.py` | 双向、cavity、contact-excess、normal gates |
 | `scripts/experiments/E181/select_canonical_set.py` | hard-gate 后词典序冻结 `C*` |
+| `scripts/experiments/E181/render_rejected_candidate_visuals.py` | Gate B 终止后的 closest-rejected 3D/2D 诊断；只读、不产生 `C*` |
 | `scripts/experiments/E181/bake_canonical_sdf.py` | multi-resolution grid、error manifest |
 | `scripts/experiments/E181/build_e181_production.py` | E178 authority 投影、27 sidecar/override/manifest 与 pair matrix |
 | `scripts/experiments/E181/build_full_allocation.py` | 连续 row index、固定 `9/9/9` queue 与 disjoint audit |
@@ -637,8 +693,8 @@ non-box 检查后让旧 box query 误读 mesh。
 | 文件 | 计划职责 |
 |---|---|
 | `scripts/launch/active/run_E181_local.sh` | S0–S4、本地 canary 与 9-row Full queue |
-| `scripts/launch/active/run_E181_remote_a6000.sh` | RTX 6000 Ada GPU `0/1` canary 与两个 9-row queues |
-| `scripts/launch/active/run_E181_full_3gpu.sh` | 冻结 allocation，并发启动本地 1 卡与远程 2 卡 |
+| `scripts/launch/active/run_E181_remote_a6000.sh` | 独立 remote root 部署；Ada GPU `0/1` canary 与两个 9-row queues；禁止 kill |
+| `scripts/launch/active/run_E181_full_3gpu.sh` | 冻结 allocation/source snapshot，并发启动本地 1 卡与远程 2 卡 |
 | `scripts/launch/active/pull_E181_remote_a6000_results.sh` | execution-manifest scoped 18-row pull |
 | `scripts/launch/active/watch_E181.sh` | 同时监控本地与远程 session，不修改 authority |
 | `scripts/launch/active/run_E181_render_all.sh` | 27 条视频和 keyframes |
@@ -717,6 +773,13 @@ Gate A/B/C/D 至少生成：
 必须 3/3 人工批准。Full 视频必须抽取 `10/30/50/70/90%` 五个时间点并实际
 观察，不能只验证编码可播放。
 
+Gate B 最终为 `ASSET_REJECTED` 后，允许对冻结 metrics 中的 closest-rejected
+候选补充只读诊断图，但必须显式标注 `REJECTED / NOT C*`，不得把它作为
+canonical selection 或 heldout 解封。首批固定为 bucket003
+`t020_k32_v032`、bucket004 `t010_k32_v064`、bucket007
+`t020_k32_v032`；每个候选生成 E178 同相机语义的四视角 3D sheet，以及
+XY/XZ/YZ 六切面的 `M-only / C∩M / C-only phantom` 2D sheet。
+
 ### Completion audit
 
 最终 audit 至少验证：
@@ -727,7 +790,7 @@ Gate A/B/C/D 至少生成：
 | Assets | raw/clean/hull/grid SHA 链闭合 |
 | Scene | 27 sidecar compile、pair、mass/inertia parity |
 | Allocation | local/Ada0/Ada1=`9/9/9`；queue union=`27`、pairwise overlap=`0` |
-| Environment | 三 worker 的 Git/lock/authority/asset SHA=`3/3 exact` |
+| Environment | 三 worker 的 source snapshot/lock/authority/asset SHA=`3/3 exact`；existing process 未被修改 |
 | Runtime | result/outdir/config/log=`27/27` |
 | Eval | full/heldout 表完整、0 missing/error |
 | Render | MP4 与五帧证据=`27/27` |
@@ -793,7 +856,8 @@ GPU 分配必须在 launch 前重新记录可用性和 process snapshot，不继
 | Hull 过多拖慢 P | A/B ratio 或 3s fail | 依据 profiling 降 complexity，不降 fidelity gate |
 | G 仍空交集 | combined-valid `0/N` | `GATE_HEALTH_BLOCKED`，新开 G 实验 |
 | heldout24 退化 | contact/CEM heldout fail | 不回调 E181 参数，不晋级 |
-| 本地或 Ada worker 不可用 | 三卡 preflight/handshake fail | 不静默降为两卡；等待资源后原 allocation 启动 |
+| 本地或 Ada worker 不可用 | SSH/device 缺失或剩余显存低于实测安全门 | 不静默降为两卡；不 kill 既有任务，等待资源后原 allocation 启动 |
+| Ada 已有实验运行 | process snapshot 非空但剩余显存过门 | 按用户授权叠加运行；独立 source/output/session，禁止抢占 |
 | 跨主机环境漂移 | Git/lock/asset SHA mismatch | fail-closed，同步后重做 preflight |
 | Tracking 未改善 | 十二门无增益 | 如实判 mixed，不归罪/归功 collider |
 
@@ -840,7 +904,7 @@ candidate；跨新 bucket 的泛化需要独立 held-out object 实验。
 
 - 计划：`plan/199_E181_coacd_canonical_geometry_plan.md`
 - 执行中：持续更新 `progress.md`
-- 结果日志预留：`log/245_E181_coacd_canonical_geometry_results.md`
+- 结果日志：`log/245_E181_coacd_gate_b_asset_rejected.md`
 - 结果完成后：更新 `EXPERIMENT_TRACKER.md` 与 `log/INDEX.md`
 - Claims 全通过后才执行项目规定的 commit/push；失败或 mixed 时先记录并
   等待下一步决策

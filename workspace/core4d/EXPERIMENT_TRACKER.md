@@ -4,7 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
-| E181 plan | 2026-07-31 | Phase 44 | CoACD C+D_C；复用E178同27 case，三卡Full | 📋 计划更新；未启动实现或实验 | [plan](plan/199_E181_coacd_canonical_geometry_plan.md) |
+| E182 plan | 2026-07-31 | Phase 45 | 真实P/R/G查询选CoACD Pareto；四卡paired Full对比E178 | 📋 计划完成 | [plan](plan/200_E182_task_conditioned_coacd_full_cem_plan.md) |
+| E181 | 2026-07-31 | Phase 44 | CoACD 54/54构建；三bucket Gate B 0/18，Full未启动 | ⛔ ASSET_REJECTED；heldout封存 | [245](log/245_E181_coacd_gate_b_asset_rejected.md) · [visual](log/246_E181_rejected_candidate_visual_diagnostic.md) · [plan](plan/199_E181_coacd_canonical_geometry_plan.md) |
 | E180-analysis | 2026-07-26 | Phase 43 | RL38线性可分审计；训练内exact但跨object/proxy不稳 | ⚠️ 仅soft score；不建立hard gate | [243](log/243_E180_rl38_metric_linear_separability_results.md) · [plan](plan/198_E180_rl38_metric_linear_separability_audit_plan.md) |
 | E179 | 2026-07-25 | Phase 42 | box023 16条paired no-PRG退化；保留PRG | ✅ 16/16完成；十二门7→4，PRG_BETTER | [242](log/242_E179_box023_e167a_no_prg_vs_e173_results.md) · [plan](plan/197_E179_box023_e167a_no_prg_full_cem_plan.md) |
 | E178 | 2026-07-24 | Phase 41 | 三bucket主接触端段校准；A100+5090 hybrid Full | 🟡 12门 10/27；人工23/27(USE12/DNU11)，bucket004待审 | [237](log/237_E178_bucket_contact_aligned_proxy_gates.md) · [238](log/238_E178_canary_waiver_full_launch.md) · [239](log/239_E178_local_5090_hybrid_rebalance.md) · [240](log/240_E178_tracking_error_numeric_gates.md) · [241](log/241_E178_bucket_user_manual_review_results.md) |
