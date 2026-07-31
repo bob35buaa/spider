@@ -21,6 +21,7 @@ import torch
 import torch.nn.functional as F
 
 from spider.config import Config
+from spider.query_tape import record_cem_query_chunk
 from spider.interp import interp
 
 
@@ -500,6 +501,7 @@ def make_rollout_fn(
     save_env_params,
     load_env_params,
     copy_sample_state,
+    get_qpos=None,
 ):
     def rollout(
         config: Config,
@@ -534,6 +536,14 @@ def make_rollout_fn(
         trace_list = []
         cum_rew = torch.zeros(N, device=config.device)
         info_list = []
+        query_qpos = None
+        if config.query_tape_enabled:
+            if get_qpos is None:
+                raise RuntimeError("query tape requires get_qpos rollout callback")
+            query_qpos = torch.zeros(
+                (N, H, config.nq),
+                device=config.device,
+            )
         for t in range(H):
             # step the environment
             step_env(config, env, ctrls[:, t])  # (N, nu)
@@ -549,6 +559,8 @@ def make_rollout_fn(
             trace = get_trace(config, env)
             trace_list.append(trace)
             info_list.append(info)
+            if query_qpos is not None:
+                query_qpos[:, t] = get_qpos(config, env)
             # Resampling: replace bad samples with good samples periodically
             terminate = get_terminate(config, env, ref)
             if (
@@ -619,6 +631,8 @@ def make_rollout_fn(
         foot_info = _compute_sample_foot_info(config, info_combined)
         if foot_info is not None:
             info.update(foot_info)
+        if query_qpos is not None:
+            info["_query_tape_qpos"] = query_qpos
         return ctrls, mean_rew, terminate, info
 
     return rollout
@@ -964,7 +978,7 @@ def make_optimize_once_fn(
         # compute info
         info = {}
         for k, v in rollout_info.items():
-            if k not in ["trace", "trace_sample"]:
+            if k not in ["trace", "trace_sample", "_query_tape_qpos"]:
                 if isinstance(v, torch.Tensor):
                     v = v.cpu().numpy()
                 if v.ndim == 1:
@@ -984,6 +998,16 @@ def make_optimize_once_fn(
         info["rew_min"] = rews_np.min()
         info["rew_median"] = np.median(rews_np)
         info["rew_mean"] = rews_np.mean()
+        if selected_indices is not None and selected_indices.numel() > 0:
+            recorded_selected_indices = selected_indices
+        else:
+            top_k = max(1, int(elite_fraction * config.num_samples))
+            recorded_selected_indices = torch.topk(
+                rews,
+                k=min(top_k, config.num_samples),
+                largest=True,
+            ).indices
+        info["cem_selected_index0"] = int(recorded_selected_indices[0].item())
         if gate_enabled:
             valid_mask = rollout_info["sample_gate_valid_mask"]
             info["cem_gate_valid_frac"] = valid_mask.float().mean().item()
@@ -1074,6 +1098,21 @@ def make_optimize_once_fn(
         if elite_std is not None:
             info["elite_std"] = elite_std  # (H, nu) tensor, stays on GPU
 
+        if config.query_tape_enabled:
+            payload = {
+                "qpos": rollout_info["_query_tape_qpos"],
+                "rewards": rews,
+                "selected_indices": recorded_selected_indices,
+            }
+            payload.update(
+                {
+                    key: value
+                    for key, value in rollout_info.items()
+                    if key.startswith("sample_") and isinstance(value, torch.Tensor)
+                }
+            )
+            info["_query_tape_payload"] = payload
+
         return ctrls_mean, terminate, info
 
     return optimize_once
@@ -1110,6 +1149,8 @@ def make_optimize_fn(
                 config.env_params_list[i],
                 sample_params_list[i],
             )
+            if infos:
+                infos[-1].pop("_query_tape_payload", None)
             infos.append(info)
             improvement_history.append(info["improvement"])
 
@@ -1127,6 +1168,12 @@ def make_optimize_fn(
                     imp < config.improvement_threshold for imp in recent_improvements
                 ):
                     break
+
+        query_tape_payload = infos[-1].pop("_query_tape_payload", None)
+        if config.query_tape_enabled:
+            if query_tape_payload is None:
+                raise RuntimeError("query tape enabled but final payload is missing")
+            record_cem_query_chunk(config, query_tape_payload)
 
         # TODO: think about a better logic
         # append zeros to infos to make sure the length is the same as max_num_iterations

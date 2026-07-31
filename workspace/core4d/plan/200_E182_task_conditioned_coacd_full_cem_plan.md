@@ -1,13 +1,15 @@
 # E182 实验计划：Task-conditioned CoACD 与 E178 paired Full CEM
 
-_Core4D Phase 45 · 2026-07-31 · planning only ·
-本地单卡 + 远程 A100 GPU 3/6/7_
+_Core4D Phase 45 · 2026-07-31 · execution authorized 2026-08-01 ·
+本地单卡 + `spider-remote` RTX 6000 Ada GPU 0/1_
 
 ---
 
 > 📌 **2026-08-01 口径修订：** hull budget 只测试 `K=8/16/32`，不新增
 > `K=4`。heldout24 的含义改为“冻结前不用于选型，冻结后只用于评估”，不是
-> 隐藏 case 名或跳过 Full。
+> 隐藏 case 名或跳过 Full。Full 资源改为本地单卡 + 远程 RTX 6000 Ada
+> GPU `0/1`；三张卡都允许与已有 compute process 叠加，禁止 kill、暂停或
+> 抢占其他任务。
 
 ## 📋 需求理解与实验问题
 
@@ -22,12 +24,13 @@ _Core4D Phase 45 · 2026-07-31 · planning only ·
 4. 只冻结一套 object-specific production geometry，随后 fresh 跑 E178 同一
    27 case、同 `seed=0, 1024×32` 的 E182 Full CEM；
 5. 与 E178 做逐 case paired 指标、效率和盲审对比；
-6. Full 使用本地一张 GPU 与 A100 `3/6/7` 四 worker 并行；远程允许和已有
-   任务叠加，但不 kill、暂停或抢占其他任务。
+6. Full 使用本地一张 GPU 与 `spider-remote` RTX 6000 Ada GPU `0/1`，共三
+   worker 并行；本机和远程都允许与已有任务叠加，但不 kill、暂停或抢占
+   其他任务。
 
 剩余 `3%` 是必须在执行时测量、而非需要用户补充的状态：本地实际 GPU ID、
-A100 三卡启动时的显存/负载，以及哪个 `K` 位于 task-accuracy–throughput
-Pareto 前沿。
+三张目标卡启动时的剩余显存/共存负载，以及哪个 `K` 位于
+task-accuracy–throughput Pareto 前沿。
 
 ### 背景事实
 
@@ -39,7 +42,7 @@ Pareto 前沿。
 | E178 六门 | `16/27` |
 | E178 十二门 | `10/27` |
 | E178 十二门分物体 | bucket003/004/007=`3/9, 2/4, 5/14` |
-| E178 historical runtime | local≈`10.97s/record`；A100≈`25.61–30.15s/record` |
+| E178 historical runtime | local≈`10.97s/record`；Ada 必须用同机 probe 实测，不能套用 A100 数值 |
 | E181 CoACD build | `54/54 BUILD_PASS` |
 | E181 Gate B | 三物体均 `0/18`，未启动 Full |
 
@@ -73,7 +76,7 @@ bucket 的实际任务需求错位。现在的问题不再是：
 | C2 real-query tape | dev3 的 ref、E178 final trajectory 与 CEM sample query 100% 可恢复；P/R/G query families 均有坐标、consumer、frame/step provenance |
 | C3 task-conditioned fidelity | 所有 production candidate 通过 technical launch floor；preferred task gate 与全局 cavity diagnostic 分开报告 |
 | C4 Pareto selection | K8/16/32 至少各有一个候选完成 task audit；production set 由预注册 accuracy–runtime 规则选择，不按 Full 结果反向挑 K |
-| C5 runtime validity | final candidate 在 local 与 A100 3/6/7 的 same-device E178/E182 probe 完成，无 OOM/NaN/覆盖，峰值显存与分项耗时完整 |
+| C5 runtime validity | final candidate 在 local 与 Ada 0/1 的 same-device E178/E182 probe 完成，无 OOM/NaN/覆盖，峰值显存与分项耗时完整 |
 | C6 Full closure | E182 `27=completed+terminal_failed`、missing=`0`；正常目标 `27/27 completed` |
 | C7 paired metrics | E178/E182 `27/27` 一一 join；六门、十二门、连续指标、迁移表和 bootstrap CI 完整 |
 | C8 efficiency | 报告每 worker/case/record wall time、总 GPU-hours、makespan、P step 与 R/G query breakdown、相对 E178 ratio |
@@ -166,7 +169,7 @@ oracle，不进入 production CEM。
 ### Query tape 来源
 
 E178 NPZ 只有逐 step 聚合 SDF/valid/fallback 指标，没有原始 query coordinates。
-E182 因此增加 deterministic shadow instrumentation：
+E182 因此增加 frozen shadow instrumentation：
 
 1. 对 dev3 的 reference trajectory 记录所有 consumer 实际查询点；
 2. 对 dev3 的 E178 Full final trajectory 做只读 replay 并记录查询点；
@@ -177,6 +180,13 @@ E182 因此增加 deterministic shadow instrumentation：
 
 query tape 只记录选择所需的 dev3；Full 阶段正常记录 E182 聚合诊断，但不因
 Full query outcome修改 production set。
+
+2026-08-01 的首个真实 MJWarp canary 否定了“跨进程 bitwise deterministic”假设：
+相同 seed 的 off/off 与 on/on replay 已存在 CUDA 数值分叉，逐 step qpos capture
+还会改变后续 kernel 调度并放大闭环分叉。因此 query tape 的 `deterministic` 含义
+修订为“命令、schema、row order、provenance 与冻结 artifact SHA 可复现”，不再
+声称重新运行会得到相同 content SHA。candidate 只查询一次冻结的 instrumented
+distribution；最终效果只由 recorder-off Full 判定。
 
 ### P、R、G 分别验证什么
 
@@ -228,8 +238,8 @@ flowchart TB
     reduce_k --> evaluate_k
     pareto_gate -->|Yes| freeze_prod[📦 Freeze C and D_C]
     freeze_prod --> heldout_audit[🛡️ Audit heldout]
-    heldout_audit --> four_card_full[⚙️ Run four-card Full]
-    four_card_full --> paired_eval([✅ Compare with E178])
+    heldout_audit --> three_gpu_full[⚙️ Run three-GPU Full]
+    three_gpu_full --> paired_eval([✅ Compare with E178])
 
     classDef source fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#3b0764
     classDef process fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a5f
@@ -237,7 +247,7 @@ flowchart TB
     classDef success fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
 
     class authority source
-    class query_tape,evaluate_k,reduce_k,freeze_prod,heldout_audit,four_card_full process
+    class query_tape,evaluate_k,reduce_k,freeze_prod,heldout_audit,three_gpu_full process
     class pareto_gate decision
     class paired_eval success
 ```
@@ -247,7 +257,8 @@ flowchart TB
 1. 只读校验 E178 manifest、27 行输入和 baseline metrics SHA；
 2. 生成 E182 `dev3/heldout24/full27` authority；
 3. 快照 source scene、E178 effective scene、trajectory、mask 和 E181 hulls；
-4. 检查本地 GPU 与 A100 3/6/7 型号、UUID、driver、显存和 compute process；
+4. 检查本地 GPU 与 `spider-remote` Ada GPU 0/1 的型号、UUID、driver、显存和
+   compute process；已有 process 只记录，不作为 idle gate；
 5. 验证独立 remote run root、SSH、tmux、EGL、source snapshot 和 lock parity；
 6. direct-main test 通过后才进入 query instrumentation。
 
@@ -258,11 +269,20 @@ Gate 0：authority/hash/row set 任一不一致则全局停止。
 1. 在不改变 E178 reward/gate 输出的 shadow path 中导出 object-local points；
 2. 分 consumer 保存 P/R/G、case、frame、opt step、sample group 和 body/geom id；
 3. 以 chunked NPZ/Zarr 类布局避免一次性保存全部 world tensor；
-4. 对相同 seed replay 两次，检查 query tape row count 与 content SHA exact；
-5. 确认 instrumentation on/off 的 E178 reward、valid mask 和 selected index exact。
+4. deterministic mock backend 上检查 instrumentation on/off output exact，且默认
+   off 路径不得分配 tape tensor、调用 recorder 或写文件；
+5. 真实 MJWarp 上执行 off/off、on/on 与 off/on replay，量化自然 replay 分叉和
+   capture-induced scheduling effect；跨进程数值与 content SHA 只报告，不作伪 exact；
+6. 对每个 recorder-on run 做 same-run exact integrity：chunk row/shape、reward
+   max/min/median/mean、valid mask、selected index 与该 run optimizer 输出逐项一致；
+7. manifest 必须显式 `COMPLETE`，记录 ordered chunk SHA、source/config/case/seed，
+   再冻结唯一 selection tape；第二次 replay 只作诊断，不参与 candidate 选择。
 
-Gate 1：instrumentation 必须 observational-only；任何 E178 数值漂移先修复，
-不得用漂移 tape 选 candidate。
+Gate 1：deterministic mock exact、default-off no-op、same-run payload exact、chunk
+完整性与 frozen SHA 必须全部 PASS。真实 backend 的跨进程 divergence 必须量化并
+保留 provenance；若出现 NaN、缺 chunk、same-run 不一致或 recorder-off Full 路径
+被启用/改变，则停止。不得把 recorder-on shadow trajectory 当作 downstream 改善，
+production Full 必须 recorder-off。
 
 ### S2：Task-conditioned candidate audit
 
@@ -307,7 +327,8 @@ canary 由低到高：
 1. `1 world × short rollout`：compile/contact/numeric；
 2. dev3、K8/K16/K32 的 `64×4`；
 3. 各 object Pareto finalist 的 `1024×2` production-density probe；
-4. final set 在 local 与 A100 3/6/7 上做 E178/E182 `A-B-B-A` 同机交错 probe。
+4. final set 在 local 与 Ada GPU 0/1 上做 E178/E182 `A-B-B-A` 同机交错
+   probe；probe 也允许与已有任务叠加，并记录共存负载。
 
 必须分项记录：
 
@@ -325,8 +346,8 @@ canary 由低到高：
 |---|---:|---:|
 | E182/E178 same-device median | `≤1.25` | finite、无 OOM |
 | E182/E178 p90 | `≤1.50` | finite、无 OOM |
-| 四 worker predicted makespan | `≤8h` | report efficiency red flag |
-| peak VRAM | 能与现有 A100 task 安全共存 | 满足启动显存公式 |
+| 三 worker predicted makespan | `≤8h` | report efficiency red flag |
+| peak VRAM | 三张卡均能与现有任务安全共存 | 满足启动显存公式 |
 
 K 决策规则：
 
@@ -357,21 +378,20 @@ heldout24 只做一次 query/compile audit，不允许重选。若 heldout 显�
 （non-finite、hash mismatch、scene compile failure），修实现后必须保留原 K；
 若只是 accuracy 不佳，继续 Full并如实归类，不能 data-leak rescue。
 
-### S6：四卡 Full CEM
+### S6：本地 + 双 Ada 三卡 Full CEM
 
 资源固定为：
 
 | Worker | Host/device | 执行方式 |
 |---|---|---|
-| `local-gpu` | 本地 `${LOCAL_GPU_ID}` | 串行 queue |
-| `a100-gpu3` | `tianyiyun-A100`, GPU 3 | 串行 queue，可叠加 |
-| `a100-gpu6` | `tianyiyun-A100`, GPU 6 | 串行 queue，可叠加 |
-| `a100-gpu7` | `tianyiyun-A100`, GPU 7 | 串行 queue，可叠加 |
+| `local-gpu` | 本地 `${LOCAL_GPU_ID}` | 串行 queue，可叠加，禁止 kill |
+| `remote-ada0` | `spider-remote`, RTX 6000 Ada GPU 0 | 串行 queue，可叠加，禁止 kill |
+| `remote-ada1` | `spider-remote`, RTX 6000 Ada GPU 1 | 串行 queue，可叠加，禁止 kill |
 
-不机械按 `7/7/7/6` 均分。queue builder 使用 S4 的 per-object、per-device
-measured rate，对预计 case cost 做 LPT makespan balance；以历史速度为初值时，
-预期约为 local/GPU3/GPU6/GPU7=`12/5/5/5`，最终数量由 frozen allocation
-manifest 决定。
+不预设机械均分。queue builder 使用 S4 的 per-object、per-device measured
+rate，对预计 case cost 做 LPT makespan balance；如果三卡实测速率接近，预期
+退化为 `9/9/9`，否则按实测速度调整，最终数量由 frozen allocation manifest
+决定。
 
 allocation 必须满足：
 
@@ -384,20 +404,22 @@ missing/duplicate   = 0/0
 work stealing       = disabled
 ```
 
-A100 requested allowlist 精确为 `3,6,7`。selection 与 tmux 启动前各检查一次：
+远程 requested allowlist 精确为 Ada GPU `0,1`，不得换到 A100 或其他卡。
+selection 与正式启动前各检查一次本机和远程三张卡：
 
 - GPU id/UUID 与用户允许集合一致；
 - 保存显存、compute process 与 task owner 快照；
-- 已有 compute process 本身不阻断，因为用户已授权叠加；
+- 已有 compute process 本身不阻断，本机和远程均已获用户授权叠加；
 - 但 free VRAM 必须满足
   `max(1.25×measured_peak, measured_peak+4GiB)`；
 - 不满足时只延迟 E182 对应 worker，不换卡、不 kill 其他任务；
-- E182 OOM 时只终止/诊断 E182 worker，不修改 `1024×32` budget。
+- E182 OOM 时只终止/诊断 E182 worker，不修改 `1024×32` budget；
+- launcher 不得调用 `kill/pkill/killall`，不得暂停、抢占或修改已有进程。
 
 远程使用独立 run root：
 
 ```text
-/home/dataset-assist-0/xiayb/workspace/e182_runs/<execution_id>/spider/
+/home/xiayb/pHRI_workspace/e182_runs/<execution_id>/spider/
 ```
 
 不在共享 checkout `git pull`。本地/远程必须使用相同 source snapshot、
@@ -477,12 +499,12 @@ E178 bucket proxy；不自动推广到其他非凸物体。
 |---|---|
 | `scripts/experiments/E182/e182_common.py` | schema、path、hash、27-row authority |
 | `scripts/experiments/E182/build_authority.py` | dev3/heldout24/full27 不可变投影 |
-| `scripts/experiments/E182/build_query_tape.py` | dev3 deterministic real-query tape |
+| `scripts/experiments/E182/build_query_tape.py` | dev3 frozen real-query tape + same-run audit |
 | `scripts/experiments/E182/evaluate_task_queries.py` | D_M/exact-C/D_C 的 P/R/G audit |
 | `scripts/experiments/E182/bake_canonical_sdf.py` | K finalist grid-SDF |
 | `scripts/experiments/E182/select_production_geometry.py` | accuracy–runtime Pareto 与 freeze |
 | `scripts/experiments/E182/build_scene_sidecars.py` | compound-convex P scene/config |
-| `scripts/experiments/E182/build_full_allocation.py` | 四 worker LPT queue |
+| `scripts/experiments/E182/build_full_allocation.py` | 三 worker LPT queue |
 | `scripts/experiments/E182/run_cem_queue.py` | resume-safe 串行 worker |
 | `scripts/experiments/E182/render_paired_results.py` | E178/E182 paired videos |
 | `scripts/experiments/E182/audit_completion.py` | authority/artifact/metrics/video/SHA 闭合 |
@@ -495,8 +517,8 @@ E178 bucket proxy；不自动推广到其他非凸物体。
 | `scripts/eval/wrappers/eval_E182_coacd_vs_E178.sh` | 固化 eval 入口 |
 | `scripts/eval/reports/gen_E182_coacd_comparison.py` | TSV/JSON/Markdown/XLSX-ready report |
 | `scripts/launch/active/run_E182_local.sh` | authority、query、canary、本地 Full queue |
-| `scripts/launch/active/run_E182_remote_a100.sh` | GPU 3/6/7 worker queues |
-| `scripts/launch/active/pull_E182_remote_a100_results.sh` | execution-manifest scoped pull |
+| `scripts/launch/active/run_E182_remote_a6000.sh` | `spider-remote` Ada GPU 0/1 worker queues；允许叠加、禁止 kill |
+| `scripts/launch/active/pull_E182_remote_a6000_results.sh` | execution-manifest scoped pull |
 | `scripts/launch/active/watch_E182_full.sh` | 双端监控、pull、eval、render、audit |
 
 结果目录：
@@ -540,15 +562,17 @@ bash workspace/core4d/scripts/launch/active/run_E182_local.sh freeze-production
 ### Full CEM
 
 ```bash
-LOCAL_GPU_ID=0 MODE=full \
-  bash workspace/core4d/scripts/launch/active/run_E182_local.sh
-
-A100_HOST=tianyiyun-A100 \
-A100_EXPECTED_GPUS="3 6 7" \
-A100_POLICY_GPUS="3,6,7" \
+LOCAL_GPU_ID=0 \
 ALLOW_EXISTING_COMPUTE_OVERLAP=1 \
 MODE=full \
-  bash workspace/core4d/scripts/launch/active/run_E182_remote_a100.sh
+  bash workspace/core4d/scripts/launch/active/run_E182_local.sh
+
+ADA_HOST=spider-remote \
+ADA_EXPECTED_GPUS="0 1" \
+ADA_POLICY_GPUS="0,1" \
+ALLOW_EXISTING_COMPUTE_OVERLAP=1 \
+MODE=full \
+  bash workspace/core4d/scripts/launch/active/run_E182_remote_a6000.sh
 ```
 
 `ALLOW_EXISTING_COMPUTE_OVERLAP=1` 只豁免“存在其他 compute process”这一项；
@@ -557,7 +581,7 @@ MODE=full \
 ### Pull、评测与可视化
 
 ```bash
-bash workspace/core4d/scripts/launch/active/pull_E182_remote_a100_results.sh full
+bash workspace/core4d/scripts/launch/active/pull_E182_remote_a6000_results.sh full
 bash workspace/core4d/scripts/launch/active/watch_E182_full.sh
 bash workspace/core4d/scripts/eval/wrappers/eval_E182_coacd_vs_E178.sh \
   full --require-all --baseline-e178 --enable-tracking-gates
@@ -575,8 +599,8 @@ python workspace/core4d/scripts/experiments/E182/audit_completion.py --require-a
 | K32 过慢 | same-device ratio / predicted makespan | 只降 K16→K8；不测试 K4 |
 | K8 task error 过大 | launch floor failure | 不强送 Full；改 decomposition 方法 |
 | Grid 误差掩盖 hull 误差 | exact-C vs D_C 分解 | 调 grid，不改 C |
-| A100 叠加 OOM | peak/free VRAM | 延迟 E182 worker；不处理已有任务 |
-| 某 remote worker 晚启动 | execution manifest | 其他 worker可先跑；最终仍要求四 queue闭合 |
+| 本地/Ada 叠加 OOM | peak/free VRAM | 只延迟或停止 E182 worker；不处理已有任务 |
+| 某 remote worker 晚启动 | execution manifest | 其他 worker可先跑；最终仍要求三 queue闭合 |
 | Full 个别 case 失败 | unique signature | 记录 terminal failure，修复后只重跑该 row |
 | Full 质量不如 E178 | paired metric/video | `REJECT/MIXED`，不按结果换 K 重跑挑最好 |
 
@@ -601,18 +625,19 @@ python workspace/core4d/scripts/experiments/E182/audit_completion.py --require-a
 
 - [ ] E178 manifest SHA、27 rows、9/4/14 分布和 `1024×32 seed0` exact
 - [ ] dev3/heldout24 无交集，selection 不读取 heldout
-- [ ] query instrumentation on/off output exact
+- [ ] query deterministic mock/default-off no-op/same-run integrity exact；CUDA replay divergence 已报告
 - [ ] K8/16/32 task audit 与实际 hull count 完整
 - [ ] 搜索空间不含 K4，K8 是最低 production budget
 - [ ] P/R/G 同源 C/D_C manifest 与 scene/config SHA exact
 - [ ] broader cavity 已明确为 report-only
 - [ ] production K/grid/threshold 在 heldout 前冻结
-- [ ] local 与 A100 3/6/7 same-device E178/E182 probe 完成
+- [ ] local 与 Ada 0/1 same-device E178/E182 probe 完成
 - [ ] LPT allocation union=27、overlap=0、missing=0
-- [ ] A100 3/6/7 两次显存/进程/UUID检查，叠加授权已记录
-- [ ] 四 worker 使用同一 source snapshot 和 lock
+- [ ] 本机与 Ada 0/1 两次显存/进程/UUID检查，三卡叠加授权已记录
+- [ ] launcher 无 kill/pause/preempt 路径；OOM 只处置 E182 自身
+- [ ] 三 worker 使用同一 source snapshot 和 lock
 - [ ] Full/pull/eval/render/audit 脚本已 code review
 - [ ] 结果日志预留可视化实际观察与 efficiency breakdown
 
-本文件完成后，E182 状态为 `📋 计划完成`。只有用户确认执行后，才进入公共
-backend、query tape、canary 和 Full CEM 实现。
+用户已于 2026-08-01 确认执行；E182 从 S0 authority/preflight 开始按 gate
+顺序推进，未通过前一 gate 不进入后一阶段。

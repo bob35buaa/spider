@@ -670,6 +670,11 @@ class Config:
     base_rot_threshold: float = 0.4
     # Compilation
     use_torch_compile: bool = True  # use torch.compile for acceleration
+    # E182 observational-only CEM sample recorder. Disabled by default and must
+    # never influence reward, gates, selection, control, or physics state.
+    query_tape_enabled: bool = False
+    query_tape_output_dir: str = ""
+    query_tape_run_id: str = ""
     # Noise scheduling
     first_ctrl_noise_scale: float = 0.5
     last_ctrl_noise_scale: float = 1.0

@@ -1279,6 +1279,7 @@ def main(config: Config):
             save_env_params,
             load_env_params,
             copy_sample_state,
+            get_qpos,
         )
         optimize_once = make_optimize_once_fn(rollout)
         optimize = make_optimize_fn(optimize_once)
