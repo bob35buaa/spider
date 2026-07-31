@@ -28,6 +28,13 @@ EXPECTED_SOURCE_SHA256 = (
 DEFAULT_RESULT_ROOT = REPO_ROOT / "workspace/core4d/results/E182/s1_query_tape"
 
 
+def case_manifest_path(result_root: Path, mode: str, case_id: str) -> Path:
+    """Return a worker-safe manifest path unique to one replay case."""
+    if Path(case_id).name != case_id or case_id in {"", ".", ".."}:
+        raise ValueError(f"unsafe case ID: {case_id}")
+    return result_root / "replays" / mode / "manifests" / f"{case_id}.json"
+
+
 def read_rows(path: Path) -> list[dict[str, str]]:
     """Read TSV rows."""
     with path.open(encoding="utf-8", newline="") as stream:
@@ -239,16 +246,27 @@ def main() -> int:
         rows = [row for row in rows if row["case_id"] in requested]
         if {row["case_id"] for row in rows} != requested:
             raise RuntimeError("one or more requested cases are outside dev3")
-    results = [
-        run_one(
+    results = []
+    for row in rows:
+        result = run_one(
             row=row,
             mode=args.mode,
             python_bin=args.python_bin,
             result_root=args.result_root,
             gpu_id=args.gpu_id,
         )
-        for row in rows
-    ]
+        results.append(result)
+        atomic_json(
+            case_manifest_path(args.result_root, args.mode, row["case_id"]),
+            {
+                "experiment_id": "E182",
+                "stage": "S1_query_tape_replay",
+                "mode": args.mode,
+                "status": "PASS",
+                "budget": {"samples": 64, "opt_steps": 4, "seed": 0},
+                "rows": [result],
+            },
+        )
     manifest = {
         "experiment_id": "E182",
         "stage": "S1_query_tape_replay",
@@ -257,8 +275,9 @@ def main() -> int:
         "budget": {"samples": 64, "opt_steps": 4, "seed": 0},
         "rows": results,
     }
-    output = args.result_root / "replays" / args.mode / "run_manifest.json"
-    atomic_json(output, manifest)
+    if len(rows) > 1:
+        output = args.result_root / "replays" / args.mode / "run_manifest.json"
+        atomic_json(output, manifest)
     print(f"E182_QUERY_REPLAY=PASS mode={args.mode} rows={len(results)}")
     return 0
 

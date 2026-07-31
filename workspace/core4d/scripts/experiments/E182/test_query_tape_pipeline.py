@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -103,12 +104,49 @@ def test_same_run_integrity() -> None:
         assert failed["mismatch_count"] == 1
 
 
+def test_relocated_same_run_integrity() -> None:
+    """Pulled remote chunks must audit after their absolute source path disappears."""
+    with tempfile.TemporaryDirectory(prefix="e182_relocated_test_") as directory:
+        root = Path(directory)
+        source = root / "remote_like"
+        config = SimpleNamespace(
+            query_tape_enabled=True,
+            query_tape_output_dir=str(source / "raw"),
+            query_tape_run_id="on_a/unit_case",
+        )
+        record_cem_query_chunk(
+            config,
+            {
+                "qpos": torch.zeros((2, 3, 4), dtype=torch.float32),
+                "rewards": torch.tensor([1.0, 3.0], dtype=torch.float32),
+                "selected_indices": torch.tensor([1], dtype=torch.int64),
+            },
+        )
+        finalize_cem_query_tape(config, provenance={"case_id": "unit_case"})
+        pulled = root / "pulled"
+        shutil.copytree(source, pulled)
+        shutil.rmtree(source)
+        result = root / "trajectory.npz"
+        np.savez(
+            result,
+            opt_steps=np.array([[0], [1]], dtype=np.int64),
+            rew_max=np.array([[0.0], [3.0]], dtype=np.float32),
+            rew_min=np.array([[0.0], [1.0]], dtype=np.float32),
+            rew_median=np.array([[0.0], [2.0]], dtype=np.float32),
+            rew_mean=np.array([[0.0], [2.0]], dtype=np.float32),
+            cem_selected_index0=np.array([[0], [1]], dtype=np.int64),
+        )
+        manifest = pulled / "raw/on_a/unit_case/chunk_manifest.json"
+        assert audit_same_run_integrity(result, manifest)["status"] == "PASS"
+
+
 def main() -> int:
     """Run pipeline tests without pytest discovery."""
     tests = (
         test_replay_command_contract,
         test_exact_npz_comparison,
         test_same_run_integrity,
+        test_relocated_same_run_integrity,
     )
     for test in tests:
         test()

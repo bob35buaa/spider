@@ -9,7 +9,7 @@ _Core4D Phase 45 · 2026-07-31 · execution authorized 2026-08-01 ·
 > `K=4`。heldout24 的含义改为“冻结前不用于选型，冻结后只用于评估”，不是
 > 隐藏 case 名或跳过 Full。Full 资源改为本地单卡 + 远程 RTX 6000 Ada
 > GPU `0/1`；三张卡都允许与已有 compute process 叠加，禁止 kill、暂停或
-> 抢占其他任务。
+> 抢占其他任务；E182 不使用 A100。
 
 ## 📋 需求理解与实验问题
 
@@ -595,7 +595,7 @@ python workspace/core4d/scripts/experiments/E182/audit_completion.py --require-a
 
 | 风险 | 证据 | 动作 |
 |---|---|---|
-| Query instrumentation 改变 E178 | on/off output/SHA mismatch | 停止 selection，修成 observational-only |
+| Query tape 数据损坏或侵入 production | same-run payload mismatch、NaN、缺 chunk、default-off 非 no-op | 停止 selection 并修复；跨进程 off/on、on/on divergence 仅报告 |
 | K32 过慢 | same-device ratio / predicted makespan | 只降 K16→K8；不测试 K4 |
 | K8 task error 过大 | launch floor failure | 不强送 Full；改 decomposition 方法 |
 | Grid 误差掩盖 hull 误差 | exact-C vs D_C 分解 | 调 grid，不改 C |

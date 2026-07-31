@@ -44,11 +44,28 @@ run_preflight() {
     2>&1 | tee "$LOG_ROOT/gate0_audit.log"
 }
 
+run_query_tape() {
+  uv run python "$SCRIPT_ROOT/runtime_inputs.py" freeze \
+    2>&1 | tee "logs/E182/s1/runtime_input_freeze.log"
+  uv run python "$SCRIPT_ROOT/runtime_inputs.py" verify \
+    --root . \
+    --manifest workspace/core4d/results/E182/s1_query_tape/runtime_inputs_manifest.json \
+    2>&1 | tee "logs/E182/s1/runtime_input_verify.log"
+  E182_PYTHON_BIN="$REPO_ROOT/.venv/bin/python" \
+    bash workspace/core4d/scripts/launch/active/run_E182_query_tape_worker.sh \
+      bucket007_20231020_055_p1 "$LOCAL_GPU_ID" \
+    2>&1 | tee "logs/E182/s1/local_bucket007_query_tape.log"
+}
+
 case "$STAGE" in
   preflight)
     run_preflight
     ;;
-  query-tape|task-audit|pareto-canary|freeze-production|full)
+  query-tape)
+    mkdir -p logs/E182/s1
+    run_query_tape
+    ;;
+  task-audit|pareto-canary|freeze-production|full)
     echo "E182 stage '$STAGE' is not implemented yet; Gate 0 must pass first." >&2
     exit 2
     ;;

@@ -57,6 +57,15 @@ def _exact(left: Any, right: Any) -> bool:
         return bool(np.array_equal(left, right))
 
 
+def resolve_chunk_path(chunk_manifest_path: Path, entry: dict[str, Any]) -> Path:
+    """Resolve a chunk after remote result trees are relocated by pull."""
+    recorded = Path(entry["path"])
+    if recorded.is_file():
+        return recorded
+    sibling = chunk_manifest_path.parent / recorded.name
+    return sibling
+
+
 def audit_same_run_integrity(
     result_path: Path,
     chunk_manifest_path: Path,
@@ -102,7 +111,7 @@ def audit_same_run_integrity(
                         "actual": entry["chunk_index"],
                     }
                 )
-            chunk_path = Path(entry["path"])
+            chunk_path = resolve_chunk_path(chunk_manifest_path, entry)
             if not chunk_path.is_file() or sha256_file(chunk_path) != entry["sha256"]:
                 mismatches.append(
                     {"chunk": expected_index, "field": "chunk_file_or_sha"}
@@ -185,9 +194,11 @@ def chunk_manifest_path(root: Path, mode: str, case_id: str) -> Path:
 
 def compare_chunk_runs(root: Path, case_id: str) -> dict[str, Any]:
     """Compare on_a/on_b query chunks array-by-array."""
+    manifest_paths = [
+        chunk_manifest_path(root, mode, case_id) for mode in ("on_a", "on_b")
+    ]
     manifests = [
-        json.loads(chunk_manifest_path(root, mode, case_id).read_text(encoding="utf-8"))
-        for mode in ("on_a", "on_b")
+        json.loads(path.read_text(encoding="utf-8")) for path in manifest_paths
     ]
     count_equal = manifests[0]["chunk_count"] == manifests[1]["chunk_count"]
     comparisons = []
@@ -196,7 +207,10 @@ def compare_chunk_runs(root: Path, case_id: str) -> dict[str, Any]:
             manifests[0]["chunks"], manifests[1]["chunks"], strict=True
         ):
             comparisons.append(
-                compare_npz_arrays(Path(left_entry["path"]), Path(right_entry["path"]))
+                compare_npz_arrays(
+                    resolve_chunk_path(manifest_paths[0], left_entry),
+                    resolve_chunk_path(manifest_paths[1], right_entry),
+                )
             )
     status = (
         "PASS"
