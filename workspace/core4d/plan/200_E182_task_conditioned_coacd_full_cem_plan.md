@@ -305,6 +305,61 @@ selection 采用以下词典序：
 全局 broader cavity、surface p90/p99、normal 和 must-cover 保留为 secondary
 diagnostic，不进入 v1 一票否决。
 
+#### S2 amendment（2026-08-01）：v8 task-aware local pre-segmentation
+
+v5 global threshold、v6 per-segment threshold 和 v7 segment3 全部 Bell(4)
+partial-merge topology 均未闭合 bucket003 P floor；冻结结果与可视化见
+[log 248](../log/248_E182_bucket003_p_decomposition_v5_v7_results.md)。按本计划的
+三次失败协议，后续不得继续同类 threshold/merge sweep，改为 **自动、局部、
+task-aware 的 exact-manifold pre-segmentation**。
+
+v8 family 必须在读取任何新 candidate P score 前按以下规则冻结：
+
+1. 从 frozen v7 K16 两种唯一 contact signature 各取词典序代表 row；
+2. 在同一882姿态 P authority 上计算
+   `delta = recall_side_contact AND NOT precision_side_contact`，要求无 removed contact；
+3. 对每个 delta pose，取 recall-side 中 radius-adjusted clearance 最小的真实 P query
+   point，并用 `D_M` 把 pose 标为 oracle-contact 或 oracle-free；
+4. 对 delta points 的 object-local xyz range 取唯一 argmax 作为 dominant axis；
+5. 沿 dominant axis 排序全部 distinct coordinates，候选 plane 是 **每一对相邻坐标的
+   中点全集**，禁止人工只挑其中一条；
+6. 每条 plane 只二分原 x2×y4 的 segment3，其余7个 exact segments 保持 SHA exact；
+   两侧必须 watertight、winding-consistent、正体积，且 volume closure `≤1e-8m³`；
+7. topology 因此有9个非空 segment，禁止跨 pre-segment merge，最小 hull 数为9。
+
+当前 frozen v7 evidence 按上述规则唯一产生 dominant axis=`x` 与两条 plane：
+`-0.14311002844145554m`、`-0.11878629238288715m`。这些数值是规则输出，不能作为
+手工可调参数；协议必须同时绑定 transition points/labels、v7 protocol/result/source、
+oracle/segment manifest 和生成器 SHA。
+
+candidate family 固定为：
+
+```text
+2 task-derived planes × threshold {5,10,20mm} × K {16,32} = 12 candidates
+```
+
+- K8 不在 v8 重跑：9-segment topology 的最小 hull 数为9；v5/v6 已保留 K8 负证据，
+  仍不测试 K4；
+- 每个 plane/threshold 复用7个未改变 segment 的 frozen v4 CoACD base，只对 segment3
+  的两个 exact children 各运行一次 isolated CoACD；
+- CoACD common config、soft cap4、fresh child、thread env、max vertex=32 与 v4 exact；
+- 后置 reducer 复用 v5 数值容差与确定性 cost/tie-break，但只允许同一新 segment 内
+  merge，强制 actual hulls `≤K`、每个9 segment至少1 hull；
+- final part `max_vertices≤256`，MuJoCo `maxhullvert≥actual` 合同不变；
+- broader cavity 继续 report-only，P precision/recall floor 继续各 `≥0.70`。
+
+v8 stop/go 分两级：
+
+1. **static P topology gate**：12候选先在同一882姿态上筛选；至少出现一个第三工作点
+   `TP≥19 AND phantom≤8`（等价于当前27 oracle contacts下 P 双 `≥0.70`），才允许构建
+   独立 fixture并进入完整 P/R/G；
+2. **完整 launch floor**：候选必须用未改的 exact-C evaluator 通过全部 P/R/G launch
+   floor、真实 MuJoCo replay和3D/2D visual review，之后才允许进入 S3。
+
+若 static P `0/12`，保留完整 evidence并停止 v8；不得移动 plane、增加手工切面、降低
+0.70 floor或访问 heldout。若有 passing row，所有 plane/K/threshold 的选择仍使用原
+launch-floor→worst normalized score→actual hulls→runtime词典序，且必须在 heldout 前冻结。
+
 ### S3：Canonical grid-SDF 与 physics sidecar
 
 对每个 K finalist：

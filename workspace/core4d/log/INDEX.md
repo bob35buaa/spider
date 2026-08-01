@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 246 个日志文件。
+> 自动生成，共 248 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 45 (E182-E182)
@@ -8,6 +8,8 @@
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
 | 247 | E182, e1 | 2026-07-31 | Gate1 real query tape results | [247_E182_gate1_real_query_tape_results.m...](247_E182_gate1_real_query_tape_results.md) |
+| 248 | E182 | 2026-07-31 | Bucket003 p decomposition v5 v7 results | [248_E182_bucket003_p_decomposition_v5_v7...](248_E182_bucket003_p_decomposition_v5_v7_results.md) |
+| 249 | E182 | 2026-07-31 | Bucket003 task aware preseg v8 results | [249_E182_bucket003_task_aware_preseg_v8_...](249_E182_bucket003_task_aware_preseg_v8_results.md) |
 
 ## Phase 44 (E181-E181)
 
