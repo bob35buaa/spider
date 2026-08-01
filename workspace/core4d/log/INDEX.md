@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 249 个日志文件。
+> 自动生成，共 250 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 46 (E183-E183)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 251 | E183 | 2026-08-01 | Full27 static p coverage results | [251_E183_full27_static_p_coverage_result...](251_E183_full27_static_p_coverage_results.md) |
 
 ## Phase 45 (E182-E182)
 

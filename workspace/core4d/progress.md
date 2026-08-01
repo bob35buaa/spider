@@ -74,3 +74,77 @@ HELDOUT_NOT_ACCESSED
   与本完整备份；结果artifact沿用results外置存储策略。
 - progress已完整备份并精简；最终ruff/format/py_compile/diff-check、文档链接与
   Tracker/INDEX一致性均PASS。E182 v9 closure已提交，未push；worktree待终检。
+
+## 2026-08-01：static-P 全 case 扩展前只读性能盘点
+
+- 用户要求后续 static-P 覆盖 E178 全部27 case，而不是只使用
+  `bucket003_20231018_001_p1` 的 reference/E178-final 两段轨迹。
+- E178 Full authority 的物体分布为 bucket003/004/007=`9/4/14`；当前v9候选仅属于
+  bucket003，禁止把该几何直接用于 bucket004/007，扩展需三物体各自候选与query。
+- 当前 Open3D `RaycastingScene.compute_signed_distance` 未指定CUDA device，static-P和
+  CoACD均按CPU任务处理；下一步只读实测单case拆分耗时及1/2/4/8 CPU进程吞吐，不写正式
+  v9 artifact、不访问heldout E182 evidence、不启动Full或GPU任务。
+- 本机 Ryzen 9 9950X3D（16C/32T）、已有任务叠加状态下，bucket003现有882-pose case：
+  query/oracle准备=`0.191s`，6个candidate核心总计=`6.385s`，含逐candidate清理的外层
+  case wall=`7.378s`；每candidate total=`1.042–1.092s`，其中scene build仅
+  `0.010–0.024s`，主要成本是signed-distance query。
+- 8个相同case-equivalent的CPU多进程实测（worker=`1/2/4/8`）wall=
+  `56.979/37.251/28.903/24.417s`，相对加速=`1.00/1.53/1.97/2.33x`；全部指标exact。
+  单worker累计CPU/wall约`560.3/57.0=9.8 cores`，说明Open3D单进程已内部并行，外层
+  进程可并行但强烈次线性；8 worker单任务膨胀至`23.94s`，不应按worker数线性估算。
+- E178 27 case 的reference frame总数为`3298`，E178-final同为`3298`；现有tape合同下
+  每case static pose数=`(2T+50)+2T=4T+50`，所以全量预计`14542 poses`，约等于当前
+  882-pose case的`16.49x`，不是简单的27倍。按当前bucket003几何线性外推：单一冻结
+  candidate全27 case核心评分约`21s`串行；6 candidates约`1.8–2.2min`串行，4/8 worker
+  预计约`55–65s/47–55s`（不同物体hull复杂度与尚未生成的static tape会带来偏差）。
+- static-P的reference/E178-final query可由`build_prg_query_tape.py`在CPU上从冻结qpos
+  materialize；只有扩展CEM sample的R/G `on_a` tape才需要MJWarp GPU replay（历史dev
+  canary约`106s/case`）。因此本次“全case P碰撞校验”应走CPU池，GPU保留给Full CEM或
+  R/G query capture。
+
+## 2026-08-01：E183 Full27 static-P coverage audit启动
+
+- 用户批准按上述口径执行。新建plan201，E183作为独立full27 coverage audit，不改写
+  已收口E182-v9；本轮将有意访问27个已知E178 case，但结果标记evaluation-only，不能
+  回头修改plane/K/threshold或再声称heldout独立。
+- 候选在score前冻结为E181标准CoACD 54个（每物体18）+ bucket003 E182-v9 6个，合计
+  60个；只做object-matched评分，预期candidate-case row=`540`。query固定为27 case
+  reference+E178-final，预计`14542 poses`；4 CPU worker，不使用GPU。
+- E183 evaluator首版已实现，formal result root确认ABSENT；并行任务按candidate分组，
+  每次加载candidate scene后连续评相应object全部case，以复用加速结构。首次静态检查中
+  `.venv/bin/ruff`不存在（py_compile与diff-check无报错），这是工具路径问题、未执行正式
+  protocol/query/score；下一步定位repo实际ruff入口后继续，不安装或改动环境。
+- 已定位权威lint入口为`uv run ruff`；首版经doc/import修正与机械format后ruff、format、
+  py_compile、diff-check全部PASS。只读preflight确认authority=`27`且物体`9/4/14`、
+  candidate=`60`且物体`24/18/18`、来源E181/v9=`54/6`，三oracle manifest/cleaned mesh
+  SHA均闭合；formal root仍ABSENT，尚未访问full27 score。
+- 临时目录dev回归3/3 PASS：重建query=`882 poses/27 oracle contacts`，v9六行
+  TP/phantom/missed与log250 exact，篡改candidate result会被pooled-confusion validator
+  拒绝；测试未写formal artifact。测试/runner ruff与format全PASS，已固化CPU-only wrapper，
+  下一步是freeze正式protocol并执行4-worker full27。
+- 正式pre-freeze matrix（bash-n/ruff/format/compileall/diff-check/root-empty）PASS；已在空root
+  冻结protocol，candidate=`60`，protocol SHA=
+  `7ed82ada0dc2675dac17e3cc435de45fae79495b86a5e8ed06661c8e807d172f`。从此runner及
+  authority/candidate/oracle任一SHA变化都会拒绝resume；下一步正式4-worker query build。
+- 正式query build COMPLETE：27/27 case、`14542 poses`、oracle contact总数=`2198`，
+  4-worker wall=`4.820s`、max worker RSS=`2038.6MiB`、tape=`275MiB/81 files`。发现
+  bucket007有2个case oracle contact=`0`、另3个仅`1/4/3`，按冻结的E182 metric其
+  per-case recall会为0；不事后改protocol，后续同时解释pooled/macro与零阳性case限制。
+- 正式score/aggregate COMPLETE：60/60 candidates、540/540 candidate-case rows，4-worker
+  score wall=`51.267s`（sum candidate wall=`187.215s`，max RSS=`993.6MiB`），GPU访问0；
+  v9六行dev回归6/6 exact。pooled/macro/all-case coverage PASS=`23/19/3`。
+- 分物体结论：bucket003 `0`个all-case PASS，最佳E181`t020_k16_v032`仅`5/9`且
+  pooled P/R=`0.645/0.863`；bucket004有3个`4/4` PASS，最佳`t005_k08_v064`
+  macro=`0.859/0.853`、pooled=`0.874/0.876`；bucket007最佳`t005_k16_v064`
+  `11/14`且macro/pooled均PASS，但all-case因3个case失败（含零阳性case）为FAIL。
+- visual/validation COMPLETE且validator PASS。实际观察：bucket003最佳在reference早段和
+  E178-final后段产生长串phantom，final接触切换处另有少量missed，符合precision主导失败；
+  bucket004最佳总体跟随oracle，reference中有零散missed、final中有离散phantom但worst
+  case仍P/R=`0.767/0.752`；bucket007零oracle worst case中candidate在reference/final两段
+  均产生密集接触（166 phantom），因此不只是“零阳性recall定义”为0，而是真实严重过碰撞。
+- E183 log251已创建并完整记录object结果、零阳性case解释、效率、可视化观察、Claims与
+  artifact SHA；Tracker新增Phase46索引。最终科学决策：bucket003/004/007全case可用
+  candidate=`0/3/0`，Full不启动；bucket004 K8可用，bucket007 mixed，bucket003仍需新方法。
+- log INDEX已重建并新增Phase46；最终ruff/format/bash-n/compileall/diff-check、formal
+  validator与standalone tests 3/3均PASS。正式result共277MiB沿results外置策略不入git；
+  下一步只提交plan/runner/tests/log/Tracker/INDEX/progress，本轮不push、不启动Full/GPU。
