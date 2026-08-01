@@ -360,6 +360,87 @@ v8 stop/go 分两级：
 0.70 floor或访问 heldout。若有 passing row，所有 plane/K/threshold 的选择仍使用原
 launch-floor→worst normalized score→actual hulls→runtime词典序，且必须在 heldout 前冻结。
 
+#### S2 amendment（2026-08-01）：v9 simultaneous double-plane topology
+
+v8 按上述冻结 family 完成12/12构建，但 static P=`0/12`；最佳平衡点为
+`TP18/phantom7`，而恢复 `TP≥19` 的最优点仍有12个 phantom，见
+[log 249](../log/249_E182_bucket003_task_aware_preseg_v8_results.md)。用户已明确批准
+v9：**同时使用两条既有冻结 task-derived plane**。这是独立于v8的新 topology，不能
+回改v8 protocol/builder/artifact，也不能把v9结果追加解释成v8 family的一部分。
+
+v9 protocol 必须在任何新 CoACD 或 P score 产生前冻结，并直接绑定：
+
+- v8 protocol/build/static/visual manifest及其SHA；
+- v8 builder、exact-C evaluator与v5 reducer/evaluator源码SHA；
+- v8 source segment manifest、source segment3 SHA和两个split manifest；
+- 三个冻结 transition points/labels、dominant axis与两条plane；
+- 所有复用的v4 unchanged base和v8 outer-child base manifest/SHA；
+- heldout=`NOT_ACCESSED_DEV3_ONLY`与v9结果根在freeze前为空。
+
+topology 固定为：
+
+1. source仍是x2×y4的原segment3，SHA不得变化；
+2. dominant axis固定为`x`，两条plane按升序固定为
+   `p0=-0.14311002844145554m`、`p1=-0.11878629238288715m`；
+3. 必须直接从同一source solid与三个闭区间box做exact manifold intersection：
+   `[cell_min,p0]`、`[p0,p1]`、`[p1,cell_max]`；禁止对序列化child再次切分；
+4. 三个child必须全部watertight、winding-consistent、正体积，且总体volume closure
+   `≤1e-8m³`；三个transition point必须按`TP/PHANTOM/PHANTOM`一一落入三个区间；
+5. 其余7个original segments保持SHA exact；映射为original`0/1/2→0/1/2`，三个
+   child为`3/4/5`，original`4/5/6/7→6/7/8/9`；
+6. 最终共有10个nonempty pre-segments，禁止跨pre-segment merge，因此最小hull数为10。
+
+candidate family在读取任何v9分数前唯一固定为：
+
+```text
+threshold {5,10,20mm} × K {16,32} = 6 candidates
+```
+
+- K8因`10>K8`在no-cross-segment-merge合同下结构不可行；不测试K8/K4，也不通过删除
+  segment或跨segment merge救援；
+- 每个threshold复用7个v4 unchanged bases；左outer child复用v8 plane0/left base，
+  右outer child复用v8 plane1/right base，前提是vertex/face/bounds/volume geometry
+  fingerprint在float roundtrip tolerance内exact；
+- 只有middle child对`5/10/20mm`各运行一次fresh isolated CoACD，共3次；CoACD
+  common config、seed、thread env、soft cap4、max vertex32与v8 exact；
+- composite base预计在middle返回4 hull时为`40/36/26`，实际值必须由manifest记录，
+  预计值不得代替构建证据；
+- 后置reducer复用v5确定性cost/tie-break与数值容差，只允许同一pre-segment内merge，
+  强制actual hulls`≤K`且10个segment各至少1 hull；
+- final part `max_vertices≤256`，MuJoCo `maxhullvert≥actual`，broader cavity继续
+  report-only，P precision/recall floor继续各`≥0.70`。
+
+v9 Claims与stop/go：
+
+| Claim | 最低证据 |
+|---|---|
+| V9-C1 protocol pre-score freeze | v9 root freeze前为空；parent/source/reuse/code SHA与6-row family strict绑定，tamper/resume tests PASS |
+| V9-C2 exact topology | 3/3 child topology合同PASS、volume closure`≤1e-8m³`、三个transition各落一个region |
+| V9-C3 minimal fresh build | 3/3 middle CoACD BUILD_PASS；21个v4 unchanged与6个v8 outer base引用SHA exact，无隐藏重建 |
+| V9-C4 candidate closure | 6/6 candidate BUILD_PASS；10 segments、no-cross merge、actual`≤K`、vertices/payload/SHA合同PASS |
+| V9-C5 third P point | 同一882姿态上至少一行`TP≥19 AND phantom≤8`，即P precision/recall双`≥0.70` |
+| V9-C6 contamination guard | heldout/grid/GPU/Full访问均为0，v8 parent SHA保持exact |
+
+stop/go仍分两级：
+
+1. **static P topology gate**：6候选全部在同一882姿态authority上评估。若`0/6`
+   满足`TP≥19 AND phantom≤8`，保存完整负证据并执行
+   `STOP_V9_NO_MORE_PLANES_OR_FLOOR_CHANGES`；禁止移动plane、增加cut、降低floor、读取
+   heldout或强送Full；
+2. **完整launch floor**：若至少一行通过static P，才构建独立v9 fixture，并使用未改的
+   exact-C evaluator完成P/R/G launch floor、真实MuJoCo replay和3D/2D visual review。
+   只有完整launch floor通过才允许进入S3。
+
+passing rows仍按原
+`launch floor→最坏归一化task error→actual hulls→runtime→threshold→candidate id`
+词典序选择；K/threshold/candidate必须在heldout前冻结，禁止按完整P/R/G、heldout或Full
+结果反向挑collision geometry。v9统一结果根为：
+
+```text
+workspace/core4d/results/E182/s2_task_query_eval/
+  attempt2_task_aware_preseg_v9_double_plane/
+```
+
 ### S3：Canonical grid-SDF 与 physics sidecar
 
 对每个 K finalist：

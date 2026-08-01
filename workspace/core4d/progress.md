@@ -7,87 +7,70 @@
 > [E180–E181 完整执行](progress_archive/E180_E181_20260731_full_backup.md) ·
 > [E182 Gate0–S1 canary](progress_archive/E182_gate0_s1_canary_20260801_full_backup.md) ·
 > [E182 S1 continuation](progress_archive/E182_s1_continuation_20260801_full_backup.md) ·
-> [E182 S2 v2–v8 完整过程](progress_archive/E182_s2_v2_v8_20260801_full_backup.md)
+> [E182 S2 v2–v8](progress_archive/E182_s2_v2_v8_20260801_full_backup.md) ·
+> [E182 v9 完整过程](progress_archive/E182_v9_20260801_full_backup.md)
 >
-> 本文件只保留 E182 当前权威状态与下一执行入口。
+> 本文件只保留 E182 当前权威状态与下一入口；v9详细结果见
+> [log250](log/250_E182_bucket003_double_plane_preseg_v9_results.md)。
 
 ## 2026-08-01：不可变执行口径
 
 - 权威计划：`plan/200_E182_task_conditioned_coacd_full_cem_plan.md`。
-- Full 与 E178 exact：27 cases、`seed0, 1024×32`；K只允许`8/16/32`，不测K4。
-- heldout24 在 production SHA 冻结前 selection-forbidden，冻结后只作 evaluation；
-  禁止按 heldout/Full 结果反选碰撞体。
-- Full 资源只用本机单卡 + `spider-remote` RTX 6000 Ada GPU0/1；允许与现有任务
-  叠加，禁止 kill、暂停、抢占或修改已有进程，不使用A100。
-- bucket003 完整 P/R/G launch floor 未闭合前，grid-SDF、heldout和Full全部禁止。
+- Full 与 E178 exact：27 cases、`seed0, 1024×32`；不测试K4。
+- Full资源只允许本机单卡 + `spider-remote` RTX 6000 Ada GPU0/1叠加运行；禁止kill、
+  暂停、抢占或修改既有进程，不使用A100。
+- heldout24 在production SHA冻结前selection-forbidden，禁止按heldout/Full反选碰撞体。
+- bucket003完整P/R/G launch floor未闭合前，grid-SDF、heldout和Full全部禁止。
 
 ## E182 已完成阶段
 
 - Gate0 authority/preflight PASS；Gate1真实P/R/G query tape PASS，见log247。
-- E181原global cavity `≤0.1%`已降为report-only；E182使用882-pose真实static P authority。
-- v5 global threshold：`0/9 P PASS`。
-- v6 per-segment threshold hybrid：K8/K16/K32各`0/6561 P PASS`。
-- v7 segment3 Bell(4) partition：K16/K32各`0/15 P PASS`；只产生
-  `TP18/phantom8/missed9`与`TP19/phantom10/missed8`，见log248。
+- v5 global threshold=`0/9`；v6 per-segment hybrid=`0/6561` each K；
+  v7 Bell(4) partition=`0/15` each K，见log248。
+- v8 single-plane family 12/12构建、static P=`0/12`；最佳balance=`TP18/phantom7`，
+  TP19最少phantom=12；3D/2D diagnostic确认rim convex envelope问题，见log249。
 
-## v8 task-aware local pre-segmentation：完整负结果
+## v9 simultaneous double-plane：完整负结果
 
-- plan200 amendment冻结family：
-  `2 task-derived planes × threshold {5,10,20mm} × K {16,32}=12`；
-  每row为9个nonempty segments，禁止跨presegment merge。
-- dominant axis=`x`；planes=
-  `-0.14311002844145554m/-0.11878629238288715m`；两split的volume delta=
-  `4.77535e-11/-1.27153e-12m³`。
-- pre-freeze closure：v8 contracts14、parent matrix60，共`74/74 PASS`；ruff/format/
-  compileall/diff-check GREEN；freeze前v8 root为空。
-- protocol SHA：`d1b19069c4be0b7f4c33884ca7aab6539ad9080ce0624a84d8eb78cf9e45fdd8`。
-- 12/12 new CoACD children、6/6 composite bases、12/12 candidates BUILD_PASS；
-  actual hulls=`[16,32,16,32,16,22]×2`，所有part vertices≤256。
-- static P=`0/12 PASS`；aggregate SHA=
-  `10666ec4d61668b528838cdab7cef9e8cb5748c2a884b2b10a827d7d694df60b`。
-- 最佳near-miss：plane1/t010/K32(actual32)=
-  `TP18/phantom7/missed9, precision=.720, recall=.667`。
-- TP≥19的最低phantom点：plane1/t020/K32(actual22)=
-  `TP19/phantom12/missed8, precision=.613, recall=.704`。
-- frozen stop action：`STOP_V8_NO_PLANE_OR_FLOOR_CHANGES`；完整P/R/G未启动。
-- 详细表、耗时、Claims与路径见
-  `log/249_E182_bucket003_task_aware_preseg_v8_results.md`。
+- 用户批准并冻结同时使用两条既有plane：
+  `-0.14311002844145554/-0.11878629238288715m`；7 unchanged+3 children=10 segments。
+- family固定为`threshold {5,10,20mm} × K {16,32}=6`；K8结构不可行，K4禁止；
+  static gate=`TP>=19 AND phantom<=8`。
+- pre-freeze functional matrix=`55/55 PASS`；ruff/format/compileall/diff-check PASS；
+  protocol SHA=`5ea0245bd0cbe7808af3c3d0875d18067b6d1b33f35aaac3d73b546439acde62`。
+- 3-child exact geometry PASS，volume closure delta=`3.584199e-11m³`。
+- 只运行3个middle CoACD，hulls=`4/4/2`；21个v4 unchanged与6个v8 outer manifest
+  只读复用；composite totals=`40/36/24`。
+- 6/6 candidates BUILD_PASS；actual hulls=`16/32/16/32/16/24`，全部10-segment、
+  no-cross merge、actual`<=K`、max vertices`<=256`。
+- static P confusion（TP/phantom/missed）：
+  `22/24/5,22/21/5,19/17/8,19/14/8,15/10/12,15/7/12`；结果=`0/6 PASS`。
+- aggregate SHA=`87c401182e082c54de4dec5b0b4c4797c0ef2b5c552bb24b60b417d84b5a642c`；
+  `selected_candidate_ids=[]`、`full_prg_eligible=false`。
 
-## 可视化实际观察
-
-- post-result renderer固定best-balance/high-recall/TP19三代表，输出6张3D/2D图；
-  visual manifest SHA=`1d1ce64ea6e97f44476dc4580c4511cf0eb6b9efe600e877c44fcf9e9558a5d3`。
-- 已查看全部原分辨率图：最深phantom均为reference pose148，集中在同一顶部端部rim
-  手部点；oracle clearance≈`+0.465mm`，candidate侵入`-4.01/-4.37/-4.77mm`。
-- high-recall把TP提到22时phantom也升到22；best-balance降到7 phantom但漏9 TP；
-  TP19仍需12 phantom。问题是局部rim convex外包trade-off，不是远处body/leg噪声。
-
-## 当前状态与下一入口
+## 当前权威状态
 
 ```text
+V9_STOPPED_COMPLETE_NEGATIVE_RESULT
+STOP_V9_NO_MORE_PLANES_OR_FLOOR_CHANGES
 P_LAUNCH_FLOOR_NOT_CLOSED
 FULL_NOT_AUTHORIZED
-V8_STOPPED_COMPLETE_NEGATIVE_RESULT
+HELDOUT_NOT_ACCESSED
 ```
 
-- 禁止继续移动plane、加手工cut、降低0.70 floor或强送Full。
-- v5–v8已超过三次失败协议；新的方法自由度需要用户确认并先写新plan/protocol。
-- 可供决策的结构方向：
-  1. 新协议同时使用两条自动plane，隔离三个transition x区间；
-  2. rim-aware非平面分区/局部原mesh collision primitive；
-  3. 改用MuJoCo SDF/plugin等更高保真P碰撞路线。
-- 本轮没有访问heldout/grid、没有启动GPU/Full，也没有操作任何既有进程。
+- V9-C1/C2/C3/C4/C6 PASS；V9-C5 FAIL。
+- heldout/grid/GPU/Full访问均为0，本地/远程既有进程未被操作。
+- 按预注册stop，不移动/增加plane、不降低0.70 floor、不追加K或threshold、不运行
+  完整P/R/G、physics replay、v9 visual、grid或Full。
+- 若继续E182，必须由用户批准实质不同的方法自由度，例如rim-aware非平面primitive或
+  MuJoCo SDF/plugin高保真局部碰撞；不能继续给CoACD平面切分加手工规则。
 
-## 本次归档
+## 归档闭环
 
-- 原`progress.md`的1260+行完整过程已移动到
-  `progress_archive/E182_s2_v2_v8_20260801_full_backup.md`；未删除过程证据。
-- Tracker已链接log249，log INDEX已包含249且文档audit PASS。
-- 最终closure已重跑PASS：v8=`14/14`、visual=`2/2`，4文件ruff/format/compileall、
-  strict protocol/static/visual validator、log链接、Tracker/INDEX与repo diff-check全GREEN；
-  三个最终SHA保持`d1b19069...45fdd8`/`10666ec...df60b`/`1d1ce64e...8a5d3`。
-- v8阶段已完整结束为负结果；下一方法超出当前冻结family，必须先由用户确认结构方向，
-  再新增plan amendment/protocol。当前不满足Full启动条件，持续目标尚未完成。
-- 当前工作计划5/5步骤均已完成（包含0/12 stop分支）；这只代表v8阶段闭合，不代表
-  plan200的C0–C9或持续目标完成。等待用户在“两plane同时使用 / rim-aware非平面 /
-  MuJoCo SDF/plugin高保真P”中确认新的结构自由度。
+- log250已创建；Tracker E182已更新并链接log250；log INDEX已包含250。
+- v9正式结果根共175文件，位于results symlink外；protocol/segment/base/build/static
+  validators均已二次PASS。
+- git归档范围：plan200 amendment、v9 builder/tests、log250、Tracker、INDEX、progress
+  与本完整备份；结果artifact沿用results外置存储策略。
+- progress已完整备份并精简；最终ruff/format/py_compile/diff-check、文档链接与
+  Tracker/INDEX一致性均PASS。E182 v9 closure已提交，未push；worktree待终检。
