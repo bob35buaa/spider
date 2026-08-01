@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 250 个日志文件。
+> 自动生成，共 251 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 47 (E184-E184)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 252 | E184, e065 | 2026-08-01 | Static p gate065 sensitivity results | [252_E184_static_p_gate065_sensitivity_re...](252_E184_static_p_gate065_sensitivity_results.md) |
 
 ## Phase 46 (E183-E183)
 

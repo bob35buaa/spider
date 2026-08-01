@@ -148,3 +148,45 @@ HELDOUT_NOT_ACCESSED
 - log INDEX已重建并新增Phase46；最终ruff/format/bash-n/compileall/diff-check、formal
   validator与standalone tests 3/3均PASS。正式result共277MiB沿results外置策略不入git；
   下一步只提交plan/runner/tests/log/Tracker/INDEX/progress，本轮不push、不启动Full/GPU。
+
+## 2026-08-01：E184 static-P gate 0.65 sensitivity启动
+
+- 用户要求TP覆盖放宽到65%，phantom对应放宽。新建plan202，正例case冻结为recall和
+  precision各`>=0.65`，即`phantom<=floor(TP*0.35/0.65)`；oracle零接触case单列为
+  `phantom==0`才PASS，并保留E183 legacy口径对照，避免混淆threshold与零阳性语义收益。
+- E184只读E183已冻结540行confusion重新聚合，不重跑SDF/CoACD，不访问GPU/Full，
+  E183 0.70 artifact与结论不改。下一步实现pre-score protocol与边界测试。
+- 已核对E183权威表头与聚合实现：case表直接保留TP/phantom/missed/TN，足以无损重算；
+  candidate表提供0.70 legacy exact对照。E184将同时输出legacy与zero-aware两套all-case，
+  并把positive-only macro独立列出，避免零oracle语义变化污染0.70→0.65阈值迁移。
+- E184 evaluator、4项standalone tests与CPU-only wrapper首版已实现。runner覆盖SHA锁定、
+  protocol先冻结、case/candidate双表、legacy/zero-aware分解、0.70回归、0.65迁移、对比图与
+  isolation validator；尚未运行测试或formal protocol，下一步先做静态检查和临时根回归。
+- 首轮临时回归的三项边界/SHA测试PASS，end-to-end在source结果目录为外置symlink时暴露
+  lexical path与resolve path不一致；这是artifact路径记录问题，不涉及指标。已改为保留repo
+  lexical路径，并同步修复ruff提示；formal root仍未创建，待复跑4/4测试。
+- 临时根end-to-end现4/4 PASS；ruff、format、bash-n、py_compile均PASS，E183 legacy
+  pooled/macro/all-case=`23/19/3` exact复现。formal E184 protocol仍未冻结；下一步确认正式root
+  为空、diff无越界改动后执行CPU-only wrapper。
+- 正式pre-freeze检查PASS：E184 root ABSENT，E183 case/summary SHA exact，git diff-check
+  无报错，改动仅E184 plan/runner/tests/wrapper/progress。现在允许冻结formal protocol并执行
+  offline aggregate/visual/validate；GPU、SDF、CoACD与Full访问继续为0。
+- formal wrapper首次调用在进入Python前失败：复用的旧wrapper目录层级多退了一层，导致
+  在`/home/ubuntu/Workspace`查找`.venv`；protocol和任何result均未创建。已把E184 wrapper
+  repo-root跳转修正为5层，需重新做bash-n/root-empty检查后再执行。
+- wrapper修复后root-empty、4/4 tests与diff-check再次PASS；formal protocol已冻结，随后
+  aggregate/visual/validate全部COMPLETE/PASS，总wall=`0.84s`，zero-aware all-case 0.65初值
+  为`4/60`。下一步读取分object迁移、v9与失败case，并实际查看对比图。
+- 正式聚合读取完成并实际查看`threshold_comparison.png`：图例、分组、数值标签与4 panel均
+  清晰无异常。0.65相对0.70仅新增1个zero-aware all-case候选，即bucket004
+  `t005_k16_v064`；bucket003/bucket007仍为0个全覆盖。下一步补齐best/failure与零语义分解。
+- 深入分解完成：bucket003 v9 K16虽pooled/macro+过线但仅5/9；bucket007 K8的13/14来自
+  两个clean zero-oracle case按正确语义PASS，剩余case为TP0/missed3；新增bucket004 K16
+  的边界case为TP37/phantom19/missed3、precision=0.661。log252与Tracker Phase47已写入，
+  下一步重建INDEX并做最终validation/commit。
+- log INDEX已自动重建，新增Phase47/E184且总日志251份；diff-check无报错。归档文件现仅
+  E184 plan/runner/tests/wrapper/log252、Tracker/INDEX/progress，正式result沿既有外置策略
+  不进入git。下一步执行最终ruff/tests/formal validator/文档链接检查后本地commit，不push。
+- 最终ruff/format/bash-n/compileall、4/4 standalone tests、formal validator、doc links与
+  diff-check全部PASS；protocol对当前runner/wrapper仍exact。下一步清点untracked目录，排除
+  compileall缓存后提交E184归档。
