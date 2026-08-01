@@ -190,3 +190,45 @@ HELDOUT_NOT_ACCESSED
 - 最终ruff/format/bash-n/compileall、4/4 standalone tests、formal validator、doc links与
   diff-check全部PASS；protocol对当前runner/wrapper仍exact。下一步清点untracked目录，排除
   compileall缓存后提交E184归档。
+
+## 2026-08-01：E185 static-P gate 0.60 sensitivity启动
+
+- 用户要求继续检查60%口径。已完整恢复Tracker、E184 plan/log/progress并新建plan203；
+  positive-case冻结为precision/recall各`>=0.60`，即
+  `phantom<=floor(TP*0.40/0.60)=floor(2TP/3)`，TP18/19/22对应12/12/14。
+- zero-oracle继续使用`phantom==0`，primary comparison冻结为0.70→0.65→0.60；E185直接
+  读取E183两张权威TSV，不从E184计数派生，不访问SDF/CoACD/GPU/Full。下一步在formal
+  root创建前实现runner/tests/wrapper并做临时根回归。
+- E185 runner、4项standalone tests与CPU-only wrapper首版已实现；runner独立从E183计数
+  重算三阈值，使用E184 aggregate SHA作0.70/0.65 regression authority，并生成三阈值
+  case/candidate表、4-panel对比图和isolation validator。尚未运行测试或创建formal root。
+- 临时根end-to-end 4/4 PASS；ruff、format、bash-n与py_compile均PASS，E184 primary
+  overall的0.70/0.65 pooled、macro+、all-case六项exact复现。formal E185 root尚未创建，
+  下一步执行source SHA/root-empty/diff-check后冻结protocol。
+- 正式pre-freeze matrix PASS：E185 root ABSENT，E183两表与E184 aggregate SHA exact，
+  diff-check无报错，worktree只有E185 plan/runner/tests/wrapper/progress。允许执行CPU-only
+  formal wrapper；SDF/CoACD/GPU/Full访问继续为0。
+- formal protocol已冻结，aggregate/visual/validate全部COMPLETE/PASS，总wall=`0.83s`；
+  zero-aware all-case在0.60下初值为`7/60`（0.65为4/60）。下一步读取分object迁移、v9、
+  hull效率和remaining failure，并实际查看三阈值对比图。
+- aggregate/validation读取确认0.60新增的3个all-case candidate全部属于bucket004；
+  bucket003/bucket007 all-case仍为0，最佳coverage仍5/9与13/14。首次只读诊断打印在拼接
+  int/str时TypeError中止，正式artifact不受影响；后续修正诊断表达式继续读取。
+- 已实际查看三阈值4-panel PNG：0.70/0.65/0.60图例、柱高、标签和coverage均清晰；视觉
+  显示0.60只扩大bucket004 all-case 4→7，bucket003/007 pooled增加但all-case与最佳coverage
+  均不动。下一步补齐新晋级候选、best failure与v9明细。
+- 修正只读诊断表达式后明细闭合：0.60新增bucket004 K16/K8/K16三个candidate；bucket003
+  v9 K16仍有P=0.478、R=0.378、全missed和R=0.586四个失败case；bucket007 K8剩余失败
+  为TP0/missed3。bucket004共有7个4/4，其中3个K8，原`t005_k08_v064`仍为裕量首选。
+- log253与Tracker Phase48已写入，明确all-case 0.70→0.65→0.60=`3→4→7`且新增全属
+  bucket004；下一步重建log INDEX并执行最终validation/commit。
+- log INDEX已自动重建，新增Phase48/E185且总日志252份；diff-check无报错。归档范围仅
+  E185 plan/runner/tests/wrapper/log253、Tracker/INDEX/progress，正式result继续外置不入git。
+  下一步执行ruff/tests/formal validator/doc-link检查，排除缓存后本地commit，不push。
+- 最终ruff/format/bash-n/compileall、4/4 standalone tests、formal validator、doc links与
+  diff-check全部PASS；protocol对当前runner/wrapper和三份authority SHA仍exact。下一步
+  删除untracked compile缓存并提交E185归档。
+- untracked清点只发现两个compileall生成的E185 `.pyc`及预期归档文件；将显式删除该缓存，
+  不触碰正式result或用户文件，然后按已列明范围提交。
+- E185归档已本地提交且未push；提交包含plan203、runner/tests/wrapper、log253、
+  Tracker/INDEX/progress，正式result沿外置策略保留。E185 closure完成，worktree待最终确认。

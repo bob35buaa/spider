@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E185 | 2026-08-01 | Phase 48 | static-P 0.60 sensitivity：all-case 4→7，新增仍全属bucket004 | ✅ 540行离线重聚合；⛔ bucket003/007仍阻塞Full | [253](log/253_E185_static_p_gate060_sensitivity_results.md) · [plan](plan/203_E185_static_p_gate060_sensitivity_plan.md) |
 | E184 | 2026-08-01 | Phase 47 | static-P 0.65 sensitivity：all-case 3→4，仅bucket004 +1 | ✅ 540行离线重聚合；⛔ bucket003/007仍阻塞Full | [252](log/252_E184_static_p_gate065_sensitivity_results.md) · [plan](plan/202_E184_static_p_gate065_sensitivity_plan.md) |
 | E183 | 2026-08-01 | Phase 46 | Full27 static-P：bucket003/004/007可用候选0/3/0 | ✅ 540/540闭合；⛔ bucket003阻塞Full | [251](log/251_E183_full27_static_p_coverage_results.md) · [plan](plan/201_E183_full27_static_p_coverage_audit_plan.md) |
 | E182 | 2026-08-01 | Phase 45 | v9双plane 6/6构建；static P 0/6 | ✅ Gate0/Gate1；⛔ bucket003 P v5–v9无候选，Full禁启 | [247](log/247_E182_gate1_real_query_tape_results.md) · [248](log/248_E182_bucket003_p_decomposition_v5_v7_results.md) · [249](log/249_E182_bucket003_task_aware_preseg_v8_results.md) · [250](log/250_E182_bucket003_double_plane_preseg_v9_results.md) · [plan](plan/200_E182_task_conditioned_coacd_full_cem_plan.md) |
