@@ -39,12 +39,10 @@ from eval.core.motion_health import (  # noqa: E402
     run_health,
 )
 
-
 REPO = Path(__file__).resolve().parents[5]
 RESULT_ROOT = REPO / "workspace/core4d/results/E176/s6_downstream"
 DEFAULT_BASELINE = (
-    REPO
-    / "workspace/core4d/results/E174/s6_downstream/eval/full/e174_case_metrics.tsv"
+    REPO / "workspace/core4d/results/E174/s6_downstream/eval/full/e174_case_metrics.tsv"
 )
 
 MONITORED_BODY_NAMES = (
@@ -161,9 +159,7 @@ def write_tsv(
         )
         writer.writeheader()
         for row in rows:
-            writer.writerow(
-                {key: serial(row.get(key, "")) for key in fields}
-            )
+            writer.writerow({key: serial(row.get(key, "")) for key in fields})
 
 
 def sha256(path: Path) -> str:
@@ -210,12 +206,8 @@ def reference_qpos(trajectory: Path, scene_xml: Path) -> np.ndarray:
         return qpos.copy()
     nq_robot = model.nq - 6
     if qpos.shape[1] < nq_robot + 7:
-        raise ValueError(
-            f"cannot convert reference qpos={qpos.shape} to nq={model.nq}"
-        )
-    object_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_BODY, "object"
-    )
+        raise ValueError(f"cannot convert reference qpos={qpos.shape} to nq={model.nq}")
+    object_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
     if object_id < 0:
         raise ValueError("scene has no object body")
 
@@ -223,9 +215,7 @@ def reference_qpos(trajectory: Path, scene_xml: Path) -> np.ndarray:
     meta = scene_xml.with_name("scene_act_meta.json")
     if meta.is_file():
         convention = str(
-            json.loads(meta.read_text(encoding="utf-8")).get(
-                "euler_convention", "XYZ"
-            )
+            json.loads(meta.read_text(encoding="utf-8")).get("euler_convention", "XYZ")
         )
     body_quat = model.body_quat[object_id]
     body_rotation = Rotation.from_quat(
@@ -276,11 +266,7 @@ def fixed_reference_z_metrics(
     ref_qpos = reference_qpos(trajectory, scene_xml)
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
     body_ids = [
-        int(
-            mujoco.mj_name2id(
-                model, mujoco.mjtObj.mjOBJ_BODY, body_name
-            )
-        )
+        int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name))
         for body_name in MONITORED_BODY_NAMES
     ]
     if any(body_id < 0 for body_id in body_ids):
@@ -300,17 +286,9 @@ def fixed_reference_z_metrics(
     legacy_peak = math.nan
     if intra_tick_qpos is not None:
         legacy_frames = min(len(sim_qpos), len(intra_tick_qpos))
-        legacy_pos = body_positions(
-            model, intra_tick_qpos[:legacy_frames], body_ids
-        )
-        legacy_error = np.abs(
-            sim_pos[:legacy_frames, :, 2] - legacy_pos[..., 2]
-        )
-        legacy_peak = (
-            float(np.max(legacy_error))
-            if legacy_error.size
-            else math.nan
-        )
+        legacy_pos = body_positions(model, intra_tick_qpos[:legacy_frames], body_ids)
+        legacy_error = np.abs(sim_pos[:legacy_frames, :, 2] - legacy_pos[..., 2])
+        legacy_peak = float(np.max(legacy_error)) if legacy_error.size else math.nan
     return {
         "z_reference_source": "fixed_kinematic_trajectory",
         "z_reference_path": rel(trajectory),
@@ -348,9 +326,7 @@ def release_window_info(
     if mask.ndim != 3 or mask.shape[2] != 2:
         raise ValueError(f"invalid 3cm contact mask shape {mask.shape}")
     frame_count = min(frame_count, len(mask))
-    active = np.any(
-        mask[:frame_count, selected_person_idx, :].astype(bool), axis=1
-    )
+    active = np.any(mask[:frame_count, selected_person_idx, :].astype(bool), axis=1)
     if not active.any():
         return {
             "release_window_frame_count": 0,
@@ -362,9 +338,7 @@ def release_window_info(
         "release_window_frame_count": release_frames,
         "release_gate_applicable": release_frames > 0,
         "release_gate_status": (
-            "EVALUATED"
-            if release_frames > 0
-            else "NOT_APPLICABLE_NO_RELEASE_WINDOW"
+            "EVALUATED" if release_frames > 0 else "NOT_APPLICABLE_NO_RELEASE_WINDOW"
         ),
     }
 
@@ -392,27 +366,19 @@ def gate_health(result_npz: Path) -> dict[str, Any]:
     with np.load(result_npz, allow_pickle=True) as payload:
         for key in LEG_GATE_KEYS:
             output[f"{key}_mean"] = array_stat(payload, key, "mean")
-            output[f"{key}_last_iter_mean"] = array_stat(
-                payload, key, "last"
-            )
+            output[f"{key}_last_iter_mean"] = array_stat(payload, key, "last")
         output["cem_leg_gate_min_sdf_worst_m"] = array_stat(
             payload, "cem_leg_gate_min_sdf_min_m", "min"
         )
     output["leg_gate_fallback_pass"] = (
-        finite(output["cem_leg_gate_fallback_used_mean"], math.inf)
-        <= GATE_FALLBACK_MAX
+        finite(output["cem_leg_gate_fallback_used_mean"], math.inf) <= GATE_FALLBACK_MAX
     )
     output["leg_gate_valid_frac_pass"] = (
-        finite(
-            output["cem_leg_gate_valid_frac_last_iter_mean"], -math.inf
-        )
+        finite(output["cem_leg_gate_valid_frac_last_iter_mean"], -math.inf)
         >= GATE_VALID_LAST_MIN
     )
     output["leg_gate_selected_valid_pass"] = (
-        finite(
-            output["cem_leg_gate_selected_all_valid_mean"], -math.inf
-        )
-        >= 1.0 - 1e-9
+        finite(output["cem_leg_gate_selected_all_valid_mean"], -math.inf) >= 1.0 - 1e-9
     )
     output["leg_gate_health_pass"] = bool(
         output["leg_gate_fallback_pass"]
@@ -429,8 +395,7 @@ def apply_gates(
     release_applicable = bool(item.get("release_gate_applicable"))
     gates = {
         "fall": not bool(item.get("fall_flag")),
-        "body_z": finite(item.get("body_z_err_p95_m"), math.inf)
-        <= BODY_Z_MAX,
+        "body_z": finite(item.get("body_z_err_p95_m"), math.inf) <= BODY_Z_MAX,
         "contact": finite(
             item.get("hand_object_physics_contact_in_mask_frac"),
             -math.inf,
@@ -447,37 +412,22 @@ def apply_gates(
             math.inf,
         )
         <= HAND_PEN_MAX,
-        "lower_body": finite(
-            item.get("leg_penetration_frac"), math.inf
-        )
-        <= LEG_PEN_MAX,
+        "lower_body": finite(item.get("leg_penetration_frac"), math.inf) <= LEG_PEN_MAX,
     }
     if tracking_thresholds is not None:
         gates.update(
             {
-                "root_pos": finite(
-                    item.get("track_root_pos_err_cm_mean"), math.inf
-                )
+                "root_pos": finite(item.get("track_root_pos_err_cm_mean"), math.inf)
                 <= tracking_thresholds["root_pos"],
-                "root_ori": finite(
-                    item.get("track_root_ori_err_deg_mean"), math.inf
-                )
+                "root_ori": finite(item.get("track_root_ori_err_deg_mean"), math.inf)
                 <= tracking_thresholds["root_ori"],
-                "hand_pos": finite(
-                    item.get("track_eef_pos_err_cm_mean"), math.inf
-                )
+                "hand_pos": finite(item.get("track_eef_pos_err_cm_mean"), math.inf)
                 <= tracking_thresholds["hand_pos"],
-                "hand_ori": finite(
-                    item.get("track_eef_ori_err_deg_mean"), math.inf
-                )
+                "hand_ori": finite(item.get("track_eef_ori_err_deg_mean"), math.inf)
                 <= tracking_thresholds["hand_ori"],
-                "object_pos": finite(
-                    item.get("track_obj_pos_err_cm_mean"), math.inf
-                )
+                "object_pos": finite(item.get("track_obj_pos_err_cm_mean"), math.inf)
                 <= tracking_thresholds["object_pos"],
-                "object_ori": finite(
-                    item.get("track_obj_ori_err_deg_mean"), math.inf
-                )
+                "object_ori": finite(item.get("track_obj_ori_err_deg_mean"), math.inf)
                 <= tracking_thresholds["object_ori"],
             }
         )
@@ -513,14 +463,8 @@ def evaluate_row(
     )
     sim_qpos, _ = npz_qpos(qpos_path)
     item.update(run_health(qpos_path, scene_xml, config))
-    item.update(
-        fixed_reference_z_metrics(qpos_path, scene_xml, trajectory)
-    )
-    item.update(
-        release_window_info(
-            contact_mask, selected_person_idx, len(sim_qpos)
-        )
-    )
+    item.update(fixed_reference_z_metrics(qpos_path, scene_xml, trajectory))
+    item.update(release_window_info(contact_mask, selected_person_idx, len(sim_qpos)))
     item.update(gate_health(result_npz))
     for key in (
         "ordinal",
@@ -562,16 +506,17 @@ def add_baseline(
     item: dict[str, Any],
     baseline: dict[str, str],
     current_prefix: str,
+    baseline_prefix: str = "e174",
 ) -> dict[str, Any]:
     current_pass = f"{current_prefix}_numeric_release_pass"
     current_failures = f"{current_prefix}_numeric_failure_modes"
     paired: dict[str, Any] = {
         "case_id": item["case_id"],
-        "e174_numeric_release_pass": baseline.get(
+        f"{baseline_prefix}_numeric_release_pass": baseline.get(
             "numeric_release_pass", ""
         ),
         current_pass: item["numeric_release_pass"],
-        "e174_numeric_failure_modes": baseline.get(
+        f"{baseline_prefix}_numeric_failure_modes": baseline.get(
             "numeric_failure_modes", ""
         ),
         current_failures: item["numeric_failure_modes"],
@@ -580,16 +525,12 @@ def add_baseline(
         current = finite(item.get(metric))
         old = finite(baseline.get(metric))
         delta = (
-            current - old
-            if math.isfinite(current) and math.isfinite(old)
-            else math.nan
+            current - old if math.isfinite(current) and math.isfinite(old) else math.nan
         )
-        item[f"e174_{metric}"] = old
+        item[f"{baseline_prefix}_{metric}"] = old
         item[f"delta_{metric}"] = delta
-        item[f"improvement_{metric}"] = (
-            delta if direction == "higher" else -delta
-        )
-        paired[f"e174_{metric}"] = old
+        item[f"improvement_{metric}"] = delta if direction == "higher" else -delta
+        paired[f"{baseline_prefix}_{metric}"] = old
         paired[f"{current_prefix}_{metric}"] = current
         paired[f"delta_{metric}"] = delta
     return paired
@@ -607,11 +548,7 @@ def group_summary(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 (
                     field,
                     value,
-                    [
-                        row
-                        for row in metrics
-                        if str(row.get(field, "")) == value
-                    ],
+                    [row for row in metrics if str(row.get(field, "")) == value],
                 )
             )
     output = []
@@ -620,24 +557,16 @@ def group_summary(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "group_type": group_type,
             "group_value": group_value,
             "rows": len(rows),
-            "numeric_pass": sum(
-                bool(row["numeric_release_pass"]) for row in rows
-            ),
-            "gate_health_pass": sum(
-                bool(row["leg_gate_health_pass"]) for row in rows
-            ),
+            "numeric_pass": sum(bool(row["numeric_release_pass"]) for row in rows),
+            "gate_health_pass": sum(bool(row["leg_gate_health_pass"]) for row in rows),
             "fall_count": sum(bool(row["fall_flag"]) for row in rows),
         }
         for metric in PAIR_METRICS:
             values = [finite(row.get(metric)) for row in rows]
             values = [value for value in values if math.isfinite(value)]
             item[f"{metric}_n"] = len(values)
-            item[f"{metric}_mean"] = (
-                statistics.fmean(values) if values else math.nan
-            )
-            item[f"{metric}_median"] = (
-                statistics.median(values) if values else math.nan
-            )
+            item[f"{metric}_mean"] = statistics.fmean(values) if values else math.nan
+            item[f"{metric}_median"] = statistics.median(values) if values else math.nan
         output.append(item)
     return output
 
@@ -651,10 +580,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--experiment-id", default="E176")
     parser.add_argument("--expected-rows", type=int)
     parser.add_argument("--output-prefix")
+    parser.add_argument("--baseline-prefix", default="e174")
     parser.add_argument(
         "--video-dir",
         type=Path,
-        help="optional offline-render directory; <variant>.mp4 overrides a missing run video",
+        help=(
+            "optional offline-render directory; <variant>.mp4 overrides "
+            "a missing run video"
+        ),
     )
     parser.add_argument("--enable-tracking-gates", action="store_true")
     parser.add_argument("--root-pos-max-cm", type=float, default=20.0)
@@ -672,12 +605,17 @@ def main(argv: list[str] | None = None) -> int:
         else (6 if args.mode == "canary" else 39)
     )
     output_prefix = (args.output_prefix or args.experiment_id.lower()).strip()
-    if (
-        not output_prefix
-        or not output_prefix[0].isalpha()
-        or any(not (char.isalnum() or char == "_") for char in output_prefix)
+    baseline_prefix = args.baseline_prefix.strip()
+    for name, prefix in (
+        ("--output-prefix", output_prefix),
+        ("--baseline-prefix", baseline_prefix),
     ):
-        parser.error("--output-prefix must contain only letters, digits, and underscores")
+        if (
+            not prefix
+            or not prefix[0].isalpha()
+            or any(not (char.isalnum() or char == "_") for char in prefix)
+        ):
+            parser.error(f"{name} must contain only letters, digits, and underscores")
     manifest = repo_path(
         args.manifest
         or RESULT_ROOT
@@ -688,9 +626,7 @@ def main(argv: list[str] | None = None) -> int:
             else "lowgeom_full_manifest.tsv"
         )
     )
-    out_dir = repo_path(
-        args.out_dir or RESULT_ROOT / "eval" / args.mode
-    )
+    out_dir = repo_path(args.out_dir or RESULT_ROOT / "eval" / args.mode)
     video_dir = repo_path(args.video_dir) if args.video_dir else None
     tracking_thresholds = (
         {
@@ -706,9 +642,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     baseline_path = repo_path(args.baseline)
     manifest_rows = read_tsv(manifest)
-    baseline_rows = {
-        row["case_id"]: row for row in read_tsv(baseline_path)
-    }
+    baseline_rows = {row["case_id"]: row for row in read_tsv(baseline_path)}
     required = (
         "result_npz",
         "outdir_npz",
@@ -720,17 +654,11 @@ def main(argv: list[str] | None = None) -> int:
     ready: list[dict[str, str]] = []
     not_ready: list[dict[str, Any]] = []
     for row in manifest_rows:
-        missing = [
-            key
-            for key in required
-            if not repo_path(row.get(key, "")).is_file()
-        ]
+        missing = [key for key in required if not repo_path(row.get(key, "")).is_file()]
         if row.get("status") != "run_complete_pending_eval":
             missing.append(f"status:{row.get('status', '')}")
         if missing:
-            not_ready.append(
-                {**row, "not_ready_reasons": ",".join(missing)}
-            )
+            not_ready.append({**row, "not_ready_reasons": ",".join(missing)})
         else:
             ready.append(row)
 
@@ -740,9 +668,7 @@ def main(argv: list[str] | None = None) -> int:
     for index, row in enumerate(ready, 1):
         print(f"[{index}/{len(ready)}] {row['case_id']}", flush=True)
         try:
-            metrics.append(
-                evaluate_row(row, config, video_dir, tracking_thresholds)
-            )
+            metrics.append(evaluate_row(row, config, video_dir, tracking_thresholds))
         except Exception as exc:  # noqa: BLE001
             errors.append(
                 {
@@ -759,14 +685,21 @@ def main(argv: list[str] | None = None) -> int:
         if baseline is None:
             missing_baseline.append(item["case_id"])
         else:
-            paired.append(add_baseline(item, baseline, output_prefix))
+            paired.append(
+                add_baseline(
+                    item,
+                    baseline,
+                    output_prefix,
+                    baseline_prefix,
+                )
+            )
 
     transitions = Counter()
     for row in paired:
-        old = boolish(row["e174_numeric_release_pass"])
+        old = boolish(row[f"{baseline_prefix}_numeric_release_pass"])
         new = bool(row[f"{output_prefix}_numeric_release_pass"])
         transitions[
-            f"e174_{'pass' if old else 'fail'}_to_"
+            f"{baseline_prefix}_{'pass' if old else 'fail'}_to_"
             f"{output_prefix}_{'pass' if new else 'fail'}"
         ] += 1
     failures = Counter(
@@ -797,9 +730,7 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
     summary = {
-        "generated_at": datetime.now().astimezone().isoformat(
-            timespec="seconds"
-        ),
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "experiment_id": args.experiment_id,
         "mode": args.mode,
         "metric_standard_id": EVAL_METRIC_STANDARD_ID,
@@ -807,6 +738,7 @@ def main(argv: list[str] | None = None) -> int:
         "manifest": rel(manifest),
         "manifest_sha256": sha256(manifest),
         "baseline": rel(baseline_path),
+        "baseline_prefix": baseline_prefix,
         "baseline_sha256": sha256(baseline_path),
         "counts": {
             "expected_rows": expected_rows,
@@ -816,9 +748,7 @@ def main(argv: list[str] | None = None) -> int:
             "errors": len(errors),
             "paired_rows": len(paired),
             "missing_baseline": len(missing_baseline),
-            "numeric_pass": sum(
-                bool(row["numeric_release_pass"]) for row in metrics
-            ),
+            "numeric_pass": sum(bool(row["numeric_release_pass"]) for row in metrics),
             "gate_health_pass": sum(
                 bool(row["leg_gate_health_pass"]) for row in metrics
             ),
@@ -863,7 +793,10 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     write_tsv(out_dir / f"{output_prefix}_case_metrics.tsv", metrics, fields)
-    write_tsv(out_dir / f"{output_prefix}_vs_e174_paired_deltas.tsv", paired)
+    write_tsv(
+        out_dir / f"{output_prefix}_vs_{baseline_prefix}_paired_deltas.tsv",
+        paired,
+    )
     write_tsv(out_dir / f"{output_prefix}_group_summary.tsv", group_summary(metrics))
     write_tsv(out_dir / f"{output_prefix}_not_ready.tsv", not_ready)
     write_tsv(out_dir / f"{output_prefix}_evaluation_errors.tsv", errors)

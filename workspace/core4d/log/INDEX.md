@@ -1,7 +1,25 @@
 # 实验日志索引
 
-> 自动生成，共 252 个日志文件。
+> 自动生成，共 259 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 50 (E187-E187)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 256 | E187, e178, e0 | 2026-08-03 | E178 compatibility gate0 blocker results | [256_E187_e178_compatibility_gate0_blocke...](256_E187_e178_compatibility_gate0_blocker_results.md) |
+| 257 | E187, e0 | 2026-08-03 | Gate0 contract audit results | [257_E187_gate0_contract_audit_results.md](257_E187_gate0_contract_audit_results.md) |
+| 258 | E187, E178 | 2026-08-03 | Vs paired evaluation results | [258_E187_vs_E178_paired_evaluation_resul...](258_E187_vs_E178_paired_evaluation_results.md) |
+| 259 | E187, E178 | 2026-08-03 | Vs paired video review results | [259_E187_vs_E178_paired_video_review_res...](259_E187_vs_E178_paired_video_review_results.md) |
+| 260 | E187, E178 | 2026-08-03 | Vs manual review comparison results | [260_E187_vs_E178_manual_review_compariso...](260_E187_vs_E178_manual_review_comparison_results.md) |
+| 261 | E187 | 2026-08-03 | Manual USE partner RL export results | [261_E187_manual_use_partner_rl_export_results.md](261_E187_manual_use_partner_rl_export_results.md) |
+
+## Phase 49 (E186-E186)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 254 | E186 | 2026-08-02 | Authority grid sdf robust p results | [254_E186_authority_grid_sdf_robust_p_res...](254_E186_authority_grid_sdf_robust_p_results.md) |
+| 255 | E186 | 2026-08-02 | Production prg shadow blocker results | [255_E186_production_prg_shadow_blocker_r...](255_E186_production_prg_shadow_blocker_results.md) |
 
 ## Phase 48 (E185-E185)
 

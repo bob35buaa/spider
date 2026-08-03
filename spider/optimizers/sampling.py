@@ -21,8 +21,16 @@ import torch
 import torch.nn.functional as F
 
 from spider.config import Config
-from spider.query_tape import record_cem_query_chunk
 from spider.interp import interp
+from spider.query_tape import record_cem_query_chunk
+
+QUERY_TAPE_REWARD_TRACE_KEYS = (
+    "robot_object_penalty",
+    "leg_object_penalty",
+    "surface_band_rew",
+    "surface_band_gate",
+    "surface_band_decay_factor",
+)
 
 
 def _cem_any_gate_enabled(config: Config) -> bool:
@@ -82,9 +90,7 @@ def _compute_sample_smooth_info(
         penalty = penalty + float(config.cem_smooth_accel_weight) * accel_p95
 
     if pos.shape[0] >= 4:
-        jerk = (pos[3:] - 3.0 * pos[2:-1] + 3.0 * pos[1:-2] - pos[:-3]) / (
-            dt * dt * dt
-        )
+        jerk = (pos[3:] - 3.0 * pos[2:-1] + 3.0 * pos[1:-2] - pos[:-3]) / (dt * dt * dt)
         jerk_norm = jerk.norm(dim=-1).mean(dim=-1)
         jerk_p95 = torch.quantile(jerk_norm, 0.95, dim=0)
     else:
@@ -129,7 +135,9 @@ def _compute_sample_e167_z_info(
     )
     if template.ndim != 4:
         return None
-    penalty = torch.zeros(template.shape[1], device=template.device, dtype=template.dtype)
+    penalty = torch.zeros(
+        template.shape[1], device=template.device, dtype=template.dtype
+    )
     out: dict[str, torch.Tensor] = {}
 
     if body_active:
@@ -142,12 +150,15 @@ def _compute_sample_e167_z_info(
             out["sample_e167_body_z_err_p95"] = _sample_p95_over_time_body(z_err)
             out["sample_e167_body_z_err_peak"] = z_err.amax(dim=(0, 2))
             out["sample_e167_body_z_over_frac"] = (
-                z_err > float(config.e167_body_z_threshold_m)
-            ).to(z_err.dtype).mean(dim=(0, 2))
+                (z_err > float(config.e167_body_z_threshold_m))
+                .to(z_err.dtype)
+                .mean(dim=(0, 2))
+            )
             out["sample_e167_body_z_over_mean"] = over.mean(dim=(0, 2))
-            penalty = penalty + float(config.e167_body_z_weight) * out[
-                "sample_e167_body_z_err_mean"
-            ]
+            penalty = (
+                penalty
+                + float(config.e167_body_z_weight) * out["sample_e167_body_z_err_mean"]
+            )
 
     if ground_active:
         pos = info_combined["e167_ground_z_pos"]
@@ -174,7 +185,9 @@ def _compute_sample_foot_info(
 ) -> dict[str, torch.Tensor] | None:
     """Compute E166 foot-slip and foot-ground sample penalties."""
     slip_active = config.foot_slip_enabled and float(config.foot_slip_weight) > 0.0
-    ground_active = config.foot_ground_enabled and float(config.foot_ground_weight) > 0.0
+    ground_active = (
+        config.foot_ground_enabled and float(config.foot_ground_weight) > 0.0
+    )
     if (
         (not slip_active and not ground_active)
         or "foot_body_pos" not in info_combined
@@ -312,9 +325,7 @@ def _compute_sample_gate_info(
         # tolerate a few frames in [floor, min_sdf_m) while still rejecting any frame
         # below the absolute floor.
         floor = min_sdf_m if hard_floor_m != hard_floor_m else hard_floor_m
-        valid_mask = (min_sdf >= floor) & (
-            violation_pct <= max_violation_pct
-        )
+        valid_mask = (min_sdf >= floor) & (violation_pct <= max_violation_pct)
         gate_masks.append(valid_mask)
         sample_gate_min_sdf = (
             min_sdf
@@ -329,9 +340,7 @@ def _compute_sample_gate_info(
         sample_gate_violation_depth_mean = (
             violation_depth_mean
             if sample_gate_violation_depth_mean is None
-            else torch.maximum(
-                sample_gate_violation_depth_mean, violation_depth_mean
-            )
+            else torch.maximum(sample_gate_violation_depth_mean, violation_depth_mean)
         )
         out[f"{output_prefix}_min_sdf"] = min_sdf
         out[f"{output_prefix}_violation_pct"] = violation_pct
@@ -340,9 +349,7 @@ def _compute_sample_gate_info(
 
     if config.cem_safety_gate_enabled:
         source_prefix = (
-            "cem_body_gate"
-            if "cem_body_gate_min_sdf" in info_combined
-            else "cem_gate"
+            "cem_body_gate" if "cem_body_gate_min_sdf" in info_combined else "cem_gate"
         )
         add_gate(
             source_prefix,
@@ -440,9 +447,8 @@ def _compute_sample_gate_info(
             + float(config.cem_peak_margin_w_anchor) * anchor_violation
             + float(config.cem_peak_margin_w_posture) * posture_violation
         )
-        valid_mask = (
-            (ee_peak <= float(config.cem_peak_margin_ee_threshold_m))
-            & (anchor_peak <= float(config.cem_peak_margin_anchor_threshold_m))
+        valid_mask = (ee_peak <= float(config.cem_peak_margin_ee_threshold_m)) & (
+            anchor_peak <= float(config.cem_peak_margin_anchor_threshold_m)
         )
         gate_masks.append(valid_mask)
         min_margin = torch.minimum(ee_margin, anchor_margin)
@@ -502,6 +508,7 @@ def make_rollout_fn(
     load_env_params,
     copy_sample_state,
     get_qpos=None,
+    get_geometry_state=None,
 ):
     def rollout(
         config: Config,
@@ -537,6 +544,8 @@ def make_rollout_fn(
         cum_rew = torch.zeros(N, device=config.device)
         info_list = []
         query_qpos = None
+        query_geometry_qpos = None
+        query_geometry_state = None
         if config.query_tape_enabled:
             if get_qpos is None:
                 raise RuntimeError("query tape requires get_qpos rollout callback")
@@ -544,7 +553,15 @@ def make_rollout_fn(
                 (N, H, config.nq),
                 device=config.device,
             )
+            # MJWarp follows MuJoCo's split-step semantics: after a step,
+            # qpos has advanced while derived geom transforms still describe
+            # the state at the start of that step.  Object-distance reward
+            # terms consume those derived transforms, so preserve a separate
+            # pre-step qpos trace for exact offline geometry replay.
+            query_geometry_qpos = torch.zeros_like(query_qpos)
         for t in range(H):
+            if query_geometry_qpos is not None:
+                query_geometry_qpos[:, t] = get_qpos(config, env)
             # step the environment
             step_env(config, env, ctrls[:, t])  # (N, nu)
             # get reward
@@ -561,6 +578,25 @@ def make_rollout_fn(
             info_list.append(info)
             if query_qpos is not None:
                 query_qpos[:, t] = get_qpos(config, env)
+            if (
+                config.query_tape_enabled
+                and config.query_tape_record_geometry_state
+                and get_geometry_state is not None
+            ):
+                geometry_state = get_geometry_state(config, env)
+                if query_geometry_state is None:
+                    query_geometry_state = {
+                        key: torch.empty(
+                            (N, H, *value.shape[1:]),
+                            device=value.device,
+                            dtype=value.dtype,
+                        )
+                        for key, value in geometry_state.items()
+                    }
+                if set(geometry_state) != set(query_geometry_state):
+                    raise RuntimeError("query tape geometry state keys changed")
+                for key, value in geometry_state.items():
+                    query_geometry_state[key][:, t] = value
             # Resampling: replace bad samples with good samples periodically
             terminate = get_terminate(config, env, ref)
             if (
@@ -633,6 +669,18 @@ def make_rollout_fn(
             info.update(foot_info)
         if query_qpos is not None:
             info["_query_tape_qpos"] = query_qpos
+            info["_query_tape_geometry_qpos"] = query_geometry_qpos
+            if query_geometry_state is not None:
+                info.update(
+                    {
+                        f"_query_tape_geometry_{key}": value
+                        for key, value in query_geometry_state.items()
+                    }
+                )
+            for key in QUERY_TAPE_REWARD_TRACE_KEYS:
+                if key not in info_combined:
+                    raise RuntimeError(f"query tape reward trace missing: {key}")
+                info[f"_query_tape_trace_{key}"] = info_combined[key].transpose(0, 1)
         return ctrls, mean_rew, terminate, info
 
     return rollout
@@ -731,8 +779,8 @@ def _compute_weights_with_gate_impl(
 
     weights = torch.zeros_like(rews_clean)
     top_rews = rews_clean[top_indices]
-    top_rews_normalized = (
-        (top_rews - top_rews.mean()) / (top_rews.std(unbiased=False) + 1e-2)
+    top_rews_normalized = (top_rews - top_rews.mean()) / (
+        top_rews.std(unbiased=False) + 1e-2
     )
     top_weights = F.softmax(top_rews_normalized / temperature, dim=0)
     weights[top_indices] = top_weights
@@ -831,9 +879,8 @@ def make_optimize_once_fn(
                     else torch.maximum(combined_smooth_penalty, smooth_penalty)
                 )
             if (
-                (config.e167_body_z_enabled or config.e167_ground_z_enabled)
-                and "sample_e167_z_penalty" in rollout_info
-            ):
+                config.e167_body_z_enabled or config.e167_ground_z_enabled
+            ) and "sample_e167_z_penalty" in rollout_info:
                 e167_z_penalty = rollout_info["sample_e167_z_penalty"]
                 combined_e167_z_penalty = (
                     e167_z_penalty
@@ -841,9 +888,8 @@ def make_optimize_once_fn(
                     else torch.maximum(combined_e167_z_penalty, e167_z_penalty)
                 )
             if (
-                (config.foot_slip_enabled or config.foot_ground_enabled)
-                and "sample_foot_penalty" in rollout_info
-            ):
+                config.foot_slip_enabled or config.foot_ground_enabled
+            ) and "sample_foot_penalty" in rollout_info:
                 foot_penalty = rollout_info["sample_foot_penalty"]
                 combined_foot_penalty = (
                     foot_penalty
@@ -861,10 +907,7 @@ def make_optimize_once_fn(
         if combined_foot_penalty is not None:
             rollout_info["sample_foot_penalty"] = combined_foot_penalty
             rews = rews - combined_foot_penalty
-        if (
-            _cem_any_gate_enabled(config)
-            and combined_gate_valid_mask is not None
-        ):
+        if _cem_any_gate_enabled(config) and combined_gate_valid_mask is not None:
             rollout_info["sample_gate_valid_mask"] = combined_gate_valid_mask
             rollout_info["sample_gate_min_sdf"] = combined_gate_min_sdf
             rollout_info["sample_gate_violation_pct"] = combined_gate_violation_pct
@@ -879,8 +922,7 @@ def make_optimize_once_fn(
             sample_params.get("elite_fraction", 0.1) if sample_params else 0.1
         )
         gate_enabled = (
-            _cem_any_gate_enabled(config)
-            and "sample_gate_valid_mask" in rollout_info
+            _cem_any_gate_enabled(config) and "sample_gate_valid_mask" in rollout_info
         )
         selected_indices = None
         gate_fallback_used = False
@@ -896,8 +938,7 @@ def make_optimize_once_fn(
                 )
             if (
                 fallback_score is None
-                and
-                config.cem_posture_gate_enabled
+                and config.cem_posture_gate_enabled
                 and "sample_posture_violation" in rollout_info
             ):
                 fallback_score = rews - (
@@ -978,7 +1019,7 @@ def make_optimize_once_fn(
         # compute info
         info = {}
         for k, v in rollout_info.items():
-            if k not in ["trace", "trace_sample", "_query_tape_qpos"]:
+            if k not in ["trace", "trace_sample"] and not k.startswith("_query_tape_"):
                 if isinstance(v, torch.Tensor):
                     v = v.cpu().numpy()
                 if v.ndim == 1:
@@ -1058,17 +1099,15 @@ def make_optimize_once_fn(
                 info["cem_leg_gate_min_sdf_p05_m"] = torch.quantile(
                     leg_min_sdf, 0.05
                 ).item()
-                info["cem_leg_gate_violation_pct_mean"] = rollout_info[
-                    "sample_leg_gate_violation_pct"
-                ].mean().item()
+                info["cem_leg_gate_violation_pct_mean"] = (
+                    rollout_info["sample_leg_gate_violation_pct"].mean().item()
+                )
                 info["cem_leg_gate_selected_all_valid"] = float(
                     info["cem_leg_gate_selected_valid_frac"] == 1.0
                 )
             if "sample_posture_valid_mask" in rollout_info:
                 posture_mask = rollout_info["sample_posture_valid_mask"]
-                info["cem_posture_gate_valid_frac"] = (
-                    posture_mask.float().mean().item()
-                )
+                info["cem_posture_gate_valid_frac"] = posture_mask.float().mean().item()
                 info["cem_posture_gate_selected_valid_frac"] = (
                     posture_mask[selected_indices].float().mean().item()
                     if selected_indices is not None and selected_indices.numel() > 0
@@ -1077,9 +1116,7 @@ def make_optimize_once_fn(
                 info["cem_posture_gate_fallback_used"] = float(gate_fallback_used)
             if "sample_peak_margin_valid_mask" in rollout_info:
                 peak_mask = rollout_info["sample_peak_margin_valid_mask"]
-                info["cem_peak_margin_valid_frac"] = (
-                    peak_mask.float().mean().item()
-                )
+                info["cem_peak_margin_valid_frac"] = peak_mask.float().mean().item()
                 info["cem_peak_margin_selected_valid_frac"] = (
                     peak_mask[selected_indices].float().mean().item()
                     if selected_indices is not None and selected_indices.numel() > 0
@@ -1101,9 +1138,24 @@ def make_optimize_once_fn(
         if config.query_tape_enabled:
             payload = {
                 "qpos": rollout_info["_query_tape_qpos"],
+                "geometry_qpos": rollout_info["_query_tape_geometry_qpos"],
                 "rewards": rews,
                 "selected_indices": recorded_selected_indices,
             }
+            payload.update(
+                {
+                    key.removeprefix("_query_tape_"): value
+                    for key, value in rollout_info.items()
+                    if key.startswith("_query_tape_geometry_")
+                    and key != "_query_tape_geometry_qpos"
+                }
+            )
+            payload.update(
+                {
+                    f"reward_trace_{key}": rollout_info[f"_query_tape_trace_{key}"]
+                    for key in QUERY_TAPE_REWARD_TRACE_KEYS
+                }
+            )
             payload.update(
                 {
                     key: value

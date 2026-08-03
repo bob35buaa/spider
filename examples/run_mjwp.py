@@ -42,10 +42,12 @@ from spider.optimizers.sampling import (
     make_optimize_once_fn,
     make_rollout_fn,
 )
+from spider.query_tape import cem_query_tape_chunk_count
 from spider.postprocess.get_success_rate import compute_object_tracking_error
 from spider.simulators.mjwp import (
     compute_contact_point_delta,
     copy_sample_state,
+    get_geometry_state,
     get_partner_force_state,
     get_qpos,
     get_qvel,
@@ -487,11 +489,18 @@ def main(config: Config):
     # snap file is at source ref_dt; we re-interpolate to match qpos_ref length.
     if config.warmstart_qpos_path:
         from spider.interp import interp as _interp
+
         ws = np.load(config.warmstart_qpos_path)
-        qpos_snap_src = torch.from_numpy(ws["qpos_snap"]).to(qpos_ref.device).to(qpos_ref.dtype)
-        snap_mask_src = torch.from_numpy(ws["snap_mask"].astype(np.float32)).to(qpos_ref.device)
+        qpos_snap_src = (
+            torch.from_numpy(ws["qpos_snap"]).to(qpos_ref.device).to(qpos_ref.dtype)
+        )
+        snap_mask_src = torch.from_numpy(ws["snap_mask"].astype(np.float32)).to(
+            qpos_ref.device
+        )
         if config.ref_dt > config.sim_dt:
-            qpos_snap_i = _interp(qpos_snap_src.unsqueeze(0), config.ref_steps).squeeze(0)
+            qpos_snap_i = _interp(qpos_snap_src.unsqueeze(0), config.ref_steps).squeeze(
+                0
+            )
             # nearest-neighbor mask upsample by repeat (avoid spider.interp align_corners bug)
             snap_mask_i = snap_mask_src.repeat_interleave(config.ref_steps)
         else:
@@ -501,13 +510,18 @@ def main(config: Config):
         # pad with last frame to match qpos_ref length (matches load_data trailing repeat)
         n_pad = qpos_ref.shape[0] - qpos_snap_i.shape[0]
         if n_pad > 0:
-            qpos_snap_i = torch.cat([qpos_snap_i, qpos_snap_i[-1:].repeat(n_pad, 1)], dim=0)
-            snap_mask_i = torch.cat([snap_mask_i, torch.zeros(n_pad, device=snap_mask_i.device)], dim=0)
+            qpos_snap_i = torch.cat(
+                [qpos_snap_i, qpos_snap_i[-1:].repeat(n_pad, 1)], dim=0
+            )
+            snap_mask_i = torch.cat(
+                [snap_mask_i, torch.zeros(n_pad, device=snap_mask_i.device)], dim=0
+            )
         elif n_pad < 0:
             qpos_snap_i = qpos_snap_i[: qpos_ref.shape[0]]
             snap_mask_i = snap_mask_i[: qpos_ref.shape[0]]
-        assert qpos_snap_i.shape == qpos_ref.shape, \
+        assert qpos_snap_i.shape == qpos_ref.shape, (
             f"warmstart shape mismatch after interp: {qpos_snap_i.shape} vs {qpos_ref.shape}"
+        )
         snap_mask_b = snap_mask_i > 0.5
         qpos_ref = torch.where(snap_mask_b.unsqueeze(-1), qpos_snap_i, qpos_ref)
         if config.warmstart_update_ctrl_from_qpos:
@@ -535,10 +549,7 @@ def main(config: Config):
             f"[E058 warmstart] {config.warmstart_qpos_path}: replaced {n_replaced}/{qpos_ref.shape[0]} frames of qpos_ref"
         )
 
-    if (
-        config.contact_guidance
-        and ctrl_ref.shape[1] != config.nu
-    ):
+    if config.contact_guidance and ctrl_ref.shape[1] != config.nu:
         loguru.logger.info(
             "Preserving raw ctrl reference for contact guidance (ctrl dims: {} -> {}); "
             "scene_act conversion will pad object controls when applicable.",
@@ -663,9 +674,7 @@ def main(config: Config):
         "qvel_ref": (int(qvel_ref.shape[1]), int(config.nv)),
         "ctrl_ref": (int(ctrl_ref.shape[1]), int(config.nu)),
     }
-    bad_ref_dims = {
-        name: dims for name, dims in ref_dims.items() if dims[0] != dims[1]
-    }
+    bad_ref_dims = {name: dims for name, dims in ref_dims.items() if dims[0] != dims[1]}
     if bad_ref_dims:
         detail = ", ".join(
             f"{name}={got} expected {expected}"
@@ -873,9 +882,9 @@ def main(config: Config):
             return mask_np.astype(np.float32)
         if mask_np.shape[0] <= 0:
             raise ValueError("contact mask has zero frames")
-        idx = np.round(
-            np.linspace(0, mask_np.shape[0] - 1, target_len)
-        ).astype(np.int64)
+        idx = np.round(np.linspace(0, mask_np.shape[0] - 1, target_len)).astype(
+            np.int64
+        )
         return mask_np[idx].astype(np.float32)
 
     def _apply_mask_ramp(mask_np: np.ndarray, ramp_frames: int) -> np.ndarray:
@@ -905,7 +914,9 @@ def main(config: Config):
             return mask_np
         ramp_values = np.linspace(1.0, 0.0, ramp_len).astype(np.float32)
         # Ensure before ramp stays 1, after ramp stays 0
-        mask_np[:ramp_start] = np.where(mask_np[:ramp_start] > 0.5, 1.0, mask_np[:ramp_start])
+        mask_np[:ramp_start] = np.where(
+            mask_np[:ramp_start] > 0.5, 1.0, mask_np[:ramp_start]
+        )
         mask_np[ramp_start:ramp_end] = ramp_values[:, None]
         mask_np[ramp_end:] = 0.0
         return mask_np
@@ -915,14 +926,22 @@ def main(config: Config):
         obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
         if config.contact_hdmi_mask_source == "core4d_3cm":
             if not config.contact_hdmi_mask_path:
-                raise ValueError("contact_hdmi_mask_source=core4d_3cm requires contact_hdmi_mask_path")
+                raise ValueError(
+                    "contact_hdmi_mask_source=core4d_3cm requires contact_hdmi_mask_path"
+                )
             mask_data = np.load(config.contact_hdmi_mask_path, allow_pickle=True)
             target_len = qpos_ref.shape[0]
             axis = config.contact_hdmi_mask_time_axis
             if axis == "auto":
-                if "spider_contact_mask_3cm" in mask_data and mask_data["spider_contact_mask_3cm"].shape[0] == target_len:
+                if (
+                    "spider_contact_mask_3cm" in mask_data
+                    and mask_data["spider_contact_mask_3cm"].shape[0] == target_len
+                ):
                     axis = "spider"
-                elif "eval_contact_mask_3cm" in mask_data and mask_data["eval_contact_mask_3cm"].shape[0] == target_len:
+                elif (
+                    "eval_contact_mask_3cm" in mask_data
+                    and mask_data["eval_contact_mask_3cm"].shape[0] == target_len
+                ):
                     axis = "eval"
                 else:
                     # Prefer eval for MJWP because load_data normally upsamples 30Hz refs to 50Hz.
@@ -948,7 +967,9 @@ def main(config: Config):
                 union = per_eef_mask_np.max(axis=1, keepdims=True)
                 per_eef_mask_np = np.broadcast_to(union, per_eef_mask_np.shape).copy()
             if config.contact_hdmi_mask_ramp_frames > 0:
-                per_eef_mask_np = _apply_mask_ramp(per_eef_mask_np, config.contact_hdmi_mask_ramp_frames)
+                per_eef_mask_np = _apply_mask_ramp(
+                    per_eef_mask_np, config.contact_hdmi_mask_ramp_frames
+                )
             approach_mask_t = torch.tensor(per_eef_mask_np, device=config.device)
             active_pct = per_eef_mask_np.mean(axis=0) * 100
             loguru.logger.info(
@@ -1019,7 +1040,8 @@ def main(config: Config):
                         axis = "spider"
                     elif (
                         "eval_contact_target_object_local" in target_data
-                        and target_data["eval_contact_target_object_local"].shape[0] == T
+                        and target_data["eval_contact_target_object_local"].shape[0]
+                        == T
                     ):
                         axis = "eval"
                     else:
@@ -1280,6 +1302,7 @@ def main(config: Config):
             load_env_params,
             copy_sample_state,
             get_qpos,
+            get_geometry_state,
         )
         optimize_once = make_optimize_once_fn(rollout)
         optimize = make_optimize_fn(optimize_once)
@@ -1322,6 +1345,7 @@ def main(config: Config):
                 ref_slice = get_slice(
                     ref_data, sim_step + 1, sim_step + config.horizon_steps + 1
                 )
+                config._query_tape_current_sim_step = sim_step
                 ctrls_for_opt = ctrls
                 # E027d: always reset object actuator ctrl to ref qpos for contact_guidance
                 if contact_guidance_enabled and config.object_actuator_ids:
@@ -1569,6 +1593,18 @@ def main(config: Config):
                 info_list.append(
                     {k: v for k, v in infos.items() if k != "trace_sample"}
                 )
+
+                stop_after_chunks = int(config.query_tape_stop_after_chunks)
+                if stop_after_chunks < 0:
+                    raise ValueError(
+                        "query_tape_stop_after_chunks must be non-negative"
+                    )
+                if (
+                    config.query_tape_enabled
+                    and stop_after_chunks > 0
+                    and cem_query_tape_chunk_count(config) >= stop_after_chunks
+                ):
+                    break
 
                 if sim_step >= config.max_sim_steps:
                     break

@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E187 | 2026-08-03 | Phase 50 | 人工USE14全配对；Holosoma 28 motion通过pre-train gate | ✅ RL export 14/14；downstream 28/28 ready | [261](log/261_E187_manual_use_partner_rl_export_results.md) · [260](log/260_E187_vs_E178_manual_review_comparison_results.md) · [plan211](plan/211_E187_manual_use_partner_rl_export_plan.md) |
+| E186 | 2026-08-02 | Phase 49 | P/G安全通过；bucket003捕获域与007 reward fidelity阻塞Full | ⛔ S3 R FAIL；Full 0 | [254](log/254_E186_authority_grid_sdf_robust_p_results.md) · [255](log/255_E186_production_prg_shadow_blocker_results.md) · [plan](plan/204_E186_22case_object_specific_prg_full_plan.md) |
 | E185 | 2026-08-01 | Phase 48 | static-P 0.60 sensitivity：all-case 4→7，新增仍全属bucket004 | ✅ 540行离线重聚合；⛔ bucket003/007仍阻塞Full | [253](log/253_E185_static_p_gate060_sensitivity_results.md) · [plan](plan/203_E185_static_p_gate060_sensitivity_plan.md) |
 | E184 | 2026-08-01 | Phase 47 | static-P 0.65 sensitivity：all-case 3→4，仅bucket004 +1 | ✅ 540行离线重聚合；⛔ bucket003/007仍阻塞Full | [252](log/252_E184_static_p_gate065_sensitivity_results.md) · [plan](plan/202_E184_static_p_gate065_sensitivity_plan.md) |
 | E183 | 2026-08-01 | Phase 46 | Full27 static-P：bucket003/004/007可用候选0/3/0 | ✅ 540/540闭合；⛔ bucket003阻塞Full | [251](log/251_E183_full27_static_p_coverage_results.md) · [plan](plan/201_E183_full27_static_p_coverage_audit_plan.md) |

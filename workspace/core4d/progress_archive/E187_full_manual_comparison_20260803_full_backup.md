@@ -1,0 +1,602 @@
+# CORE4D 当前进度
+
+## 归档索引
+
+- [E186 production P/R/G 完整备份](progress_archive/E186_production_prg_20260802_full_backup.md)
+- [E182 v9 完整备份](progress_archive/E182_v9_20260801_full_backup.md)
+- [E180–E181 完整备份](progress_archive/E180_E181_20260731_full_backup.md)
+- 更早阶段见 `progress_archive/`。
+
+## 当前活跃实验：E187
+
+### 2026-08-03 Evaluation 阶段
+
+- 用户追加要求生成E178（左）vs E187（右）可视化对比视频，并注册到`workspace/core4d/scripts/eval/wrappers/review_player.sh`。
+- 已启用`video-frames`与`experiment-planning-zh`；复核现有E179 paired renderer采用统一960x540缩放、标签、hstack、H.264/yuv420p/shortest合同，可作为E187实现模板。
+- `review_player.sh`本身只是viser入口；实际实验注册位于`eval/review/review_index.py`/player索引合同。尚未修改代码或生成视频，下一步先完整读取index/player注册结构并写visual-review扩展计划。
+- 已完整确认注册方式：`review_index.DEFAULT_EXPS`控制`review_player.sh`默认索引，`--check`按summary核对indexed/numeric pass/playable；E187应注册为默认experiment而不是在shell中伪造路径。
+- 已创建计划[209_E187_vs_E178_paired_video_review_plan.md](plan/209_E187_vs_E178_paired_video_review_plan.md)，预注册V1–V6、22条四画面paired MP4、manifest/summary、播放器注册与canonical commands。
+- 输入preflight事实：E178/E187各22条均为H.264、1440×480、yuv420p、50fps；每对时长精确相等，范围2.36–8.04s。注册前`review_player.sh --check`现有E170–E178共165条全部无mismatch。
+- 已新增E187 paired renderer、direct-main tests与canonical `render_E187_vs_E178_paired.sh`；固定E178左/E187右、1920×540/50fps/H.264/yuv420p、case+transition标签、atomic output、SHA/probe manifest与summary。
+- 已把E187加入`review_index.DEFAULT_EXPS`，同步更新viser与`review_player.sh`范围注释。代码尚未format/lint/test/preflight，尚未生成paired MP4。
+- 首轮static在运行tests/preflight前fail-fast：新renderer仅有import排序与1处transition长行；review index/player暴露既有F401/E501/I001历史lint，不是本次注册逻辑错误。未生成视频。
+- 已缩短新renderer transition构造；下一步只对新增文件执行严格ruff，对历史review文件执行py_compile+headless index合同，避免为一行注册扩大无关格式diff。
+- Paired-video实现静态门已闭合：新增文件ruff format/E/F/I、review py_compile、两wrapper bash-n、direct-main2/2、canonical preflight与diff-check全部PASS。
+- `review_player.sh --check`注册验证PASS：E187=`22 indexed / 22 evaluated / 6 numeric pass / 22 playable`；默认总索引由165增至187且全部playable，无mismatch。
+- 目前paired output仍未生成；下一步运行22条CPU ffmpeg编码，完成后执行独立audit和关键帧抽查。
+- Canonical paired render已自然完成：22/22均`rendered`，随后的内置probe audit为22/22 PASS、failures=0；summary layout=`LEFT_E178_REF_SIM__RIGHT_E187_REF_SIM`，C9仍`FAIL/USER_WAIVED`。
+- 下一步运行独立`audit`确认幂等输出、统计文件大小/SHA，并从improved/regressed/stable三类paired MP4抽中帧检查左右标签和四画面可读性。
+- 独立canonical audit PASS：22 existing/22 audited、unexpected=0、failures=0；全部H.264/yuv420p/1920×540/50fps且时长与两侧输入一致。总视频约5.91MB；manifest SHA=`7edb73a0...cafc`、summary SHA=`aa16bd10...314`。
+- 已用`video-frames`抽查3类paired中帧：improved、regressed、stable-pass均明确显示左`E178 BASELINE`、右`E187 CONTINUATION`，中央分隔线、底部case/transition标签和四个ref/sim画面均可读；transition分别为F→P、P→F、P→P，方向无反转。
+- `review_player.sh --check`复核仍为E187 22/22 playable、默认总187/187 playable。下一步把paired manifest注册到E187人工review模板/工作簿可点击字段（如现有review合同需要），再更新log/tracker并做最终审计。
+- 已确认当前viser review player的注册合同是experiment case index而非浏览器内嵌MP4；E187已按该合同默认注册，paired MP4则由独立manifest提供逐条路径，无需伪造annotation或改写workbook。
+- 已新增结果log[259_E187_vs_E178_paired_video_review_results.md](log/259_E187_vs_E178_paired_video_review_results.md)，记录视频合同、播放器注册、实际观察、Claims和SHA；Tracker更新为`Eval+可视化完成`，numeric结论仍净-2。
+- 下一步重建log INDEX，并执行最终renderer/audit/player/artifact/git一致性检查。
+- `log/INDEX.md`已由canonical builder重建并收录259，总日志数258。
+- 最终审计全部PASS：新增renderer/tests ruff、review py_compile、两wrapper bash-n、direct-main2/2、read-only 22-row视频probe/SHA、review player E187 `22/22/6/0/22`注册合同与diff-check均通过。
+- Plan209 V1–V6全部闭合；paired视频22/22与review player默认注册完成，C9仍`FAIL/USER_WAIVED`，numeric结论仍E187 6/22 vs E178 8/22。
+
+- 用户要求进入 Evaluation，生成与 E178 对比的 `.xlsx`；已启用 `experiment-planning-zh` 与 `xlsx` 工作流。
+- 已确认 E178 提供冻结的 27-row Full evaluator结果与专业工作簿模板；E187 keep22 是其 `case_id` 精确子集，Evaluation 将严格做22行paired comparison。
+- 已确认 E178 tracking gates 为 root pos/orientation、hand pos/orientation、object pos `<=20`，object orientation `<=10`，并保留contact/release/penetration/lower-body/smoothness/jerk/foot-slip等公共指标。
+- 已创建计划 [208_E187_vs_E178_paired_evaluation_plan.md](plan/208_E187_vs_E178_paired_evaluation_plan.md)，预注册E1–E6 Claims、产物、canonical commands与禁止项。
+- C9语义继续冻结为technical `FAIL`、progression authority `USER_WAIVED`；Evaluation不得改写该治理事实。
+- 已定位公共实现 `eval_E176_lowgeom.py`、E178 adapter与Excel generator；E187 evaluator将直接调用公共实现，不做dynamic import。
+- 已确认E178 metrics含完整公共指标、12 gate结果与E174对照字段；E187 Full每个case都有独立immutable `manifest.json`，其中3条promoted canary需按manifest解析实际artifact位置，不能假设所有outdir都在row目录。
+- 已复核公共evaluator完整执行合同：required fields为result/outdir/config/scene/trajectory/contact，`require-all`只有22行全部评测且baseline无缺失才PASS；输出含case/group/not-ready/errors/snapshot/summary。
+- E187 22个row manifest全部`PASS`；19条`FULL_CEM`和3条`PROMOTED_CANARY`均显式给出result/config/video路径。抽检三object的NPZ均有457个字段，包含qpos与完整`cem_leg_gate_*`健康数组，可直接满足公共evaluator。
+- E187 `config_act.yaml:model_path`提供实际E186 CoACD compound scene；builder将读取并标准化为repo-relative `scene_act`，同时以row/queue authority SHA交叉校验。
+- 已实现向后兼容的公共evaluator `--baseline-prefix`：默认仍为`e174`，E187可显式生成`e187_vs_e178_paired_deltas.tsv`与`e178_*` baseline字段；尚待static/unit验证。
+- 已新增E187 evaluation manifest builder、2项authority tests、E187-vs-E178 adapter与canonical wrapper。Builder逐项校验22个row/result/config/video/scene/trajectory/contact SHA，并强制C9=`FAIL/USER_WAIVED`；尚未写正式manifest或运行评测。
+- 首轮static/preflight未进入代码验证：项目`.venv`没有ruff/pytest模块，且新wrapper的repo-root层级多退了一层到`/home/ubuntu/Workspace`。这是工具入口与路径问题，未写evaluation manifest/result。
+- 已确认system `ruff`可用；下一步修正wrapper到`../../../../..`，并沿用项目既有的测试入口（不重复调用缺失的`.venv pytest`）。
+- 已按E187既有wrapper约定改用`uv run python`，并把authority tests改为direct-main合同；repo root层级已修正。下一步重新运行ruff/bash/direct-main/preflight完整链。
+- 第二轮static已完成format；ruff默认全规则暴露公共历史文件缺docstring与import排序（非新科学错误），后续按项目既有E/F/I静态口径验证。
+- direct-main首次真正进入builder后发现`results/`为symlink，`Path.resolve()`把逻辑workspace路径展开到`/mnt/...`导致relative provenance失败；已改为保留逻辑路径，仅在远程absolute config路径上按marker重定位。未写正式manifest/result。
+- 修复后authority tests两次均2/2 PASS，canonical preflight PASS：22行=19 Full+3 promoted，所有SHA与C9 waiver合同闭合，且`written=false`未生成正式manifest。
+- E/F/I静态检查仅剩两处E501长行（公共help文本与E178 manifest常量），现已换行；下一步重跑静态门并审计diff，再生成正式manifest和执行22行CPU evaluation。
+- Evaluation实现静态门已闭合：ruff format、E/F/I、bash-n、direct-main2/2、canonical preflight与diff-check全部PASS。
+- canonical `run` session 36960已启动；正式22-row evaluation manifest已写出，19 Full+3 promoted及所有SHA闭合。公共MuJoCo evaluator正在逐case重算，未使用GPU、未修改CEM artifact。
+- evaluator已自然推进到至少2/22且无错误输出。
+- 已新增E187-vs-E178 Excel generator：预注册9个sheet（Overview、Paired Comparison、E187 Metrics、E178 Baseline、Object Summary、Gate Transitions、Best Improvements、Worst Regressions、Artifact Provenance），paired/delta/improvement/summary/ranking均用Excel公式；尚待lint、实际生成、LibreOffice重算与0-error验证。
+- 22-case公共evaluation已自然完成：evaluated=22、paired=22、not-ready=0、errors=0、missing-baseline=0，summary status=`pass`；E187 12门numeric pass=`6/22`，leg gate health=`0/22`。这只是评测结果，不改变Full artifact PASS或C9 waiver语义。
+- Excel generator的paired row-count断言已改为三项显式`==22` fail-closed检查；下一步读取summary/paired统计、完成lint并生成/重算工作簿。
+- Excel generator首轮lint在实际生成前fail-fast：仅1个import排序和2处长公式行，未创建workbook。已缩短公式构造；下一步用ruff safe-fix排序import后重跑，避免带静态错误生成交付物。
+- Excel generator的ruff format/E/F/I已全部PASS；工作簿已生成，9个sheet、22 paired rows，生成器写入2653个显式公式。
+- 量化摘要：E178→E187 numeric transition为F→F 11、P→F 5、F→P 3、P→P 3，净pass `8→6`；E187分object为bucket003 `0/5`、bucket004 `3/4`、bucket007 `3/13`。主要失败计数lower_body14、hand_ori11、root_pos7、hand_penetration6。
+- 已按`xlsx`技能运行LibreOffice `recalc.py`：status=success、total_errors=0、公式扫描3621，无`#REF/#DIV0/#VALUE/#NAME/#N/A`。下一步读取缓存值抽检公式、工作簿结构与关键metric方向，再做必要的视觉QC和结果log/tracker收口。
+- 工作簿缓存值抽检PASS：9个sheet维度合理、公式保留3621、Overview实算为E178 `8/22` vs E187 `6/22`、delta `-2`，paired sample的E178/E187/delta/improvement引用方向正确。
+- 按`video-frames`技能选择3类代表case：improved=`bucket004_20231002_021_p1`、regressed=`bucket003_20231018_001_p2`、stable pass=`bucket004_20231003_1_012_p2`，计划各抽E178/E187中帧。
+- 首次frame抽取未执行：skill脚本没有可执行位，直接调用报`Permission denied`，无jpg产出。下一步改用`bash frame.sh`调用同一脚本，不改变视频或权限。
+- 改用`bash frame.sh`后6张中帧均成功产出并可读（1440x480），覆盖3类代表case的E178/E187配对。
+- 视觉实际观察：improved case `bucket004_20231002_021_p1`两侧ref可读，E187 sim在2s处物体位置/人物手部姿态与E178明显不同但画面无崩坏；regressed `bucket003_20231018_001_p2`两侧均呈人体处于桶体内部/边缘的高风险构型，单帧可见足部接触高亮差异，与E187 lower_body+hand_ori失败方向一致；stable-pass `bucket004_20231003_1_012_p2`两侧站姿与物体相对位置总体相近，E187 sim仍保持直立。
+- 该视觉QC仅是中帧可读性/明显姿态spot-check，不取代12门数值结论；下一步把观察、完整统计、Claims与artifact SHA写入新log并更新INDEX/Tracker。
+- Pair means显示明确trade-off：contact-in-mask `+0.0581`、root pos改善`4.13cm`、hand pos改善`2.71cm`；但leg penetration恶化`+0.1519`、hand penetration恶化`+0.0435`、release false恶化`+0.0290`、foot slip恶化`+0.0925m`。
+- 12门核心原因已闭合：lower-body pass `19→8`（0改善/11回归）是净pass下降主因；同时contact `19→21`、root-pos `13→15`、hand-pos `12→17`、object-ori `20→22`改善。五个P→F里全部含lower_body，其中bucket003一条还含hand_ori。
+- Artifact SHA已计算：manifest `507c3a79...c6fc7`、metrics `77405ebd...cb06`、paired `0ae0b10f...5715`、summary `038d9778...6e8`、xlsx `92bf7431...8389`。
+- 已创建结果log [258_E187_vs_E178_paired_evaluation_results.md](log/258_E187_vs_E178_paired_evaluation_results.md)，记录执行合同、完整性、transition、gate/metric trade-off、Excel、视觉观察、Claims与所有SHA。
+- Tracker E187已更新为`Evaluation 22/22；paired净-2`，并明确`6/22`低于E178 `8/22`；C9仍`FAIL+豁免`。下一步重建log INDEX、做最终静态/公式/artifact/tracker一致性审计。
+- `log/INDEX.md`已由canonical builder重建并收录258，总日志数257。
+- 最终审计全部PASS：5个Python文件ruff format/E/F/I、bash-n、authority tests2/2、diff-check；summary精确22/22且baseline prefix=`e178`；workbook 9 sheets、3621 formulas、缓存公式错误0、Overview `8→6/-2`；最终xlsx SHA仍为`92bf7431...8389`。
+- Plan208的E1–E6均已闭合，E187 Evaluation阶段完成。科学结论为paired regression而非promotion；若继续需新开lower-body/foot-slip trade-off实验，不回调E187冻结artifact。
+
+### 2026-08-02 计划阶段
+
+- 用户批准新开R改进实验，要求先写详细计划；本轮只规划，不改实现、不启动GPU。
+- 已复读E178计划194–196与结果237–241、E186计划204与结果255。E186正式结论：P 22/22 CPU/MJWarp PASS、G false-safe=0；R因bucket003约50mm捕获域缺失和bucket007 5mm grid/hard-band排序失真而FAIL；Full启动数0。
+- E187继续冻结keep22与三个object-specific CoACD collider：P保持compound-convex，G保持`D_C-epsilon_grid`；不测试K4、不减少hulls、不在Full后丢case或重选C。
+- E178 Full27 authority SHA为`de9a3d165301318049da208aad52b1f5bc4d3ed671631f0097958734a0f022a8`；keep22上的E178冻结12门baseline为`8/22 PASS`。
+- E187主R预注册为双尺度continuation：`0.25*exp(-smooth_abs(d)/50mm)+0.75*exp(-smooth_abs(d)/15mm)`，`smooth_abs(d)=sqrt(d^2+1mm^2)-1mm`。旧hard band仅作诊断，不允许根据Full结果回选参数。
+- Grid按每object固定决策树`5→2.5→1.25mm`选择满足R/G/效率门的最粗分辨率；参数与grid在Full前冻结，Full结果禁止反向调参。
+- E178兼容性是Gate 0：新字段默认关闭、legacy reward/G/recorder no-op逐值回归、三代表replay、E178 scene/override/result SHA不变。Gate 0未过禁止E187 shadow/canary/Full。
+- 正式Full保持E178同case输入、`1024×32 seed0`；资源为local GPU0 + `spider-remote` Ada GPU0/1，允许与现有程序叠加但禁止kill/暂停/抢占，不使用A100。
+- 已创建详细计划：[205_E187_canonical_distance_continuation_reward_plan.md](plan/205_E187_canonical_distance_continuation_reward_plan.md)。
+- Tracker已新增E187 Phase 50行，状态为“计划完成；未实现/未启动”。本轮未创建实现代码、GPU artifact或结果log。
+
+### 下一步（需进入实现阶段后执行）
+
+1. 实现并验证E178 Gate 0；
+2. 实现continuation纯函数与离线exact-C/grid审计；
+3. 冻结每object生产grid和`reward_grid_lock.json`；
+4. 过22-case P/G regression；
+5. 三卡production canary过门后再跑keep22 Full；
+6. 与E178同22行做12门、连续指标、效率和3D/2D visual paired evaluation。
+
+### 本轮验证
+
+- plan共476行，必需章节与代码围栏完整；Tracker描述34字符，满足≤80字符规则。
+- progress原635行已逐行备份到`progress_archive/E186_production_prg_20260802_full_backup.md`，当前活跃文件缩为E187摘要；未删除历史结论。
+- 最终Markdown检查PASS：5个相对链接均存在、代码围栏平衡、E187 tracker行唯一、相关tracked文件`git diff --check`无错误；本轮未触碰既有E186代码改动，也未启动任何GPU任务。
+
+### 2026-08-02 实现阶段恢复
+
+- 已按 `experiment-planning-zh` 复读 tracker、E187 计划索引、最新日志索引、当前 progress 与远程并行执行规范；权威状态仍为 E187 未实现、未启动。
+- 本轮将严格按 Gate 0 → continuation exact-C/grid audit → reward grid lock → 22-case P/G regression → 三卡 canary → keep22 Full 的顺序推进；门禁未过不启动 Full。
+- Full 资源约束保持为本地 GPU0 一卡与 `spider-remote` Ada6000 GPU0/1 两卡，不使用 A100，不 kill/暂停/抢占已有进程。
+- 已完整复核 E187 的核心 stop/go contract：S0 必须先闭合 E178 authority/source isolation/legacy reward+G+recorder no-op/三代表 replay；S1–S2 必须在 Full 前冻结 continuation 公式与各 object 最粗合格 grid；S4 三卡 canary 的科学配置可在 lock SHA 完全一致时晋升为 Full 前三行。
+- E186 最新 formal 证据再次确认：bucket003 min hand SDF 约 45.8/48.6mm，旧 hard band 无 support；bucket007 5mm grid 的 total rho=0.802378、top-k overlap=0.578431、selected mismatch，而 G false-safe=0。因此本轮只改 R/D_C grid，不改 P、G、keep22 或 CoACD C。
+- 实现盘点：当前尚无 E187 代码/override/launcher/evaluator；worktree 中已有未提交的 E186 生产 grid-SDF、query-tape 与 compound P 实现及22个override，这是 E187 的直接基线，必须保留并在其上做隔离式增量改动。
+- 当前分支为 `experiment/E161-surface-release-ablation`（相对远端领先8），且 E186/E187计划与E186结果仍未提交；按照计划“Claims全过前不commit/push”，本轮继续使用未提交本地实现与 immutable snapshot 方案，不擅自清理或覆盖既有改动。
+- 已执行计划要求的 `gen_experiment.py --dry-run`：模板仍会把真实 remote/pull/eval 入口生成到旧根路径，和当前 canonical `launch/active`、`eval/wrappers` 规范不一致；因此只将 dry-run 作为骨架预览，不直接生成这4个旧布局文件，E187 canonical入口将按计划表手工落到规范目录。
+- E186 基线已提供 fail-closed `grid_sdf` backend、manifest/asset/error-bound校验、nominal `D_C` reward与 `D_C-epsilon_grid` gate分流；E187可只新增default-off continuation参数、纯score函数与显式opt-in分支，无需改动P/G实现。
+- reward实现定位完成：当前 `mjwp.py` 在surface reward块内定义局部 `surface_score_raw`，只支持 `one_sided`/`symmetric_abs`；配置默认仍为 `one_sided`，尚无集中式mode/参数校验。E187 S1应把三种score抽成可单测纯函数，并由runtime显式调用，continuation mode才读取新参数。
+- E186 grid runtime已明确区分 nominal reward距离与 conservative gate距离：`conservative=True`时仅减`epsilon_grid`。该结构符合E187“epsilon只进入G、不偏移R”，后续测试需锁死此不变量。
+- 发现S1的关键语义风险：当前两种legacy score计算后统一再乘`[surface_band_min_sdf_m, surface_band_width_m]`硬mask；若仅新增continuation指数而不绕开此mask，bucket003约48mm距离仍为零support。实现必须让`distance_continuation`使用全距离support，同时保证两个legacy mode继续逐值使用原hard-band mask。
+
+### 2026-08-02 S1 pure reward 实现 v1
+
+- 新增 `spider/rewards/surface_distance.py`：集中实现one-sided、symmetric-abs与opt-in distance-continuation score及support mask；continuation严格使用预注册`0.25/0.75/50/15/1mm`并绕开legacy hard band。
+- `Config`新增5个default-only continuation参数，历史默认mode仍为`one_sided`；启用surface reward时对mode、finite、权重和、正尺度/正delta做fail-closed校验。
+- `mjwp.py`已改为调用纯函数；legacy score表达式与hard-band mask保持原值，continuation使用nominal `D_C`全距离score，未改G与`epsilon_grid`路径。
+- 新增E187 direct-main测试5项并通过：default-off、legacy逐值exact、公式/对称/单调/finite/全support、bucket003 45.8–48.6mm score>0.05、非法参数fail-closed。
+- 首轮全文件ruff报告57个既有`config.py`/`mjwp.py`历史lint问题（缺docstring、旧变量命名等），不是本次新增测试失败；需改用新文件lint + diff检查，避免为E187顺手格式化大文件或扩大改动面。
+- 新文件定向ruff lint已PASS；format-check要求机械重排`surface_distance.py`与对应测试。由于命令使用fail-fast串联，后续diff/E186/E182回归尚未执行，下一操作先格式化再完整重跑，不把未执行项误记为PASS。
+- 已机械格式化2个新文件并完整重跑：E187 pure reward `5/5 PASS`、E186 production grid-SDF backend `PASS`、E182 query-tape `5/5 PASS`；新文件ruff lint/format及相关`git diff --check`全部PASS。S1实现单元级证据已建立，但S0 authority/replay与正式tape fidelity尚未完成，不能提前宣称Gate S0/S1通过。
+- S0复核确认E186 authority builder已验证E178 Full27 SHA、27行输入/scene SHA、`1024×32 seed0`、P evidence、keep/drop=`22/5`及三collider ordered parts；E187应引用并再验证该immutable authority，而不是重新选择case/C。E178 manifest当前SHA仍精确为`de9a3d...f022a8`且为header+27行。
+- 已锁定E186 authority artifact SHA：keep22=`35d028f3...eb535`、drop5=`baa2dc11...a604`、collider lock=`6a20df7c...6065`、protocol=`e74ca890...5795`；E187计划当前SHA=`9cc2fc9d...15fe`。E187 S0 builder将fail-closed验证这些上游SHA并生成自身protocol/keep22投影/E178全artifact SHA inventory。
+- E178 Full manifest逐行提供override/scene/input/result/outdir/config/video/log路径；override共27个均在git跟踪。S0 inventory可覆盖27行这些只读artifact及E178结果日志，作为后续source-isolation复核基线。
+
+### 2026-08-02 S0 authority 实现 v1
+
+- 新增E187 authority builder：fail-closed锁定E178 manifest、E186 keep22/drop5/collider/protocol与E187 plan SHA；验证keep22是E178 Full27按原顺序删除drop5的精确投影、三object计数与逐行input/scene/budget/seed一致。
+- builder拟生成immutable `protocol_manifest.json`、`keep22_protocol_manifest.tsv`及E178 authority SHA inventory；inventory覆盖27×10个row artifact（scene/input/override/result/config/video/log）与6个shared authority文件。
+- 新增canonical static compatibility wrapper，串联authority freeze/tests、E187 pure reward、E186 production grid backend与E182 query-tape回归，并显式输出replay仍PENDING，避免把static checks冒充完整Gate S0。
+- 尚未执行新builder；测试中的ordered-projection断言需先清理一处临时占位表达式，再格式化并运行。
+- 已修正projection/object-count/inventory唯一性断言并运行canonical wrapper：E187 authority `3/3 PASS`、pure reward `5/5 PASS`、E186 grid backend PASS、E182 query-tape `5/5 PASS`，输出`E187_E178_COMPAT_STATIC=PASS`且明确`E187_GATE_S0_REPLAY=PENDING`。
+- S0 immutable产物已生成：protocol SHA=`35233dac...a35b`、keep22投影SHA=`b1122a3a...4924`、E178 inventory 276行/SHA=`2a396baf...8237`。inventory行数精确为27×10+6；结果根通过workspace symlink解析到挂载盘，canonical引用仍保留`workspace/core4d/results/E187/...`。
+- GPU只读快照：本地RTX5090显存151/32607MiB、util 0%、无compute-app行，当前可用于same-device E178 replay；本地既有tmux仅记录、不操作。`spider-remote`在15秒窗口内未返回任何GPU/tmux输出（命令已保守结束且未误判为空闲），需继续诊断SSH，不能据此启动远程任务。
+- E178没有现成compat replay入口；其historical Full manifest提供每row原override、result/outdir/config/video/log，后续应由E187独立launcher调用同一override/`1024×32 seed0`写入`s0_environment/e178_compat/`，绝不复用历史输出路径。
+- 代表row已固定为计划指定的`bucket003_...003_p1`、`bucket004_...021_p1`、`bucket007_...055_p1`；三者历史config/result/video/log均存在。E178正式执行使用公共E176 `run_cem_queue.py`并显式`1024×32`，可为E187生成单行独立manifest复用同一runner，而不复制裸命令逻辑。
+- `run_mjwp.py`支持从historical `config_act.yaml`加载并以CLI覆盖输出路径，但最稳妥的兼容replay仍应使用原E178 override，让Hydra和当前Config默认字段路径同时受测；新config将自然多出5个default-only continuation keys，whitelist diff需只允许这些字段及device/output/video路径。
+- 复核E176 queue runner：它会调用底层正式CEM runner并验证root/outdir NPZ一致、resolved geom顺序、scene SHA与18×object-geom pair矩阵；对E178 legacy union replay适用。E187可生成3行独立compat manifest后复用该production runner，但E187自身评测结论仍需用公共`eval.core`接口，不能动态加载旧实验evaluator。
+- 底层E169 command builder固定`save_video=false`并支持独立outdir/result/log，但没有在命令行显式写`seed=0`（依赖override/default）。为Gate0 fail-closed与命令可审计，E187 compat runner应自行显式固化`num_samples=1024 max_num_iterations=32 seed=0`，并原子更新独立manifest；不直接把旧runner当作全部兼容证据。
+- 历史provenance确认：bucket007 `...055_p1` Full由本地RTX5090执行（13:30:14→13:45:13，约895s），可作为same-device golden；bucket003/004来自远程A100，适合作为cross-GPU semantic tolerance代表。三者历史config均显式`seed=0`、`1024×32`、`surface_band_score_mode=symmetric_abs`。
+- 预计本地先重放bucket007约15分钟；bucket003/004历史耗时更长，远程Ada当前SSH不通时不应误启动。compat launcher必须先做scene snapshot与GPU/process snapshot，并写独立E187 root。
+- scene snapshot入口审计发现现有脚本只复制固定`scene.xml/scene_act.xml`，不会复制本轮实际使用的`scene_act_E178_contactAlignedTop.xml`（也不会复制后续E186 compound variant），违反“快照实际scene”的复现要求。启动任何compat physics前需先把snapshot脚本修为收集case目录下全部`scene*.xml`并保留manifest SHA。
+- 已修复canonical snapshot脚本：每个case fail-closed要求至少一个scene XML，并复制全部`scene*.xml`（含带实验variant的实际scene）及可选metadata/task_info；仍逐文件记录size/SHA，不删除已有快照。尚未执行E187快照或GPU replay。
+- 已执行E187三代表scene snapshot：三个实际`scene_act_E178_contactAlignedTop.xml` SHA分别为bucket003 `31e2d122...fa44`、bucket004 `540d1177...ff4a`、bucket007 `2997e4a4...f6b5`，与E178 authority逐值一致；manifest同时记录各case全部scene variants与metadata。snapshot/diff-check PASS，仍未启动GPU replay。
+- 已新增compat manifest builder、显式legacy replay runner、2项static tests与local launcher：命令冻结原E178 override/task、`1024×32 seed0`、recorder默认off，输出全部重定向到E187；launcher前后被动保存GPU/process快照并调用scene snapshot，不操作既有进程。
+- 尚未执行新runner测试；临时目录测试会覆盖root不在repo时的路径序列化边界，需先把builder的输出路径显示逻辑改为“repo内相对、repo外绝对”，再格式化/测试/dry-run，不能直接启动GPU。
+- 已修复repo内相对/临时root绝对路径序列化并完成机械format；定向ruff仅剩`run_e178_compat_replay.py` import排序1项，fail-fast导致本轮测试/static wrapper/command dry-run均尚未执行。下一步只做机械import排序后重跑完整链，不误报测试结果。
+- 已机械修复import排序并完整通过：E187 compat replay tests `2/2`、authority `3/3`、pure reward `5/5`、E186 grid backend、E182 query-tape `5/5`、新文件ruff/format/diff-check全部PASS；static wrapper仍诚实输出Gate S0 replay PENDING。
+- bucket007 dry-run命令已核对：原E178 override/task、`1024×32 seed0`、`save_video=false`，outdir/result/log均指向E187 compat root，无distance-continuation或query-tape显式开启。满足本地same-device replay启动前静态门。
+- 17:38:23 已在本地RTX5090启动bucket007 same-device E178 compat replay，tmux=`e187_s0_compat_local`；启动前GPU 151/32607MiB、util 0%，manifest状态已原子写为`running`，命令日志与独立E187路径正确。首次2秒快照尚未出现compute-app（进程处于初始化窗口），需继续监控，不误报GPU运行或完成。
+- 后续监控确认实际运行：PID 1517932 `.venv/bin/python`、显存约1878MiB（整卡2037MiB）、util 46%；runtime已保存新config并进入正式opt_steps=32，当前sim step 14/166，无报错/NaN/OOM。该证据仅证明正在运行，Gate S0仍PENDING。
+- 评测结构审计：现有E178 adapter只是动态导入E176 evaluator，不符合E187“新评测直接import `eval.core.core_metrics`”规则；E187 compat evaluator必须直接调用`evaluate_sequence/EvalConfig`并自行实现已冻结12门聚合与config whitelist，不能复用该adapter作为新证据。
+- 已复核12门authority实现：公共core负责physics/tracking/contact指标；实验adapter另计算fixed-reference `body_z_err_p95_m`与release-window适用性，再应用冻结阈值fall、body_z≤0.20、in-mask contact≥0.50、release≤0.30、3mm hand penetration≤0.30、lower-body≤0.10及tracking 20/20/20/20/20/10。E187将复制这些明确阈值逻辑但直接import公共core，不import旧evaluator。
+- bucket007运行中config whitelist实测：old/new key数406/423，新增精确17个default-only E182/E186/E187字段（7个query-tape、5个object-distance、5个continuation）；已有字段仅`output_dir`与`video_output_path`变化。`cem_safety_gate_hard_floor_m`两侧均NaN，普通`!=`会假报变化，verifier需做NaN-equal规范化。
+- 17:~40运行进度约30/166，plan-time约11.1s，仍无异常；不能用已落盘config替代最终trajectory/replay evidence。
+- historical bucket007 NPZ schema已审计：包含83个outer records的qpos/qvel/ctrl、32-step reward统计、body/hand/leg/posture valid/fallback与完整reward component统计，但不直接保存selected index。same-device golden将对所有同shape公共numeric/boolean arrays逐值比较（阈值1e-5、bool exact），qpos/ctrl闭合可间接证明最终选择；selected-index缺失必须在Gate0结论中明确记录为现有artifact证据边界，不能伪称直接验证。
+- 已新增E187 direct-core compat evaluator草案：直接import`eval.core.core_metrics`，实现12门、config whitelist、所有公共NPZ数组exact diff与8项semantic tolerance；输出显式记录historical NPZ无selected-index的证据边界。另新增2项eval unit tests与canonical结果wrapper，尚未格式化/执行。
+- 单测当前用`importlib`载入本实验evaluator，虽未加载“其他实验”，仍应改成普通module import以彻底遵守no-importlib评测规范，再运行ruff/tests；GPU replay继续独立运行。
+- 已改为普通module import并机械format；定向ruff仅报`values_equal`嵌套if的SIM102一项，fail-fast使eval unit tests与partial evaluator尚未运行。下一步合并该条件后完整重跑，不将format通过等同功能通过。
+- 已修复SIM102并通过direct-core evaluator lint/format/diff-check与unit tests `2/2`（12门inclusive boundary、live config whitelist）。partial evaluator正确返回evaluated=0/not_ready=3/status=`INCOMPLETE_OR_FAIL`，证明不会把运行中或缺失row误判PASS；该非零未完成状态是预期证据，不是科学失败。
+- 17:~45 compat replay进度78/166，plan-time 11.68s，整卡显存2119MiB/util58%，无Traceback/OOM；其余bucket003/004保持not_run。继续运行中，不操作现有进程。
+- 远程SSH诊断已澄清：`spider-remote`解析为xiayb@10.100.71.70:58122，TCP端口可达，ed25519公钥认证与远程`true`均在0.2s内成功。此前“无GPU输出”不是SSH authority缺失，下一步应分别限时查询nvidia-smi/tmux定位是命令延迟还是输出问题；仍未启动远程任务。
+- 分离查询成功：Ada GPU0/1分别836/19MiB、util17/0%，compute-app列表为空；远程已有多个R0186/xyb tmux会话但不操作。两卡满足“允许叠加、只被动记录”条件，可用于bucket003/004 compat replay；启动前仍需制作E187未提交代码的immutable source snapshot并验证SHA，不能在远程现有worktree merge/reset/checkout。
+- 远程部署参考已复核：E182已有`deploy_remote_snapshot.py`按source SHA派生独立run root、rsync不使用delete、远端逐文件验SHA；E187应复用这一模式而非直接覆盖`/home/xiayb/pHRI_workspace/spider`。compat只需两row输入/override依赖、当前source与独立execution manifest，远端python可复用已安装venv。
+- 17:48 接管复核：未重复启动bucket007；tmux=`e187_s0_compat_local`及PID 1517932仍存活，manifest仍为`running`，进度已到116/166，RTX5090约2119/32607MiB、util60%，日志无Traceback/OOM。旧partial eval仍是evaluated=0/not_ready=3的预期运行中状态，不能据此宣称Gate S0失败或通过。
+- 已完整重读`experiment-planning-zh/remote-execution.md`并复核E182 immutable deploy模式：E187必须使用SHA派生独立Ada root、无`rsync --delete`、逐文件远端校验、启动前再次核验GPU0/1均为RTX 6000 Ada且保留process snapshot；不能修改共享checkout或既有tmux。
+- 远程实现前发现一处authority边界：现有compat builder把三row均冻结为`assigned_gpu=local-0/compat_device=local_rtx5090`，这与计划的bucket003→Ada0、bucket004→Ada1、bucket007→本地5090不一致；远程启动前必须将设备分配纳入三row静态authority并用显式迁移/测试处理既有生成物，不能仅在运行时悄悄篡改frozen scientific fields。
+- 17:50 bucket007继续健康推进到132/166，PID/manifest仍为running且无异常；active goal已复核仍为`active`，不会在S0完成前误标complete。计划Gate0本身只要求至少一条same-device与跨GPU语义门，三条compat的具体安全分配采用003→Ada0、004→Ada1、007→本地5090；S4 canary的003本地/004 Ada0/007 Ada1是后续新方法阶段，不能与S0 legacy replay分配混写。
+- 17:53 bucket007已到154/166，仍无异常，预计即将完成；在其退出前不迁移共享local manifest，避免旧runner收尾写回覆盖新字段。
+- 远程可移植性审计新增两项必须修复：①`display_path(resolve())`穿过本地results symlink，把输出写成`/mnt/...`绝对路径；②当前evaluator错误地对跨GPU row也强制所有NPZ数组`≤1e-5` exact，而计划只要求本地same-device exact、Ada row用8项semantic tolerance。还需让远程双worker以加锁的read-modify-write更新独立execution manifest，避免并发lost update。
+- 17:53:14 bucket007 CEM主体完成166/166，总时长887.45s，已保存finite trajectory NPZ，final object tracking pos/quat=`0.1441/0.1078`；外层runner尚在copy/validation收尾且manifest仍running，继续等待其原子落为`run_complete_pending_eval`后再评测或迁移。
+- 17:53:16 外层runner成功收口：bucket007状态=`run_complete_pending_eval`，根/outdir NPZ各约5.7MiB且config存在；local tmux/process已自然退出，未做kill。
+- **Gate S0本地golden首次实测未通过，远程启动暂停**：partial evaluator evaluated=1/not_ready=2/errors=0；bucket007 config whitelist PASS、历史/当前12门均FAIL所以decision match PASS，但same-device exact FAIL（456个共同数组中大量qpos/ctrl/reward/gate数组超1e-5或bool不一致），8项semantic tolerance FAIL，compat_row FAIL。该结果是科学兼容性失败而非“partial未齐”状态；下一步先量化差异并审计环境/seed/legacy路径，不能直接扩跑Ada或进入E187 reward阶段。
+- 差异量化：最终qpos max abs=0.2374、ctrl=0.3480、qvel=9.2523；CEM gate valid fraction最大差0.8857，reward mean最大差2.0194。8项semantic中root/object position通过，但EEF position差0.614cm、root/EEF/object orientation差2.812/2.681/0.804deg、contact差0.0290、3mm penetration差0.0361，均超预注册门。当前/历史都是Warp1.12.1、RTX5090、同override、1024×32、seed0、torch-compile off；总时887.4s vs 894.9s，环境表面一致。
+- 轨迹在前6个非CEM warmup record基本bit-close，首次正式CEM后开始放大，指向sampling/reward/G选择路径而非scene初态或纯physics加载。当前工作树相对HEAD在`run_mjwp.py/config.py/sampling.py/mjwp.py`有大量E182/E186/E187 default-off改动；下一步对照E178完成时commit `64f9a33`与当前逐一排除默认关闭分支的隐藏side effect，特别审计RNG消费与gate选择。
+- whitespace-insensitive提交审计：E178收口commit `64f9a33`→当前HEAD对核心runtime仅有E182 query-tape default-off接线（sampling约48行、config 5字段、run入口1行）与E179的18行MJWP辅助逻辑；工作树再叠加E186 grid backend/E187 reward。静态阅读暂未发现recorder-off路径消费RNG，但仅凭代码形状不能证明bitwise no-op。
+- 已确认可用`max_sim_steps=16`在第一个正式CEM commit后立即停止，单次约12秒；本地GPU0当前151MiB/util0%、无compute-app。下一步固化current-vs-`64f9a33`短程bisect入口，在相同seed/override上比较首次CEM qpos/ctrl/gate/reward，从而用低成本定位“历史源码本身不可复现”还是后续代码回归。
+- 已新增短程bisect canonical launcher与逐数组JSON比较器：从git archive读取`64f9a33`，不checkout/reset当前脏worktree；old/current各跑到`max_sim_steps=16`且输出隔离，比较old-vs-current及二者vs历史Full prefix。比较器synthetic smoke PASS、shell syntax/diff-check链已执行。
+- 遇到工具错误：本环境没有`.venv/bin/ruff`，前一验证链又未设fail-fast，故ruff两项实际**未执行**，不能误报PASS；synthetic smoke仍独立PASS。下一步改用仓库惯用`uv run ruff`并以`set -euo pipefail`重跑完整静态链，通过后才启动短GPU诊断。
+- fail-fast重跑先发现compare脚本需要机械format（lint已过但format-check FAIL）；已用`uv run ruff format`机械修正并再次完整验证：ruff lint/format、bash syntax、diff-check、synthetic prefix/equality smoke全部PASS。短程GPU bisect现在满足启动前静态门。
+- 短程bisect v1完成（两条均自然退出）：`64f9a33`旧源码 vs 当前源码首个CEM prefix并非exact，qpos/ctrl/qvel/rew max abs=`2.91e-4/1.588e-3/1.033e-2/1.007e-3`，gate-valid差`0.00293`；但旧源码短跑 vs 2026-07-24历史Full前缀同样失败且差更大（qpos `1.365e-3`、ctrl `6.91e-3`），因此现有证据不能把分叉单归因新代码，必须测same-source A/B运行间非确定性。
+- v1还暴露schema回归：当前短NPZ比旧源码新增`cem_selected_index0`（即使query-tape off）；历史artifact没有该array。该字段可能只改变记录schema、不影响控制，但与Gate0 recorder-off“无tape artifact/no-op”边界不一致，需查明并改成仅recorder-on记录，或在authority中明确为何它不是tape artifact；不能忽略。
+- `cem_selected_index0`确认由E182 commit `1967afb`无条件写入普通info；query-tape真正的chunk写入仍受`query_tape_enabled`保护。它在gate-enabled案例只读取既有selected tensor并`.item()`，科学控制影响尚未证明，但确实改变recorder-off NPZ schema；后续需把普通info记录与tape payload解耦并补off-schema回归。
+- v1分叉结构：old/current在record0–5物理warmup至多约1e-8，record6第一次CEM后qpos差4.0e-7/ctrl 2.1e-6，record7第二次CEM后放大到qpos2.91e-4/ctrl1.59e-3；历史Full vs旧源码也从record6起分叉。需要current-source A/B重复测量同样的放大曲线，才能估计MJWarp run-to-run底噪并判断query-tape `.item()`是否超出底噪。
+- 已扩展比较器支持generic left/right并新增same-current-source repeat launcher（A/B均`max_sim_steps=16`、同seed0/1024×32、隔离输出）；ruff lint/format、bash syntax、diff-check与synthetic compare全部PASS，满足repeat诊断启动门。
+- same-current-source A/B短跑确认运行间非确定性：457个共同数组中qpos/ctrl/qvel/rew max abs=`5.03e-4/3.087e-3/1.876e-2/1.208e-3`，gate-valid差`0.00977`且`cem_selected_index0`不同；该底噪大于old/current源码差的多项幅度，说明v1源码差不能归因E182/E186/E187回归。
+- seed链已确认真实执行：`process_config`在setup_env前调用NumPy/Torch/CUDA/Python seed0；Torch deterministic algorithms未开启，Warp1.12.1为release mode且无显式deterministic flag，MJWarp GPU并行physics仍可能非确定。另发现E178留有bucket007 canary/benchmark重复artifact；下一步先核对canary是否同设备同`1024×32`全长，若是可直接量化历史当日same-source Full间漂移，无需再花15分钟重跑旧源码Full。
+- 历史重复artifact不能替代formal same-device golden：E178 canary是远程A100 `64×4`，本地speed probes分别是RTX5090 `64×4`与`1024×2`；只有正式E178 Full是本地5090 `1024×32`。这些结果仍支持“不同CEM budget输出自然不同”，但不能直接量化同budget重复漂移。
+- 当前证据已足以判定预注册Gate S0未通过：formal current replay相对历史Full exact与semantic均FAIL；old/current短源码分叉被same-current A/B底噪覆盖，故不能声称明确legacy实现回归，也不能据此放宽或改写预注册门。按计划应暂停Ada两条replay与后续S1–S5 GPU阶段，先形成Gate S0负结果日志/Claims审计；若后续要研究MJWarp deterministic replay，应新开独立方法学实验而非在E187内现场改门。
+- E187 tracker当前仍是“计划完成；未实现/未启动”，需更新为S0 compatibility FAIL并链接新log 256；最近结果log为255，故本轮负结果使用`256_E187_e178_compatibility_gate0_blocker_results.md`。运行`build_log_index.py --help`时发现该脚本不解析help而是直接重建INDEX（254 files/42786 bytes）；这是一次无害索引再生成，但已记录，后续新增log后应再正式重建一次。
+- 最终static/isolation recheck全PASS：authority3/3、reward5/5、compat runner2/2、E186 grid backend、E182 query-tape5/5；E178 manifest SHA仍`de9a3d...f022a8`，没有本地/远程E187 tmux或worker。static wrapper末尾`REPLAY=PENDING`只是其固定的“本入口不评动态结果”提示；动态evaluator已单独给出formal FAIL，不能被static文字覆盖。
+- formal量化固定：456个共同numeric/bool arrays中236项超门；semantic仅root/object position 2/8通过，其余EEF pos、三orientation、contact、penetration 6/8失败。证据SHA已冻结：formal NPZ=`055cf5...6999`、eval summary=`c9b42d...38d`、bisect=`a533c5...8102`、repeat=`b2797a...4fcd`。负结果log写入前还需按实验技能完成一次可视化实际观察或明确阶段豁免。
+- 已按`video-frames`技能确定离线可视化路径：使用`workspace/hdmi_reproduce/scripts/render_trajectory_video.py`将kinematic与E187 physics并排渲染；历史E178 MP4为1440×480、166帧、50fps/3.32s。下一步生成E187对照MP4并在两视频的首/中/末固定时刻抽帧实际检查；该观察只补质量证据，不改变S0数值FAIL。
+- renderer输入闭合：bucket007 kinematic qpos为`(83,43)`、E187 physics flatten后`(83,42)`，脚本可按scene_act的42-DOF model转换并排渲染；将用25fps生成83帧/约3.32s视频，与历史166帧/50fps时间长度对齐。
+- 已新增可复用visual wrapper，固化E187离线render、E178/E187在0.20/1.66/3.10s抽帧、ffprobe与SHA；首次fail-fast执行调用异常地返回空输出，尚未确认脚本是否实际生成产物，不能误报visual完成。下一步只读检查文件与wrapper退出状态，若失败记录具体原因后修复。
+- visual首次失败根因已定位：技能自带`frame.sh`存在但未设置executable bit，wrapper用`test -x`在任何render前退出1；不是MuJoCo/ffmpeg问题。已改为`test -f`，实际调用本来就是`bash "$FRAME_SCRIPT"`，不需要改变skill文件权限。下一步重跑visual wrapper。
+- visual wrapper重跑PASS：E187 kin-vs-phys MP4为1440×480、83帧、25fps/3.32s，SHA=`784152...c07d4`；历史E178为1440×480、166帧、50fps/3.32s，首/中/末六帧及SHA已保存。renderer对43-DOF kin输入截断到42并警告，因此左半kin仅作上下文，不能用于量化。
+- 实际观察（重点右半physics）：0.20s两版均保持桶直立、机器人站在桶侧，初态大体一致；1.66s均已绕至桶前/侧，但E178与E187躯干朝向、手臂与跨步姿态已有肉眼差别；3.10s差异显著，E178机器人俯身/跨靠桶体且主体仍居中，E187桶明显倾斜、机器人/肢体大幅移出固定视野。静帧因遮挡不足以单独判定穿透，但明确支持轨迹非等价，与exact/semantic FAIL一致；两版动作质量都不能仅凭此宣称可用。
+- E187负结果已正式收口到`log/256_E187_e178_compatibility_gate0_blocker_results.md`：C0 PASS、C1 FAIL、C2仅pure-function PARTIAL、C3–C12 NOT STARTED、C13 isolation PASS；明确Ada/A100/Full启动数均0，禁止根据失败结果改门/调R/grid/C。
+- tracker已从“未实现/未启动”更新为`Gate S0 FAIL；Ada/Full 0`并链接log256；description 39字符满足≤80规则。log INDEX正式重建为255个log/43071 bytes，diff-check、路径存在性与closure验证全部PASS。Claims未通过，按计划不commit/push；thread goal继续保持active，等待用户是否授权新开determinism方法学实验。
+
+### 2026-08-02 E187 Gate S0 合同审计接管
+
+- 已重新完整读取`experiment-planning-zh`技能并开始只读恢复；tracker/progress尾部确认E187仍为`Gate S0 FAIL；Ada/Full 0`，没有恢复Ada或Full的授权。
+- 首次合并读取计划、log256、progress与direct-core evaluator时工具输出被截断；已看到evaluator当前无条件把`exact && semantic`同时纳入每个row的`compat_row_pass`，但在逐文件完整读取前不作最终合同判断。
+- 下一步仅审计E187预注册S0原文、log256既有结论、manifest证据字段和evaluator/tests实现；不会修改log256，不会启动远程replay、canary或Full。
+- 已逐字完整重读E187 plan 205与不可变log256。预注册S0把same-device golden限定为“关键query qpos/reward max abs≤1e-5，valid/selected一致”，并把semantic tolerance限定为跨GPU代表replay；并未要求本地row的全部公共NPZ数组exact，也未要求本地row同时通过cross-GPU semantic门。
+- log256中的formal数值、可视化与STOP事实仍有效，但其`compat row FAIL`来自当前evaluator更强的实现合同：本地5090 row同时接受all-common-array exact与semantic判定。该实现偏差不能直接改判PASS；历史NPZ无direct selected-index，且“关键query”是否落盘仍需逐字段审计。
+- evaluator完整审计确认：`npz_exact_diff`比较所有共同同shape numeric/bool arrays；`evaluate_row`对每一row无条件计算exact与8项semantic，并以`config && exact && decision && semantic`作为compat。代码没有按设备或历史运行硬件分流，因此确实把计划中的两类硬门错误合并。
+- evaluator单测仅覆盖12门边界和live config whitelist，不覆盖local-vs-cross-GPU路由、关键query字段选择、selected/valid缺失时fail-closed或三row设备authority。现execution manifest又把003/004/007全部写成`assigned_gpu=local-0`、`compat_device=local_rtx5090`，且输出路径已解析为本地`/mnt/...`；该manifest不能作为Ada部署authority。
+- 冻结NPZ schema审计：E178 historical root/outdir各456字段，E187 replay各457字段；唯一新增关键schema为`cem_selected_index0(83,32)`。历史文件没有任何`query*`或selected-index数组，因此无法直接执行预注册的query-qpos与selected-index逐值比较。
+- 历史NPZ有最终轨迹`qpos/qvel/ctrl`、reward/dist统计和valid-mask的`max/min/median/mean`聚合，也有gate valid/fallback/selected-valid fraction；这些不是完整CEM query qpos、逐样本valid mask或selected index。当前all-array exact是保守诊断，却不是原文指定证据的等价替代。
+- runtime代码确认完整query qpos/rewards/selected_indices/valid mask只在`query_tape_enabled`时写入独立tape；recorder-off普通NPZ则由E182后无条件新增`cem_selected_index0`。历史E178在该功能前生成，故缺少可作paired golden的query tape与selected字段。
+- `spider/query_tape.py`与sampling payload复核进一步确认正式tape字段为`qpos`、`rewards`、`selected_indices`及`sample_*`逐样本tensor；ordinary trajectory NPZ只保留统计量。E178 commit `64f9a33`在optimizer info阶段尚不写selected index，也无query-tape payload，因此缺口不能从现有历史NPZ无损重建。
+- 当前compat builder/runner审计：builder把三row统一写为local5090并用`resolve()`冻结本地挂载绝对路径；现有`authority_manifest.tsv`按immutable规则不能原位改写。若修正执行authority，必须生成versioned contract/manifest，不得覆盖首次formal replay证据。
+- worktree确认相关E187 evaluator/builder/tests/log均为未提交文件，tracker/INDEX/progress已有预期未提交改动；本轮只在这些E187新增文件上做增量，不清理或覆盖E186/用户改动。
+- 当前冻结eval summary SHA对应旧实现：evaluated=1、failure_counts=`exact:1, semantic:1`、status=`INCOMPLETE_OR_FAIL`。后续复评若生成新summary，必须写versioned新目录保留该旧证据，不覆盖log256所引用的`eval/summary.json`。
+- E178原始runtime日志直接确认历史设备：003/004=`NVIDIA A100-SXM4-80GB`，007=`NVIDIA GeForce RTX 5090`；因此003/004应走Ada cross-GPU semantic，007才是local same-device golden。
+- 已修正direct-core evaluator草案：新默认输出隔离到`eval_contract_audit_v2/`；all-common-array exact降为diagnostic；same-device改为要求paired query-tape的qpos/rewards/五类valid mask/selected indices并在缺失时fail-closed；cross-GPU只门控semantic；另显式审计三row设备route。
+- evaluator tests从2项扩为5项，新增local/cross路由互斥、historical query证据缺失fail-closed与现manifest 003/004设备错配显式化。代码尚未ruff/test/执行，不能把设计修正误报为已验证。
+- evaluator与5项tests已机械format并通过ruff lint/format、direct-main `5/5 PASS`及diff-check。
+- versioned复评已写`eval_contract_audit_v2/`且未覆盖log256冻结的旧`eval/`：evaluated=1/not_ready=2/errors=0，failure_counts从旧实现的`exact+semantic`纠正为`same_device_evidence=1`；003/004 manifest device contract同时显式FAIL，status仍`INCOMPLETE_OR_FAIL`。
+- 复评结论：本地007的semantic失败和all-array exact失败仍保留为diagnostic，但不再被错误当成该row的两项并列硬门；真正的same-device硬门因historical query-tape/selected证据不存在而fail-closed。因此E187 Gate S0仍未闭合，Ada/Full继续0。
+- 已确认旧eval summary SHA仍为`c9b42d82...38d`；versioned contract-audit summary/metrics SHA分别为`70a1fe8...f83c8`与`c83b04d5...6833d`。
+- 已新增不可变修订日志`log/257_E187_gate0_contract_audit_results.md`，不修改log256。log257区分“旧实现的exact/semantic错误合并”与“按原文仍因historical query/selected证据缺失而FAIL”，并记录当前003/004 device manifest错配、determinism结论边界及E188前置要求。
+- Tracker E187已更新为“S0合同复评：historical query/selected证据缺失，Ada/Full 0”，新log257列在旧log256之前；状态仍为`Gate S0 FAIL`，未宣称实验完成或兼容通过。
+- canonical results wrapper已存在且会先跑evaluator tests再执行runner；其注释仍把输出称为“exact replay comparison”，需改为device-routed contract audit以避免继续传播旧合同表述。static wrapper保持只报告自身不执行dynamic replay，无需用其PENDING文案覆盖formal结果。
+- results wrapper注释已改为device-routed contract audit，并完成canonical重跑：tests `5/5 PASS`，summary仍为same-device evidence FAIL、003/004 device-contract FAIL、evaluated/not_ready/errors=`1/2/0`。
+- log INDEX已重建为256个日志/43221 bytes；相关diff-check与新旧summary存在性/SHA复核PASS。旧summary SHA仍`c9b42d82...38d`，新summary仍`70a1fe8...f83c8`。
+- 本轮四项审计计划已完成：原文/实现对照、query/selected可验证性、determinism结论边界、按原合同复评。结论是维持E187 STOP而非放宽门；thread goal仍为`active`，未标complete/blocked。
+- 最终交付检查PASS：ruff lint/format、wrapper bash-n、evaluator tests `5/5`、全worktree diff-check、plan/log256/log257路径和新旧summary SHA均闭合；progress为172行，低于200行归档阈值。未commit/push，未启动或操作任何GPU/远程worker。
+
+### 2026-08-02 E187 Gate S0 第三轮阻塞审计
+
+- 已重新完整读取`experiment-planning-zh`并恢复Tracker、log257与progress；权威状态仍为Gate S0 FAIL、Ada/Full 0。合并读取输出末段有截断，因此下一步单独重读plan 205的Gate0/stop条款并检查磁盘是否出现新的historical query/selected证据。
+- 本轮只做阻塞条件复核；若同一不可追溯证据缺口连续第三轮仍成立，将按goal blocked协议收口，不擅自新建E188、改写E187门或启动任何GPU任务。
+- 已完整重读plan205：Gate S0明确要求recorder-off qpos/reward/selected逐值一致、same-device关键query qpos/reward≤1e-5且valid/selected一致；C0/C1任一失败即停止，第三次同类失败须停止E187并汇报。S0未过时禁止shadow/canary/Full，故不能以继续执行S1–S6规避阻塞。
+- 全E178 authority复核：27/27 historical result NPZ均存在，但路径级query-tape/selected匹配为0，NPZ中`selected_indices/cem_selected_index0/sample_gate_valid_mask/rewards/query_tape*`匹配row也为0；没有出现可改变阻塞条件的新artifact。
+- E187旧/新summary SHA仍为`c9b42d82...38d`与`70a1fe8...f83c8`，mtime和worktree状态未显示上轮后新增兼容证据；log256/257与evaluator仍保持未提交隔离状态。第三轮仍是同一historical evidence不可追溯阻塞。
+- 同一Gate S0阻塞已连续满足三轮审计阈值，且plan205与`experiment-planning-zh`均要求第三次停止并向用户求助；thread goal已按协议从`active`标记为`blocked`。恢复需要用户明确授权新建E188方法学实验，或提供新的historical query/selected artifact；E187内不得改门、补造golden或启动Ada/Full。
+- blocked收口复核PASS：goal状态已读回为`blocked`，相关diff-check无错误，contract-audit summary SHA仍`70a1fe8...f83c8`；progress为182行，未超过200行归档阈值。本轮无GPU、SSH、tmux、commit或push操作。
+
+### 2026-08-02 用户授权 Gate S0 waiver，恢复 E187
+
+- 用户明确要求跳过historical query/selected兼容阻塞、恢复E187并进入Full CEM。该授权只豁免已记录的Gate S0不可追溯证据缺口，不删除log256/257，也不把C1改写为技术PASS。
+- 为避免直接用未冻结reward/grid启动22-row Full，本轮将先创建E187 continuation amendment：C1标记`USER_WAIVED`，仍依次完成S1/S2 reward-grid lock、S3 P/G regression与S4三卡canary；通过后立即用local GPU0 + Ada GPU0/1执行keep22 Full。A100、kill/暂停/抢占仍禁止。
+- worktree仍包含大量E186/E187未提交改动，全部保留；本轮不reset/checkout/清理。下一步先写新plan206，再审计已有E187 S1/S2实现缺口，不在plan前新增实验代码。
+- 已创建补充计划`plan/206_E187_user_waived_gate0_full_continuation_plan.md`：冻结`technical_gate_status=FAIL`与`progression_authority=USER_WAIVED`并列语义；只豁免historical golden，不豁免authority/isolation或S1–S4安全门。
+- plan206把恢复路径固化为A0 waiver manifest→A1 reward/grid lock→A2 keep22 P/G→A3本地5090+Ada双卡canary→A4 keep22 Full→A5 paired eval；Full仍为1024×32 seed0、三卡并行，禁止A100与操作既有进程。
+- A0输入SHA已读取：plan205=`9cc2fc9d...15fe`、plan206=`e89bc72c...ad2f`、log256=`73f08f8c...0e50`、log257=`14ecfce1...f848`、旧/新compat summary=`c9b42d82...38d`/`70a1fe8e...f83c8`。goal工具仍显示旧`blocked`状态，但用户本轮已显式恢复执行；继续工作且不再次标blocked。
+- 现有`freeze_authority.py`锁定plan205 SHA并生成S0 protocol/keep22/inventory，适合作为A0上游；waiver必须新增独立builder/artifact，不能修改已有immutable protocol。
+- 已新增A0 waiver builder、2项direct-main tests与canonical wrapper。payload同时固化用户原文、`technical_gate_status=FAIL`、`progression_authority=USER_WAIVED`、三项waived evidence、八项not-waived gate以及5090+Ada双卡/A100=false资源合同。
+- builder引用并锁定plan205/206、log256/257、两版compat summary、S0 protocol、keep22、E178 inventory/manifest共10个SHA；输出为独立`gate0_user_waiver/waiver_manifest.json`，不修改已有immutable artifact。尚未format/lint/test/freeze。
+- A0完整验证PASS：ruff lint/format、bash-n、authority `3/3`、waiver `2/2`、diff-check均通过；正式waiver manifest SHA=`f2d0673418916c7a9b08ba2971c6e305cf534430ae796c959b3e4c44f610752b`，size=3638 bytes。
+- Tracker E187已更新为`USER_WAIVED；A1进行中；Full 0`并链接plan206/log257/log256。该状态不宣称C1 technical PASS；下一步进入A1 reward/grid资产盘点与实现。
+- E186 A1资产盘点：v4已提供三object 1M exact-C与CPU/CUDA PASS grid，分辨率003/004/007=`5/2.5/5mm`，padding均≥120mm，payload SHA=`1fd4fe8c.../dd2b855c.../2aed5d2a...`；对应50k smoke也齐全且payload SHA一致，可作为plan205决策树候选。
+- E186 fullbudget tapes仅有003/007 `1024×32`；旧hard-band下003 geometry active=0，007 total rho/top-k=`0.80238/0.57843`。004只有64×4 shadow且旧reward rho≈0.9998。A1必须用新continuation公式重评已有tape，并补004同口径formal tape，不能直接沿用E186旧reward FAIL/PASS。
+- E186 evaluator可复用其reward-aligned transform与exact-C/grid query路径，但必须新建E187 evaluator：从recorded old total扣除旧object-distance components，再加入continuation grid/exact components；G仍用`grid-epsilon`与exact距离，不能把E186 recorded old reward当新total。
+- 003/007 formal chunks分别约277/258MB、1024 samples×48 horizon、selected k=102，geometry transforms齐全；运行时峰值约4005/3243MiB。新continuation评测可先CPU/offline复用，无需重跑这两条GPU；004仍需新增一条formal capture。
+- 2026-08-02 接管恢复后已完整重读`experiment-planning-zh`、plan206及Tracker/progress末段；A0 waiver manifest保持冻结，当前权威阶段为A1，Gate S0仍是technical FAIL + USER_WAIVED，未启动Full或任何GPU进程。
+- A1下一步冻结为：新增direct-core continuation fidelity公共实现与边界单测，随后只读复用E186 bucket003/007 `1024x32` query tape离线重算；bucket004 formal capture、三卡canary及Full均继续受后续门禁约束。
+- A1代码盘点确认：E186 `evaluate_shadow64x4.py`已有reward-aligned transform、grid/exact query、三组object reward替换、selection与rho路径；`audit_reference_final_rg.py`已有rank/valid/false-safe基础逻辑，但新E187实现不得动态import旧实验 evaluator。
+- 公共目录当前只有通用sequence metrics，尚无continuation fidelity helper；E187现有脚本仅覆盖S0与surface-distance纯函数测试。003/007 formal tape与manifest路径完整，适合先实现公共纯数组重构/门判定，再接几何query runner。
+- Formal tape schema已复核：003/007均为43键、`rewards[1024]`、三项旧object component各`[1024,48]`、temporal gate/decay、posture/gate arrays及selected102；reward-aligned geom/body transforms齐全，manifest状态均PASS。
+- continuation替换的权威计算边界明确：旧三项component先逐frame求和再按48帧mean从recorded total扣除；robot/leg沿用距离公式，surface仅换为global-support双尺度score并继续乘原temporal gate/decay。新grid/exact totals必须分别从同一base total重建，G仍由`grid_dist-epsilon`与exact distance产生。
+- plan205 §5.1硬门已再次冻结：finite/sign 100%、CPU/CUDA≤1e-5m、padding≥110mm、false-safe=0、selected exact-valid=100%、continuation component p99≤0.05、rho≥0.99、top-k overlap≥0.90、grid-selected exact regret≤0.5%且exact top1%、query ratio≤1.25、增量显存≤6GiB。
+- 正式tape配置确认surface scale/gate/decay=`1.5/contact_mask/0.15`，旧mode=`symmetric_abs`；body/leg reward与三组G阈值均可直接由config重建。A1 evaluator将参数化这些值并把continuation常数锁为plan205值，不依赖E186 evaluator import。
+- 现有canonical runner约定已复核：将`workspace/core4d/scripts`加入sys.path后直接import `eval.core.*`；A1新runner可遵循同一模式。E186 grid manifest已含1M validation、CPU/CUDA parity、padding和epsilon，可在E187报告中按SHA引用而不复制/覆盖。
+- exact-C旧实现集中在E186 bake/audit私有函数；为满足“新evaluator不依赖另一实验evaluator”，本轮先把纯数组reward/G/selection/fidelity逻辑抽为`eval/core`公共模块，并在新runner内对现有几何authority做独立接线；不修改E186完成日志或artifact。
+- 已新增公共`eval/core/distance_fidelity.py`与E187 direct-main tests，覆盖continuation component替换、raw-grid reward/epsilon-only G、elite overlap/regret/exact-valid和bucket003 capture shape；代码尚未通过完整验证。
+- 首轮fail-fast静态链：ruff lint PASS，但format-check要求2文件机械格式化，因此测试未执行；这不是科学失败。下一步先format，再修正任何暴露的单测/边界错误后重跑完整链。
+- 静态复读时提前修正两个测试/metric实现问题：exact percentile改为“有效候选中reward≤selected0的比例”，failure fixture改为对齐100候选且让selected0同时超过0.5% regret、非top1%并exact-invalid。尚需format与实际执行确认。
+- 公共continuation fidelity实现验证闭合：ruff lint/format、diff-check PASS，direct-main `6/6 PASS`。已钉死local/cross component replacement、epsilon只进G、rho/top-k/regret inclusive boundary、false-safe selected与bucket003 1024x48 capture支持。
+- 下一步接E187 formal runner：直接import公共模块，不import E186 evaluator；读取冻结scene/grid/collider/tape SHA，独立执行production grid与exact-C query并输出每object机器可读门结果。
+- exact/grid query依赖已闭合：production `GridObjectDistanceRuntime.per_geom_sdf`可直接复用；exact authority需公共化robot geom采样→object-local→Open3D unsigned distance+convex halfspace sign→radius adjustment，不再从E186实验脚本import。
+- 三代表scene manifest字段已核对：003/004/007 collider asset SHA、grid manifest与epsilon分别闭合；003/007 formal tape正好对应manifest row。下一步新增公共exact convex-union loader/query并配合synthetic几何单测。
+- 已新增公共`eval/core/canonical_distance_query.py`：逐part SHA/convex/watertight验证、manifold boolean union、Open3D magnitude+convex-halfspace sign、production geom采样/radius adjustment与group reduce均独立于E186 evaluator。
+- exact query公共层验证PASS：ruff lint/format、diff-check与direct-main `3/3 PASS`；覆盖单box signed magnitude、overlap union任一part inside和group-min row order。下一步实现formal tape runner与artifact provenance/硬门汇总。
+- Grid runtime复核确认manifest在load时验证candidate SHA与epsilon，grid tensor按输入device/dtype懒加载，raw `query`与`conservative_query`明确分离；formal runner可在CPU离线执行且不会占用/影响GPU进程。
+- E186旧summary仅作为机制对照：003旧surface active=0、007旧rho/top-k=`0.80238/0.57843`；E187新runner必须重新生成continuation totals和selection，不能继承旧status或旧component reproduction门。
+- 已新增formal fidelity runner与canonical wrapper，包含full input SHA/budget/record-step closure、独立exact/grid query、continuation重构、保守G、selection及plan205硬门输出；尚未运行formal tape。
+- 首轮静态链发现2项机械问题：Python import排序/unused import；同时误把shell传给ruff导致11条shell-as-Python语法噪声，真实shell验证尚未执行。下一步只对`.py`运行ruff、对`.sh`运行`bash -n`，并修复runner中closed-NPZ引用和immutable timing字段后再preflight。
+- 已移除unused import与非确定wall-time持久化（保证immutable rerun字节稳定），并在NPZ上下文内复制recorded gate后再诊断，消除closed-NPZ访问风险。下一步机械format并执行全套unit/static/preflight。
+- 第二轮fail-fast：runner format已机械完成，但ruff仍要求E402 import block排序，故后续unit/bash/preflight尚未执行。该问题仅为import组织；下一步用ruff safe-fix处理I001后重新从头验证。
+- safe-fix已解决I001，但将`# noqa: E402`移到括号内symbol导致module-level E402仍报1组；fail-fast再次未进入测试/preflight。下一步把noqa放回整条多行import语句的首行后重跑，不重复其它策略。
+- E402注释位置已修正到多行import首行；尚待完整验证确认。
+- 第三轮static/unit已通过：ruff lint/format、bash-n及surface5/5、fidelity6/6、exact-query3/3全部PASS。Preflight首次触及authority时因scene TSV没有`scene_act_sha256`列而KeyError停止；未运行几何评测、未写result。
+- 该错误是runner schema假设而非artifact缺失：scene SHA应从compound manifest的真实列或上游scene snapshot authority解析。下一步读取TSV header/相关builder字段并改为存在的冻结SHA，不能跳过scene校验。
+- TSV权威列已确认：E186 compound scene使用`effective_scene_sha256`，grid另有`object_distance_manifest_sha256`；003/007对应scene/grid SHA均存在。runner将同时校验这两列，替换不存在的`scene_act_sha256`假设。
+- runner现已改为校验`effective_scene_sha256`并新增grid manifest SHA校验；下一步重新执行完整static/unit/preflight，预期只读hash约535MiB tapes，不进行GPU工作。
+- A1 formal runner启动前门已闭合：ruff lint/format、bash-n、diff-check、surface5/5、fidelity6/6、exact-query3/3及003/007完整SHA/budget/record-step preflight全部PASS；两tape content SHA=`a0ba4cc...24d9`/`e6648518...8ae4`。
+- 下一步先单独运行bucket003 CPU/offline exact-grid continuation评测并检查machine-readable result；这是只读tape计算，不启动CEM、不占GPU、不操作现有进程。通过后再运行007。
+- bucket003 formal offline wrapper已启动（exec session 54296），前置surface5/5与fidelity6/6已再次PASS，当前继续执行exact-query tests/authority hash/CPU exact-grid query；未启动任何GPU或CEM进程。
+- bucket003运行中exact-query公共测试3/3再次PASS；session仍自然运行于authority hash/CPU query阶段，无错误输出。
+- bucket003 v1离线结果已自然完成并写出，但fidelity_status=FAIL仅因capture reducer实现口径错误：runner用了48帧mean score，得到`0.0009766`；plan205的“score>0.05 candidates”对应逐候选最近表面/peak score，E186依据正是每候选horizon min hand distance约45.8–48.6mm。
+- 其余正式指标全部过门：finite、grid static、false-safe=0、selected exact-valid=1、surface p99=`0.002533`、rho=`0.9999801`、top-k=`1.0`、regret=`0`/exact percentile1.0、surface spread=`0.012665`。v1 immutable结果保留不覆盖；修复reducer并新增time-varying capture单测后写v2。
+- 首次v2补丁因ruff格式化后的长行上下文不匹配而未应用，磁盘代码/结果均未改变；下一步精确读取相关片段后做小范围patch，不覆盖v1。
+- 已精确定位v1 reducer、schema、output root与capture fixture行；v2将同时持久化peak primary与mean diagnostic，primary gate只用逐候选peak，便于审计两种口径差异。
+- v2修复已应用：default output移到`formal_fidelity_v2`，schema升v2；bucket003 primary为per-candidate peak score fraction，mean fraction只做diagnostic。单测fixture现在只有1/48帧处于45.8–48.6mm，要求peak 100%且mean 0%，可防止旧bug回归。
+- v2完整static/unit/preflight再次PASS（5+6+3 tests）；输入SHA未变。现在可重跑bucket003生成独立v2 immutable result，v1保留为已知reducer-bug evidence。
+- bucket003 v2 offline session 58631已启动并通过前两组测试，继续自然运行；仍是CPU只读评测，无GPU/CEM操作。
+- bucket003 v2正式离线fidelity PASS：peak score>0.05 frac=`1.0`（mean仅diagnostic=`0.0009766`）、surface spread=`0.012665`、component p99=`0.002533`、rho=`0.9999801`、top-k=`1.0`、selected regret=`0`/exact top1%、false-safe=0、selected exact-valid=100%。
+- v2 scientific payload SHA=`fad2dad0...daca1`，A1仍明确`PENDING_BUCKET004_AND_EFFICIENCY`；下一步运行bucket007同口径CPU formal fidelity，只有通过才进入004 capture准备。
+- bucket007 v2 offline session 5359已启动，surface/fidelity tests再次PASS，继续自然运行exact-query与formal computation；无GPU/CEM操作。
+- bucket007 5mm v2 formal fidelity按预注册门FAIL，仅top-k overlap=`0.843137<0.90`；其余均PASS：rho=`0.991194`、regret=`0.000156`、exact percentile=`0.99805`、surface p99=`0.005279`、false-safe=0、selected exact-valid=100%。scientific payload SHA=`40dea146...b3414`。
+- 因5mm候选失败，按`5→2.5→1.25mm`决策树现在只解锁bucket007 2.5mm；不查看/生成1.25mm，不启动bucket004 capture、canary或Full。下一步固化E187 2.5mm bake+50k/1M验证入口与scene snapshot/资源检查。
+- E186 bake CLI只支持全object统一分辨率，直接复用会不必要地重烘003/004且manifest仍标E186；E187需要一个object-specific builder/wrapper，调用公共化后的同算法写新E187 root并显式引用E186 collider lock/source SHA。
+- bucket007 2.5mm预计grid约130MiB（5mm现17MiB，三轴加倍）；属于CPU/Open3D bake+validation，无物理仿真，按skill scene快照例外可不快照，也不需要GPU。下一步先实现immutable单object入口并用50k smoke新root，PASS后才允许1M formal同payload resume。
+- 复核E186 builder发现其50k运行会把manifest直接标`GRID_FROZEN`，之后不能在同payload上升级1M；E187不能照搬单阶段入口。新builder需分离`grid_candidate_manifest.json`、`smoke50k.json`、`formal1m.json`，formal通过后才生成production `manifest.json`。
+- `CanonicalGridSDF.load(...allow_pending=True)`允许pending manifest且epsilon=0，因此可用同一immutable grid payload分别验证50k/1M；最终manifest写formal epsilon并引用两级validation SHA。CPU/CUDA parity会在当前RTX5090上被动使用GPU query，但只在无冲突检查通过后启动，且不运行physics/CEM。
+- 已新增bucket007-only 2.5mm builder、2项identity/preflight tests与canonical wrapper：输出分离candidate grid、smoke50k、formal1m和最终production manifest；formal必须引用同candidate SHA且smoke PASS，1.25mm/其它object无入口。
+- builder复用E186已验证grid-v4算法函数但自身manifest标E187并冻结E186 builder/collider/parts SHA；尚未format/lint/test。下一步先静态验证与preflight，不直接烘焙。
+- Grid builder首轮ruff lint/format与bash-n PASS；direct-main第1项PASS，第2项因测试fixture对symlinked workspace调用`Path.resolve()`变成`/mnt/...`，严格relative display抛ValueError，故preflight wrapper未继续。未创建candidate/grid、未使用GPU。
+- 这是路径显示层bug；下一步让display path对repo外/resolve路径安全fallback，并让测试直接使用DEFAULT_OUTPUT_ROOT（保留symlink逻辑路径），随后重跑完整链。
+- 首次路径修复补丁因ruff重排后的测试上下文不匹配而未应用，磁盘未改变；下一步读取短文件精确patch。
+- 精确片段已读取；测试中的动态`__import__().Path().resolve()`将替换为builder导出的逻辑DEFAULT_OUTPUT_ROOT，relative函数增加repo外fallback。
+- 路径修复已应用；下一步重新format/lint/test/preflight，仍不烘焙。
+- bucket007 2.5mm builder静态门闭合：ruff lint/format、bash-n、diff-check、tests2/2与preflight PASS；collider asset=`9b04f068...abfed`、ordered parts=`a8ce7106...f7bb8`、输出root固定。
+- Smoke启动前必须被动检查local GPU0型号/显存/process与本地现有tmux，不kill/等待/改动外部任务；若共存空间安全才执行一次candidate bake+50k validation。
+- bucket007 2.5mm smoke资源快照：local GPU0=`NVIDIA GeForce RTX 5090`，151/32607MiB、util0%、compute-app列表为空；已有LIMMT/SUGAR/watch/viser/tmux均只读记录不操作。results磁盘余5.5TiB。
+- 当前满足短CUDA parity共存条件，可启动一次CPU/Open3D bake+50k validation；禁止kill/暂停现有viewer/watch进程，运行自然收口后再审计artifact与显存。
+- bucket007 2.5mm smoke session 71797已启动，当前在grid bake/validation阶段暂无输出；未启动physics/CEM，保持自然运行。
+- bucket007 2.5mm candidate bake+50k smoke自然完成PASS：candidate manifest SHA=`3a686d98...156c`，grid payload SHA=`df038817...d475`，epsilon smoke=`0.00122622m`，p99=`0.0003965m`，surface p99=`0.0010917m`，sign disagreements=0，padding=`0.120006m`，CPU/CUDA max=`1.49e-7m`。
+- 同一grid payload现在解锁1M formal；启动前需重新被动检查GPU/process，formal只验证不重烘，完成后以1M epsilon生成production manifest。
+- 1M formal启动前复核：RTX5090仍151MiB/util0%、compute-app为空；existing watchers/viser不操作。candidate grid size=`133,036,928` bytes，candidate/smoke artifact均存在且无残留builder进程。
+- 资源与immutable input满足formal条件，下一步运行同payload 1M exact-C+CUDA parity；不重烘、不启动physics/CEM。
+- bucket007 2.5mm 1M formal session 77236已启动，当前自然运行无输出；同candidate SHA，不重烘，无physics/CEM。
+- bucket007 2.5mm 1M formal自然完成PASS：epsilon=`0.001239579m`、p99=`0.000162825m`、surface p99=`0.00109168m`、sign disagreement=0、padding=`0.120006m`、CPU/CUDA=`1.49e-7m`；grid SHA仍`df038817...d475`。
+- production manifest已冻结：`results/E187/s2_canonical_grid_sdf/candidates/bucket007_2p5mm/manifest.json`，SHA=`bb781f65...d0e7`。下一步给formal fidelity runner增加fail-closed的唯一2.5mm override route，并把结果写独立root，不覆盖5mm v2结果。
+- formal runner已增加`--grid-manifest`，只允许单独bucket007且路径必须exact等于冻结2.5mm production manifest；runtime epsilon从所选manifest读取，默认003/007 E186 grid路径仍走原TSV SHA合同。尚待static/preflight。
+- bucket007 2.5mm fidelity route的ruff lint/format、diff-check、5+6+3 tests与override preflight全部PASS；输入formal tape content SHA仍`e6648518...8ae4`，grid production manifest SHA在上步冻结。
+- 下一步CPU离线重算bucket007并写独立`formal_fidelity_bucket007_2p5mm_v1/eval`，不得覆盖5mm v2 FAIL；如果top-k仍失败才解锁1.25mm。
+- bucket007 2.5mm fidelity session 5429已启动并通过surface/fidelity tests，继续CPU exact-grid重算；无GPU/CEM操作。
+- bucket007 2.5mm formal fidelity PASS：top-k=`0.941176`（5mm为0.843137）、rho=`0.998379`、regret=0/exact percentile1.0、surface p99=`0.002435`、false-safe=0、selected exact-valid=100%；scientific payload SHA=`e6669f35...a793`。
+- 决策树对bucket007在2.5mm停止并冻结，禁止查看/生成1.25mm。当前A1已有003=5mm PASS、007=2.5mm PASS；仍需bucket004正式1024x32 production-fixed tape与三object效率闭合，不能进入A2/Full。
+- bucket004历史64x4 v5/v6/v7均在record step12；v7已明确timing authority为E178 first final-iteration surface mean≥0.3且valid>0。formal 1024x32应沿用step12、E186 bucket004 override/scene/grid，不改science，只把预算与geometry recorder升正式口径。
+- E186 formal runner只允许003/007且manifest标E186；E187需新bucket004-only capture runner/launch wrapper，输出E187独立root、首步scene snapshot、启动前GPU/process snapshot、immutable resume与peak memory记录。不得直接调用旧runner伪装E187。
+- E186 passive GPU memory polling实现已复核，可在E187 standalone runner复刻（nvidia-smi read-only 0.25s）；query-tape finalize/config/transform schema/finite/selected检查也需独立实现，避免import旧experiment runner。
+- bucket004 keep22 authority再次闭合：1024×32 seed0、E186 override/compound scene/grid SHA存在；capture仍使用旧symmetric reward生成“base+旧components”冻结tape，continuation只在后续离线替换，不能在capture时先改reward。
+- 已新增standalone bucket004 formal tape runner、2项authority/command tests与local launch入口：固定step12、1024x32 seed0、geometry recorder one-chunk、旧symmetric reward；输出E187独立root并passive poll peak memory。
+- launch首步将scene快照写入E187 A1 stage-specific root，前后记录GPU/compute snapshot并强制GPU0型号RTX5090；未授权kill/等待/降budget。代码尚未format/lint/test/preflight，未启动capture。
+- bucket004 capture静态门闭合：ruff lint/format、bash-n、diff-check、tests2/2、runner preflight PASS；命令精确为E186 bucket004 override+task、1024x32 seed0、GPU0、step12、one geometry chunk。
+- 下一步执行canonical launch `preflight`以实际生成stage scene snapshot和前后GPU/process证据，并复核没有意外运行CEM；通过后再作一次启动前资源审计并运行capture。
+- canonical local preflight PASS：stage-specific scene snapshot已生成，含E186 compound scene SHA=`97348b1e...7e70`及全scene文件manifest；tests2/2与command再次闭合，未启动CEM或生成runs/raw_chunks。
+- preflight已写before/after GPU/process snapshots。下一步复核snapshot内容、GPU0/compute apps、capture目录无partial output后运行正式bucket004 tape。
+- bucket004 capture启动前最终复核PASS：RTX5090 151/32607MiB util0%、compute-app为空；runs/raw_chunks均不存在（clean）；stage snapshot compound scene SHA exact=`97348b1e...7e70`，preflight前后compute snapshot均空。
+- 现在允许用canonical launch `run`执行一次正式1024x32 tape；launcher会再次snapshot和前后被动GPU记录，不操作任何既有进程。预计参照003/007 capture约1–2分钟、峰值<6GiB。
+- bucket004 formal capture session 80449已启动；launch重快照后compound SHA仍exact，tests2/2 PASS，当前CEM/query recorder自然运行。未操作现有进程。
+- bucket004 formal capture自然完成PASS：1024x48、selected102、combined/posture valid=1024/1024、reward finite、legacy surface active=1024；wall=`28.30s`、peak total GPU=`2399MiB`，chunk≈258MiB。
+- 新tape content SHA=`3dc3cc8b...2274`、chunk manifest SHA=`b89dbc3e...aaa8`、result SHA=`8e5b22e6...5324`；source override/scene/grid SHA闭合。下一步扩展formal fidelity authority接受这条E187 tape（仅bucket004），并离线评估现有2.5mm grid。
+- formal fidelity runner已把bucket004加入case-specific tape-root authority（step12指向E187新capture；003/007仍只读E186 root），避免全局root混淆。尚待static/unit/preflight后才能运行。
+- bucket004 fidelity route的ruff lint/format、5+6+3 tests、diff-check与full SHA/budget/step12 preflight全部PASS；tape content SHA读取为`3dc3cc8b...2274`。
+- 下一步CPU离线评估bucket004现有2.5mm E186 grid；若门全过即三object fidelity闭合，若失败才按bucket004决策树进入更细候选（当前禁止提前查看）。
+- bucket004 formal fidelity session 4319已启动并通过surface/fidelity tests，继续CPU exact-grid query；无GPU/CEM操作。
+- bucket004 2.5mm formal fidelity PASS：rho=`0.9999662`、top-k=`0.990196`、regret=0/top1%、surface p99=`0.00015764`、false-safe=0、selected exact-valid=100%；scientific payload SHA=`021e7003...c033`。
+- 三object fidelity现闭合：003冻结E186 5mm、004冻结E186 2.5mm、007冻结E187 2.5mm；禁止查看任何更细grid。A1尚缺same-tape R/G throughput ratio≤1.25与增量显存≤6GiB，以及最终`reward_grid_lock.json`，故仍不进入A2/Full。
+- 已新增三object same-tape CUDA R/G benchmark、2项authority tests与canonical wrapper：baseline=各自E186 v4 grid+legacy hard band，chosen=冻结grid+continuation，5次交替顺序取median，门为ratio≤1.25与peak≤6144MiB。
+- benchmark代码尚未验证；静态复读发现当前计时包含host→device transfer，会稀释R/G ratio。运行前必须把formal batches预载GPU并在同步后只计kernel，保留persistent allocation作为更保守显存证据。
+- benchmark已改为先把1024x48 transform/gate/decay按batch预载GPU，再`cuda.synchronize`后计时纯kernel；peak allocated仍包含persistent tape batches+grid cache，显存门偏保守。尚待format/lint/test/preflight。
+- efficiency首轮static fail-fast：format完成，ruff仅报1个E402 import block排序；tests/preflight未执行、无GPU benchmark。下一步safe-fix I001并重跑完整链。
+- ruff safe-fix已解决唯一I001且保留E402 noqa边界；下一步重新执行lint/format、tests2/2、三case preflight与diff-check。
+- efficiency benchmark静态门闭合：ruff lint/format、bash-n、diff-check、tests2/2与三case authority preflight全部PASS；chosen routes为003 E186-5mm、004 E186-2.5mm、007 E187-2.5mm。
+- 下一步启动前被动检查RTX5090/process与output clean，然后三case按同一local GPU0顺序运行；这是同一A1 benchmark而非三个科学实验，统一硬件避免跨GPU计时混淆。
+- efficiency启动前资源复核PASS：RTX5090 151/32607MiB util0%、compute-app为空；existing watchers/viser不操作；`efficiency_v1` output不存在。可顺序运行三case，每条自然收口后检查门。
+- bucket003 same-tape efficiency session 33153已启动，当前预载/benchmark自然运行；无physics/CEM。
+- bucket003 efficiency PASS：baseline/chosen median=`0.22799/0.23076s`，ratio=`1.01215≤1.25`，chosen peak allocated=`558.77MiB≤6144`。下一步同口径bucket004。
+- bucket004 efficiency session 39891已启动，保持同RTX5090/5 repeats口径，无physics/CEM。
+- bucket004 efficiency PASS：baseline/chosen median=`0.18561/0.18580s`，ratio=`1.00107`，peak allocated=`681.80MiB`。下一步关键bucket007 5mm baseline vs frozen2.5mm chosen。
+- bucket007 efficiency session 98273已启动，比较E186 5mm baseline与E187 2.5mm chosen；无physics/CEM。
+- bucket007 efficiency PASS：baseline/chosen median=`0.20052/0.20257s`，ratio=`1.01023`，peak allocated=`668.88MiB`。三object最大ratio=`1.01215`、最大benchmark allocated=`681.80MiB`，全部过1.25/6GiB门；formal capture total peak003/004/007=`4005/2399/3243MiB`亦均<6GiB。
+- A1 scientific gates现全部具备；下一步freeze `reward_grid_lock.json`前审计bucket004 5→2.5决策树的5mm失败上游证据，并锁定所有selected grid/fidelity/efficiency/tape/waiver SHA。锁后禁止R/grid回调。
+- bucket004 coarse-to-fine上游证据已定位：completed log254明确记录5mm/50k单点max=`12.73mm`导致epsilon过保守，因此在任何R/G/Full前细化到2.5mm；E186 v4 1M 2.5mm随后PASS。该历史方法学证据可引用但不修改log254。
+- freeze builder将把bucket004 decision reason与log254 SHA、003/004/007最终grid、007 5mm FAIL→2.5mm PASS两级fidelity、三条efficiency、bucket004 tape和Gate0 waiver全部锁定；不需要也禁止生成更细grid。
+- 已新增A1 lock builder、2项direct-main tests与canonical wrapper；payload固定continuation公式、G=`D_C-epsilon`/R=nominal D_C、三object resolution/epsilon/grid/fidelity/efficiency SHA、004 tape、007 5mm rejection与Gate0 USER_WAIVED语义。
+- lock builder要求所有fidelity/efficiency/global gates逐项PASS，输出immutable `s2_canonical_grid_sdf/reward_grid_lock.json`，并明确A2/A3前Full仍禁止。尚未format/lint/test/freeze。
+- A1 lock静态门闭合：ruff lint/format、bash-n、diff-check与lock tests2/2 PASS；build_payload已从磁盘证据成功验证三object及waiver合同，但尚未写正式lock。
+- 下一步运行canonical freeze wrapper（会再次跑surface5/fidelity6/lock2 tests）并记录最终lock SHA；成功后A1完成，进入A2 production integration。
+- A1 canonical freeze完成：surface5/5、fidelity6/6、lock2/2再次PASS；`reward_grid_lock.json` file SHA=`2cc949e1...194f`，scientific payload SHA=`99b6d35b...397d`，status=`FROZEN`。
+- A1正式完成，R/grid从现在起禁止回调：003=5mm、004=2.5mm、007=2.5mm；Gate0仍technical FAIL+USER_WAIVED。下一步更新Tracker为A2进行中，再实现22-row opt-in overrides/P-G regression；A2/A3未过前Full仍为0。
+- Tracker E187当前仍显示A1进行中，需改为“A1 PASS/lock SHA冻结；A2进行中；Full0”；worktree仍有既有E186/E187未提交文件，继续保留不reset/clean，Claims未完不commit。
+- Tracker E187已更新为`A1 PASS；A2进行中；Full 0`，仍链接plan206与log256/257且不声称Gate0 technical PASS。现在进入A2生产集成盘点。
+- A2盘点确认E186 22-row override均仅叠加compound scene/grid backend；E187 override应以对应E186 override为default，再显式追加`surface_band_score_mode=distance_continuation`、5个冻结参数，以及从lock选择的grid path/epsilon（007切2.5mm）。
+- runtime/config已接通continuation纯函数与参数验证。下一步创建22-row E187 override/manifest builder，Hydra whitelist只允许method/reward/grid字段变化；scene/P/G其余字段必须与E186 effective config exact。
+- E186 `compiled_contract`可直接作为P regression算法参考：CPU加载、mass/inertia/friction、18×K pair exact、MJWarp put_model ngeom/nmesh/npair一致。E187可先生成override并做Hydra config whitelist，再对既有相同scene重新跑22/22 CPU/MJWarp compile，不改XML。
+- A2 已新增 production override 生成器 `scripts/experiments/E187/build_production_overrides.py`、direct-main/contract 测试 `scripts/experiments/E187/test_production_overrides.py` 与 canonical wrapper `scripts/eval/wrappers/eval_E187_production_overrides.sh`。
+- 上述 A2 文件当前尚未完成 format/lint、shell syntax、direct-main、22-case effective-config 与 production manifest 验证，不得据此晋级 A2；首次补记补丁因缺少稳定尾部上下文未落盘，本条已纠正记录。
+- 下一步先验证/修复 override builder，再执行 22/22 compile、MJWarp、P/G、SHA fail-closed、recorder-off 与 44-query false-safe regression。
+- A2 首轮代码复读完成：builder按E186 22-row顺序、immutable write、Hydra effective-config whitelist与object-specific lock选路设计；`build(write=False)`在override不存在时会跳过compose，正式首次验证必须走canonical write入口，不能把payload-only测试当成22-row闭合。
+- 本轮只读确认dirty worktree包含既有E186/E187及无关修改，继续不reset/checkout/clean；下一步运行format/lint/bash-n/direct-main与builder dry semantics，若失败先修复并记录，尚不触发physics/CEM。
+- A2 静态门首轮：`ruff format --check`仅发现2文件需格式化；完成机械format后，ruff剩1个可自动修复的`SIM300`（测试集合等值断言Yoda condition），因此bash/direct-main链按fail-fast尚未继续。
+- 这是纯测试风格问题、没有生成override/artifact；下一步应用ruff safe-fix并重跑完整静态链。
+- A2 override 静态门现闭合：ruff safe-fix解决唯一SIM300；format、ruff lint、bash-n、diff-check与direct-main tests 2/2全部PASS。
+- 启动canonical generation前确认E187 distanceContinuation overrides为0、`production_overrides.json`不存在；下一步正式生成22个immutable override并做Hydra effective-config whitelist，仍不运行physics/CEM。
+- A2 canonical generation首轮fail-closed：surface reward 5/5与override tests 2/2先PASS，但Hydra首行审计发现whitelist漏列五个冻结continuation参数，报`effective config drift`后立即停止。
+- 失败仅留下第1个按预期内容生成的opt-in YAML；production manifest不存在、无physics/CEM。根因是默认config中的continuation参数与A1冻结值不同，因此合法delta应为mode+五参数+manifest+epsilon（asset SHA因同collider未变）；下一步修正whitelist与测试后重跑，不删除首行，依赖immutable identity复核。
+- 已修正A2 effective-config whitelist为8项合法delta：mode、五个冻结continuation参数、grid manifest、epsilon；测试同步冻结精确集合。
+- 修正后format/lint/bash-n/direct-main/diff-check全PASS，canonical generation完成：22/22 immutable opt-in override、Hydra compose与whitelist均PASS，`production_overrides.json` status=PASS；003/004 grid路径不变，007精确切到E187 2.5mm manifest/epsilon。A2尚未完成，下一步冻结manifest SHA并实现/运行compile、MJWarp、P/G、recorder-off、44-query regression。
+- A2 reference盘点：E186 `build_compound_physics.py::compiled_contract`已冻结CPU mass/inertia/friction、18×K pair exact与MJWarp `put_model`口径；E186 `audit_reference_final_rg.py`含44-tape exact/grid query，但formal PASS还混入旧reward rho/selection，不能直接冒充E187的G-only门。
+- 一次只读identity小脚本末尾集合推导括号拼写错误，未改变磁盘；下一步重做manifest SHA/count并以E187 standalone audit闭合compile/P/G，避免修改E186历史结果或把旧R门混入A2。
+- production override manifest identity复核：file SHA=`28d695f5...d23f`、22 rows/22 YAML、object counts=`5/4/13`、status PASS。
+- recorder合同定位：query-tape属于显式`query_tape_enabled` opt-in，Full必须off且无`raw_chunks`；plan A2要求G-only false-safe，不要求复用E186旧reward rho/selection。下一步实现E187自身的compile+G-only manifest，输入冻结override/scene/grid/collider/tape SHA。
+- A1已提供公共`eval/core/canonical_distance_query.py`，包含frozen-part SHA、exact union、exact/grid per-geom与group reduce，可用于E187 44-query审计而无需import E186 evaluator；这决定A2新runner只实现authority/qpos/threshold orchestration。
+- E186 keep22 manifest字段足够冻结source/effective scene、trajectory/contact、collider与budget；E178 manifest提供44个reference/final来源。下一步按TDD先写A2 contract tests，再实现compile与G-only runner。
+- 已新增A2 direct-main测试骨架，预注册三项：keep22=`5/4/13`且18 robot geoms、Config recorder default-off且无A2 raw_chunks、保守G边界样本false-safe=0。
+- 测试当前按TDD处于RED前状态（目标modules尚未创建）；下一步先运行确认缺失实现失败，再添加E187 standalone production integration与reference/final G-only runners。
+- A2 TDD RED已确认：direct-main因`audit_production_integration`尚不存在而按预期`ModuleNotFoundError`，没有artifact或运行副作用。
+- grid/collider schema复核：三object production manifest均`GRID_FROZEN`、validation PASS，显式锁定grid payload SHA、collider asset SHA与ordered-parts SHA；production audit将逐层复核这些SHA后才允许compile/query。
+- 已实现E187 standalone `audit_production_integration.py`：22-row authority/SHA、CPU mass/inertia/friction、exact 18×K pair、MJWarp put_model、recorder default-off/no raw_chunks，输出确定性immutable manifest。
+- 已实现E187 standalone `audit_reference_final_gate.py`：复用A1公共canonical exact/grid primitives，逐条SHA校验后重算22×2 reference/E178-final，仅以G finite+false-safe=0判门；当前两runner尚未format/lint/test/preflight，不得运行formal compile/query。
+- A2新runner首轮format check仅要求3文件机械重排；format后ruff报告4个可自动修复项（2个import排序、2个`dict.fromkeys`简化），tests/preflight按fail-fast尚未运行。
+- 无artifact/compile/query已发生；下一步应用ruff safe-fix并重跑完整static/direct-main/preflight链。
+- ruff safe-fix与static现PASS；direct-main首项失败是测试误把A1 reward/grid lock SHA与E186 collider lock SHA相等，实际为两个独立authority文件，实现未混淆。preflight因fail-fast未继续。
+- 首次修正补丁受ruff重排后的上下文影响未应用，磁盘除safe-fix外未变；下一步读取短测试精确patch，分别冻结`2cc949e1...194f`与`6a20df7c...6065`。
+- 已读取ruff后的短测试并精确修正authority断言：reward/grid lock与collider lock各自冻结独立SHA，不再错误比较两者相等。
+- 下一步重跑format/lint/direct-main与两个preflight；仍不执行formal compile/query。
+- A2 static/direct-main/preflight现全部PASS：ruff/format/diff-check、tests3/3、production authority/recorder preflight与44-query authority preflight均闭合；formal row/tape计数仍为0是预期preflight语义。
+- 下一步新增canonical A2 wrapper，正式run前被动记录local RTX5090 GPU/process并确认formal outputs clean；compile仅CPU/MJWarp model load，G audit为CPU exact/grid query，不启动CEM。
+- 已新增canonical `eval_E187_production_integration.sh`，固定local GPU0 RTX5090、前后被动GPU/process snapshot，并串联reward5、override2、integration3、compile与44-query runner；没有kill/wait/抢占逻辑。
+- wrapper bash-n/diff-check与实际preflight全PASS，before/after snapshot已生成；下一步复核GPU/process、formal outputs仍clean后运行一次A2 formal。该run不会启动CEM。
+- A2 formal启动前资源/clean复核PASS：local GPU0 RTX5090=`151/32607MiB`、util0%、compute-app为空；`production_integration.json`、reference/final gate outputs与`raw_chunks`均不存在。
+- canonical A2 formal session `36050`已启动，reward5/5与override2/2先PASS，继续22 CPU/MJWarp compile及44 CPU query；未启动CEM，不操作现有进程。
+- A2 formal自然完成exit0：22/22 CPU MuJoCo+MJWarp PASS；bucket003 pair=`288=18×16`，bucket004/007=`144=18×8`，mass/inertia/friction/condim与source exact，selected grid/collider/input SHA全闭合。
+- 44/44 reference/E178-final query finite且body/hand/leg/combined false-safe总数=0；recorder default-off、A2 `raw_chunks`不存在。A2 scientific gates现具备，下一步复核artifact SHA/after snapshot并冻结A2 manifest，之后才进入A3三卡canary。
+- A2 artifact复核：overrides SHA=`28d695f5...d23f`；integration SHA=`1762a455...55f5`；tape SHA=`6053dbef...d304`；aggregate SHA=`dd73657d...8605`；after GPU回落151MiB/util0%，无遗留E187/CEM进程（pgrep仅匹配检查命令自身）。
+- 已新增A2 freeze builder与direct-main test，锁定A1/A2 artifacts、recorder-off、44 finite/false-safe0、process snapshots与`Full rows=0`；尚未format/lint/test/freeze。
+- A2 freeze builder静态门闭合：format/lint/diff-check与lock test1/1 PASS，build_payload已从磁盘重新验证全部A2合同。
+- 已新增canonical freeze wrapper，串联reward5、override2、integration3与lock1测试后才写lock；下一步bash-n并正式freeze，成功后A2完成、Tracker转A3进行中。
+- A2 canonical freeze完成：reward5/5、override2/2、integration3/3、lock1/1全部PASS；`production_integration_lock.json` status=FROZEN，file SHA=`400c98b4...441`，并保持Gate0 technical FAIL+USER_WAIVED、Full rows=0。
+- A2正式完成，下一门为A3三设备canary；R/grid/override/A2 lock从现在起不得回调。dirty worktree仍含既有E186/E187未提交文件，继续不reset/clean、不commit。Tracker将更新为`A1/A2 PASS；A3进行中；Full0`。
+- A3执行口径复核：三代表固定003=`bucket003_20231018_003_p1`、004=`bucket004_20231002_021_p1`、007=`bucket007_20231020_055_p1`，正式1024×32 seed0、完整轨迹、recorder-off、视频开启；canary config可原子promote为Full前三行。
+- 远端只读资源快照：`spider-remote`=embodied-2x6000Ada，GPU0/1均为RTX6000 Ada；当前GPU0=`836MiB/util18%`、GPU1=`19MiB/util0%`、compute-app列表空。不等待idle、不操作共存负载；下一步实现immutable source snapshot部署与三row runner/preflight。
+- 三代表E178历史plan-time约003=31s、004=25.5s、007=11.8s/tick，但manifest硬件标识不够证明与当前三设备same-hardware；A3效率证据不能直接把这三条当严格因果baseline，runner需记录该限制或在同设备补baseline。
+- 远端root盘仅余28GiB且未在常见路径发现uv/.venv/checkout；禁止盲目同步全repo。下一步只读定位既有可运行environment/checkout与容量，若不存在则制作最小immutable snapshot（代码+三case+三grid/collider）而非共享checkout修改。
+- 远端进一步只读定位到既有`/home/xiayb/pHRI_workspace/spider` checkout；系统PATH无python，torch241 env缺mujoco/mjwarp，但该checkout可能自带uv/.venv，下一步只读验证其环境，不修改共享checkout。
+- 远端已有大量共存Holosoma/Isaac工作目录与tensorboard进程；继续遵守独立snapshot/run root、无merge/reset/checkout/kill。A3 baseline效率需在同设备补E178或明确不能达C9，不能用历史异构plan-time冒充。
+- 远端共享`/home/xiayb/pHRI_workspace/spider`确有完整`.venv`（torch2.11/cu130、mujoco3.7、mjwarp3.7、warp1.12等），但checkout为20GiB且高度dirty；只复用其只读python environment，绝不在该checkout执行或修改。
+- 本地最小同步规模可控：`spider`242MiB、`examples`8MiB、assets3.5MiB、所需grid约215MiB、两远端case各≈1MiB。将沿E182已验证deployment pattern生成内容SHA snapshot到独立`pHRI_workspace/e187_runs/<id>/spider`，不复制`.git/.venv/无关results`。
+- 已新增通用A3 `run_production_canary.py`与static test：三代表固定worker、1024×32 seed0、完整轨迹、video/save_info on、query recorder off；逐row fail-closed A2/override/scene/grid/input SHA，运行后验证全numeric finite、ffprobe、plan-time、config与immutable resume。
+- canary runner当前尚未format/lint/test/preflight，不得启动GPU；下一步先闭合static，再实现local snapshot wrapper与remote minimal deployment。
+- A3 canary runner静态门闭合：ruff format/lint/diff-check、test1/1与三case command preflight全部PASS；命令精确为E187 override、Full 1024×32 seed0、完整轨迹、video on、recorder off。
+- 已新增canonical `run_E187_local.sh {preflight|canary}`：首步003 scene snapshot、local GPU0 RTX5090 allowlist、前后被动snapshot、test后执行；尚未bash-n/实际preflight或启动GPU。
+- local wrapper bash-n/diff-check与实际preflight PASS；stage scene snapshot含E186 compound scene exact SHA=`1e30803c...64fb`，Full command/recorder-off再次闭合。
+- local启动前GPU0 RTX5090=`151/32607MiB util0%`、compute-app为空且row output clean；A3 local canary session `28295`已启动，完整1024×32自然运行。未等待idle/操作既有进程。
+- A3 local canary第1次启动在Hydra解析阶段立即FAIL：`query_tape_enabled`不是default YAML struct key，必须使用`+query_tape_enabled=false`（geometry字段同理）；未进入CEM、未生成NPZ/video，仅留下outdir空目录+run.log，GPU回落151MiB。
+- 根因是command test冻结了错误的非`+`拼写；下一步修正runner/test，保留失败目录为attempt1证据并用新clean row root重跑static/preflight。不会原地覆盖失败attempt。
+- A3 local canary attempt1 已归档到 `results/E187/s4_canary/failed_attempts/local_bucket003_hydra_plus_attempt1`，保留 Hydra 解析失败证据；正式 row root 已恢复为 clean，未覆盖失败尝试。
+- runner/test 已将两个非 schema 字段修正为 `+query_tape_enabled=false` 与 `+query_tape_record_geometry_state=false`；修正后 ruff/format、direct-main test 1/1 与 bucket003 command preflight 全部 PASS。下一步被动复核 RTX5090/row root 后启动 local attempt2；A3 未闭合前 Full CEM 仍为 0。
+- A3 local attempt2 启动前复核 PASS：GPU0=`NVIDIA GeForce RTX 5090`、151/32607MiB、util0%、compute-app 为空；正式 row root 无产物，只有独立 failed_attempts 归档，preflight 再次 PASS。
+- A3 local attempt2 session `54266` 已启动，固定 bucket003 1024×32 seed0、完整轨迹、video/save_info on、recorder off；当前自然运行，不等待 idle、不操作既有进程。A3 未闭合，Full CEM 仍为 0。
+- remote immutable deployment 设计复核完成：将复用 E182 的 SHA inventory/`rsync --relative`/远端 verify 思路，但为 E187 新建独立最小 closure，不 import 或修改 E182；remote root 固定为 `/home/xiayb/pHRI_workspace/e187_runs/e187_<sha16>/spider`，共享 checkout 仅提供只读 `.venv/bin/python`。
+- E187 remote closure 将只含运行代码、004/007 scene/trajectory/contact/object assets、对应冻结 grid、A1/A2/override authority 与 runner；deploy/run/pull 均 fail-closed 且不使用 `--delete`、kill、抢占或等待 idle。下一步实现 deployment builder、Ada wrapper 与 manifest-driven pull，再 static/preflight 后才允许 remote canary。
+- remote runtime dependency closure 已解析：bucket004 grid=`56,076,392B`，bucket007 grid=`133,036,928B`；两个 E187 override 分别继承对应 E186 override，完整 `examples/` source 必须随 snapshot 冻结；004/007 case 目录、object OBJ、contact mask 与 authority SHA 将逐文件入 inventory。
+- pull 将先进入同文件系统 `mktemp` staging，逐条校验 remote canary manifest/result/config/video/log SHA 后才晋升到本地固定 row 目录；任何本地 row 已存在都会 fail-closed，不覆盖、不删除。下一步开始实现，local session `54266` 保持自然运行。
+- 已新增 E187 独立 `deploy_remote_canary.py`、2项 direct-main deployment tests、Ada0/1 canonical launch 与 staged pull wrapper；实现包含 bounded source/runtime inventory、SHA-derived remote root、remote verify、环境/GPU allowlist、两row tmux启动和pull前后SHA校验。
+- static 首轮在首命令立即停止：本地 `.venv/bin/ruff` 不存在（exit127），因此尚未执行 lint/bash-n/tests，也未 freeze/deploy/启动 remote。下一步只读定位项目实际 ruff 入口（预计 `uv run ruff`）后重跑；这不是科学运行失败。
+- 已确认项目 ruff 入口为 `uv run ruff` 0.15.12；首轮 format-check 仅要求 deployment builder 机械重排，没有执行后续链或远端动作。
+- 机械 format 后 remote deployment static 门闭合：ruff format/lint、两个 shell bash-n、direct-main tests 2/2 全 PASS。下一步先本地 freeze inventory 并校验 snapshot 规模/路径边界，再做 remote preflight；尚未部署或启动 Ada canary。
+- remote snapshot 临时 freeze/preflight PASS：2114 files、454,055,693B（约433MiB），source2036/runtime80；只含 bounded `spider/examples/src`、两个case/assets/grids/authority，明确不含 `.git/.venv/logs/s4_canary/rows`。snapshot identity=`91a5eaa8...75860`（临时预览，尚未正式冻结）。
+- 004/007 scene 的 robot STL、object OBJ 与8-part compound assets 均位于已纳入的 case/assets trees；local session `54266` 仍自然运行且本次轮询无新stdout，未对其发送控制字符。下一步做 diff/static最终复核后正式freeze+remote preflight。
+- final diff/path审计发现正式freeze前需修一项部署幂等性：deployment manifest 当前记录首次/复用布尔值，导致 preflight→canary 第二次 deploy payload 不同而触发 immutable-write 拒绝；应改成稳定的“frozen root verified”合同。
+- 两个 E186/E187 scientific override 已确认都在 closure；先前检查的 `examples/config/task/...` 路径是假设错误，实际 task selector 文件为 `examples/config/override/core4d_dcv3_...yaml` 且已由完整 examples tree 纳入。尚未正式freeze/deploy；下一步修复幂等字段并增加回归断言。
+- remote deploy 幂等性已修正：持久化 manifest 改为稳定 `frozen_remote_root_verified=true`，不再因首次/复用运行态差异改变 payload；tests 增加004/007真实 task selector closure 断言。
+- 修正后 remote static 门再次闭合：ruff format/lint、bash-n、direct-main2/2、git diff-check 全 PASS。代码与输入现在可正式freeze；freeze后该snapshot内执行文件不得再修改，下一步生成正式identity并运行只部署/验证的remote preflight。
+- E187 A3 remote snapshot 已正式冻结并本地逐文件 verify PASS：2114 files、454,055,665B，snapshot SHA=`3c3ce06a2a81c5a4d6574b02def5f9c635e3b6baeadcb8ddf2f8cc29c9924671`；manifest SHA=`a6392df4...ffed`，file-list SHA=`c466632b...0f9`。
+- remote preflight session `38518` 已启动，当前在向独立 root `e187_3c3ce06a2a81c5a4` 部署/逐文件验证；尚未启动 Ada CEM。冻结后的snapshot执行文件不再修改，若preflight失败只诊断或新建下一identity，不原地覆盖。
+- remote deployment/preflight 自然完成 PASS：远端2114/2114逐文件SHA一致；共享venv版本torch2.11/mujoco3.7/mjwarp3.7.0.1/warp1.12.1/hydra1.3.2/open3d0.19、ffprobe可用，shared checkout/environment均未修改。
+- Ada0/1 型号/资源/compute-app门 PASS：GPU0 837/49140MiB、GPU1 19/49140MiB，compute-app列表为空；004=`cuda:0`、007=`cuda:1`的1024×32/+recorder-off命令均 remote preflight PASS。local session `54266`仍自然运行无新stdout；下一步可启动两条 Ada canary，Full仍为0。
+- Ada canary 已正式启动：session `e187_a3_ada0_3c3ce06a2a81c5a4`=bucket004/GPU0，`e187_a3_ada1_3c3ce06a2a81c5a4`=bucket007/GPU1；两者均1024×32 seed0、video/save_info on、recorder off，复用同一冻结snapshot。
+- 启动后只读确认两session存活、config已写出并进入计算：Ada0 2486MiB/util42%（worker1644MiB），Ada1 2914MiB/util35%（worker2272MiB）；无OOM/覆盖迹象。三条canary均自然运行，A3未闭合，Full仍为0。
+- C9复核：plan206明确要求same-hardware end-to-end plan-time ratio≤1.50；A1已闭合R/G kernel ratio与<6GiB，但历史004/007 E178主要为A100，不能直接作为Ada baseline。local E178确有同一RTX5090 UUID证据，但为三设备一致口径仍优先补当前设备baseline。
+- `Config.max_sim_steps` 可在不改1024×32/seed0的前提下限制效率probe长度；计划在三条E187 canary自然结束后，各设备用对应E178 frozen override运行独立`max_sim_steps=30`短baseline，解析`opt_steps=32`记录作比值。先固化controller/preflight，绝不与当前canary并发或复用正式row输出。
+- 已新增A3 same-device efficiency audit、2项direct-main tests及独立run/pull wrappers：三设备E178 baseline固定1024×32 seed0/max_sim_steps30，输出到`efficiency_baseline`，只统计opt_steps32；audit要求GPU UUID相同、ratio≤1.5、E187 peak≤6144MiB。
+- efficiency static首轮按fail-fast只发现audit Python需机械format；lint/bash-n/tests/preflight尚未执行，也未启动baseline。下一步format后重跑完整链；三条E187 canary继续自然运行。
+- efficiency机械format完成后ruff仅报1个unused `Sequence` import，后续bash/tests/preflight继续按fail-fast未执行；该import已精确移除，无运行副作用。
+- 下一步重跑efficiency完整static/direct-main/preflight链；baseline仍为0，当前canary不受这一本地controller改动影响，remote frozen snapshot未修改。
+- same-device efficiency static门已闭合：ruff format/lint、bash-n、direct-main2/2、command preflight与diff-check全PASS；三命令均E178 frozen override、1024×32 seed0/max_sim_steps30、recorder-off、独立output。
+- canary只读进度：local003约43条optimized记录/目标约119，plan-time约22–27s、2688MiB；Ada004约11/139、约32s、2628MiB；Ada007约13/77、约29s、3098MiB。三session存活、无OOM；按实测自然完成尚需较长时间，仍不启动baseline或Full。
+- Full结构只读复核：E187 production override manifest保持22行ordered authority；E178/E176旧queue runner通过TSV row manifest做complete-skip和runtime validation，但含历史dynamic-import/box-only逻辑，E187不能直接复用或修改。
+- A4应实现E187 standalone queue/runner：A3 canary lock+efficiency PASS后按代表wall与trajectory长度LPT，前三条以canary SHA原子登记为completed，其余19条独立输出/immutable resume；当前只完成设计复核，未生成queue/Full产物。
+- A3 lock上游结构已复核：A1 lock明确三object kernel ratio最大1.01215、allocated最大681.80MiB且global gates PASS；A2 lock固定SHA=`400c98b4...441`、Full rows0、recorder-off与22/44门。后续canary lock将原样引用，不重算/回调R/G。
+- local session `54266` 追加30秒自然等待仍无stdout（runner输出写row log），session保持运行；未发送控制字符。下一步继续只读监控三条完整canary，尚不运行C9 baseline。
+- local session `54266` 又自然运行30秒且统一exec session仍存活，无stdout是因为CEM写入row `run.log`；未发送中断/控制字符。下一步读本地/远端log中的最新sim_steps和GPU快照。
+- 最新canary进度：local003 step114/252、optimized51；Ada004 step50/290、optimized19；Ada007 step52/166、optimized20。近期plan-time约28.5/32.1/29.9s，remote显存2628/3098MiB；三manifest尚未生成属正常运行中状态。
+- 已新增A3 canary gate lock builder与2项direct-main tests：将fail-closed复核三row artifact/config/video/recorder/memory、same-device efficiency、A1/A2/remote snapshot SHA，并保持technical FAIL+USER_WAIVED、Full rows0。尚未static验证或freeze。
+- A3 lock首轮format-check只要求2文件机械重排；format后ruff lint、direct-main2/2、authority preflight与diff-check全部PASS。preflight再次确认A1/A2 FROZEN、expected canaries精确3条、Full rows0。
+- `canary_gate_lock.json`仍未生成是预期：必须等三row PASS且C9 efficiency PASS后才能freeze。当前代码准备完成，继续自然监控，不提前晋级。
+- keep22轨迹口径已确认：trajectory qpos frames代表003/004/007=`126/145/83`，其它row同schema；可用代表canary实际wall按frame比例预测，而不读取/改变科学变量。
+- 已新增A4 LPT queue builder与2项direct-main tests：A3 lock必须C8/C9 FROZEN且Full0才生成；固定三canary为各worker position1，其余19条按预测wall LPT，输出3个immutable TSV+authority JSON。尚未static验证，未生成正式queue。
+- A4 queue首轮format-check仅需2文件机械重排；format后ruff lint、direct-main2/2、keep22 authority preflight与diff-check全PASS。preflight=22 rows、override PASS、A3 lock不存在、Full0。
+- queue builder已准备但fail-closed保持未生成；只有未来A3 lock存在才会写`s5_full/queue`。下一步继续canary自然监控，不能把代码准备误写为A4开始。
+- local canary session `54266` 再自然运行30秒仍存活且无stdout（输出仍写row log）；未发送控制字符。下一步只读汇总三条sim_steps/manifest/GPU状态。
+- canary进度更新：local003 step144/252、optimized66；Ada004 step76/290、optimized32；Ada007 step80/166、optimized34。remote两session存活，显存2628/3098MiB、util42/40%，三manifest尚未生成且无错误迹象。
+- local session继续自然运行30秒仍存活；未发送控制字符。Ada007接近半程，004仍为最长关键路径；Full与C9 baseline保持0。
+- 降频50秒自然监控后进度：local003 step154/252（71 optimized）、Ada004 86/290（37）、Ada007 88/166（38）；三manifest仍未生成且无异常。保持只读监控，baseline/Full仍为0。
+- 下一轮50秒自然监控：local003 160/252（74）、Ada004 92/290（40）、Ada007 94/166（41）；持续推进、无manifest/异常，未操作任何进程。
+- local session `54266` 连续两个59秒等待仍存活、无错误stdout；为减少噪声本轮未额外SSH轮询。三条保持自然运行，未发送控制字符，baseline/Full仍为0。
+- canary明显推进：local003 174/252（81 optimized）、Ada004 104/290（46）、Ada007 108/166（48），三manifest仍未生成；随后local又自然运行59秒且session存活。无错误/进程操作，baseline/Full仍为0。
+- local session `54266` 再连续两个59秒自然等待仍存活且无错误stdout；未额外轮询/操作远端。下一步再汇总三条sim_steps与completion manifest。
+- canary进度：local003 190/252（89 optimized）、Ada004 118/290（53）、Ada007 122/166（55）；三manifest未生成。随后local再自然运行59秒且session存活，无错误/操作，baseline/Full仍为0。
+- local session再连续两个59秒自然运行且存活，无错误stdout或控制操作；下一步检查三条completion状态。
+- canary进度：local003 210/252（99 optimized）、Ada004 132/290（60）、Ada007 136/166（62）；三manifest未生成。随后local又自然运行59秒且存活，仍无异常/操作。
+- local session再连续两个59秒自然运行且存活；未发送控制字符。003/007已进入后段，下一步检查是否自然生成manifest。
+- canary进度：local003 232/252（110 optimized）、Ada004 146/290（67）、Ada007 150/166（69）；随后local再自然运行59秒。003/007即将收口，004约半程；仍无错误/操作。
+- local003 canary attempt2自然完成PASS：wall=`3048.265s`、plan median（runner全record口径）=`24.60295s`、peak total GPU=`2688MiB`、numeric arrays=447；result/config/log/video SHA闭合，video 5.04s可读，full_promotable=true。
+- local unified session正常exit0，未中断/恢复；Gate0仍technical FAIL+USER_WAIVED。Ada004/007继续自然运行，C9 baseline尚未启动，Full仍0。
+- 为复用已释放RTX5090且不触碰remote canary，efficiency wrapper新增`local`分段入口：只检查local compute-app/GPU UUID并运行003 E178短baseline，`run`仍保留三设备整批入口。尚未bash-n/static/preflight，不得启动。
+- efficiency `local`入口bash-n、tests2/2、完整command preflight与diff-check PASS；启动前local GPU0 compute-app为空且RTX5090 allowlist满足。
+- local E178 same-device baseline session `87477`已启动：bucket003、1024×32 seed0/max_sim_steps30、video/info off、recorder off、独立efficiency root；remote004/007 canary不变，Full仍0。
+- remote007 canary自然完成PASS：wall=`2504.449s`、runner plan median=`32.3583s`、peak=`3098MiB`、numeric447、video3.32s可读，result/config/log/video SHA闭合；remote1 tmux自然退出，remote0/004继续。
+- efficiency wrapper新增`remote1`分段入口：只检查Ada GPU1 UUID对应compute-app为空，允许GPU0继续004 canary时在独立GPU1跑007 baseline；尚未static/preflight/启动。Full仍0。
+- `remote1`入口bash-n、tests2/2、command preflight与diff-check PASS；启动前GPU1 target UUID无compute-app，GPU0现有004 worker未被操作。
+- Ada1 E178 bucket007 same-device baseline session `e187_c9_e178_ada1_3c3ce06a2a81c5a4`已启动，1024×32/max_sim_steps30、独立root；Ada0继续004 canary，local003 baseline继续，Full仍0。
+- local003 E178 same-device baseline自然完成PASS：9条opt_steps32记录，median=`11.0563s`，config/override/scene SHA闭合；E187 canary同口径120条median=`24.9860s`，same-device ratio=`2.259888×`。
+- C9因此触发plan206硬停止规则`>2.0×`：A3 FAIL，禁止Full；这不是Gate0 historical golden waiver覆盖项，也不允许以数值不变优化窗口（仅1.5–2.0×）继续。remote004 canary与Ada1 baseline保持自然运行，不kill/暂停/抢占；Full rows仍0。
+- Tracker E187已更新为`A1/A2 PASS；A3 C9 FAIL 2.260×；remote自然收口；Full0`，保留Gate0 waiver与log256/257链接，不把technical FAIL改写。Claims未闭合，继续不commit/push。
+- 远端自然收口状态：Ada0/004 canary与Ada1/007 baseline session均仍运行；GPU0/1约2629/2422MiB，不操作。007 baseline当前opt_steps32 plan-time约15.0–15.6s，亦显示E187约32s相对baseline可能>2，但正式结论不抢跑。
+- local C9失败identity复核：canary/baseline GPU UUID均=`GPU-cc0dba62-a57f-cf03-8b13-3e7ed6e1a96c`；canary manifest SHA=`700757e7...72a9`，baseline log/config SHA=`e8f4775c...a372`/`684ea8a8...3bf`。下一步写immutable local failure artifact。
+- machine-readable local C9失败证据已写入`results/E187/s4_canary/efficiency_gate_local_failure.json`，JSON/diff-check PASS，file SHA=`84431f3f886cd9360d979a207f8a938a9252e96ae88782385ebdb1b6572d009c`；status=FAIL、stop_rule=`PLAN_TIME_RATIO_GT_2P0`、Full rows0。
+- 2026-08-03用户明确追加授权：`25s可以接受,继续吧`。执行解释为只豁免C9 same-hardware plan-time停止门（已测local ratio=2.259888×），保持C9 technical FAIL/measurement不变；不豁免C8、A1/A2、SHA/finite/video/recorder/output/device/process门。
+- 隔夜remote自然收口：无E187 tmux session；Ada0/1=`840/19MiB`，004/007 canary manifest均存在，007 E178 baseline config存在。未kill/暂停/抢占。下一步先写plan207 waiver amendment，再pull/verify，Full仍0。
+- 已新增plan207，冻结新增授权边界：C9 technical FAIL保持、progression改为USER_WAIVED；C8/A1/A2/SHA/device/isolation等门不豁免，A100/进程操作仍禁止。
+- remote004/007 canary已通过独立mktemp staging pull并在staging/最终root两次SHA verify PASS，2/2 rows无failure、不覆盖local003。下一步读取三manifest与拉取007 baseline；Full仍0。
+- 三条C8 canary本地复核均PASS：wall003/004/007=`3048.265/4384.031/2504.449s`，peak=`2688/2650/3098MiB`，video=`5.04/5.8/3.32s`可读，A2 lock SHA一致。
+- C9 waiver manifest已冻结（原文、plan207 SHA=`d0467a2a...0ce3`、FAIL artifact SHA=`84431f3f...009c`）；A3 lock/queue gate代码改为`c8_pass=true`且`c9_technical_pass=false,c9_progression_allowed=true,authority=USER_WAIVED`。尚待format/lint/tests/freeze，Full仍0。
+- A3 canary gate 已正式冻结：`s4_canary/canary_gate_lock.json` SHA=`65d53086d7e82b6f4faa384788509055d505abc1302709ab2f9003484eacb18a`；C8 PASS，C9 technical FAIL + progression `USER_WAIVED`，A1/A2/三条 canary/SHA/video/finite/recorder 门均保持闭合，`full_cem_started_rows=0`。
+- A4 keep22 LPT queue 已冻结：manifest SHA=`836b5388420f968e9c88968349a87799ae1ea3bd43d6276e631847c7956dcd92`；local/remote0/remote1 TSV SHA=`3bbd3e6f...a1c9d`/`15b97a6e...e44`/`ce132777...63afd`，22 unique（3 canary promotion + 19 NOT_RUN），预测负载=`23584.14/25302.13/23554.18s`。Full 仍为0；下一步实现独立 Full runner/deploy/pull，static/preflight 通过后才原子 promotion 与启动。
+- Tracker 已更新为 `A1/A2/C8 PASS；C9 technical FAIL+USER_WAIVED；A4 READY；Full 0`，并索引 plan207；未声称 C9 PASS。工作树存在大量 E186/E187 既有未提交改动，后续只增量修改 E187 Full 执行层，不 reset/checkout/clean、不触碰 log256/257。
+- Full 执行层复核完成：现有 `run_production_canary.py` 已提供完整1024×32、finite/video/config/SHA验证，但仅允许三代表case；旧 E173/E169 runner为dynamic-import历史层，不适合作为E187 authority。决定新增standalone runner读取冻结worker TSV、逐row fail-closed，并将canary以manifest SHA登记而非重跑。
+- 现有 remote canary snapshot 只闭合004/007两case且root已冻结，不能复用。Full deployment 将建立新`s5_full/deployment` identity，包含22 case/三grid/A1-A3 locks/queue/override/三canary artifacts与Full runner；新remote root仍由snapshot SHA派生，旧`s4_canary` root只读保留。
+- 已新增 standalone `run_full_queue.py` 与 direct-main tests：硬编码复核 A1/A2/A3/queue/三TSV SHA；三canary以`s5_full/promotion_manifest.json`最后提交0→3原子登记；19行保持1024×32 seed0、video/info on、query recorder off，逐row finite/config/video/SHA闭合且 incomplete/existing fail-closed。
+- runner 不复用旧 dynamic-import queue 逻辑；每worker只按冻结TSV串行，position1只验证promotion不重跑。尚未format/lint/test/preflight，也未生成promotion或启动Full；下一步先修静态问题，再实现新Full snapshot/deploy/wrappers。
+- Full runner 首轮 static 按 fail-fast 停在机械format要求；已仅执行ruff format，尚未运行lint/direct-main/preflight，也未产生任何实验输出或promotion。下一步继续静态链并修正代码级问题。
+- Full runner ruff lint PASS、direct-main 2/2 PASS：冻结19行命令均1024×32/seed0/video-on/recorder-off且无`max_sim_steps`，三promotion与A3 canary一一对应。尚未执行实际runner preflight或登记promotion。
+- 已新增独立 `deploy_remote_full.py` 与tests：Full root格式固定`e187_full_<sha16>/spider`，runtime closure要求22 unique、三grid、A1/A2/A3、queue、promotion、三canary artifacts及全case目录；明确拒绝旧canary root与shared checkout。
+- Full deployment首轮format-check按fail-fast仅发现两个新文件需机械format；尚未lint/test/freeze/deploy，旧remote canary root未触碰。下一步仅format后继续static。
+- Full deployment两个Python文件已机械format；新增canonical local/remote Full launch与staged pull wrappers，并让既有`run_E187_local.sh full`/`run_E187_remote_a6000.sh full`转发到新入口。
+- wrappers固定local RTX5090 GPU0、remote RTX6000 Ada GPU0/1，compute-app非空即拒绝且不等待/抢占；remote按physical `gpu-id=0/1`精确选择设备；pull仅拉13条remote新row，经mktemp staging与最终root两次SHA verify且拒绝覆盖。尚未bash-n/lint/test/preflight/launch。
+- Full execution layer static PASS：4个Python ruff format/lint、5个shell bash-n全部通过；runner direct-main 2/2再次PASS。
+- 三worker实际command preflight PASS：local-0=`1 promotion+6 new`、remote-0=`1+7`、remote-1=`1+6`，合计3 promotion+19 new；尚未登记promotion/冻结Full snapshot/启动GPU。下一步先完成deployment无promotion静态可测重构，再做原子登记。
+- remote deployment test已调整为promotion前也能静态验证22-row authority、A1-A3/queue SHA、三canary与三grid；promotion存在后自动升级为完整runtime closure测试。首轮仍按fail-fast停在该test文件机械format要求，lint/test未运行且无实验状态变更。
+- remote deployment test机械format后 ruff lint、direct-main 2/2 PASS；promotion前静态门现已闭合。下一步复核GPU/现有row与diff，再执行三canary原子登记（Full started 0→3），随后冻结新的Full snapshot。
+- 启动前只读审计 PASS：A1/A2/A3/queue/三TSV SHA与冻结值完全一致；`s5_full`此前仅有queue、无row覆盖风险；local RTX5090=`151/32607MiB util0%`、compute-app空，remote Ada0/1=`840/19MiB`且compute-app空。remote仅存在历史非E187 tmux，会保持不动；diff-check PASS。
+- canonical local wrapper实际preflight PASS，并按skill生成7个local queue scene snapshot（manifest已记录git HEAD与scene SHA）；再次验证6条新Full命令。尚未promotion/launch。下一步执行原子登记并立即复核3个Full manifest SHA。
+- 三条canary已原子登记为Full completed，`full_cem_started_rows 0→3`，没有重跑/复制artifact；promotion manifest SHA=`11502d4b0a6a88a743ae34026bce1ff23ffac34105a3844206c65e901c001cc0`。
+- 三Full row manifest SHA：003=`ef064f66...506e`、004=`590052d9...defb`、007=`7b83566c...bdb9`；逐artifact SHA verify 3/3 PASS。promotion后remote deployment完整closure test 2/2 PASS；remaining NOT_RUN=19。下一步冻结并本地verify新的Full snapshot。
+- 新Full immutable snapshot已冻结并本地逐文件verify PASS：2596 files、517,092,094B，identity=`a4d98a1b8fcb4afd4d75d35905ff39097cdfec167f5acc14ab3000025388d37c`；source manifest SHA=`0c3d17d0...925f`、file-list SHA=`534b0bb0...1df`。
+- closure精确为22 unique（local/remote0/remote1=`7/8/7`）、三object、3 promotion+19 NOT_RUN，并绑定A1/A2/A3/queue/promotion SHA；旧canary snapshot/root未复用。下一步部署到新`e187_full_a4d98a1b8fcb4afd/spider`并远端2596-file verify，不启动CEM直到remote preflight通过。
+- Full remote deployment/preflight自然完成 PASS：新root=`/home/xiayb/pHRI_workspace/e187_runs/e187_full_a4d98a1b8fcb4afd/spider`，2596/2596 SHA一致；shared venv/checkout未修改、`--delete`未用、旧canary root未复用，Ada0/1资源门与两worker command preflight通过。
+- preflight同时暴露wrapper启动口径需在launch前精确修正：当前draft用`CUDA_VISIBLE_DEVICES=<physical>`后传visible0，会让runner的`nvidia-smi --id=0`在Ada1 worker误监控physical0；将改为与已验证canary一致，不设CVD、直接传physical `gpu-id=0/1`，保持Hydra device与显存监控同卡。尚未启动任何Full worker。
+- remote wrapper设备口径已修正并bash-n/diff-check PASS；冻结Full snapshot本地2596-file verify仍PASS，identity未变。
+- 两条Ada Full队列已正式启动：`e187_a4_ada0_a4d98a1b8fcb4afd`=`remote-0/GPU0/7 new`，`e187_a4_ada1_a4d98a1b8fcb4afd`=`remote-1/GPU1/6 new`；命令physical device与memory monitor同为0/1，无CVD错位。启动前compute-app空、未等待/抢占/操作历史session。下一步只读确认远端健康，再启动local-0的6 new。
+- Ada启动后只读健康检查：两session存活，GPU0/1=`2520/2876MiB`、util=`40/35%`，各仅一条E187 python compute-app（1674/2234MiB），无OOM/早退迹象。
+- local-0 Full队列已正式启动：session=`e187_a4_local_836b5388420f968e`，RTX5090 GPU0，6 new rows；启动前wrapper再次完成scene snapshot、tests/preflight与promotion幂等验证。现在三worker均运行，Full已登记3/22、其余19按队列自然执行；下一步首轮只读健康检查并更新Tracker。
+- 首轮健康检查发现local launch并未实际存活：session已自然消失、GPU仍151MiB、无launcher log、无新row目录，因此没有进入CEM/没有incomplete row/没有覆盖；remote两worker正常运行并已各进入首个新row（sim14，plan约34–36s）。
+- local根因定位为wrapper将`printf %q`结果再次作为单一quoted tmux command参数，tmux立即解析失败；remote使用unquoted `$quoted`故正常。下一步仅修local tmux调用并bash-n，确认output仍clean后启动新的attempt2 session；不修改冻结remote snapshot/runner。
+- local tmux quoting已精确修正为与remote已验证模式一致；bash-n PASS，启动前确认compute-app空且除3个promotion外没有任何new/incomplete row。
+- local attempt2已启动同一确定性session identity=`e187_a4_local_836b5388420f968e`；首次失败没有科学运行或row artifact，因此无需另建case output attempt目录。下一步只读确认session/GPU/new row，再把Tracker从A4 READY改为Full RUNNING。
+- local attempt2同样在tmux命令解析阶段立即退出：仍无session/GPU进程/log/new row，因此没有科学run/incomplete output。根因进一步明确：变量展开后的`%q`反斜杠不会被本地shell二次解析；remote之所以可行是还经过一层SSH remote shell。
+- local wrapper改为显式`tmux ... bash -lc "$worker_command"`参数传递，不再依赖二次解析。下一步bash-n并做无副作用的tmux命令传递smoke，再启动attempt3；按三次失败协议这是第二次launcher failure，不能重复同样方法。
+- 新local tmux传参方式通过独立自然退出smoke（session存活后2s命令自然结束，无kill）；bash-n PASS。随后确认local output仍仅3 promotion、compute-app空。
+- local attempt3已用新`bash -lc`方式启动，session identity保持确定性；remote双worker继续自然运行。下一步立即确认local session/GPU/首个new row，若仍失败则按三次失败协议停止并请求用户，而不做第四次盲试。
+- local attempt3健康 PASS：session存活，RTX5090=`2558MiB util49%`、唯一E187 compute-app=`2388MiB`；首个new row=`bucket004_20231002_021_p2`已写config/run.log并推进sim12/286，无OOM/早退。
+- Tracker已更新为`Full RUNNING；3完成+3运行+16排队`；三条技术状态仍明确为Gate0 FAIL、C9 technical FAIL、progression USER_WAIVED。三worker会自然串行完成19行，不kill/暂停/抢占；Claims未闭合，不commit/push。
+- 启动后最终交接门 PASS：4 Python format/lint、5 shell bash-n、diff-check全通过；local与Ada0/1三session均存活，remote显存=`2598/3018MiB`、util=`39/37%`。Full execution已进入稳定自然运行状态；后续用staged pull在remote 13行全部PASS后回收，不覆盖本地row。
+- 2026-08-03只读进度复核：三worker均已自然完成且state=`PASS`；local-0=`7/7`（1 promotion+6 new），remote-0=`8/8`（1+7），remote-1=`7/7`（1+6），union为keep22 `22/22`。本地当前有9个manifest，remote Full root有16个manifest（两边共享3 promotion），无incomplete row。
+- local/remote E187 tmux均已自然退出；RTX5090=`151MiB util0%`，Ada0/1=`761/19MiB util1/0%`，无运行中E187 Full worker。尚未执行staged pull，因此本地仍缺remote新增13行；Tracker更新为`Full workers PASS；remote13待pull/verify`，不能提前宣称本地22-row closure或Claims闭合。
+- 用户授权执行最终回收。pull前门禁PASS：canonical staged-pull wrapper bash-n通过；remote0/1冻结TSV解析出13 unique new rows，本地冲突0；deployment status=PASS且remote root安全匹配`e187_full_a4d98a1b8fcb4afd/spider`，远端16个manifest（3 promotion+13 new）齐全。下一步执行mktemp staging pull，任何SHA/存在性失败都会在晋升前停止。
+- remote 13行已通过canonical mktemp staging回收：staging verify=`13/13 PASS`、晋升后本地verify=`13/13 PASS`、failure=0，未覆盖任何已有row；pull wrapper返回`E187_PULL_REMOTE_FULL=PASS rows=13`。
+- 首次keep22 closure命令的核心`verify_rows`已输出`22/22 PASS, failures=[]`；随后仅在打印附加summary时因Python `Counter`含tuple budget key不可JSON序列化而exit1，不影响已完成的22-row SHA验证或artifact。下一步改为字符串budget key重跑附加计数，不重复pull、不改任何row。
+- 修正附加summary序列化后keep22本地closure完整PASS：22 queue/22 unique/22 manifests，missing=0、unexpected=0、SHA failure=0；构成为3 promoted canary+19 Full CEM，worker=`7/8/7`，全为`1024×32 seed0`。
+- 22/22 manifest均status PASS、finite检查已执行、video readable；peak total GPU max=`3112MiB`，remote回收后compute snapshot为空。C9字段在22行中均保持technical FAIL + `USER_WAIVED`，未改写为PASS。Tracker更新为`Full 22/22 PASS；paired eval待执行`；Full C10闭合，但paired evaluation/最终Claims与新结果log尚未完成，继续不commit/push。
+- 2026-08-03：用户已在`results/E187/s6_downstream/eval/full/user_manual_review_filled.tsv`完成E187人工标注，要求与E178标注做同case比较。本轮使用experiment-planning恢复E187冻结口径，并按data-construction-v3的S6 evidence规则只读核对标注authority，不改用户标签。
+- 当前Tracker显示E187 Full/eval/paired视频已完成，numeric为6/22 vs E178 keep22的8/22；人工结论尚需以TSV逐casejoin后计算，不能从numeric结果代推。
+- 两份人工authority SHA已读取：E187=`0b3de9ea...f0161a`，E178=`2d2ef9c8...e223a`。E187 TSV覆盖22/22且review_status均为reviewed，但decision为USE=11、DO_NOT_USE=8、PENDING=3；因此“看过22条”不等于“22条终审完成”。
+- E178原filled TSV只含23个已裁决row，keep22投影中有18条已裁决，bucket004四条缺失应视为PENDING，禁止当作DNU。E187的三个PENDING为`bucket007_20231003_2_021_p1`、`bucket007_20231018_019_p1`、`bucket007_20231018_021_p2`。
+- 初步同case、双方均有终裁的15条中：USE→USE=7、DNU→USE=2、DNU→DNU=6、USE→DNU=0；即当前可比子集人工USE净+2且无人工回归，但仍需脚本化复核、按object/quality/numeric一致性统计后再下结论。
+- 只读统计复核闭合：common-decisive 15条中E178 USE=7/15、E187 USE=9/15（+13.3pp）；McNemar discordant为2恢复/0回归，双侧exact p=0.5，方向正向但样本不足以宣称统计显著。
+- 两条人工恢复：`bucket003_20231018_003_p1`（UNUSABLE→MINOR_ACCEPTABLE）和`bucket007_20231003_1_021_p1`（UNUSABLE→CLEAN）。前者root/hand位置与contact改善但新增lower-body穿透，后者hand penetration改善但leg penetration升到0.263；两条numeric仍FAIL，说明人工改善与12门lower-body硬门存在冲突。
+- 人工quality在common15为改善5、持平9、回归1；唯一quality回归是`bucket007_20231023_075_p2` CLEAN→MINOR_ACCEPTABLE，但仍USE。另两条DNU从UNUSABLE变MAJOR_DEFECT不等于可用恢复。
+- Numeric/人工一致性明显恶化：E178已裁18条中numeric USE recall=6/8、DNU rejection=10/10；E187已裁19条中USE recall=4/11、DNU rejection=7/8。E187有7条人工USE被numeric拒绝（其中6条含lower_body failure），另有`bucket004_20231003_1_012_p2` numeric PASS但人工DNU（接触很差）。
+- 已新增plan210，冻结人工比较口径：只在双方decisive交集计算迁移，缺失/PENDING均不伪装DNU；保留两份annotation SHA、quality变化、numeric/manual错配与C9 FAIL/USER_WAIVED治理状态。
+- 已新增canonical只读report脚本与wrapper：`gen_E187_vs_E178_manual_review_comparison.py`和`eval_E187_vs_E178_manual_review.sh`；计划输出22-row comparison TSV及JSON/Markdown summary。尚未格式化、静态检查或执行，未修改两份用户标注。
+- 首次static按fail-fast在`.venv/bin/python -m ruff`停止1次：项目venv未安装ruff，后续lint/py_compile/bash-n未执行、无result artifact。已确认可用的全局ruff为`/home/ubuntu/miniconda3/bin/ruff`（0.15.12）及`uv run ruff`；下一步改用已存在ruff，不重复失败命令。
+- 第二轮static确认report需机械format，已执行ruff format；随后全规则lint因1项import排序和12项D103 helper docstring停止。尚未运行report/写结果。下一步用ruff安全fix import，并为本文件helper加短docstring后重跑，不降低lint口径或忽略错误。
+- 已用ruff安全修复import排序并补齐helper docstring；随后format、全规则ruff、py_compile、wrapper bash-n、相关diff-check全部PASS。canonical report现在允许执行，但尚未写comparison artifacts。
+- canonical manual comparison已执行PASS：22-row TSV、JSON、Markdown均生成，common-decisive=15、recovered=2、regressed=0、E187 PENDING=3，summary状态正确为`PENDING_USER_REVIEW`。
+- 同一wrapper确定性重跑后3个输出SHA逐值不变：TSV=`c88d8d48...f01f`、JSON=`2ae26899...acf`、MD=`0975b21b...894`。两份用户annotation SHA执行前后保持E187=`0b3de9ea...161a`、E178=`2d2ef9c8...223a`，确认未回写标签。
+- 已新增正式结果log260：结论为MIXED——人工common15净+2且无回归，但numeric/下肢安全与C9效率退化，且3条PENDING使人工终审未闭合。log明确最保守pending敏感性下E187在E178已裁18条上仍至少净+1 USE，但不冒充最终迁移。
+- Tracker E187已更新为`Manual比较完成；3 PENDING`并索引log260/plan210；log INDEX已重建并收录259个log文件。未自动生成RL export或修改任何Full/annotation artifact。

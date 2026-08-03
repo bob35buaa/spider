@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified case index + annotation store for the PRG review player (E170-E178).
+"""Unified case index + annotation store for the PRG review player (E170-E187).
 
 Pure-python (no viser / no spider imports) so it is importable headless for the
 `--check` self-test. Reads each experiment's ``*_case_metrics.tsv`` by column
@@ -19,7 +19,7 @@ from pathlib import Path
 
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174", "E178")
+DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174", "E178", "E187")
 
 GATE_FIELDS = (
     "fall_gate_pass",
@@ -97,7 +97,11 @@ def normalize_path(raw: str) -> str:
     # (workspace/core4d/results is a symlink to that dir), so collapse the double
     # results/ before the single-results legacy rule below.
     if "spider_workdirs/core4d/results/results/" in text:
-        return str(REPO / "workspace/core4d/results" / text.split("spider_workdirs/core4d/results/results/", 1)[1])
+        return str(
+            REPO
+            / "workspace/core4d/results"
+            / text.split("spider_workdirs/core4d/results/results/", 1)[1]
+        )
     # legacy foreign mount: /mnt/<uuid>/spider_workdirs/core4d/results/... -> workspace/core4d/...
     if "spider_workdirs/" in text:
         return str(REPO / "workspace" / text.split("spider_workdirs/", 1)[1])
@@ -202,8 +206,8 @@ def save_annotation(exp: str, case_id: str, values: dict[str, str]) -> Path:
     row.update(values)
     row["case_id"] = case_id
     row["user_manual_review_status"] = "reviewed"
-    row["manual_reviewed_at"] = _dt.datetime.now().astimezone().isoformat(
-        timespec="seconds"
+    row["manual_reviewed_at"] = (
+        _dt.datetime.now().astimezone().isoformat(timespec="seconds")
     )
     rows[case_id] = row
 
@@ -246,7 +250,9 @@ def _read_exp(exp: str) -> list[CaseRecord]:
                     object_key=(row.get("object_key") or "").strip(),
                     retarget_variant_id=(row.get("retarget_variant_id") or "").strip(),
                     numeric_release_pass=_as_bool(row.get("numeric_release_pass", "")),
-                    numeric_failure_modes=[m.strip() for m in modes.split(",") if m.strip()],
+                    numeric_failure_modes=[
+                        m.strip() for m in modes.split(",") if m.strip()
+                    ],
                     gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
                     status=(row.get("status") or "").strip(),
                     outdir_npz=normalize_path(row.get("outdir_npz", "")),
@@ -290,7 +296,9 @@ def _check() -> int:
 
     records = build_index()
     ok = True
-    print(f"{'exp':6} {'indexed':>7} {'evaluated':>9} {'npass':>5} {'reviewed':>8} {'playable':>8}")
+    print(
+        f"{'exp':6} {'indexed':>7} {'evaluated':>9} {'npass':>5} {'reviewed':>8} {'playable':>8}"
+    )
     for exp in DEFAULT_EXPS:
         recs = [r for r in records if r.exp_id == exp]
         summ = eval_dir(exp) / "summary.json"
@@ -310,7 +318,9 @@ def _check() -> int:
             f"{exp:6} {len(recs):7d} {evaluated:9d} {idx_pass:5d} {reviewed:8d} "
             f"{playable:8d}{flag}"
         )
-    print(f"total indexed: {len(records)}  playable: {sum(1 for r in records if r.playable)}")
+    print(
+        f"total indexed: {len(records)}  playable: {sum(1 for r in records if r.playable)}"
+    )
     print(f"objects: {objects_for(records)}")
     print(f"failure modes: {failure_modes_for(records)}")
     print(f"variants: {variants_for(records)}")

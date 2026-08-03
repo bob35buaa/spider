@@ -26,9 +26,16 @@ import warp as wp
 # mjwarp._src.io.MAX_WORLDS = 1024
 from spider.config import (
     Config,
+)
+from spider.config import (
     resolve_object_collision_geom_ids as _resolve_object_collision_geom_ids,
 )
 from spider.math import quat_sub
+from spider.rewards.surface_distance import (
+    surface_distance_score,
+    surface_distance_support_mask,
+)
+from spider.simulators.mjwp_object_distance import GridObjectDistanceRuntime
 
 MESH_SDF_SAMPLE_COUNT = 800
 
@@ -196,21 +203,15 @@ def _geom_box_union_sdf_min(
 
     box_type = int(mujoco.mjtGeom.mjGEOM_BOX)
     non_box = [
-        gid
-        for gid in object_geom_ids
-        if int(env.model_cpu.geom_type[gid]) != box_type
+        gid for gid in object_geom_ids if int(env.model_cpu.geom_type[gid]) != box_type
     ]
     if non_box:
         names = [
-            mujoco.mj_id2name(
-                env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, gid
-            )
-            or str(gid)
+            mujoco.mj_id2name(env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, gid) or str(gid)
             for gid in non_box
         ]
         raise ValueError(
-            "Object SDF union currently supports box geoms only; "
-            f"got {','.join(names)}"
+            f"Object SDF union currently supports box geoms only; got {','.join(names)}"
         )
 
     mesh_type = int(mujoco.mjtGeom.mjGEOM_MESH)
@@ -228,10 +229,7 @@ def _geom_box_union_sdf_min(
         mats = geom_xmat[:, primitive_ids]
         axes = mats[:, :, :, 2]
         primitive_radii = torch.tensor(
-            [
-                float(env.model_cpu.geom_size[gid, 0])
-                for gid in primitive_ids
-            ],
+            [float(env.model_cpu.geom_size[gid, 0]) for gid in primitive_ids],
             device=config.device,
             dtype=geom_xpos.dtype,
         )
@@ -251,9 +249,9 @@ def _geom_box_union_sdf_min(
         samples = torch.stack(
             (-half_lens, torch.zeros_like(half_lens), half_lens), dim=1
         )
-        primitive_points = centers.unsqueeze(2) + axes.unsqueeze(
-            2
-        ) * samples.view(1, -1, 3, 1)
+        primitive_points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(
+            1, -1, 3, 1
+        )
 
     mesh_points: list[torch.Tensor] = []
     for gid in mesh_ids:
@@ -264,14 +262,10 @@ def _geom_box_union_sdf_min(
         if nv > MESH_SDF_SAMPLE_COUNT:
             idx = np.linspace(0, nv - 1, MESH_SDF_SAMPLE_COUNT).astype(int)
             verts_np = verts_np[idx]
-        verts = torch.tensor(
-            verts_np, device=config.device, dtype=geom_xpos.dtype
-        )
+        verts = torch.tensor(verts_np, device=config.device, dtype=geom_xpos.dtype)
         center = geom_xpos[:, gid]
         mat = geom_xmat[:, gid]
-        mesh_points.append(
-            center[:, None, :] + torch.einsum("nij,sj->nsi", mat, verts)
-        )
+        mesh_points.append(center[:, None, :] + torch.einsum("nij,sj->nsi", mat, verts))
 
     for start in range(0, len(object_geom_ids), object_chunk_size):
         chunk_ids = object_geom_ids[start : start + object_chunk_size]
@@ -284,14 +278,9 @@ def _geom_box_union_sdf_min(
         )
 
         if primitive_points is not None and primitive_radii is not None:
-            delta = (
-                primitive_points[:, None, :, :, :]
-                - obj_pos[:, :, None, None, :]
-            )
+            delta = primitive_points[:, None, :, :, :] - obj_pos[:, :, None, None, :]
             local = torch.einsum("nbji,nbrpj->nbrpi", obj_mat, delta)
-            q = torch.abs(local) - half_ext.view(
-                1, len(chunk_ids), 1, 1, 3
-            )
+            q = torch.abs(local) - half_ext.view(1, len(chunk_ids), 1, 1, 3)
             outside = torch.clamp(q, min=0.0).norm(dim=-1)
             inside = torch.clamp(q.max(dim=-1).values, max=0.0)
             sdf_geom = (outside + inside).min(dim=3).values
@@ -301,9 +290,7 @@ def _geom_box_union_sdf_min(
         for points in mesh_points:
             delta = points[:, None, :, :] - obj_pos[:, :, None, :]
             local = torch.einsum("nbji,nbsj->nbsi", obj_mat, delta)
-            q = torch.abs(local) - half_ext.view(
-                1, len(chunk_ids), 1, 3
-            )
+            q = torch.abs(local) - half_ext.view(1, len(chunk_ids), 1, 3)
             outside = torch.clamp(q, min=0.0).norm(dim=-1)
             inside = torch.clamp(q.max(dim=-1).values, max=0.0)
             candidates.append((outside + inside).amin(dim=(1, 2)))
@@ -364,21 +351,15 @@ def _geom_box_union_sdf_per_geom(
 
     box_type = int(mujoco.mjtGeom.mjGEOM_BOX)
     non_box = [
-        gid
-        for gid in object_geom_ids
-        if int(env.model_cpu.geom_type[gid]) != box_type
+        gid for gid in object_geom_ids if int(env.model_cpu.geom_type[gid]) != box_type
     ]
     if non_box:
         names = [
-            mujoco.mj_id2name(
-                env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, gid
-            )
-            or str(gid)
+            mujoco.mj_id2name(env.model_cpu, mujoco.mjtObj.mjOBJ_GEOM, gid) or str(gid)
             for gid in non_box
         ]
         raise ValueError(
-            "Object SDF union currently supports box geoms only; "
-            f"got {','.join(names)}"
+            f"Object SDF union currently supports box geoms only; got {','.join(names)}"
         )
 
     mesh_type = int(mujoco.mjtGeom.mjGEOM_MESH)
@@ -395,10 +376,7 @@ def _geom_box_union_sdf_per_geom(
         mats = geom_xmat[:, primitive_ids]
         axes = mats[:, :, :, 2]
         primitive_radii = torch.tensor(
-            [
-                float(env.model_cpu.geom_size[gid, 0])
-                for gid in primitive_ids
-            ],
+            [float(env.model_cpu.geom_size[gid, 0]) for gid in primitive_ids],
             device=config.device,
             dtype=geom_xpos.dtype,
         )
@@ -418,9 +396,9 @@ def _geom_box_union_sdf_per_geom(
         samples = torch.stack(
             (-half_lens, torch.zeros_like(half_lens), half_lens), dim=1
         )
-        primitive_points = centers.unsqueeze(2) + axes.unsqueeze(
-            2
-        ) * samples.view(1, -1, 3, 1)
+        primitive_points = centers.unsqueeze(2) + axes.unsqueeze(2) * samples.view(
+            1, -1, 3, 1
+        )
 
     mesh_points: dict[int, torch.Tensor] = {}
     for gid in mesh_ids:
@@ -431,19 +409,13 @@ def _geom_box_union_sdf_per_geom(
         if nv > MESH_SDF_SAMPLE_COUNT:
             idx = np.linspace(0, nv - 1, MESH_SDF_SAMPLE_COUNT).astype(int)
             verts_np = verts_np[idx]
-        verts = torch.tensor(
-            verts_np, device=config.device, dtype=geom_xpos.dtype
-        )
+        verts = torch.tensor(verts_np, device=config.device, dtype=geom_xpos.dtype)
         center = geom_xpos[:, gid]
         mat = geom_xmat[:, gid]
-        mesh_points[gid] = center[:, None, :] + torch.einsum(
-            "nij,sj->nsi", mat, verts
-        )
+        mesh_points[gid] = center[:, None, :] + torch.einsum("nij,sj->nsi", mat, verts)
 
     primitive_chunks: list[torch.Tensor] = []
-    mesh_chunks: dict[int, list[torch.Tensor]] = {
-        gid: [] for gid in mesh_ids
-    }
+    mesh_chunks: dict[int, list[torch.Tensor]] = {gid: [] for gid in mesh_ids}
     for start in range(0, len(object_geom_ids), object_chunk_size):
         chunk_ids = object_geom_ids[start : start + object_chunk_size]
         obj_pos = geom_xpos[:, chunk_ids]
@@ -455,14 +427,9 @@ def _geom_box_union_sdf_per_geom(
         )
 
         if primitive_points is not None and primitive_radii is not None:
-            delta = (
-                primitive_points[:, None, :, :, :]
-                - obj_pos[:, :, None, None, :]
-            )
+            delta = primitive_points[:, None, :, :, :] - obj_pos[:, :, None, None, :]
             local = torch.einsum("nbji,nbrpj->nbrpi", obj_mat, delta)
-            q = torch.abs(local) - half_ext.view(
-                1, len(chunk_ids), 1, 1, 3
-            )
+            q = torch.abs(local) - half_ext.view(1, len(chunk_ids), 1, 1, 3)
             outside = torch.clamp(q, min=0.0).norm(dim=-1)
             inside = torch.clamp(q.max(dim=-1).values, max=0.0)
             sdf_geom = (outside + inside).min(dim=3).values
@@ -472,9 +439,7 @@ def _geom_box_union_sdf_per_geom(
         for gid, points in mesh_points.items():
             delta = points[:, None, :, :] - obj_pos[:, :, None, :]
             local = torch.einsum("nbji,nbsj->nbsi", obj_mat, delta)
-            q = torch.abs(local) - half_ext.view(
-                1, len(chunk_ids), 1, 3
-            )
+            q = torch.abs(local) - half_ext.view(1, len(chunk_ids), 1, 3)
             outside = torch.clamp(q, min=0.0).norm(dim=-1)
             inside = torch.clamp(q.max(dim=-1).values, max=0.0)
             mesh_chunks[gid].append((outside + inside).amin(dim=(1, 2)))
@@ -485,9 +450,7 @@ def _geom_box_union_sdf_per_geom(
         primitive_sdf = torch.stack(primitive_chunks, dim=2).min(dim=2).values
     else:
         primitive_sdf = None
-    primitive_columns = {
-        gid: index for index, gid in enumerate(primitive_ids)
-    }
+    primitive_columns = {gid: index for index, gid in enumerate(primitive_ids)}
     mesh_sdf = {
         gid: (
             values[0]
@@ -497,11 +460,7 @@ def _geom_box_union_sdf_per_geom(
         for gid, values in mesh_chunks.items()
     }
     columns = [
-        (
-            mesh_sdf[gid]
-            if gid in mesh_sdf
-            else primitive_sdf[:, primitive_columns[gid]]
-        )
+        (mesh_sdf[gid] if gid in mesh_sdf else primitive_sdf[:, primitive_columns[gid]])
         for gid in geom_ids
     ]
     return torch.stack(columns, dim=1)
@@ -518,16 +477,12 @@ def _batched_geom_box_union_sdf_cache(
     """Evaluate all requested robot-geom groups from one per-geom SDF batch."""
     group_keys = list(
         dict.fromkeys(
-            tuple(int(gid) for gid in group)
-            for group in geom_groups
-            if group
+            tuple(int(gid) for gid in group) for group in geom_groups if group
         )
     )
     if not group_keys:
         return {}
-    ordered_geom_ids = list(
-        dict.fromkeys(gid for key in group_keys for gid in key)
-    )
+    ordered_geom_ids = list(dict.fromkeys(gid for key in group_keys for gid in key))
     per_geom_sdf = _geom_box_union_sdf_per_geom(
         config,
         env,
@@ -536,16 +491,111 @@ def _batched_geom_box_union_sdf_cache(
         geom_xpos=geom_xpos,
         geom_xmat=geom_xmat,
     )
-    column_by_geom_id = {
-        gid: index for index, gid in enumerate(ordered_geom_ids)
-    }
+    column_by_geom_id = {gid: index for index, gid in enumerate(ordered_geom_ids)}
     return {
         key: per_geom_sdf[
             :,
             [column_by_geom_id[gid] for gid in key],
-        ].min(dim=1).values
+        ]
+        .min(dim=1)
+        .values
         for key in group_keys
     }
+
+
+def _require_grid_object_distance_runtime(
+    config: Config,
+) -> GridObjectDistanceRuntime:
+    runtime = getattr(config, "_object_distance_grid_runtime", None)
+    if not isinstance(runtime, GridObjectDistanceRuntime):
+        raise RuntimeError(
+            "grid_sdf object-distance backend was not resolved before runtime"
+        )
+    return runtime
+
+
+def _object_distance_group_cache(
+    config: Config,
+    env: MJWPEnv,
+    geom_groups: list[list[int]],
+    object_geom_ids: list[int],
+    *,
+    geom_xpos: torch.Tensor,
+    geom_xmat: torch.Tensor,
+    body_xpos: torch.Tensor | None = None,
+    body_xmat: torch.Tensor | None = None,
+) -> dict[tuple[int, ...], torch.Tensor]:
+    """Build one-tick nominal distance cache for the configured backend."""
+    if config.object_distance_backend == "legacy_box":
+        return _batched_geom_box_union_sdf_cache(
+            config,
+            env,
+            geom_groups,
+            object_geom_ids,
+            geom_xpos=geom_xpos,
+            geom_xmat=geom_xmat,
+        )
+    if config.object_distance_backend != "grid_sdf":
+        raise ValueError(
+            f"Unsupported object_distance_backend={config.object_distance_backend!r}"
+        )
+    runtime = _require_grid_object_distance_runtime(config)
+    if body_xpos is None:
+        body_xpos = wp.to_torch(env.data_wp.xpos)
+    if body_xmat is None:
+        body_xmat = wp.to_torch(env.data_wp.xmat).reshape(body_xpos.shape[0], -1, 3, 3)
+    return runtime.group_cache(
+        env.model_cpu,
+        geom_groups,
+        geom_xpos=geom_xpos,
+        geom_xmat=geom_xmat,
+        body_xpos=body_xpos,
+        body_xmat=body_xmat,
+    )
+
+
+def _cached_object_distance_sdf_min(
+    cache: dict[tuple[int, ...], torch.Tensor],
+    config: Config,
+    env: MJWPEnv,
+    geom_ids: list[int],
+    object_geom_ids: list[int],
+    *,
+    geom_xpos: torch.Tensor,
+    geom_xmat: torch.Tensor,
+    body_xpos: torch.Tensor | None = None,
+    body_xmat: torch.Tensor | None = None,
+    conservative: bool = False,
+) -> torch.Tensor:
+    """Query nominal reward distance or conservative hard-gate distance."""
+    if config.object_distance_backend == "legacy_box":
+        return _cached_geom_box_union_sdf_min(
+            cache,
+            config,
+            env,
+            geom_ids,
+            object_geom_ids,
+            geom_xpos=geom_xpos,
+            geom_xmat=geom_xmat,
+        )
+    key = tuple(int(gid) for gid in geom_ids)
+    if key not in cache:
+        cache.update(
+            _object_distance_group_cache(
+                config,
+                env,
+                [geom_ids],
+                object_geom_ids,
+                geom_xpos=geom_xpos,
+                geom_xmat=geom_xmat,
+                body_xpos=body_xpos,
+                body_xmat=body_xmat,
+            )
+        )
+    value = cache[key]
+    if conservative:
+        value = value - _require_grid_object_distance_runtime(config).epsilon_grid_m
+    return value
 
 
 def _object_sdf_geom_groups_for_tick(config: Config) -> list[list[int]]:
@@ -571,8 +621,7 @@ def _object_sdf_geom_groups_for_tick(config: Config) -> list[list[int]]:
     add(config.hand_support_rew_scale > 0.0, config.hand_support_geom_ids)
 
     surface_band_enabled = (
-        config.surface_band_rew_scale > 0.0
-        or config.surface_band_penalty_scale > 0.0
+        config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0
     ) and bool(config.surface_band_geom_ids)
     if surface_band_enabled and config.surface_band_bimanual_required:
         add(True, config.surface_band_left_geom_ids)
@@ -710,7 +759,9 @@ def setup_mj_model(config: Config) -> mujoco.MjModel:
         for ji in range(model_cpu.njnt):
             jname = mujoco.mj_id2name(model_cpu, mujoco.mjtObj.mjOBJ_JOINT, ji)
             if jname and "wrist" in jname:
-                model_cpu.dof_damping[model_cpu.jnt_dofadr[ji]] = config.wrist_dof_damping
+                model_cpu.dof_damping[model_cpu.jnt_dofadr[ji]] = (
+                    config.wrist_dof_damping
+                )
         loguru.logger.info(f"Applied wrist dof_damping={config.wrist_dof_damping}")
     return model_cpu
 
@@ -996,7 +1047,9 @@ def _clamp_vector_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:
     return torch.where(norm > max_norm, vec / norm * max_norm, vec)
 
 
-def _clear_object_wrench_once(env: MJWPEnv, obj_body_id: int, xfrc_applied: torch.Tensor):
+def _clear_object_wrench_once(
+    env: MJWPEnv, obj_body_id: int, xfrc_applied: torch.Tensor
+):
     """Clear persistent object xfrc once per step before accumulating helpers."""
     if not getattr(env, "_object_wrench_cleared_this_step", False):
         xfrc_applied[:, obj_body_id, :6] = 0.0
@@ -1307,10 +1360,9 @@ def get_reward(
         xpos_sim = wp.to_torch(env.data_wp.xpos)  # (N, nbody, 3)
         body_pos_sim = xpos_sim[:, config.task_body_ids]  # (N, K, 3)
         task_body_xpos_ref = body_xpos_ref
-        if (
-            body_xpos_ref.shape[0] != len(config.task_body_ids)
-            and body_xpos_ref.shape[0] > max(config.task_body_ids)
-        ):
+        if body_xpos_ref.shape[0] != len(config.task_body_ids) and body_xpos_ref.shape[
+            0
+        ] > max(config.task_body_ids):
             task_body_xpos_ref = body_xpos_ref[config.task_body_ids]
         body_weights = torch.tensor(
             config.task_body_weights, device=config.device, dtype=body_pos_sim.dtype
@@ -1350,12 +1402,16 @@ def get_reward(
                 obj_quat_ref = qpos_ref[-4:].unsqueeze(0).repeat(N, 1)
                 if use_exp:
                     rot_err_norm = quat_sub(obj_quat_sim, obj_quat_ref).norm(dim=-1)
-                    task_obj_rew = task_obj_rew + config.task_obj_rot_rew_scale * torch.exp(
-                        -rot_err_norm / config.task_obj_rot_sigma
+                    task_obj_rew = (
+                        task_obj_rew
+                        + config.task_obj_rot_rew_scale
+                        * torch.exp(-rot_err_norm / config.task_obj_rot_sigma)
                     )
                 else:
                     rot_err = (quat_sub(obj_quat_sim, obj_quat_ref) ** 2).sum(dim=-1)
-                    task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+                    task_obj_rew = (
+                        task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+                    )
         elif nq_obj == 6:
             obj_pos_sim = qpos_sim[:, -6:-3]
             obj_pos_ref = qpos_ref[-6:-3].unsqueeze(0)
@@ -1372,12 +1428,16 @@ def get_reward(
                 obj_euler_ref = qpos_ref[-3:].unsqueeze(0)
                 if use_exp:
                     rot_err_norm = (obj_euler_sim - obj_euler_ref).norm(dim=-1)
-                    task_obj_rew = task_obj_rew + config.task_obj_rot_rew_scale * torch.exp(
-                        -rot_err_norm / config.task_obj_rot_sigma
+                    task_obj_rew = (
+                        task_obj_rew
+                        + config.task_obj_rot_rew_scale
+                        * torch.exp(-rot_err_norm / config.task_obj_rot_sigma)
                     )
                 else:
                     rot_err = ((obj_euler_sim - obj_euler_ref) ** 2).sum(dim=-1)
-                    task_obj_rew = task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+                    task_obj_rew = (
+                        task_obj_rew - config.task_obj_rot_rew_scale * rot_err
+                    )
 
     # E018: interaction reward (Harmanoid Eq.15) — match relative offsets
     # between pairs of bodies in task_body_ids
@@ -1780,8 +1840,13 @@ def get_reward(
     terminal_carry_gate_nonhand_sdf = torch.zeros(N, device=config.device)
     terminal_carry_gate_hand_near_frac = torch.zeros(N, device=config.device)
     if (
-        (config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids)
-        or (config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids)
+        (
+            config.robot_object_penalty_scale > 0.0
+            and config.robot_object_penalty_geom_ids
+        )
+        or (
+            config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids
+        )
         or (
             config.hand_object_deep_penalty_scale > 0.0
             and config.hand_object_deep_penalty_geom_ids
@@ -1809,35 +1874,47 @@ def get_reward(
             object_geom_ids = _resolve_object_collision_geom_ids(
                 env.model_cpu, config.object_collision_sdf_mode
             )
-        object_geom_id = (
-            object_geom_ids[0] if object_geom_ids else -1
-        )
+        object_geom_id = object_geom_ids[0] if object_geom_ids else -1
         if object_geom_id != -1:
             geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
             geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
                 geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
             )
+            body_xpos = None
+            body_xmat = None
+            if config.object_distance_backend == "grid_sdf":
+                body_xpos = wp.to_torch(env.data_wp.xpos)
+                body_xmat = wp.to_torch(env.data_wp.xmat).reshape(
+                    body_xpos.shape[0], -1, 3, 3
+                )
             if config.object_collision_sdf_batch_groups:
-                union_sdf_cache = _batched_geom_box_union_sdf_cache(
+                object_sdf_cache = _object_distance_group_cache(
                     config,
                     env,
                     _object_sdf_geom_groups_for_tick(config),
                     object_geom_ids,
                     geom_xpos=geom_xpos,
                     geom_xmat=geom_xmat,
+                    body_xpos=body_xpos,
+                    body_xmat=body_xmat,
                 )
             else:
-                union_sdf_cache = {}
+                object_sdf_cache = {}
 
-            def geom_box_sdf_min(geom_ids: list[int]) -> torch.Tensor:
-                return _cached_geom_box_union_sdf_min(
-                    union_sdf_cache,
+            def geom_object_sdf_min(
+                geom_ids: list[int], *, conservative: bool = False
+            ) -> torch.Tensor:
+                return _cached_object_distance_sdf_min(
+                    object_sdf_cache,
                     config,
                     env,
                     geom_ids,
                     object_geom_ids,
                     geom_xpos=geom_xpos,
                     geom_xmat=geom_xmat,
+                    body_xpos=body_xpos,
+                    body_xmat=body_xmat,
+                    conservative=conservative,
                 )
 
             def support_gate(
@@ -1887,8 +1964,7 @@ def get_reward(
                     time_arr = wp.to_torch(env.data_wp.time)
                     gates.append(
                         (
-                            (time_arr >= start_eval_time)
-                            & (time_arr <= end_eval_time)
+                            (time_arr >= start_eval_time) & (time_arr <= end_eval_time)
                         ).to(dtype)
                     )
                 gate = torch.ones(N, device=config.device, dtype=dtype)
@@ -1896,16 +1972,22 @@ def get_reward(
                     gate = gate * g
                 return gate
 
-            if config.robot_object_penalty_scale > 0.0 and config.robot_object_penalty_geom_ids:
-                robot_sdf = geom_box_sdf_min(config.robot_object_penalty_geom_ids)
+            if (
+                config.robot_object_penalty_scale > 0.0
+                and config.robot_object_penalty_geom_ids
+            ):
+                robot_sdf = geom_object_sdf_min(config.robot_object_penalty_geom_ids)
                 deep_limit = (
                     config.robot_object_penalty_margin_m
                     - config.robot_object_penalty_deep_threshold_m
                 )
                 robot_hinge = torch.clamp(deep_limit - robot_sdf, min=0.0)
                 robot_object_penalty = -config.robot_object_penalty_scale * robot_hinge
-            if config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids:
-                leg_sdf = geom_box_sdf_min(config.leg_object_penalty_geom_ids)
+            if (
+                config.leg_object_penalty_scale > 0.0
+                and config.leg_object_penalty_geom_ids
+            ):
+                leg_sdf = geom_object_sdf_min(config.leg_object_penalty_geom_ids)
                 leg_hinge = torch.clamp(
                     config.leg_object_penalty_margin_m - leg_sdf, min=0.0
                 )
@@ -1942,10 +2024,7 @@ def get_reward(
                         gates.append(
                             (
                                 (time_arr >= config.leg_object_penalty_start_eval_time)
-                                & (
-                                    time_arr
-                                    <= config.leg_object_penalty_end_eval_time
-                                )
+                                & (time_arr <= config.leg_object_penalty_end_eval_time)
                             ).to(leg_hinge.dtype)
                         )
                     if gate_source in {"hand_target", "contact_mask_and_hand_target"}:
@@ -2032,7 +2111,7 @@ def get_reward(
                 config.hand_object_deep_penalty_scale > 0.0
                 and config.hand_object_deep_penalty_geom_ids
             ):
-                hand_sdf = geom_box_sdf_min(config.hand_object_deep_penalty_geom_ids)
+                hand_sdf = geom_object_sdf_min(config.hand_object_deep_penalty_geom_ids)
                 deep_hinge = torch.clamp(
                     -config.hand_object_deep_penalty_threshold_m - hand_sdf,
                     min=0.0,
@@ -2041,7 +2120,7 @@ def get_reward(
                     -config.hand_object_deep_penalty_scale * deep_hinge
                 )
             if config.hand_support_rew_scale > 0.0 and config.hand_support_geom_ids:
-                hand_support_sdf = geom_box_sdf_min(config.hand_support_geom_ids)
+                hand_support_sdf = geom_object_sdf_min(config.hand_support_geom_ids)
                 hand_err = torch.clamp(
                     torch.abs(hand_support_sdf) - config.hand_support_margin_m,
                     min=0.0,
@@ -2064,7 +2143,8 @@ def get_reward(
                 if config.hand_support_neutral_baseline > 0.0:
                     hand_support_rew = (
                         hand_support_rew
-                        + config.hand_support_neutral_baseline * (1.0 - hand_support_gate)
+                        + config.hand_support_neutral_baseline
+                        * (1.0 - hand_support_gate)
                     )
                 # E155-C: tail decay (last decay_frac of episode)
                 if config.hand_support_decay_frac > 0.0:
@@ -2074,24 +2154,46 @@ def get_reward(
                     if total_time > decay_start:
                         decay_factor = torch.clamp(
                             (total_time - time_arr) / (total_time - decay_start),
-                            0.0, 1.0,
+                            0.0,
+                            1.0,
                         )
                         hand_support_rew = hand_support_rew * decay_factor
             if (
-                (config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0)
-                and config.surface_band_geom_ids
-            ):
+                config.surface_band_rew_scale > 0.0
+                or config.surface_band_penalty_scale > 0.0
+            ) and config.surface_band_geom_ids:
                 band_width = float(config.surface_band_width_m)
                 band_min_sdf = float(config.surface_band_min_sdf_m)
-                sigma = max(float(config.surface_band_sigma), 1e-6)
+                sigma = float(config.surface_band_sigma)
 
                 def surface_score_raw(sdf: torch.Tensor) -> torch.Tensor:
-                    if config.surface_band_score_mode == "one_sided":
-                        return torch.exp(-torch.clamp(sdf, min=0.0) / sigma)
-                    if config.surface_band_score_mode == "symmetric_abs":
-                        return torch.exp(-torch.abs(sdf) / sigma)
-                    raise ValueError(
-                        f"Unsupported surface_band_score_mode={config.surface_band_score_mode!r}"
+                    return surface_distance_score(
+                        sdf,
+                        mode=config.surface_band_score_mode,
+                        sigma_m=sigma,
+                        continuation_far_weight=float(
+                            config.surface_band_continuation_far_weight
+                        ),
+                        continuation_near_weight=float(
+                            config.surface_band_continuation_near_weight
+                        ),
+                        continuation_far_scale_m=float(
+                            config.surface_band_continuation_far_scale_m
+                        ),
+                        continuation_near_scale_m=float(
+                            config.surface_band_continuation_near_scale_m
+                        ),
+                        continuation_smooth_delta_m=float(
+                            config.surface_band_continuation_smooth_delta_m
+                        ),
+                    )
+
+                def surface_support_mask(sdf: torch.Tensor) -> torch.Tensor:
+                    return surface_distance_support_mask(
+                        sdf,
+                        mode=config.surface_band_score_mode,
+                        band_min_sdf_m=band_min_sdf,
+                        band_width_m=band_width,
                     )
 
                 if config.surface_band_bimanual_required:
@@ -2107,18 +2209,14 @@ def get_reward(
                             "Unsupported surface_band_bimanual_score_reduce="
                             f"{config.surface_band_bimanual_score_reduce!r}"
                         )
-                    surface_band_left_sdf = geom_box_sdf_min(
+                    surface_band_left_sdf = geom_object_sdf_min(
                         config.surface_band_left_geom_ids
                     )
-                    surface_band_right_sdf = geom_box_sdf_min(
+                    surface_band_right_sdf = geom_object_sdf_min(
                         config.surface_band_right_geom_ids
                     )
-                    left_in_band = (surface_band_left_sdf >= band_min_sdf) & (
-                        surface_band_left_sdf <= band_width
-                    )
-                    right_in_band = (surface_band_right_sdf >= band_min_sdf) & (
-                        surface_band_right_sdf <= band_width
-                    )
+                    left_in_band = surface_support_mask(surface_band_left_sdf)
+                    right_in_band = surface_support_mask(surface_band_right_sdf)
                     both_in_band = left_in_band & right_in_band
                     surface_band_left_score = surface_score_raw(surface_band_left_sdf)
                     surface_band_right_score = surface_score_raw(surface_band_right_sdf)
@@ -2142,10 +2240,8 @@ def get_reward(
                         surface_band_left_sdf, surface_band_right_sdf
                     )
                 else:
-                    surface_band_sdf = geom_box_sdf_min(config.surface_band_geom_ids)
-                    in_band = (surface_band_sdf >= band_min_sdf) & (
-                        surface_band_sdf <= band_width
-                    )
+                    surface_band_sdf = geom_object_sdf_min(config.surface_band_geom_ids)
+                    in_band = surface_support_mask(surface_band_sdf)
                     surface_band_score_raw = surface_score_raw(surface_band_sdf)
                     surface_band_score = torch.where(
                         in_band,
@@ -2165,7 +2261,8 @@ def get_reward(
                     * surface_band_gate
                 )
                 surface_band_penetration = torch.clamp(
-                    -surface_band_penetration_sdf - config.surface_band_penetration_tol_m,
+                    -surface_band_penetration_sdf
+                    - config.surface_band_penetration_tol_m,
                     min=0.0,
                 )
                 surface_band_penalty = (
@@ -2176,7 +2273,9 @@ def get_reward(
                 if config.surface_band_decay_frac > 0.0:
                     time_arr = wp.to_torch(env.data_wp.time)
                     total_time = float(config.max_sim_steps) * config.sim_dt
-                    decay_frac = min(max(float(config.surface_band_decay_frac), 0.0), 1.0)
+                    decay_frac = min(
+                        max(float(config.surface_band_decay_frac), 0.0), 1.0
+                    )
                     decay_start = total_time * (1.0 - decay_frac)
                     if total_time > decay_start:
                         surface_band_decay_factor = torch.clamp(
@@ -2185,12 +2284,14 @@ def get_reward(
                             1.0,
                         )
                         surface_band_rew = surface_band_rew * surface_band_decay_factor
-                        surface_band_penalty = surface_band_penalty * surface_band_decay_factor
+                        surface_band_penalty = (
+                            surface_band_penalty * surface_band_decay_factor
+                        )
             if (
                 config.nonhand_support_penalty_scale > 0.0
                 and config.nonhand_support_penalty_geom_ids
             ):
-                nonhand_support_sdf = geom_box_sdf_min(
+                nonhand_support_sdf = geom_object_sdf_min(
                     config.nonhand_support_penalty_geom_ids
                 )
                 nonhand_support_violation = torch.clamp(
@@ -2209,8 +2310,9 @@ def get_reward(
                     * nonhand_support_gate
                 )
             if config.cem_safety_gate_enabled and config.cem_safety_gate_geom_ids:
-                cem_body_gate_min_sdf = geom_box_sdf_min(
-                    config.cem_safety_gate_geom_ids
+                cem_body_gate_min_sdf = geom_object_sdf_min(
+                    config.cem_safety_gate_geom_ids,
+                    conservative=True,
                 )
                 cem_body_gate_violation_depth = torch.clamp(
                     config.cem_safety_gate_min_sdf_m - cem_body_gate_min_sdf,
@@ -2223,8 +2325,9 @@ def get_reward(
                 cem_gate_violation_depth = cem_body_gate_violation_depth
                 cem_gate_violation = cem_body_gate_violation
             if config.cem_hand_gate_enabled and config.cem_hand_gate_geom_ids:
-                cem_hand_gate_min_sdf = geom_box_sdf_min(
-                    config.cem_hand_gate_geom_ids
+                cem_hand_gate_min_sdf = geom_object_sdf_min(
+                    config.cem_hand_gate_geom_ids,
+                    conservative=True,
                 )
                 cem_hand_gate_violation_depth = torch.clamp(
                     config.cem_hand_gate_min_sdf_m - cem_hand_gate_min_sdf,
@@ -2246,8 +2349,9 @@ def get_reward(
                     cem_gate_violation, cem_hand_gate_violation
                 )
             if config.cem_leg_gate_enabled and config.cem_leg_gate_geom_ids:
-                cem_leg_gate_min_sdf = geom_box_sdf_min(
-                    config.cem_leg_gate_geom_ids
+                cem_leg_gate_min_sdf = geom_object_sdf_min(
+                    config.cem_leg_gate_geom_ids,
+                    conservative=True,
                 )
                 cem_leg_gate_violation_depth = torch.clamp(
                     config.cem_leg_gate_min_sdf_m - cem_leg_gate_min_sdf,
@@ -2268,7 +2372,10 @@ def get_reward(
                 cem_gate_violation = torch.maximum(
                     cem_gate_violation, cem_leg_gate_violation
                 )
-            if config.object_lift_rew_scale > 0.0 or config.object_floor_penalty_scale > 0.0:
+            if (
+                config.object_lift_rew_scale > 0.0
+                or config.object_floor_penalty_scale > 0.0
+            ):
                 obj_half_z = float(config.hand_approach_obj_half_extents[2])
                 obj_bottom = geom_xpos[:, object_geom_id, 2] - obj_half_z
                 if config.nq_obj == 7:
@@ -2475,7 +2582,7 @@ def get_reward(
                 )
 
                 if config.carry_corridor_leg_geom_ids:
-                    corridor_leg_sdf = geom_box_sdf_min(
+                    corridor_leg_sdf = geom_object_sdf_min(
                         config.carry_corridor_leg_geom_ids
                     )
                     leg_excess = torch.clamp(
@@ -2570,9 +2677,9 @@ def get_reward(
         )
         anchor_pos = xpos_sim[:, anchor_id]
         ee_pos = xpos_sim[:, ee_ids]
-        cem_peak_margin_anchor_pos_err = (anchor_pos - ref_anchor_pos.unsqueeze(0)).norm(
-            dim=-1
-        )
+        cem_peak_margin_anchor_pos_err = (
+            anchor_pos - ref_anchor_pos.unsqueeze(0)
+        ).norm(dim=-1)
         if body_xquat_ref is not None and body_xquat_ref.shape[0] > anchor_id:
             xquat_sim = wp.to_torch(env.data_wp.xquat)
             anchor_yaw = _lf_yaw_quat(xquat_sim[:, anchor_id])
@@ -2595,16 +2702,18 @@ def get_reward(
             anchor_diff = _lf_quat_mul(
                 _lf_quat_conjugate(ref_anchor_quat_batch), anchor_quat
             )
-            cem_peak_margin_anchor_ori_err = _lf_axis_angle_from_quat(
-                anchor_diff
-            ).norm(dim=-1)
+            cem_peak_margin_anchor_ori_err = _lf_axis_angle_from_quat(anchor_diff).norm(
+                dim=-1
+            )
         else:
             ee_err = (ee_pos - ref_ee_pos.unsqueeze(0)).norm(dim=-1)
         cem_peak_margin_ee_body_err = ee_err.max(dim=1).values
 
     if config.cem_smooth_enabled and config.cem_smooth_body_ids:
         xpos_sim = wp.to_torch(env.data_wp.xpos)
-        smooth_ids = [bid for bid in config.cem_smooth_body_ids if bid < xpos_sim.shape[1]]
+        smooth_ids = [
+            bid for bid in config.cem_smooth_body_ids if bid < xpos_sim.shape[1]
+        ]
         if smooth_ids:
             e166_aux_info["cem_smooth_body_pos"] = xpos_sim[:, smooth_ids]
 
@@ -2667,9 +2776,7 @@ def get_reward(
                 device=config.device, dtype=foot_pos.dtype
             )
             e166_aux_info["foot_body_pos"] = foot_pos
-            e166_aux_info["foot_body_ref_pos"] = foot_ref.unsqueeze(0).expand(
-                N, -1, -1
-            )
+            e166_aux_info["foot_body_ref_pos"] = foot_ref.unsqueeze(0).expand(N, -1, -1)
 
     info = {
         "qpos_dist": qpos_dist,
@@ -2757,15 +2864,11 @@ def get_reward(
     # zero/default values in every run makes a no-PRG artifact falsely look
     # as though lower-body PRG participated in optimization.
     if not (
-        config.leg_object_penalty_scale > 0.0
-        and config.leg_object_penalty_geom_ids
+        config.leg_object_penalty_scale > 0.0 and config.leg_object_penalty_geom_ids
     ):
         info.pop("leg_object_penalty", None)
         info.pop("leg_object_penalty_gate", None)
-    if not (
-        config.cem_leg_gate_enabled
-        and config.cem_leg_gate_geom_ids
-    ):
+    if not (config.cem_leg_gate_enabled and config.cem_leg_gate_geom_ids):
         info.pop("cem_leg_gate_min_sdf", None)
         info.pop("cem_leg_gate_violation", None)
         info.pop("cem_leg_gate_violation_depth", None)
@@ -2823,9 +2926,7 @@ def _terminal_carry_gate(
         object_geom_ids = _resolve_object_collision_geom_ids(
             env.model_cpu, config.object_collision_sdf_mode
         )
-    object_geom_id = (
-        object_geom_ids[0] if object_geom_ids else -1
-    )
+    object_geom_id = object_geom_ids[0] if object_geom_ids else -1
     nonhand_sdf = torch.full((N,), float("inf"), device=config.device, dtype=dtype)
     hand_near_frac = zeros
     nonhand_violation = zeros
@@ -2834,15 +2935,31 @@ def _terminal_carry_gate(
         geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
             geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
         )
-        if config.nonhand_support_penalty_geom_ids:
-            nonhand_sdf = _geom_box_union_sdf_min(
+        body_xpos = None
+        body_xmat = None
+        if config.object_distance_backend == "grid_sdf":
+            body_xpos = wp.to_torch(env.data_wp.xpos)
+            body_xmat = wp.to_torch(env.data_wp.xmat).reshape(
+                body_xpos.shape[0], -1, 3, 3
+            )
+        object_sdf_cache: dict[tuple[int, ...], torch.Tensor] = {}
+
+        def terminal_object_sdf(geom_ids: list[int]) -> torch.Tensor:
+            return _cached_object_distance_sdf_min(
+                object_sdf_cache,
                 config,
                 env,
-                config.nonhand_support_penalty_geom_ids,
+                geom_ids,
                 object_geom_ids,
                 geom_xpos=geom_xpos,
                 geom_xmat=geom_xmat,
+                body_xpos=body_xpos,
+                body_xmat=body_xmat,
+                conservative=True,
             )
+
+        if config.nonhand_support_penalty_geom_ids:
+            nonhand_sdf = terminal_object_sdf(config.nonhand_support_penalty_geom_ids)
             nonhand_violation = torch.clamp(
                 config.terminal_carry_gate_nonhand_margin_m - nonhand_sdf,
                 min=0.0,
@@ -2850,16 +2967,7 @@ def _terminal_carry_gate(
         if config.hand_support_geom_ids:
             hand_sdfs = []
             for gid in config.hand_support_geom_ids:
-                hand_sdfs.append(
-                    _geom_box_union_sdf_min(
-                        config,
-                        env,
-                        [gid],
-                        object_geom_ids,
-                        geom_xpos=geom_xpos,
-                        geom_xmat=geom_xmat,
-                    )
-                )
+                hand_sdfs.append(terminal_object_sdf([gid]))
             if hand_sdfs:
                 hand_sdf_stack = torch.stack(hand_sdfs, dim=1)
                 hand_near = (
@@ -2872,12 +2980,7 @@ def _terminal_carry_gate(
                     min=0.0,
                 )
 
-    violation = (
-        pelvis_violation
-        + rot_violation
-        + nonhand_violation
-        + hand_violation
-    )
+    violation = pelvis_violation + rot_violation + nonhand_violation + hand_violation
     valid = (violation <= 0.0).to(dtype)
     penalty = -config.terminal_carry_gate_soft_scale * violation
     return {
@@ -2932,9 +3035,7 @@ def get_terminal_reward(
         info["terminal_carry_gate_nonhand_sdf"] = gate["nonhand_sdf"]
         info["terminal_carry_gate_hand_near_frac"] = gate["hand_near_frac"]
         if mode in {"hard", "hard_soft"}:
-            min_sdf_from_terminal = (
-                config.cem_safety_gate_min_sdf_m - gate["violation"]
-            )
+            min_sdf_from_terminal = config.cem_safety_gate_min_sdf_m - gate["violation"]
             info["cem_gate_min_sdf"] = torch.minimum(
                 info["cem_gate_min_sdf"], min_sdf_from_terminal
             )
@@ -2953,9 +3054,7 @@ def get_terminal_reward(
             )
             info["cem_body_gate_violation"] = torch.maximum(
                 info["cem_body_gate_violation"],
-                (gate["violation"] > 0.0).to(
-                    info["cem_body_gate_violation"].dtype
-                ),
+                (gate["violation"] > 0.0).to(info["cem_body_gate_violation"].dtype),
             )
     return terminal_rew, info
 
@@ -3109,6 +3208,23 @@ def get_terminate(
 
 def get_qpos(config: Config, env: MJWPEnv) -> torch.Tensor:
     return wp.to_torch(env.data_wp.qpos)
+
+
+def get_geometry_state(config: Config, env: MJWPEnv) -> dict[str, torch.Tensor]:
+    """Return the derived transforms consumed by object-distance rewards."""
+    del config
+    geom_xpos = wp.to_torch(env.data_wp.geom_xpos)
+    body_xpos = wp.to_torch(env.data_wp.xpos)
+    return {
+        "geom_xpos": geom_xpos,
+        "geom_xmat": wp.to_torch(env.data_wp.geom_xmat).reshape(
+            geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
+        ),
+        "body_xpos": body_xpos,
+        "body_xmat": wp.to_torch(env.data_wp.xmat).reshape(
+            body_xpos.shape[0], body_xpos.shape[1], 3, 3
+        ),
+    }
 
 
 def set_qpos(config: Config, env: MJWPEnv, qpos: torch.Tensor):
@@ -3342,18 +3458,16 @@ def _apply_object_kinematic_override(config: Config, env: MJWPEnv):
     idx = min(max(int(t / max(dt, 1e-8) + 1e-6), 0), T - 1)
 
     qpos = wp.to_torch(env.data_wp.qpos)
-    qpos[:, obj_qadr : obj_qadr + 7] = env.object_kinematic_ref_qpos[
-        idx
-    ].unsqueeze(0)
+    qpos[:, obj_qadr : obj_qadr + 7] = env.object_kinematic_ref_qpos[idx].unsqueeze(0)
     wp.copy(env.data_wp.qpos, wp.from_torch(qpos))
 
     if bool(config.object_kinematic_set_qvel) and hasattr(
         env, "object_kinematic_ref_qvel"
     ):
         qvel = wp.to_torch(env.data_wp.qvel)
-        qvel[:, obj_vadr : obj_vadr + 6] = env.object_kinematic_ref_qvel[
-            idx
-        ].unsqueeze(0)
+        qvel[:, obj_vadr : obj_vadr + 6] = env.object_kinematic_ref_qvel[idx].unsqueeze(
+            0
+        )
         wp.copy(env.data_wp.qvel, wp.from_torch(qvel))
 
 
@@ -3404,10 +3518,17 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
     has_rot_spring = config.partner_force_spring_kp_rot > 0 and hasattr(
         env, "partner_force_ref_quat"
     )
-    last_force = torch.zeros((env.num_worlds, 3), device=config.device, dtype=torch.float32)
+    last_force = torch.zeros(
+        (env.num_worlds, 3), device=config.device, dtype=torch.float32
+    )
     last_torque = torch.zeros_like(last_force)
 
-    if not multi_point_mode and not point_mode and not has_spring and not has_rot_spring:
+    if (
+        not multi_point_mode
+        and not point_mode
+        and not has_spring
+        and not has_rot_spring
+    ):
         xfrc_applied[:, obj_body_id, 2] = upward_force
         last_force[:, 2] = upward_force
         env.partner_force_last_force = last_force.detach()
@@ -3467,9 +3588,7 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
             local = points.unsqueeze(0).expand(obj_pos_sim.shape[0], -1, -1)
 
             q_expand = (
-                obj_quat_sim.unsqueeze(1)
-                .expand(-1, num_points, -1)
-                .reshape(-1, 4)
+                obj_quat_sim.unsqueeze(1).expand(-1, num_points, -1).reshape(-1, 4)
             )
             r_world = _lf_quat_apply(
                 q_expand,
@@ -3494,10 +3613,9 @@ def _apply_partner_force(config: Config, env: MJWPEnv):
             ).reshape(obj_pos_sim.shape[0], num_points, 3)
             ref_point = ref_pos.view(1, 1, 3) + ref_r_world
 
-            point_force = (
-                (kp / num_points) * (ref_point - point_pos_sim)
-                - (kd / num_points) * point_vel_sim
-            )
+            point_force = (kp / num_points) * (ref_point - point_pos_sim) - (
+                kd / num_points
+            ) * point_vel_sim
             point_force[:, :, 2] += upward_force / num_points
             point_force = torch.nan_to_num(point_force, nan=0.0)
             force = point_force.sum(dim=1)
@@ -3797,8 +3915,7 @@ def _load_dynamic_support_ref(
         ref_vel = torch.zeros_like(env.support_dynamic_ref_qpos)
         if env.support_dynamic_ref_qpos.shape[0] > 1:
             ref_vel[1:] = (
-                env.support_dynamic_ref_qpos[1:]
-                - env.support_dynamic_ref_qpos[:-1]
+                env.support_dynamic_ref_qpos[1:] - env.support_dynamic_ref_qpos[:-1]
             ) / max(dt, 1e-8)
             ref_vel[0] = ref_vel[1]
         env.support_dynamic_ref_qvel = ref_vel.detach()
@@ -3853,25 +3970,23 @@ def _apply_dynamic_support_pd(config: Config, env: MJWPEnv):
     T = env.support_dynamic_ref_qpos.shape[0]
     idx = min(int(t / dt), T - 1)
 
-    target_qpos = env.support_dynamic_ref_qpos[idx].unsqueeze(0).expand(
-        env.num_worlds, -1
+    target_qpos = (
+        env.support_dynamic_ref_qpos[idx].unsqueeze(0).expand(env.num_worlds, -1)
     )
-    target_qvel = env.support_dynamic_ref_qvel[idx].unsqueeze(0).expand(
-        env.num_worlds, -1
+    target_qvel = (
+        env.support_dynamic_ref_qvel[idx].unsqueeze(0).expand(env.num_worlds, -1)
     )
     cur_qpos = qpos[:, qadr : qadr + 6]
     cur_qvel = qvel[:, dadr : dadr + 6]
 
     pos_err = target_qpos[:, :3] - cur_qpos[:, :3]
     rot_err = _wrap_angle_pi(target_qpos[:, 3:6] - cur_qpos[:, 3:6])
-    pos_force = (
-        float(config.support_dynamic_pos_kp) * pos_err
-        + float(env.support_dynamic_pos_kd) * (target_qvel[:, :3] - cur_qvel[:, :3])
-    )
-    rot_torque = (
-        float(config.support_dynamic_rot_kp) * rot_err
-        + float(env.support_dynamic_rot_kd) * (target_qvel[:, 3:6] - cur_qvel[:, 3:6])
-    )
+    pos_force = float(config.support_dynamic_pos_kp) * pos_err + float(
+        env.support_dynamic_pos_kd
+    ) * (target_qvel[:, :3] - cur_qvel[:, :3])
+    rot_torque = float(config.support_dynamic_rot_kp) * rot_err + float(
+        env.support_dynamic_rot_kd
+    ) * (target_qvel[:, 3:6] - cur_qvel[:, 3:6])
     pos_force = _clamp_vector_norm(
         torch.nan_to_num(pos_force, nan=0.0), config.support_dynamic_force_clamp
     )
@@ -3956,13 +4071,17 @@ def _apply_support_proxy_force(config: Config, env: MJWPEnv):
     ramp = min(t / 0.5, 1.0)
     kp = float(config.support_proxy_connector_kp) * ramp
     if config.support_proxy_connector_kd < 0:
-        kd = 2.0 * (obj_mass * max(float(config.support_proxy_connector_kp), 0.0)) ** 0.5
+        kd = (
+            2.0 * (obj_mass * max(float(config.support_proxy_connector_kp), 0.0)) ** 0.5
+        )
     else:
         kd = float(config.support_proxy_connector_kd)
     kd *= ramp
 
-    force = gravity_force + kp * (proxy_pos - support_point_pos) + kd * (
-        proxy_vel - support_point_vel
+    force = (
+        gravity_force
+        + kp * (proxy_pos - support_point_pos)
+        + kd * (proxy_vel - support_point_vel)
     )
     force = _clamp_vector_norm(
         torch.nan_to_num(force, nan=0.0), config.support_proxy_force_clamp
@@ -4026,9 +4145,8 @@ def _update_support_proxy_mocap_pad(config: Config, env: MJWPEnv):
     mid = env._support_proxy_mocap_id
     N = mocap_pos_all.shape[0]
     mocap_pos_all[:, mid] = proxy_pos.unsqueeze(0).expand(N, -1)
-    if (
-        config.support_proxy_mocap_quat_mode == "object_ref"
-        and hasattr(env, "support_proxy_ref_quat")
+    if config.support_proxy_mocap_quat_mode == "object_ref" and hasattr(
+        env, "support_proxy_ref_quat"
     ):
         mocap_quat = env.support_proxy_ref_quat[idx]
     else:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive viser review player for PRG retargeting results (E170-E178).
+"""Interactive viser review player for PRG retargeting results (E170-E187).
 
 Browse every CEM-complete case across the registered experiments, filter by object /
 numeric pass / failure mode / retarget variant, play back the executed 3D
@@ -36,7 +36,11 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[5]
 _HERE = Path(__file__).resolve().parent
-for _p in (str(REPO), str(_HERE), str(REPO / "workspace/core4d/scripts/experiments/E168")):
+for _p in (
+    str(REPO),
+    str(_HERE),
+    str(REPO / "workspace/core4d/scripts/experiments/E168"),
+):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -51,9 +55,27 @@ QUALITY_LABELS = ("", "CLEAN", "MINOR_ACCEPTABLE", "MAJOR_DEFECT", "UNUSABLE")
 METRIC_BAR = (
     ("body_z_err_p95_m", "身高误差", "body_z_err_p95_m_max", "max", "m"),
     ("leg_penetration_frac", "腿穿透", "leg_penetration_max", "max", ""),
-    ("hand_object_physics_penetration_3mm_frame_frac", "手穿透", "hand_penetration_3mm_max", "max", ""),
-    ("hand_object_release_false_contact_3mm_frac", "释放误触", "release_false_3mm_max", "max", ""),
-    ("hand_object_physics_contact_3mm_in_mask_frac", "接触率", "raw_contact_min", "min", ""),
+    (
+        "hand_object_physics_penetration_3mm_frame_frac",
+        "手穿透",
+        "hand_penetration_3mm_max",
+        "max",
+        "",
+    ),
+    (
+        "hand_object_release_false_contact_3mm_frac",
+        "释放误触",
+        "release_false_3mm_max",
+        "max",
+        "",
+    ),
+    (
+        "hand_object_physics_contact_3mm_in_mask_frac",
+        "接触率",
+        "raw_contact_min",
+        "min",
+        "",
+    ),
     ("fall_flag", "摔倒", "", "flag", ""),
 )
 
@@ -119,7 +141,9 @@ def _object_mesh_fallback(filename: str) -> Path | None:
     """Return an unambiguous canonical object mesh with this basename."""
     if not OBJECT_MESH_ROOT.is_dir():
         return None
-    matches = sorted(p.resolve() for p in OBJECT_MESH_ROOT.rglob(filename) if p.is_file())
+    matches = sorted(
+        p.resolve() for p in OBJECT_MESH_ROOT.rglob(filename) if p.is_file()
+    )
     return matches[0] if len(matches) == 1 else None
 
 
@@ -256,7 +280,11 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
             if "_object_mass" in gname:
                 continue
             try:
-                gv = int(np.asarray(geom.group).ravel()[0]) if hasattr(geom, "group") else 0
+                gv = (
+                    int(np.asarray(geom.group).ravel()[0])
+                    if hasattr(geom, "group")
+                    else 0
+                )
             except Exception:
                 gv = 0
             if gv >= 5:
@@ -290,7 +318,9 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
                         tm = None
                 if tm is None:
                     try:
-                        tm = _mujoco_mesh_to_trimesh(model, mg.id if mg is not None else -1)
+                        tm = _mujoco_mesh_to_trimesh(
+                            model, mg.id if mg is not None else -1
+                        )
                     except Exception:
                         tm = None
                 if tm is None:
@@ -328,7 +358,9 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
                 )
             except Exception:
                 continue
-            (collision if ("collision" in gname.lower() or gv >= 3) else visual).append(h)
+            (collision if ("collision" in gname.lower() or gv >= 3) else visual).append(
+                h
+            )
     return body_handles, visual, collision
 
 
@@ -343,7 +375,9 @@ class ReviewApp:
         self.by_key = {r.key: r for r in records}
         self.reviewer = reviewer
         self.want_ref = show_reference
-        self.thresholds = {e: idx.load_thresholds(e) for e in {r.exp_id for r in records}}
+        self.thresholds = {
+            e: idx.load_thresholds(e) for e in {r.exp_id for r in records}
+        }
         self.server = viser.ViserServer(host=host, port=port)
         try:
             self.server.gui.configure_theme(control_width="large")
@@ -385,13 +419,19 @@ class ReviewApp:
             self.f_num = s.gui.add_dropdown(
                 "数值", options=["全部", "达标", "不达标"], initial_value="全部"
             )
-            self.f_mode = s.gui.add_dropdown("失败原因", options=modes, initial_value="全部")
-            self.f_var = s.gui.add_dropdown("变体", options=variants, initial_value="全部")
+            self.f_mode = s.gui.add_dropdown(
+                "失败原因", options=modes, initial_value="全部"
+            )
+            self.f_var = s.gui.add_dropdown(
+                "变体", options=variants, initial_value="全部"
+            )
             for w in (self.f_exp, self.f_obj, self.f_num, self.f_mode, self.f_var):
                 w.on_update(lambda _=None: self._refresh_case_list())
 
         with s.gui.add_folder("样本"):
-            self.case_dd = s.gui.add_dropdown("选择", options=["(无)"], initial_value="(无)")
+            self.case_dd = s.gui.add_dropdown(
+                "选择", options=["(无)"], initial_value="(无)"
+            )
             self.case_dd.on_update(self._on_case_pick)
             btn_prev = s.gui.add_button("◀ 上一个")
             btn_next = s.gui.add_button("下一个 ▶")
@@ -400,15 +440,21 @@ class ReviewApp:
             self.info_md = s.gui.add_markdown("")
 
         with s.gui.add_folder("播放"):
-            self.frame_slider = s.gui.add_slider("帧", min=0, max=1, step=1, initial_value=0)
+            self.frame_slider = s.gui.add_slider(
+                "帧", min=0, max=1, step=1, initial_value=0
+            )
             self.frame_slider.on_update(self._on_slider)
             self.play_btn = s.gui.add_button("播放 / 暂停")
             self.play_btn.on_click(self._toggle_play)
-            self.fps_num = s.gui.add_number("帧率", initial_value=30, min=1, max=120, step=1)
+            self.fps_num = s.gui.add_number(
+                "帧率", initial_value=30, min=1, max=120, step=1
+            )
 
         with s.gui.add_folder("显示"):
             self.cb_collision = s.gui.add_checkbox("显示碰撞体", initial_value=False)
-            self.cb_reference = s.gui.add_checkbox("显示参考残影", initial_value=self.want_ref)
+            self.cb_reference = s.gui.add_checkbox(
+                "显示参考残影", initial_value=self.want_ref
+            )
             self.cb_grid = s.gui.add_checkbox("显示网格", initial_value=True)
             self.cb_collision.on_update(lambda _: self._apply_visibility())
             self.cb_reference.on_update(lambda _: self._apply_visibility())
@@ -441,7 +487,10 @@ class ReviewApp:
                 continue
             if self.f_num.value == "不达标" and r.numeric_release_pass:
                 continue
-            if self.f_mode.value != "全部" and self.f_mode.value not in r.numeric_failure_modes:
+            if (
+                self.f_mode.value != "全部"
+                and self.f_mode.value not in r.numeric_failure_modes
+            ):
                 continue
             if self.f_var.value != "全部" and r.retarget_variant_id != self.f_var.value:
                 continue
@@ -454,7 +503,11 @@ class ReviewApp:
             return "⬜未标"
         dec = a.get("manual_use_decision", "")
         if dec == "USE":
-            return "🟡勉强" if a.get("manual_quality_label") == "MINOR_ACCEPTABLE" else "✅可用"
+            return (
+                "🟡勉强"
+                if a.get("manual_quality_label") == "MINOR_ACCEPTABLE"
+                else "✅可用"
+            )
         if dec == "DO_NOT_USE":
             return "⛔禁用"
         return "🔲待定"
@@ -483,7 +536,11 @@ class ReviewApp:
     def _step_case(self, delta):
         if not self._filtered_recs:
             return
-        i = self._labels.index(self.case_dd.value) if self.case_dd.value in self._labels else 0
+        i = (
+            self._labels.index(self.case_dd.value)
+            if self.case_dd.value in self._labels
+            else 0
+        )
         i = max(0, min(len(self._filtered_recs) - 1, i + delta))
         self.case_dd.value = self._labels[i]  # fires _on_case_pick
 
@@ -501,7 +558,11 @@ class ReviewApp:
             self._prefill_annotation(rec)
 
             if not rec.playable:
-                self._set_info(self._info_text(rec, note="⚠ 3D 数据已归档不可用；请对照 MP4 标注。"))
+                self._set_info(
+                    self._info_text(
+                        rec, note="⚠ 3D 数据已归档不可用；请对照 MP4 标注。"
+                    )
+                )
                 self.frame_slider.max = 1
                 self._set_slider(0)
                 return
@@ -526,7 +587,11 @@ class ReviewApp:
             )
             if ref_qpos is not None:
                 self.ref_bodies, rv, rc = _build_scene(
-                    self.server, spec, model, "/ref", ref_color=np.array([0, 0, 1, 0.25], np.float32)
+                    self.server,
+                    spec,
+                    model,
+                    "/ref",
+                    ref_color=np.array([0, 0, 1, 0.25], np.float32),
                 )
                 self.ref_geom_handles = rv + rc
                 self.ref_frames = _compute_xforms(
@@ -637,9 +702,14 @@ class ReviewApp:
     def _update_progress(self, saved=""):
         n = len(self.records)
         done = sum(1 for r in self.records if r.reviewed)
-        use = sum(1 for r in self.records if (r.annotation or {}).get("manual_use_decision") == "USE")
+        use = sum(
+            1
+            for r in self.records
+            if (r.annotation or {}).get("manual_use_decision") == "USE"
+        )
         dnu = sum(
-            1 for r in self.records
+            1
+            for r in self.records
             if (r.annotation or {}).get("manual_use_decision") == "DO_NOT_USE"
         )
         msg = f"**已审阅 {done} / {n}**  ·  USE {use}  ·  DO_NOT_USE {dnu}"
@@ -712,7 +782,9 @@ class ReviewApp:
             "object_pos_gate_pass": "物位置",
             "object_ori_gate_pass": "物朝向",
         }
-        known_gates = {key: value for key, value in r.gates.items() if value is not None}
+        known_gates = {
+            key: value for key, value in r.gates.items() if value is not None
+        }
         total = len(known_gates)
         n_pass = sum(1 for value in known_gates.values() if value is True)
         failed = [
@@ -721,15 +793,19 @@ class ReviewApp:
             if value is False
         ]
         if failed:
-            gate_line = f"{n_pass}/{total} 通过 · 未过 " + " ".join(f"🔴{n}" for n in failed)
+            gate_line = f"{n_pass}/{total} 通过 · 未过 " + " ".join(
+                f"🔴{n}" for n in failed
+            )
         else:
             gate_line = f"🟢 {n_pass}/{total} 全部通过"
         modes = ", ".join(r.numeric_failure_modes) or "—"
         a = r.annotation or {}
         if (a.get("user_manual_review_status") or "") == "reviewed":
-            ann = (f"{self._ann_tag(r)}  裁决=**{a.get('manual_use_decision','')}** "
-                   f"质量={a.get('manual_quality_label','') or '—'} "
-                   f"审阅人={a.get('manual_reviewer','') or '—'}")
+            ann = (
+                f"{self._ann_tag(r)}  裁决=**{a.get('manual_use_decision', '')}** "
+                f"质量={a.get('manual_quality_label', '') or '—'} "
+                f"审阅人={a.get('manual_reviewer', '') or '—'}"
+            )
         else:
             ann = "⬜ 尚未人工标注"
         pass_mark = "✅ 达标" if r.numeric_release_pass else "❌ 不达标"
@@ -753,7 +829,9 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--exps", default=",".join(idx.DEFAULT_EXPS))
     ap.add_argument("--reviewer", default=os.environ.get("USER", "user"))
-    ap.add_argument("--no-reference", action="store_true", help="disable reference ghost")
+    ap.add_argument(
+        "--no-reference", action="store_true", help="disable reference ghost"
+    )
     ap.add_argument("--check", action="store_true", help="print index audit and exit")
     args = ap.parse_args()
 

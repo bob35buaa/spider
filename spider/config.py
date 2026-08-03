@@ -25,20 +25,19 @@ from omegaconf import OmegaConf
 
 import spider
 from spider.io import get_processed_data_dir
+from spider.rewards.surface_distance import validate_surface_distance_score_parameters
+from spider.simulators.mjwp_object_distance import GridObjectDistanceRuntime
 
 
-def resolve_object_collision_geom_ids(
-    model: mujoco.MjModel, mode: str
-) -> list[int]:
+def resolve_object_collision_geom_ids(model: mujoco.MjModel, mode: str) -> list[int]:
     """Resolve object proxy geoms for legacy-primary or multi-box union SDF."""
-    if mode not in {"primary", "union"}:
+    if mode not in {"primary", "union", "compound"}:
         raise ValueError(
-            "object_collision_sdf_mode must be 'primary' or 'union', "
+            "object_collision_sdf_mode must be 'primary', 'union', or "
+            "'compound', "
             f"got {mode!r}"
         )
-    obj_body_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_BODY, "object"
-    )
+    obj_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
     if obj_body_id == -1:
         return []
 
@@ -65,6 +64,8 @@ def resolve_object_collision_geom_ids(
         return [primary]
 
     union_ids = [gid for gid, _ in named] or [primary]
+    if mode == "compound":
+        return union_ids
     non_box = [
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or str(gid)
         for gid in union_ids
@@ -160,9 +161,7 @@ class Config:
     # E006: COLA-style virtual support-body proxy. This keeps the object true
     # freejoint and applies a connector wrench from an independent proxy target.
     support_proxy_enabled: bool = False
-    support_proxy_mode: str = (
-        "wrench"  # "wrench" | "mocap_pad" | "wrench_pad"
-    )
+    support_proxy_mode: str = "wrench"  # "wrench" | "mocap_pad" | "wrench_pad"
     support_proxy_mocap_body_name: str = "support_proxy_pad"
     support_proxy_mocap_quat_mode: str = (
         "identity"  # "identity" | "object_ref"; used by E014 weld anchor
@@ -230,6 +229,14 @@ class Config:
     object_collision_sdf_mode: str = "primary"
     object_collision_geom_names: list[str] = field(default_factory=list)
     object_collision_geom_ids: list[int] = field(default_factory=list)
+    # E186: default-off production distance backend. ``legacy_box`` preserves
+    # historical values; ``grid_sdf`` is fail-closed on manifest, asset SHA,
+    # and the frozen interpolation error bound.
+    object_distance_backend: str = "legacy_box"
+    object_distance_manifest: str = ""
+    object_distance_expected_asset_sha256: str = ""
+    object_distance_error_bound_m: float = 0.0
+    object_distance_object_body_id: int = -1
     # E176: compute all active robot-geom groups from one per-geom union-SDF
     # batch. Disabled by default to preserve the memory/performance behavior of
     # existing experiments.
@@ -258,14 +265,14 @@ class Config:
     contact_hdmi_threshold: float = (
         0.30  # mask threshold: activate when hand-target < this (m)
     )
-    contact_hdmi_mask_source: str = (
-        "rotated_sdf"  # "rotated_sdf" | "core4d_3cm"
-    )
+    contact_hdmi_mask_source: str = "rotated_sdf"  # "rotated_sdf" | "core4d_3cm"
     contact_hdmi_mask_path: str = ""
     contact_hdmi_mask_person_idx: int = 0
     contact_hdmi_mask_time_axis: str = "auto"  # "auto" | "spider" | "eval"
     contact_hdmi_mask_carry_union: bool = False  # E155: carry task L/R union
-    contact_hdmi_mask_ramp_frames: int = 0  # E155: linear ramp frames at boundary, 0=off
+    contact_hdmi_mask_ramp_frames: int = (
+        0  # E155: linear ramp frames at boundary, 0=off
+    )
     # E164: require both hands to satisfy contact HDMI reward. Disabled by
     # default so E039-E163 behavior remains unchanged.
     contact_hdmi_bimanual_required: bool = False
@@ -486,7 +493,9 @@ class Config:
     # object clearance/orientation, pelvis height, and lower-body clearance as
     # one coupled state instead of independent scalar terms.
     carry_corridor_rew_scale: float = 0.0
-    carry_corridor_gate_source: str = "contact_mask"  # contact_mask | time_window | contact_mask_time_window
+    carry_corridor_gate_source: str = (
+        "contact_mask"  # contact_mask | time_window | contact_mask_time_window
+    )
     carry_corridor_start_eval_time: float = 0.0
     carry_corridor_end_eval_time: float = 999.0
     carry_corridor_hand_target_threshold_m: float = 0.02
@@ -506,15 +515,17 @@ class Config:
     hand_support_rew_scale: float = 0.0
     hand_support_sigma: float = 0.015
     hand_support_margin_m: float = 0.01
-    hand_support_gate_source: str = "contact_mask"  # always | contact_mask | time_window | contact_mask_time_window
+    hand_support_gate_source: str = (
+        "contact_mask"  # always | contact_mask | time_window | contact_mask_time_window
+    )
     hand_support_start_eval_time: float = 0.0
     hand_support_end_eval_time: float = 999.0
-    hand_support_geom_names: list[str] = field(
-        default_factory=lambda: ["lh", "rh"]
-    )
+    hand_support_geom_names: list[str] = field(default_factory=lambda: ["lh", "rh"])
     hand_support_geom_ids: list[int] = field(default_factory=list)
     hand_support_decay_frac: float = 0.0  # E155-C: tail decay fraction, 0=off
-    hand_support_neutral_baseline: float = 0.0  # E155-D: gate=0 neutral value, 0=current
+    hand_support_neutral_baseline: float = (
+        0.0  # E155-D: gate=0 neutral value, 0=current
+    )
     # E158/E159: hand/object surface-band reward. By default this remains
     # one-sided outside the object; E159 may allow a shallow negative band.
     surface_band_rew_scale: float = 0.0
@@ -522,7 +533,16 @@ class Config:
     surface_band_width_m: float = 0.03
     surface_band_min_sdf_m: float = 0.0
     surface_band_sigma: float = 0.015
-    surface_band_score_mode: str = "one_sided"  # one_sided | symmetric_abs
+    surface_band_score_mode: str = (
+        "one_sided"  # one_sided | symmetric_abs | distance_continuation
+    )
+    # E187: opt-in dual-scale canonical-distance continuation. These defaults
+    # have no effect unless ``surface_band_score_mode=distance_continuation``.
+    surface_band_continuation_far_weight: float = 0.25
+    surface_band_continuation_near_weight: float = 0.75
+    surface_band_continuation_far_scale_m: float = 0.050
+    surface_band_continuation_near_scale_m: float = 0.015
+    surface_band_continuation_smooth_delta_m: float = 0.001
     surface_band_bimanual_required: bool = False
     surface_band_bimanual_score_reduce: str = "min"  # min
     surface_band_penetration_tol_m: float = 0.003
@@ -583,7 +603,9 @@ class Config:
     foot_ground_weight: float = 0.0
     contact_guidance: bool = False
     euler_convention: str = "XYZ"  # Intrinsic euler convention for object hinge joints
-    use_scene_act: str = ""  # Path to scene_act.xml (bypass _make_contact_guidance_model)
+    use_scene_act: str = (
+        ""  # Path to scene_act.xml (bypass _make_contact_guidance_model)
+    )
     object_pos_actuator_names: list[str] = field(
         default_factory=lambda: [
             "right_object_pos_x",
@@ -675,6 +697,10 @@ class Config:
     query_tape_enabled: bool = False
     query_tape_output_dir: str = ""
     query_tape_run_id: str = ""
+    query_tape_max_chunks: int = 0  # 0=unlimited; positive values bound artifacts
+    query_tape_stop_after_chunks: int = 0  # 0=run full episode after recording
+    query_tape_record_start_sim_step: int = 0  # skip artifacts before this MPC step
+    query_tape_record_geometry_state: bool = False  # exact offline replay; high volume
     # Noise scheduling
     first_ctrl_noise_scale: float = 0.5
     last_ctrl_noise_scale: float = 1.0
@@ -733,7 +759,9 @@ class Config:
     rerun_spawn: bool = False
     save_video: bool = True
     video_output_path: str = ""  # custom video output path; empty = default (output_dir/visualization_mjwp_act.mp4)
-    video_camera: str = "front"  # named MuJoCo camera; if missing or "auto", use full-body free camera
+    video_camera: str = (
+        "front"  # named MuJoCo camera; if missing or "auto", use full-body free camera
+    )
     video_auto_camera_min_distance: float = 3.8
     video_auto_camera_distance_scale: float = 3.0
     video_auto_camera_azimuth: float = 135.0
@@ -1199,6 +1227,19 @@ def process_config(config: Config):
                     "hand_approach_body_names: body '{}' not found.", name
                 )
         config.hand_approach_body_ids = resolved_ids
+        if config.object_distance_backend not in {"legacy_box", "grid_sdf"}:
+            raise ValueError(
+                "object_distance_backend must be 'legacy_box' or 'grid_sdf', "
+                f"got {config.object_distance_backend!r}"
+            )
+        if (
+            config.object_distance_backend == "legacy_box"
+            and config.object_collision_sdf_mode == "compound"
+        ):
+            raise ValueError(
+                "object_collision_sdf_mode='compound' requires "
+                "object_distance_backend='grid_sdf'"
+            )
         config.object_collision_geom_ids = resolve_object_collision_geom_ids(
             model, config.object_collision_sdf_mode
         )
@@ -1211,13 +1252,35 @@ def process_config(config: Config):
             config.hand_approach_obj_half_extents = [
                 float(x) for x in model.geom_size[primary_gid]
             ]
+        config.object_distance_object_body_id = mujoco.mj_name2id(
+            model, mujoco.mjtObj.mjOBJ_BODY, "object"
+        )
+        if config.object_distance_backend == "grid_sdf":
+            config._object_distance_grid_runtime = GridObjectDistanceRuntime.load(
+                config.object_distance_manifest,
+                expected_candidate_asset_sha256=(
+                    config.object_distance_expected_asset_sha256
+                ),
+                expected_error_bound_m=config.object_distance_error_bound_m,
+                object_body_id=config.object_distance_object_body_id,
+            )
+            grid_manifest = config._object_distance_grid_runtime.grid.manifest
+            config.hand_approach_obj_half_extents = [
+                0.5 * (maximum - minimum)
+                for minimum, maximum in zip(
+                    grid_manifest.object_aabb_min_m,
+                    grid_manifest.object_aabb_max_m,
+                    strict=True,
+                )
+            ]
         loguru.logger.info(
             "Hand approach: {} bodies, obj half_ext={}, object_sdf_mode={}, "
-            "object_sdf_geoms={}",
+            "object_sdf_geoms={}, object_distance_backend={}",
             len(config.hand_approach_body_ids),
             config.hand_approach_obj_half_extents,
             config.object_collision_sdf_mode,
             config.object_collision_geom_names,
+            config.object_distance_backend,
         )
 
     if config.simulator == "mjwp":
@@ -1246,9 +1309,7 @@ def process_config(config: Config):
                         "leg_object_penalty_geom_names: geom '{}' not found.", name
                     )
             config.leg_object_penalty_geom_ids = geom_ids
-            loguru.logger.info(
-                "Leg/object penalty: {} geoms resolved.", len(geom_ids)
-            )
+            loguru.logger.info("Leg/object penalty: {} geoms resolved.", len(geom_ids))
         if config.carry_corridor_rew_scale > 0.0:
             geom_ids = []
             for name in config.carry_corridor_leg_geom_names:
@@ -1260,9 +1321,7 @@ def process_config(config: Config):
                         "carry_corridor_leg_geom_names: geom '{}' not found.", name
                     )
             config.carry_corridor_leg_geom_ids = geom_ids
-            loguru.logger.info(
-                "Carry corridor leg geoms: {} resolved.", len(geom_ids)
-            )
+            loguru.logger.info("Carry corridor leg geoms: {} resolved.", len(geom_ids))
         if config.hand_floor_penalty_scale > 0.0:
             geom_ids = []
             for name in config.hand_floor_penalty_geom_names:
@@ -1274,9 +1333,7 @@ def process_config(config: Config):
                         "hand_floor_penalty_geom_names: geom '{}' not found.", name
                     )
             config.hand_floor_penalty_geom_ids = geom_ids
-            loguru.logger.info(
-                "Hand/floor penalty: {} geoms resolved.", len(geom_ids)
-            )
+            loguru.logger.info("Hand/floor penalty: {} geoms resolved.", len(geom_ids))
         if config.hand_object_deep_penalty_scale > 0.0:
             geom_ids = []
             for name in config.hand_object_deep_penalty_geom_names:
@@ -1304,7 +1361,29 @@ def process_config(config: Config):
                     )
             config.hand_support_geom_ids = geom_ids
             loguru.logger.info("Hand support geoms: {} resolved.", len(geom_ids))
-        if config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0:
+        if (
+            config.surface_band_rew_scale > 0.0
+            or config.surface_band_penalty_scale > 0.0
+        ):
+            validate_surface_distance_score_parameters(
+                mode=config.surface_band_score_mode,
+                sigma_m=float(config.surface_band_sigma),
+                continuation_far_weight=float(
+                    config.surface_band_continuation_far_weight
+                ),
+                continuation_near_weight=float(
+                    config.surface_band_continuation_near_weight
+                ),
+                continuation_far_scale_m=float(
+                    config.surface_band_continuation_far_scale_m
+                ),
+                continuation_near_scale_m=float(
+                    config.surface_band_continuation_near_scale_m
+                ),
+                continuation_smooth_delta_m=float(
+                    config.surface_band_continuation_smooth_delta_m
+                ),
+            )
             geom_ids = []
             for name in config.surface_band_geom_names:
                 gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
@@ -1371,9 +1450,7 @@ def process_config(config: Config):
                         "cem_safety_gate_geom_names: geom '{}' not found.", name
                     )
             config.cem_safety_gate_geom_ids = geom_ids
-            loguru.logger.info(
-                "CEM safety gate: {} geoms resolved.", len(geom_ids)
-            )
+            loguru.logger.info("CEM safety gate: {} geoms resolved.", len(geom_ids))
         if config.cem_hand_gate_enabled:
             geom_ids = []
             for name in config.cem_hand_gate_geom_names:

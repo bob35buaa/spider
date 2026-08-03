@@ -7,7 +7,7 @@
 #   bash workspace/core4d/scripts/convert/snapshot_scenes.sh E060 box023_person1 bucket005_s2_person1
 #
 # Output:
-#   workspace/core4d/results/E060/scene_snapshot/{case_name}/scene{,_act}.xml
+#   workspace/core4d/results/E060/scene_snapshot/{case_name}/scene*.xml
 #   workspace/core4d/results/E060/scene_snapshot/manifest.txt  (case + sha256 + size)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -39,9 +39,19 @@ for case_name in "$@"; do
   fi
   dst_dir="$DST/$case_name"
   mkdir -p "$dst_dir"
-  for f in scene.xml scene_act.xml scene_act_meta.json task_info.json; do
-    src="$src_dir/$f"
-    [ -f "$src" ] || continue
+  shopt -s nullglob
+  scene_files=("$src_dir"/scene*.xml)
+  shopt -u nullglob
+  if [ "${#scene_files[@]}" -eq 0 ]; then
+    echo "ERROR: no scene XML found: $src_dir" >&2
+    exit 1
+  fi
+  files=("${scene_files[@]}")
+  for optional in scene_act_meta.json task_info.json; do
+    [ -f "$src_dir/$optional" ] && files+=("$src_dir/$optional")
+  done
+  for src in "${files[@]}"; do
+    f="$(basename "$src")"
     cp "$src" "$dst_dir/$f"
     size=$(stat -c%s "$src")
     sha=$(sha256sum "$src" | awk '{print $1}')

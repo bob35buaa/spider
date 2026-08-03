@@ -60,6 +60,18 @@ def _run_root(config: Any) -> tuple[Path, str]:
     return Path(output_dir).resolve() / run_id, run_id
 
 
+def cem_query_tape_chunk_count(config: Any) -> int:
+    """Return the persisted chunk count for optional bounded-run control."""
+    if not bool(config.query_tape_enabled):
+        return 0
+    run_root, _ = _run_root(config)
+    manifest_path = run_root / "chunk_manifest.json"
+    if not manifest_path.is_file():
+        return 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return int(manifest.get("chunk_count", 0))
+
+
 def record_cem_query_chunk(config: Any, payload: dict[str, Any]) -> dict[str, Any]:
     """Write one final-iteration CEM sample chunk without changing optimization."""
     if not bool(config.query_tape_enabled):
@@ -68,12 +80,36 @@ def record_cem_query_chunk(config: Any, payload: dict[str, Any]) -> dict[str, An
     if "qpos" not in payload or "rewards" not in payload:
         raise ValueError("query tape payload requires qpos and rewards")
 
+    start_step = int(getattr(config, "query_tape_record_start_sim_step", 0))
+    current_step = int(getattr(config, "_query_tape_current_sim_step", 0))
+    if start_step < 0:
+        raise ValueError("query_tape_record_start_sim_step must be non-negative")
+    if current_step < start_step:
+        return {
+            "status": "SKIPPED_BEFORE_START",
+            "current_sim_step": current_step,
+            "record_start_sim_step": start_step,
+        }
+
     run_root.mkdir(parents=True, exist_ok=True)
     manifest_path = run_root / "chunk_manifest.json"
     if manifest_path.is_file():
         existing_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if existing_manifest.get("status") == "COMPLETE":
             raise RuntimeError(f"refusing to append to complete query tape: {run_root}")
+    else:
+        existing_manifest = {"chunks": [], "chunk_count": 0}
+    maximum_chunks = int(getattr(config, "query_tape_max_chunks", 0))
+    if maximum_chunks < 0:
+        raise ValueError("query_tape_max_chunks must be non-negative")
+    if (
+        maximum_chunks
+        and int(existing_manifest.get("chunk_count", 0)) >= maximum_chunks
+    ):
+        return {
+            "status": "SKIPPED_MAX_CHUNKS",
+            "chunk_count": int(existing_manifest["chunk_count"]),
+        }
     chunk_index = _next_index(run_root)
     chunk_path = run_root / f"chunk_{chunk_index:06d}.npz"
     if chunk_path.exists():
