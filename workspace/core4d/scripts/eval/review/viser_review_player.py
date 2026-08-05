@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive viser review player for PRG retargeting results (E170-E187).
+"""Interactive viser review player for PRG retargeting results (E170-E188).
 
 Browse every CEM-complete case across the registered experiments, filter by object /
 numeric pass / failure mode / retarget variant, play back the executed 3D
@@ -835,10 +835,10 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="print index audit and exit")
     args = ap.parse_args()
 
-    if args.check:
-        return idx._check()
-
     exps = tuple(e.strip() for e in args.exps.split(",") if e.strip())
+    if args.check:
+        return idx._check(exps)
+
     records = idx.build_index(exps)
     print(f"[review] indexed {len(records)} cases across {exps}")
     app = ReviewApp(  # noqa: F841

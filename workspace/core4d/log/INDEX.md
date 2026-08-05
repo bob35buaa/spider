@@ -1,7 +1,14 @@
 # 实验日志索引
 
-> 自动生成，共 259 个日志文件。
+> 自动生成，共 263 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 51 (E188-E188)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 262 | E188 | 2026-08-04 | Bucket 5kg controlled full cem results | [262_E188_bucket_5kg_controlled_full_cem_...](262_E188_bucket_5kg_controlled_full_cem_results.md) |
+| 263 | E188 | 2026-08-04 | Object tracking cross object audit results | [263_E188_object_tracking_cross_object_au...](263_E188_object_tracking_cross_object_audit_results.md) |
 
 ## Phase 50 (E187-E187)
 
@@ -12,7 +19,7 @@
 | 258 | E187, E178 | 2026-08-03 | Vs paired evaluation results | [258_E187_vs_E178_paired_evaluation_resul...](258_E187_vs_E178_paired_evaluation_results.md) |
 | 259 | E187, E178 | 2026-08-03 | Vs paired video review results | [259_E187_vs_E178_paired_video_review_res...](259_E187_vs_E178_paired_video_review_results.md) |
 | 260 | E187, E178 | 2026-08-03 | Vs manual review comparison results | [260_E187_vs_E178_manual_review_compariso...](260_E187_vs_E178_manual_review_comparison_results.md) |
-| 261 | E187 | 2026-08-03 | Manual USE partner RL export results | [261_E187_manual_use_partner_rl_export_results.md](261_E187_manual_use_partner_rl_export_results.md) |
+| 261 | E187 | 2026-08-03 | Manual use partner rl export results | [261_E187_manual_use_partner_rl_export_re...](261_E187_manual_use_partner_rl_export_results.md) |
 
 ## Phase 49 (E186-E186)
 
@@ -77,6 +84,7 @@
 | 240 | E178 | 2026-07-24 | Tracking error numeric gates | [240_E178_tracking_error_numeric_gates.md](240_E178_tracking_error_numeric_gates.md) |
 | 241 | E178 | 2026-07-24 | Bucket user manual review results | [241_E178_bucket_user_manual_review_resul...](241_E178_bucket_user_manual_review_results.md) |
 | 244 | E178 | 2026-07-24 | Nonconvex mujoco collision review | [244_E178_nonconvex_mujoco_collision_revi...](244_E178_nonconvex_mujoco_collision_review.md) |
+| 264 | E178 | 2026-07-24 | Manual use partner rl export results | [264_E178_manual_use_partner_rl_export_re...](264_E178_manual_use_partner_rl_export_results.md) |
 
 ## Phase 40 (E177-E177)
 

@@ -4,6 +4,9 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E178-export | 2026-08-05 | Phase 41 S6 | 最终人工USE13全配对；Holosoma 26 motion通过pre-train | ✅ RL export 13/13；downstream 26/26 ready | [264](log/264_E178_manual_use_partner_rl_export_results.md) · [plan214](plan/214_E178_manual_use_partner_rl_export_plan.md) |
+| E188-analysis | 2026-08-05 | Phase 51 | bucket/box object tracking分层；E188全15条双指标退化 | ✅ 分析完成；新增高优先级风险 | [263](log/263_E188_object_tracking_cross_object_audit_results.md) · [plan213](plan/213_E188_object_tracking_cross_object_audit_plan.md) |
+| E188 | 2026-08-04 | Phase 51 | 5kg受控复跑：技术闭合；同设备local-4下肢显著退化 | ✅ T2 mixed；C5/C8 FAIL，不升级5kg | [262](log/262_E188_bucket_5kg_controlled_full_cem_results.md) · [plan212](plan/212_E188_bucket_5kg_controlled_full_cem_plan.md) |
 | E187 | 2026-08-03 | Phase 50 | 人工USE14全配对；Holosoma 28 motion通过pre-train gate | ✅ RL export 14/14；downstream 28/28 ready | [261](log/261_E187_manual_use_partner_rl_export_results.md) · [260](log/260_E187_vs_E178_manual_review_comparison_results.md) · [plan211](plan/211_E187_manual_use_partner_rl_export_plan.md) |
 | E186 | 2026-08-02 | Phase 49 | P/G安全通过；bucket003捕获域与007 reward fidelity阻塞Full | ⛔ S3 R FAIL；Full 0 | [254](log/254_E186_authority_grid_sdf_robust_p_results.md) · [255](log/255_E186_production_prg_shadow_blocker_results.md) · [plan](plan/204_E186_22case_object_specific_prg_full_plan.md) |
 | E185 | 2026-08-01 | Phase 48 | static-P 0.60 sensitivity：all-case 4→7，新增仍全属bucket004 | ✅ 540行离线重聚合；⛔ bucket003/007仍阻塞Full | [253](log/253_E185_static_p_gate060_sensitivity_results.md) · [plan](plan/203_E185_static_p_gate060_sensitivity_plan.md) |

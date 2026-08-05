@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified case index + annotation store for the PRG review player (E170-E187).
+"""Unified case index + annotation store for the PRG review player (E170-E188).
 
 Pure-python (no viser / no spider imports) so it is importable headless for the
 `--check` self-test. Reads each experiment's ``*_case_metrics.tsv`` by column
@@ -19,7 +19,7 @@ from pathlib import Path
 
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174", "E178", "E187")
+DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188")
 
 GATE_FIELDS = (
     "fall_gate_pass",
@@ -290,16 +290,16 @@ def variants_for(records: list[CaseRecord]) -> list[str]:
     return sorted({r.retarget_variant_id for r in records if r.retarget_variant_id})
 
 
-def _check() -> int:
+def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
     """Print per-exp counts and cross-check against summary.json; exit non-zero on mismatch."""
     import json
 
-    records = build_index()
+    records = build_index(exps)
     ok = True
     print(
         f"{'exp':6} {'indexed':>7} {'evaluated':>9} {'npass':>5} {'reviewed':>8} {'playable':>8}"
     )
-    for exp in DEFAULT_EXPS:
+    for exp in exps:
         recs = [r for r in records if r.exp_id == exp]
         summ = eval_dir(exp) / "summary.json"
         evaluated = npass = -1
