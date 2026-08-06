@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E189 | 2026-08-06 | Phase 52 | box004(6)/box024(9)/box001(28)共43例E167A no-PRG vs PRG配对消融；box023复用E179结论不重跑 | ⏳ Full CEM跨机运行中(30/43完成)；gpu7队列NFS中断已修复+补跑 | [plan215](plan/215_E189_box004_box024_box001_e167a_no_prg_full_cem_plan.md) |
 | E178-export | 2026-08-05 | Phase 41 S6 | 最终人工USE13全配对；Holosoma 26 motion通过pre-train | ✅ RL export 13/13；downstream 26/26 ready | [264](log/264_E178_manual_use_partner_rl_export_results.md) · [plan214](plan/214_E178_manual_use_partner_rl_export_plan.md) |
 | E188-analysis | 2026-08-05 | Phase 51 | bucket/box object tracking分层；E188全15条双指标退化 | ✅ 分析完成；新增高优先级风险 | [263](log/263_E188_object_tracking_cross_object_audit_results.md) · [plan213](plan/213_E188_object_tracking_cross_object_audit_plan.md) |
 | E188 | 2026-08-04 | Phase 51 | 5kg受控复跑：技术闭合；同设备local-4下肢显著退化 | ✅ T2 mixed；C5/C8 FAIL，不升级5kg | [262](log/262_E188_bucket_5kg_controlled_full_cem_results.md) · [plan212](plan/212_E188_bucket_5kg_controlled_full_cem_plan.md) |
@@ -20,7 +21,7 @@
 | E177 | 2026-07-24 | Phase 40 | 三bucket低geom proxy：003/007五段无盖，004单box | ✅ 本地proxy批准；contact/CEM未启动 | [236](log/236_E177_five_step_no_lid_bucket_proxy_results.md) |
 | E176 | 2026-07-24 | Phase 39 | 个位数proxy 6–9 geom；runtime 6/6；吞吐canary 4/6 | ⛔ Full被3s门阻断，三轮优化后停止 | [235](log/235_E176_lowgeom_proxy_canary_results.md) · [plan](plan/192_E176_lowgeom_nonbox_proxy_plan.md) |
 | E175 | 2026-07-23 | Phase 38 | 修复multi-geom接入；41–167 geom导致Full预计52–66h | ⛔ Full慢速中止，canary/部分Full证据保留 | [plan](plan/191_E175_nonbox_proxy_fidelity_diagnostic_plan.md) |
-| E174 | 2026-07-23 | Phase 37 | 非box首次(bucket×5+desk×2 move2-only凹几何proxy)：39/39完成，numeric pass 5/39=13% | ✅ 执行完成待用户终审(PENDING_USER_REVIEW,倾向PARTIAL_YIELD) | [234](log/234_E174_bucket_desk_move2_nonbox_results.md) · [plan](plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) |
+| E174 | 2026-07-23 | Phase 37 | 非box首次(bucket×5+desk×2 move2-only凹几何proxy)：Full CEM 39/39,numeric pass 5/39=13%;bucket004(凹0.045)0/4 vs box004(凸0.041,E172)83%→凹几何proxy惩罚(腿穿薄壁+手够不到接触点);bucket010 2/2·desk007 2/9可用;gate-health 0/39 | ⏸ 执行完成(CEM_NEGATIVE,13%)；结果差人工标注暂缓,转proxy根因排查(见log§9) | [234](log/234_E174_bucket_desk_move2_nonbox_results.md) · [plan](plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) |
 | E173 | 2026-07-22 | Phase 36 | box024/box023/box001 move-only全流程；53条人工终审USE=23/DNU=30；23条source+partner RL-ready；PRG随尺寸退化 | ✅ 人工终审与paired RL export完成（23/23） | [233](log/233_E173_box024_box023_box001_screening_full_cem.md) · [plan](plan/189_E173_box024_box023_box001_full_pipeline_plan.md) |
 | E172 | 2026-07-22 | Phase 35 | Box004 move-only 全流程S0-S6：6 S5-ready→6 CEM→5 numeric pass；v2救回082_p2且下游pass；PRG 0 scene-reject | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [232](log/232_E172_box004_screening_full_cem.md) · [plan](plan/188_E172_box004_full_pipeline_plan.md) |
 | E171 | 2026-07-21 | Phase 34 | Box026 5/12 numeric pass；Box022 DATA_NEGATIVE；PRG跨物体contact trade-off显著 | ⏳ 执行完成待用户终审（PENDING_USER_REVIEW，倾向PARTIAL_YIELD） | [231](log/231_E171_box022_box026_screening_full_cem.md) · [plan](plan/187_E171_box022_box026_full_pipeline_plan.md) |

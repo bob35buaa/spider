@@ -83,7 +83,8 @@ Full original backup: [progress_archive/E098_E152_full_backup.md](progress_archi
 - [x] **核心发现·凹几何 proxy 惩罚**：bucket004(凹0.045m³)=0/4 vs box004(凸0.041,E172)=83%——同尺寸凸→凹全败。两失败轴：leg_penetration(均值0.165,腿穿空心桶薄壁)+contact loss(hand_contact_in_mask均值0.379,手够不到 ref 接触点，wall/voxel proxy 该处无碰撞面)。
 - [x] **视觉核验（强制，Codex）**：S6 keyframe 抽 2 fail+2 pass——bucket004 抱物腿夹进桶、bucket003 手飘到头没抓桶盖（真实物理，非 reward hacking）；bucket010/desk007 pass sim 紧贴 ref 干净。codex_s6_verification.md + codex_s4_review.md。
 - [x] 修 canary cap=5 bug（漏 desk/v2）、修 fresh authority 330/165（bucket007 prior 低估）、修 missing_dcv3_override（拷 44 override 到 Hydra 路径）。
-- [x] **收口**：log/100（E174）、tracker Phase37（✅ PENDING_USER_REVIEW 倾向 PARTIAL_YIELD）、report、completion audit PASS。倾向 PRG/rubber_hull **不宜作凹几何默认**，改进方向是物体 proxy 保真度（非 reward/hull）。**待用户对 39 条 USE/DO_NOT_USE**；chair(E175) 是否做由用户定。
+- [x] **收口**：log **234**（E174；之前误编号 100 已 git mv 修正）、tracker Phase37、report、completion audit PASS、INDEX 重建。disposition = **CEM_NEGATIVE**（13%）。**结果差→本轮暂缓逐条人工标注**，转 proxy 根因排查（log §9 清单：ref 接触点落点 vs proxy 碰撞面覆盖量化 / bucket wall proxy 补顶沿内壁 / bucket004 proxy 消融隔离变量）。倾向 PRG/rubber_hull **不宜作凹几何默认**，改进方向是物体 proxy 保真度。未导出 RL；chair(E175) 暂缓。
+- [x] **git 覆盖补齐**：examples/config/override 之前只提交 44 dcv3、漏 44 PRG override(`204e8dd`)；per-case CEM 场景 `scene_act_E174_rubberHull_PRG.xml` ×44 按 E173 约定 git add -f(`5ccf2ee`)。review player 接入 E174(`c1b2097`，修 tidal double-results 路径 bug，39/39 playable)。5 个 E174 commit 未 push。
 
 ---
 

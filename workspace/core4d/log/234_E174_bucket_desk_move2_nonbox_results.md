@@ -1,10 +1,10 @@
 # E174 结果日志：Bucket / Desk 非 box 物体 move2 全流程 + Full CEM
 
-_Core4D Phase 37 · 2026-07-23 · plan [190](../plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) · machine recommendation = `PENDING_USER_REVIEW`_
+_Core4D Phase 37 · 2026-07-23 · plan [190](../plan/190_E174_bucket_desk_move2_full_pipeline_plan.md) · machine disposition = `CEM_NEGATIVE_LEANING`（结果差，人工标注暂缓，待根因排查）_
 
 ## 0. 一句话结论
 
-E170 PRG + rubber_hull 冻结算法**首次用于非 box 凹几何物体**（5 bucket 空心 + 2 desk 桌腿，move2-only）：Full CEM 39 条 **numeric pass 仅 5/39 = 13%**，远低于 E173 同尺寸凸 box 的尺寸先验（~60–80%）。**关键对照：bucket004(凹,0.045m³)=0/4 vs box004(凸,0.041m³,E172)=83%——同尺寸、凹→全败**。失败集中在两条**物体侧 collision_policy proxy 相关轴**：腿穿进空心 bucket 薄壁（leg_penetration 均值 0.165）、手够不到 ref 接触点（hand_contact_in_mask 均值 0.379）。这是「凹几何 proxy 惩罚」的第一份量化证据。倾向 `PARTIAL_YIELD`（bucket010 2/2、desk007 2/9 可用），待用户对 39 条终审。
+E170 PRG + rubber_hull 冻结算法**首次用于非 box 凹几何物体**（5 bucket 空心 + 2 desk 桌腿，move2-only）：Full CEM 39 条 **numeric pass 仅 5/39 = 13%**，远低于 E173 同尺寸凸 box 的尺寸先验（~60–80%）。**关键对照：bucket004(凹,0.045m³)=0/4 vs box004(凸,0.041m³,E172)=83%——同尺寸、凹→全败**。失败集中在两条**物体侧 collision_policy proxy 相关轴**：腿穿进空心 bucket 薄壁（leg_penetration 均值 0.165）、手够不到 ref 接触点（hand_contact_in_mask 均值 0.379）。这是「凹几何 proxy 惩罚」的第一份量化证据。**结果整体偏差（13%），本轮不做逐条人工 USE/DO_NOT_USE 标注，先转入根因排查（见 §9）**；机器 disposition 倾向 `CEM_NEGATIVE`（仅 bucket010 2/2、desk007 2/9 少数可用）。
 
 ## 1. 目的与假设
 
@@ -105,7 +105,7 @@ S2 object-only overlay（14 template，4 方位）：bucket wall_proxy 贴合 me
 | C9 分层结论 | ✅ 按 object/category/variant/failure-mode 报告 |
 | C10 凹几何 proxy 证据 | ✅ 量化：bucket004(凹)0% vs box004(凸)83% 同尺寸对照 + 两失败轴（leg_pen/contact-loss）|
 | C11 历史比较不越界 | ✅ 仅 warning，无 `_e0**`/`_s2_` 继承 |
-| C12 用户 authority | ⏳ Codex 只写核验列；待用户 39 条 USE/DO_NOT_USE |
+| C12 用户 authority | ⏸ 结果差(13%)，本轮暂缓逐条人工标注，转根因排查（§9）；模板保留待需要 |
 | C13 复现 | ✅ config/git/SHA/snapshot/registry/commands/NPZ/metrics/video/audit 全在 results/E174/ |
 
 ## 8. 分析与结论
@@ -119,9 +119,18 @@ S2 object-only overlay（14 template，4 方位）：bucket wall_proxy 贴合 me
 
 ## 9. Yield 分级与下一步
 
-- 机器倾向 **`PARTIAL_YIELD`**（5 条 numeric pass + 视觉干净，逐物体 bucket010/desk007 有产出；bucket004/007/009 = `CEM_NEGATIVE`）。
-- machine recommendation 固定 `PENDING_USER_REVIEW`；**待用户对 39 条 CEM-complete 给 USE/DO_NOT_USE**（模板 `s6_downstream/eval/full/user_manual_review_template.tsv`）。
-- 未导出 RL/partner。是否进入 chair(E175) / 改 proxy 由用户决定。
+**Yield 分级**：整体 5/39=13% 偏差，机器 disposition = **`CEM_NEGATIVE`**（逐物体：bucket004/007/009 = CEM_NEGATIVE；bucket010/desk007 有零星 pass 但不足以支撑该拓扑）。
+
+**人工标注：本轮暂缓**。结果整体太差，逐条 USE/DO_NOT_USE 标注的边际价值低（多数明显不可用），且真正要回答的是「为什么凹几何这么差、proxy 能否修」。因此本轮**不做 39 条人工标注**，直接转入根因排查。模板 `s6_downstream/eval/full/user_manual_review_template.tsv` 保留待需要时用。
+
+**根因排查清单（下一步，重点）**：
+1. **区分「retarget 目标本身好但 CEM 学不动」vs「目标就差」**：S4 target replay 视觉是 clean 的（手贴物、无穿透），但 CEM 后 contact/leg_pen 崩——说明 ref 目标合理，问题在**物理执行层**（proxy 碰撞面 vs ref 接触点错位）。需逐 case 对比 ref contact mask 落点 vs proxy 碰撞几何覆盖，量化「ref 接触点有多少落在 proxy 无碰撞面的区域」。
+2. **wall proxy 空心问题**：bucket 内壁/顶沿是主要 ref 接触区，但 `bucket_wall_proxy_aabb` 只有底+四外壁、**无顶面/内壁碰撞**→ 手抓桶沿/内壁时穿空。验证：给 bucket proxy 补顶沿/内壁薄壳后重跑 bucket004 canary，看 contact 是否恢复。
+3. **leg_penetration 来源**：抱物近身时腿穿薄壁——查是 PRG lower-body gate 对薄壁 SDF 失效，还是 ref 本身腿-物距离就小。对比同 case 的 ref leg-object 距离 vs sim。
+4. **desk voxel proxy 局部 miss**：desk007 2/9，查失败 7 条的 ref 接触落点（桌面边缘/桌腿）是否在 voxel 覆盖盲区。
+5. **对照实验设计**：挑 bucket004（0/4，最干净小凹桶）做 proxy 消融（wall vs wall+顶内壁 vs 近似实心 convex hull），隔离「proxy 保真度」这一单一变量——这是把 13% 归因到 proxy 而非 PRG/hull 的决定性实验。
+
+**结论边界**：PRG/rubber_hull **不宜作凹几何默认**；适用边界目前止于凸 box + 接触落在 proxy 面上的少数非 box 条目。改进方向是**物体 proxy 保真度**（补顶/内壁、更贴合凹碰撞体），非改 reward/hull。未导出 RL/partner。chair(E175，更极端凹) 暂缓，优先做上面的 proxy 根因排查。
 
 ## 10. 结果路径
 
