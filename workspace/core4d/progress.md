@@ -2,9 +2,21 @@
 
 ## 归档索引
 
+- [E189 完整执行记录（跨机协调/环境坑/xlsx迭代）](progress_archive/E189_full_backup_20260807.md)
 - [E187 Full至人工比较完整备份](progress_archive/E187_full_manual_comparison_20260803_full_backup.md)
 - [E186 production P/R/G完整备份](progress_archive/E186_production_prg_20260802_full_backup.md)
 - 更早阶段见 `progress_archive/`。
+
+## 最近完成：E189 box004/box024/box001 E167A no-PRG vs PRG 配对消融
+
+### 2026-08-06 ~ 2026-08-07
+
+- 43 条 case（box004×6/box024×9/box001×28，box023 引用 E179 不重跑）Full CEM 全部完成（跨机 jzsy-11 + ditg-12，中途修复了 `run_cem_queue.py` 的 NFS copy 崩溃问题）。
+- 十二门 eval 全部跑通（`eval_E189_boxes_e167a_vs_prg.py`，43/43、516/516 gate cells）：**box004 `NO_PRG_NONINFERIOR`(2/6→2/6)、box024 `PRG_BETTER`(2/9→0/9)、box001 `NO_PRG_NONINFERIOR`(5/28→6/28)**。三物体 lower_body gate 一致退化（-2/-6/-4），但"PRG 随体积单调退化"假设在 no-PRG 侧不成立（box001 体积比 box024 更大却是 non-inferior）。
+- 43/43 self MP4 + 43/43 paired 对照视频渲染完成；6/11 条 pass-migration case 做了关键帧视觉复核，box024 有清晰的腿部穿箱可见证据，与数值结论强吻合。
+- xlsx 报表按用户反馈重做为精简版（每物体一个 sheet：case_id + 是否通过 + 失败模式 + 12门(PRG/E189/Delta)，Delta=PRG−noPRG，表头橙色区分）。
+- 已注册进 viser review player（43/43 playable，`--check` 无 mismatch）。
+- 完整结论、Claims verification(C0-C6全PASS)、局限性见 [log/265](log/265_E189_box004_box024_box001_e167a_no_prg_vs_prg_results.md)；执行细节（跨机协调、GL环境坑、xlsx迭代过程）见归档备份。E189 结论：box004/box001 维持 PRG default，box024 明确保留 PRG，三者均不进入 RL export。
 
 ## 最近完成：E178 final manual-USE partner RL export
 

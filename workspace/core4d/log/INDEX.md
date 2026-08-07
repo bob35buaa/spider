@@ -1,7 +1,13 @@
 # 实验日志索引
 
-> 自动生成，共 263 个日志文件。
+> 自动生成，共 264 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 52 (E189-E189)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 265 | E189, e167a | 2026-08-06 | Box004 box024 box001 e167a no prg vs prg results | [265_E189_box004_box024_box001_e167a_no_p...](265_E189_box004_box024_box001_e167a_no_prg_vs_prg_results.md) |
 
 ## Phase 51 (E188-E188)
 

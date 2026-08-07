@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified case index + annotation store for the PRG review player (E170-E188).
+"""Unified case index + annotation store for the PRG review player (E170-E189).
 
 Pure-python (no viser / no spider imports) so it is importable headless for the
 `--check` self-test. Reads each experiment's ``*_case_metrics.tsv`` by column
@@ -19,7 +19,9 @@ from pathlib import Path
 
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_EXPS = ("E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188")
+DEFAULT_EXPS = (
+    "E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188", "E189",
+)
 
 GATE_FIELDS = (
     "fall_gate_pass",

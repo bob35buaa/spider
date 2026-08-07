@@ -4,7 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
-| E189 | 2026-08-06 | Phase 52 | box004(6)/box024(9)/box001(28)共43例E167A no-PRG vs PRG配对消融；box023复用E179结论不重跑 | ⏳ Full CEM跨机运行中(30/43完成)；gpu7队列NFS中断已修复+补跑 | [plan215](plan/215_E189_box004_box024_box001_e167a_no_prg_full_cem_plan.md) |
+| E189 | 2026-08-06 | Phase 52 | box004(6)/box024(9)/box001(28)共43例E167A no-PRG vs PRG配对消融；box023复用E179结论不重跑 | ✅ 43/43完成；box004 NONINFERIOR/box024 PRG_BETTER/box001 NONINFERIOR；lower-body三物体一致退化 | [265](log/265_E189_box004_box024_box001_e167a_no_prg_vs_prg_results.md) · [plan215](plan/215_E189_box004_box024_box001_e167a_no_prg_full_cem_plan.md) |
 | E178-export | 2026-08-05 | Phase 41 S6 | 最终人工USE13全配对；Holosoma 26 motion通过pre-train | ✅ RL export 13/13；downstream 26/26 ready | [264](log/264_E178_manual_use_partner_rl_export_results.md) · [plan214](plan/214_E178_manual_use_partner_rl_export_plan.md) |
 | E188-analysis | 2026-08-05 | Phase 51 | bucket/box object tracking分层；E188全15条双指标退化 | ✅ 分析完成；新增高优先级风险 | [263](log/263_E188_object_tracking_cross_object_audit_results.md) · [plan213](plan/213_E188_object_tracking_cross_object_audit_plan.md) |
 | E188 | 2026-08-04 | Phase 51 | 5kg受控复跑：技术闭合；同设备local-4下肢显著退化 | ✅ T2 mixed；C5/C8 FAIL，不升级5kg | [262](log/262_E188_bucket_5kg_controlled_full_cem_results.md) · [plan212](plan/212_E188_bucket_5kg_controlled_full_cem_plan.md) |

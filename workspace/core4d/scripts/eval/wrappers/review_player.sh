@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch the PRG retargeting review player (viser, E170-E188).
+# Launch the PRG retargeting review player (viser, E170-E189).
 #
 # Usage:
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E188] [--port 8080] [--check] [...]
