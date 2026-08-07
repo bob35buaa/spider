@@ -65,7 +65,12 @@ def number(value: Any, digits: int = 3) -> str:
     return f"{output:.{digits}f}" if math.isfinite(output) else "NA"
 
 
-def object_section(obj: str, block: dict[str, Any], paired: list[dict[str, str]]) -> list[str]:
+def object_section(
+    obj: str,
+    block: dict[str, Any],
+    paired: list[dict[str, str]],
+    qpos_jerk_by_case: dict[str, dict[str, float]],
+) -> list[str]:
     n = block["n"]
     lines = [
         f"## 📊 {obj}（n={n}）",
@@ -131,20 +136,47 @@ def object_section(obj: str, block: dict[str, Any], paired: list[dict[str, str]]
             f"{number(delta['bootstrap_mean_ci95_high'])}] |"
         )
     rows = [row for row in paired if row["object_key"] == obj]
+    jerk_prg_vals = [
+        qpos_jerk_by_case[r["case_id"]]["prg"]
+        for r in rows
+        if "prg" in qpos_jerk_by_case.get(r["case_id"], {})
+    ]
+    jerk_e189_vals = [
+        qpos_jerk_by_case[r["case_id"]]["e189"]
+        for r in rows
+        if "e189" in qpos_jerk_by_case.get(r["case_id"], {})
+    ]
+    lines.extend(
+        [
+            "",
+            "### qpos jerk（全身42维单通道, fixed formula, L2 p95）",
+            "",
+            "_修复了历史 84 维（把 npz 的 (T,2,42) 两个通道直接拼接）bug后重算，"
+            "口径与本报告其余指标不共享同一 case_metrics.tsv 来源，见 "
+            "`compute_qpos_jerk_fixed.py`。_",
+            "",
+            "| 口径 | PRG mean | no-PRG(E189) mean |",
+            "|---|---:|---:|",
+            f"| qpos_jerk_l2_p95 | {number(sum(jerk_prg_vals)/len(jerk_prg_vals) if jerk_prg_vals else math.nan, 1)} | "
+            f"{number(sum(jerk_e189_vals)/len(jerk_e189_vals) if jerk_e189_vals else math.nan, 1)} |",
+        ]
+    )
     lines.extend(
         [
             "",
             f"### {obj} 逐 case 结果",
             "",
-            "| Case | PRG 12门 | E189 12门 | Migration | PRG failures | "
-            "E189 failures |",
-            "|---|---:|---:|---|---|---|",
+            "| Case | PRG 12门 | E189 12门 | Migration | qpos_jerk PRG | "
+            "qpos_jerk E189 | PRG failures | E189 failures |",
+            "|---|---:|---:|---|---:|---:|---|---|",
         ]
     )
     for row in rows:
+        jerk = qpos_jerk_by_case.get(row["case_id"], {})
         lines.append(
             f"| `{row['case_id']}` | {mark(row['prg_12gate_pass'])} | "
             f"{mark(row['e189_12gate_pass'])} | {row['pass_migration']} | "
+            f"{number(jerk.get('prg'), 1)} | {number(jerk.get('e189'), 1)} | "
             f"{row['prg_failure_modes'] or '—'} | "
             f"{row['e189_failure_modes'] or '—'} |"
         )
@@ -191,6 +223,7 @@ def build_gate_rows(
     paired: list[dict[str, str]],
     baseline_by_case: dict[str, dict[str, str]],
     case_metrics_by_case: dict[str, dict[str, str]],
+    qpos_jerk_by_case: dict[str, dict[str, float]],
 ) -> list[dict[str, Any]]:
     rows = []
     for row in paired:
@@ -223,8 +256,36 @@ def build_gate_rows(
             out[f"{gate}_prg"] = round(prg_value, round_digits) if math.isfinite(prg_value) else "NA"
             out[f"{gate}_e189"] = round(e189_value, round_digits) if math.isfinite(e189_value) else "NA"
             out[f"{gate}_delta"] = round(delta, round_digits) if math.isfinite(delta) else "NA"
+        jerk = qpos_jerk_by_case.get(case_id, {})
+        jerk_prg = C.finite(jerk.get("prg"), math.nan)
+        jerk_e189 = C.finite(jerk.get("e189"), math.nan)
+        jerk_delta = jerk_prg - jerk_e189 if math.isfinite(jerk_prg) and math.isfinite(jerk_e189) else math.nan
+        out["qpos_jerk_prg"] = round(jerk_prg, 1) if math.isfinite(jerk_prg) else "NA"
+        out["qpos_jerk_e189"] = round(jerk_e189, 1) if math.isfinite(jerk_e189) else "NA"
+        out["qpos_jerk_delta"] = round(jerk_delta, 1) if math.isfinite(jerk_delta) else "NA"
         rows.append(out)
     return rows
+
+
+def load_qpos_jerk_fixed() -> dict[str, dict[str, dict[str, float]]]:
+    """case_id -> {prg, e189} qpos_jerk_l2_p95, using the fixed (42-dim,
+    single-channel) formula in eval.core.motion_health.qpos_kinematic_health.
+    See compute_qpos_jerk_fixed.py — precomputed, not recomputed here."""
+    data = json.loads(
+        (C.RESULTS / "s6_downstream/eval/full/qpos_jerk_fixed.json").read_text(encoding="utf-8")
+    )
+    label_map = {
+        "box004": ("E172_box004_prg", "E189_box004_noprg"),
+        "box024": ("E173_box024_prg", "E189_box024_noprg"),
+        "box001": ("E173_box001_prg", "E189_box001_noprg"),
+    }
+    by_case: dict[str, dict[str, float]] = {}
+    for obj, (prg_label, e189_label) in label_map.items():
+        for case_id, value in data[prg_label].items():
+            by_case.setdefault(case_id, {})["prg"] = value
+        for case_id, value in data[e189_label].items():
+            by_case.setdefault(case_id, {})["e189"] = value
+    return by_case
 
 
 def write_xlsx(
@@ -274,18 +335,22 @@ def write_xlsx(
         ws_summary.column_dimensions[get_column_letter(col_idx)].width = 22
 
     fixed_cols = ("case_id", "prg_pass", "e189_pass", "prg_failure_modes", "e189_failure_modes")
+    qpos_jerk_by_case = load_qpos_jerk_fixed()
+    column_groups = [(gate, LABELS[gate]) for gate in C.ALL_GATES] + [
+        ("qpos_jerk", "qpos jerk (fixed, L2 p95)")
+    ]
     for obj in OBJECTS:
         ws = wb.create_sheet(obj)
-        rows = build_gate_rows(obj, paired, baseline_by_case, case_metrics_by_case)
+        rows = build_gate_rows(obj, paired, baseline_by_case, case_metrics_by_case, qpos_jerk_by_case)
         fields = list(fixed_cols)
-        for gate in C.ALL_GATES:
-            fields.extend([f"{gate}_prg", f"{gate}_e189", f"{gate}_delta"])
+        for key, _ in column_groups:
+            fields.extend([f"{key}_prg", f"{key}_e189", f"{key}_delta"])
 
         # Two header rows: gate name spanning its 3 columns, then the
         # prg/e189/delta sub-header underneath (delta gets the warning color).
         ws.append(
             [""] * len(fixed_cols)
-            + [g for gate in C.ALL_GATES for g in (LABELS[gate], "", "")]
+            + [g for _, label in column_groups for g in (label, "", "")]
         )
         ws.append(list(fixed_cols) + [c.rsplit("_", 1)[-1] for c in fields[len(fixed_cols):]])
         for col_idx in range(1, len(fixed_cols) + 1):
@@ -293,8 +358,8 @@ def write_xlsx(
                 cell = ws.cell(row=r, column=col_idx)
                 cell.font = header_font
                 cell.fill = header_fill
-        for gate_idx, gate in enumerate(C.ALL_GATES):
-            base_col = len(fixed_cols) + gate_idx * 3 + 1
+        for group_idx, (_, _label) in enumerate(column_groups):
+            base_col = len(fixed_cols) + group_idx * 3 + 1
             ws.merge_cells(start_row=1, start_column=base_col, end_row=1, end_column=base_col + 2)
             top_cell = ws.cell(row=1, column=base_col)
             top_cell.font = header_font
@@ -416,8 +481,9 @@ def main() -> int:
             "",
         ]
     )
+    qpos_jerk_by_case = load_qpos_jerk_fixed()
     for obj in OBJECTS:
-        lines.extend(object_section(obj, summary["by_object"][obj], paired))
+        lines.extend(object_section(obj, summary["by_object"][obj], paired, qpos_jerk_by_case))
 
     lines.extend(
         [

@@ -84,7 +84,7 @@ def reduce_array(array: np.ndarray, aggregation: str) -> float:
     return float(values.mean())
 
 
-def qpos_kinematic_health(qpos_path: Path) -> dict[str, Any]:
+def qpos_kinematic_health(qpos_path: Path, default_fps: float = 30.0) -> dict[str, Any]:
     out = {
         "qpos_speed_l2_p95": math.nan,
         "qpos_accel_l2_p95": math.nan,
@@ -93,24 +93,18 @@ def qpos_kinematic_health(qpos_path: Path) -> dict[str, Any]:
     }
     if not qpos_path.is_file():
         return out
-    with np.load(qpos_path, allow_pickle=True) as data:
-        if "qpos" not in data.files:
-            return out
-        qpos = np.asarray(data["qpos"], dtype=np.float64)
-        time = np.asarray(data["time"], dtype=np.float64) if "time" in data.files else None
+    # Use only the actual robot qpos channel (npz_qpos()[0]): the npz's raw
+    # "qpos" array is (T, 2, nq) with channel 1 an optional reference qpos,
+    # not a second physics substep. Flattening both channels together (as
+    # this used to do) doubled the vector to 2*nq dims and mixed two
+    # different implicit time granularities into one derivative.
+    qpos, _ = npz_qpos(qpos_path)
     if qpos.ndim < 2 or qpos.shape[0] < 4:
         return out
-    flat = qpos.reshape(qpos.shape[0], -1)
-    fps = 50.0
-    if time is not None:
-        time_1d = time.reshape(qpos.shape[0], -1)[:, 0]
-        dt = np.diff(time_1d)
-        dt = dt[np.isfinite(dt) & (dt > 0)]
-        if dt.size:
-            fps = float(1.0 / np.median(dt))
-    speed = np.linalg.norm(np.diff(flat, axis=0), axis=1) * fps
-    accel = np.linalg.norm(np.diff(flat, n=2, axis=0), axis=1) * (fps**2)
-    jerk = np.linalg.norm(np.diff(flat, n=3, axis=0), axis=1) * (fps**3)
+    fps = fps_from_npz(qpos_path, default_fps)
+    speed = np.linalg.norm(np.diff(qpos, axis=0), axis=1) * fps
+    accel = np.linalg.norm(np.diff(qpos, n=2, axis=0), axis=1) * (fps**2)
+    jerk = np.linalg.norm(np.diff(qpos, n=3, axis=0), axis=1) * (fps**3)
     out.update(
         {
             "qpos_speed_l2_p95": float(np.percentile(speed, 95)) if speed.size else math.nan,
@@ -269,7 +263,7 @@ def run_health(
     config: EvalConfig,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {key: math.nan for key in HEALTH_AGGS}
-    out.update(qpos_kinematic_health(qpos_path))
+    out.update(qpos_kinematic_health(qpos_path, config.fps))
     out.update(body_motion_health(qpos_path, scene_xml, config))
     if not qpos_path.is_file():
         return out

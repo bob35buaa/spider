@@ -18,6 +18,7 @@ same layout as ``E189_vs_PRG_boxes_report.xlsx`` (case_id/pass/failure-modes
 
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -71,6 +72,41 @@ SOURCE_LABELS = {
     "box023": {"prg": "E173", "noprg": "E179"},
     "box021": {"prg": "E170", "noprg": "E168"},
 }
+
+QPOS_JERK_FIXED_JSON = OUTPUT_DIR / "qpos_jerk_fixed.json"
+# label keys inside qpos_jerk_fixed.json (see compute_qpos_jerk_fixed.py),
+# per object/side.
+QPOS_JERK_LABELS = {
+    "box023": {"prg": "E173_box023_prg", "noprg": "E179_box023_noprg"},
+    "box021": {"prg": "E170_box021_prg", "noprg": "E168_box021_noprg"},
+}
+
+
+def load_qpos_jerk_fixed() -> dict[str, dict[str, dict[str, float]]]:
+    """object_key -> case_id -> {prg, noprg} qpos_jerk_l2_p95, using the
+    fixed (42-dim, single-channel) formula in
+    eval.core.motion_health.qpos_kinematic_health. Precomputed by
+    compute_qpos_jerk_fixed.py, not recomputed here."""
+    data = json.loads(QPOS_JERK_FIXED_JSON.read_text(encoding="utf-8"))
+    by_object: dict[str, dict[str, dict[str, float]]] = {}
+    for obj, sides in QPOS_JERK_LABELS.items():
+        by_case: dict[str, dict[str, float]] = {}
+        for side, label in sides.items():
+            for case_id, value in data[label].items():
+                by_case.setdefault(case_id, {})[side] = value
+        by_object[obj] = by_case
+    return by_object
+
+
+def attach_qpos_jerk(rows: list[dict[str, Any]], jerk_by_case: dict[str, dict[str, float]]) -> None:
+    for row in rows:
+        jerk = jerk_by_case.get(row["case_id"], {})
+        prg = C.finite(jerk.get("prg"), math.nan)
+        noprg = C.finite(jerk.get("noprg"), math.nan)
+        delta = prg - noprg if math.isfinite(prg) and math.isfinite(noprg) else math.nan
+        row["qpos_jerk_prg"] = round(prg, 1) if math.isfinite(prg) else "NA"
+        row["qpos_jerk_noprg"] = round(noprg, 1) if math.isfinite(noprg) else "NA"
+        row["qpos_jerk_delta"] = round(delta, 1) if math.isfinite(delta) else "NA"
 
 
 def migration(prg_pass: bool, noprg_pass: bool) -> str:
@@ -228,16 +264,19 @@ def write_xlsx(by_object: dict[str, list[dict[str, Any]]]) -> None:
         ws_summary.column_dimensions[get_column_letter(col_idx)].width = 20
 
     fixed_cols = ("case_id", "prg_pass", "noprg_pass", "prg_failure_modes", "noprg_failure_modes")
+    column_groups = [(gate, LABELS[gate]) for gate in C.ALL_GATES] + [
+        ("qpos_jerk", "qpos jerk (fixed, L2 p95)")
+    ]
     for obj in OBJECTS:
         ws = wb.create_sheet(obj)
         rows = by_object[obj]
         fields = list(fixed_cols)
-        for gate in C.ALL_GATES:
-            fields.extend([f"{gate}_prg", f"{gate}_noprg", f"{gate}_delta"])
+        for key, _ in column_groups:
+            fields.extend([f"{key}_prg", f"{key}_noprg", f"{key}_delta"])
 
         ws.append(
             [""] * len(fixed_cols)
-            + [g for gate in C.ALL_GATES for g in (LABELS[gate], "", "")]
+            + [g for _, label in column_groups for g in (label, "", "")]
         )
         ws.append(list(fixed_cols) + [c.rsplit("_", 1)[-1] for c in fields[len(fixed_cols):]])
         for col_idx in range(1, len(fixed_cols) + 1):
@@ -245,8 +284,8 @@ def write_xlsx(by_object: dict[str, list[dict[str, Any]]]) -> None:
                 cell = ws.cell(row=r, column=col_idx)
                 cell.font = header_font
                 cell.fill = header_fill
-        for gate_idx, gate in enumerate(C.ALL_GATES):
-            base_col = len(fixed_cols) + gate_idx * 3 + 1
+        for group_idx, (_, _label) in enumerate(column_groups):
+            base_col = len(fixed_cols) + group_idx * 3 + 1
             ws.merge_cells(start_row=1, start_column=base_col, end_row=1, end_column=base_col + 2)
             top_cell = ws.cell(row=1, column=base_col)
             top_cell.font = header_font
@@ -331,6 +370,21 @@ def write_md(by_object: dict[str, list[dict[str, Any]]], gate_counts: dict[str, 
         ])
         for key, count in migrations.items():
             lines.append(f"| {key} | {count} |")
+        jerk_prg_vals = [row["qpos_jerk_prg"] for row in rows if isinstance(row["qpos_jerk_prg"], (int, float))]
+        jerk_noprg_vals = [row["qpos_jerk_noprg"] for row in rows if isinstance(row["qpos_jerk_noprg"], (int, float))]
+        lines.extend([
+            "",
+            "### qpos jerk（全身42维单通道, fixed formula, L2 p95）",
+            "",
+            "_修复了历史 84 维（把 npz 的 (T,2,42) 两个通道直接拼接）bug后重算，"
+            "见 `compute_qpos_jerk_fixed.py`。_",
+            "",
+            "| 口径 | PRG mean | no-PRG mean |",
+            "|---|---:|---:|",
+            f"| qpos_jerk_l2_p95 | "
+            f"{round(sum(jerk_prg_vals)/len(jerk_prg_vals), 1) if jerk_prg_vals else 'NA'} | "
+            f"{round(sum(jerk_noprg_vals)/len(jerk_noprg_vals), 1) if jerk_noprg_vals else 'NA'} |",
+        ])
     OUTPUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -339,6 +393,9 @@ def main() -> int:
     box021_rows, box021_gates = load_box021()
     by_object = {"box023": box023_rows, "box021": box021_rows}
     gates_by_object = {"box023": box023_gates, "box021": box021_gates}
+    qpos_jerk_by_object = load_qpos_jerk_fixed()
+    for obj in OBJECTS:
+        attach_qpos_jerk(by_object[obj], qpos_jerk_by_object[obj])
     gate_counts = {
         obj: gate_pass_counts(by_object[obj], gates_by_object[obj]) for obj in OBJECTS
     }
