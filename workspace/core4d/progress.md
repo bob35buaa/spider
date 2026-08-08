@@ -7,7 +7,81 @@
 - [E186 production P/R/G完整备份](progress_archive/E186_production_prg_20260802_full_backup.md)
 - 更早阶段见 `progress_archive/`。
 
-## 最近完成：E189 box004/box024/box001 E167A no-PRG vs PRG 配对消融
+## 计划态：E192（机制 a 阈值）/ E193（机制 c 抓取拓扑）/ E194（机制 b 重力补偿）
+
+### 2026-08-08 · 三份计划已写好，**待用户批准后才创建脚本 / 跑 CEM**
+
+承接 E191 的三重共线结论，三个正交实验各打一条机制，**互不叠加**（各自冻结另外两条的相关参数）。
+
+**[E192](plan/218_E192_gate_threshold_size_dependence_plan.md)** — 收紧 CEM 手门硬地板（**精简案**）
+- 设计要点：(a) 有**两个方向相反**的子机制 —— (a2) 门被吃满需**收紧**、(a1) 门太紧致饥饿需**放松**，
+  所以单一「按尺寸缩放」测不了。
+- **(a1) 本轮不测**：核对 PRG 侧（生产默认）发现 box004 posture fallback `0.1530` **反而高于**
+  box024 `0.1427`，没有物体间差异，先验太弱。C5 删除，相关诊断列降级为观测项。
+- **只跑 (a2) 单臂**：`cem_hand_gate_hard_floor_m −0.020→−0.010` + `max_violation_pct 0.10→0.05`。
+  依据：box024 `con_dist_min = −0.0201` 顶死硬地板，饱和率 0.0136 vs box004 0.0046（**3×**）。
+- **15 条 Full CEM**（原 2×2 析因 45 条 → 1/3 算力），canary 3 例。
+- **不是调参**：不做 sweep、单点预设值、box004 作阴性对照。关键判据 C3：
+  Δ(box024) − Δ(box004) ≥ 0.10 —— 若两物体同向同幅改善，即使数字变好也判
+  `GLOBALLY_SUBOPTIMAL`，(a) 作为尺寸机制被证伪。C6 要求饱和率必须同步下降，否则归因错误、结果作废。
+
+**[E193](plan/219_E193_grasp_topology_plan.md)** — 抓取拓扑（接触法向能否对置）
+- **新对照**：box001 vs box024 是天然体积配平对——体积差 −1%、**参考自带穿透差 −4%（0.628 vs 0.603）**，
+  但物理穿透差 **1.78×**（0.212 vs 0.378），长宽比 1.30 vs 1.93。差异在物理阶段产生，不是数据自带。
+- **仓库里从来没有接触法向度量**：`contact.frame` 只被整体拷贝、从未被读；grep `force_closure`/
+  `contact_normal`/`opposed` 零命中。所以 Stage 1 先造度量（照 E191 纯追加模式），零 GPU 在既有 141 条上判。
+- **干预是纯配置**：`contact_hdmi_target_source: external` + `(T,2,3)` NPZ 可重定位抓握点，
+  不重跑重定向、不改 scene；面操作复用 `E098/face_utils.py`，先例 `E100/build_fingertip_aware_target.py`。
+- Stage 2 由 C2 **gate**：box001↔box024 对置度差 ≥ 0.3 且 p<0.05 才跑 24 条 CEM。
+- 明确排除的轴：手部碰撞体变体（E146–E149 已 A/B 四次无净胜，且两个变体都是单块、不改拓扑）、
+  CoACD（E181 ASSET_REJECTED / E182 全族未过 / E186 Full 未启动，且 box 的 AABB 本来就精确）。
+
+**两实验互不叠加**：E193 冻结所有 gate/reward 阈值在 E167A 原值，E192 不动抓握目标，保证可独立归因。
+
+**[E194](plan/220_E194_object_gravity_compensation_plan.md)** — 物体重力补偿（**不引入 partner**）
+- 用 MuJoCo 原生 `gravcomp="1"` body 属性（**不用** `partner_force_scale`——它在无 point/spring 时
+  数学上就是质心托力，但走的是一段以 partner 命名、含 freejoint 硬假设的路径）。
+- **技术可行性已实测**：mujoco 3.7.0，`gravcomp=1` 稳态 qpos `0.00000` vs 无补偿 `−0.10782`。
+  仓库已有先例：`spider/preprocess/generate_xml.py:429-431`、allegro/mano palm 资产。
+- **2×2 三臂**（A0 基线已落盘）。四格稳态解已实测：**位移由 `kp` 决定，力由 `gravcomp` 决定** ——
+  A0 `−9.81cm / 49.05N`、G1 `0 / 0`、**G2 `−1.96cm / 49.05N`（力不变！）**、G3 `0 / 0`。
+  基线里这两件事是混在一起的，2×2 正好分离。
+- **主判别 C6（G1 vs G2）**：两臂都把箱子放回正确位置，但只有 G1 去掉了 49N 伺服力 →
+  穿透在 G1 降、G2 不降 = 「伺服顶出来的」；两者同降 = 「只跟位置有关」；都不降 = 与 (b) 无关。
+  **C7（G3 vs G1）** 稳态相同、只差柔顺性，隔离「箱子不肯让位」的贡献。45 条 Full CEM。
+- 期望上限已按 E191 H1 校准：PRG 侧 `z_err_share_lifted` 仅 0.35(box004)/0.37(box024)，
+  所以 `track_obj_pos_err` 降幅预注册在 **[15%, 45%]**；若降幅 > 60% 反而说明 E191 的分解有误（C2）。
+- 三臂都在质心作用、都不产生力矩 → **都修不好** box024 那 7.33cm 远端不对称（C3）。
+  若成立即把「平移下垂」与「远端倾斜」两成分实验分离——本实验最有价值的产出。
+
+## 最近完成：E191 物体支撑建模离线审计（box024 远端下沉 / 手物穿透根因）
+
+### 2026-08-08
+
+起因：用户指出 box024 的物体**非机器人一侧高度远低于参考轨迹**，且手物穿透显著高于 box004/box001。
+E191 **不跑仿真**，只给 eval 补上缺失的度量维度，再对 E172/E173/E174/E189 已落盘的 141 条 rollout 重打分。
+
+- **现象证实并量化**：box024 全 9 例远端一致下沉 **−11~−18 cm**，机器人侧只 −2~−12 cm；不对称量随物体
+  最长半轴单调（box023 0.38 → box004 0.78 → box001 4.01 → box024 **7.18** cm）。目视 A/B 帧确认
+  （`results/E191/audit/frames/`：ref 箱体水平，sim 远端栽向地面；box004 短力臂两侧几乎重合）。
+- **修正用户表述**：`027_p1/p2` 的远端同样下沉 −11.5/−12.1 cm，**没有例外**；它们只是穿透与总位置误差低。
+- **机制**：物体由 6-DoF 位置伺服（`init_pos_actuator_gain=500` N/m，P-only 无重力前馈）钉在参考上，
+  partner 完全未建模。事后分析 H1b 发现 E174 的 bucket/desk 质量跨 2.0–120.4 kg（box 全钉死 5.0 kg），
+  构成尺寸之外的天然变量：**实测下垂/(m·g/kp) 中位数 0.93、范围 [0.60, 1.08]**（剔除 69 kg 的 desk007）。
+- **但预注册的 H1 被证伪**：z 分量只占抬起帧总误差的 0.21–0.41，**水平分量才是主导**。修好伺服
+  最多消掉约 1/3 的 `track_obj_pos_err`。H3 也被证伪：穿透继承自参考只对 box 成立，bucket/desk 反向。
+- **回归零差异 PASS**：E189 全 43 行、每个既有列 bit-identical（改动为纯追加）。
+- **两处 R018 勘误**：(1) `E174` 不是「OmniRetarget bucket 对照」，其 method 为
+  `E174_E170PRG_nonbox_candidate_r1`、plan/190 明写是 SPIDER 自己的非 box 扩展 → 本仓库**不存在**任何
+  Omni 侧上游表；(2) 配置层对全部 10 个物体完全一致（27 个米制参数 0 个随物体变化，156/156 case 同一个
+  `core4d_E167_box004_082_p1_E167A` base），**不能**解释 §9.1 的原生/跨物体差距。
+- **覆盖缺口**：box021 的 `dcv3_omnirt_v1_ref_fk_box021_*` 数据目录本地缺失（0 个），28 例无法审计——
+  而它正是 R018 结论里的「原生」锚点。
+- 结论：(a) 阈值量纲 / (b) 伺服+partner / (c) 抓取拓扑 三者**仍未分离**（H2 ρ=0.72 未达 0.8；
+  H6 因 box024 力臂跨度仅 0.039 m 无功效）。零算力路线到此为止，需 Stage B(E192) 的 config-only A/B。
+- 详见 [log/266](log/266_E191_object_support_offline_audit_results.md) · [plan/216](plan/216_E191_object_support_offline_audit_plan.md)。
+
+## 上一阶段：E189 box004/box024/box001 E167A no-PRG vs PRG 配对消融
 
 ### 2026-08-06 ~ 2026-08-07
 

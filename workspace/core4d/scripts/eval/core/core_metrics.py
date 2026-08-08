@@ -36,6 +36,17 @@ class EvalConfig:
     track_terminal_frac: float = 0.15  # terminal phase = last 15% of frames
     track_pelvis_terminal_th_m: float = 0.08  # success gate: terminal pelvis-z err
     release_false_contact_th: float = 0.30  # success gate: max false-contact frac
+    # E191: object-support diagnostics (observation-only, no gate uses these).
+    # The CORE4D scene_act object is driven by 6 P-only position actuators whose
+    # gains are injected at runtime by examples/run_mjwp.py from the Hydra config;
+    # they are NOT recoverable from the scene XML (which ships kp="0"). Defaults
+    # below mirror the E163->E167A->E172/E173/E189 resolved chain.
+    object_pos_actuator_gain: float = 500.0  # N/m, init_pos_actuator_gain
+    object_rot_actuator_gain: float = 50.0  # Nm/rad, init_rot_actuator_gain
+    object_lift_threshold_m: float = 0.05  # ref object z above its own min => "lifted"
+    object_lift_min_frames: int = 5  # below this, fall back to all frames
+    hand_gate_hard_floor_m: float = -0.020  # cem_hand_gate_hard_floor_m
+    hand_gate_floor_tol_m: float = 0.0005  # counted as saturated within this band
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +196,45 @@ TRACK_MASK_FIELDS = [
     "hand_geom_penetration_5mm_in_mask_frac",
 ]
 METRIC_FIELDS += TRACK_MASK_FIELDS
+
+# E191: object-support diagnostics. Purely additive observation columns — no
+# 12-gate rule reads them. They exist to separate three mechanisms that are
+# perfectly collinear with object size in the existing box experiments:
+#   (a) fixed-metre reward/gate geometry, (b) the soft object position servo
+#   with no partner model, (c) grasp topology on large flat faces.
+E191_SUPPORT_FIELDS = [
+    # signed decomposition of track_obj_pos_err_cm_mean (which is an L2 norm)
+    "track_obj_z_err_m_mean",
+    "track_obj_z_err_m_p10",
+    "track_obj_xy_err_cm_mean",
+    # same decomposition restricted to the carry phase, where H1 is judged
+    "track_obj_z_err_m_lifted_mean",
+    "track_obj_xy_err_cm_lifted_mean",
+    "track_obj_z_err_share_lifted",
+    # side-resolved object height, probe aligned with SUGAR-side R010-6
+    "obj_lifted_frame_frac",
+    "obj_side_near_z_err_m",
+    "obj_side_far_z_err_m",
+    "obj_side_z_asym_cm",
+    # implied restoring wrench of the object guidance servo
+    "object_guidance_force_N_p95",
+    "object_guidance_force_z_N_p95",
+    "object_guidance_torque_Nm_p95",
+    "object_weight_N",
+    # how much hand penetration is inherited from the kinematic reference
+    "ref_hand_geom_penetration_frac",
+    "ref_hand_geom_penetration_3mm_frac",
+    "ref_hand_geom_min_sdf_m",
+    # is the CEM hand gate hard floor the binding constraint?
+    "hand_gate_floor_saturation_frac",
+    # object geometry / grasp lever arm (regression covariates)
+    "object_mass_kg",
+    "object_half_extents_m",
+    "object_max_half_extent_m",
+    "grip_near_arm_m",
+    "grip_far_arm_m",
+]
+METRIC_FIELDS += E191_SUPPORT_FIELDS
 
 # ---------------------------------------------------------------------------
 # Canonical metric standard for E154+ experiments
@@ -715,6 +765,219 @@ def _tracking_metrics(
     return out
 
 
+def _box_corners_world(center: np.ndarray, mat: np.ndarray, half: np.ndarray) -> np.ndarray:
+    """8 world-space corners of an oriented box."""
+    signs = np.asarray(
+        [[sx, sy, sz] for sx in (-1.0, 1.0) for sy in (-1.0, 1.0) for sz in (-1.0, 1.0)],
+        dtype=np.float64,
+    )
+    return center + (signs * half) @ mat.T
+
+
+def _object_support_metrics(
+    run_qpos: np.ndarray,
+    kin_ref_path: Path | None,
+    model: mujoco.MjModel,
+    config: EvalConfig,
+    hand_frame_min_con_dist: list[float],
+) -> dict[str, float]:
+    """E191: object-support diagnostics (observation-only, additive).
+
+    Splits the object tracking error into a signed vertical and a horizontal
+    component, resolves object height per side (robot side vs the unsupported
+    "partner" side), reports the restoring wrench implied by the object guidance
+    servo, and measures how much hand-object penetration the kinematic reference
+    already carries before any physics runs.
+
+    Side assignment uses the horizontal pelvis -> object-centre direction of the
+    *reference* pose, so it does not depend on how far the run drifted. Heights
+    are the lowest corner of the object collision box on each side, which is the
+    same probe the SUGAR-side R010-6 diagnosis used.
+    """
+    out: dict[str, float] = dict.fromkeys(E191_SUPPORT_FIELDS, math.nan)
+    out["object_half_extents_m"] = ""
+
+    object_body = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+    pelvis_body = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
+    if object_body < 0:
+        return out
+
+    # Geometry / provenance covariates are available even without a reference.
+    try:
+        obj_gid = object_collision_geoms(model)[0]
+    except ValueError:
+        return out
+    half = model.geom_size[obj_gid, :3].astype(np.float64).copy()
+    geom_pos_local = model.geom_pos[obj_gid].astype(np.float64).copy()
+    geom_mat_local = np.zeros(9, dtype=np.float64)
+    mujoco.mju_quat2Mat(geom_mat_local, model.geom_quat[obj_gid].astype(np.float64))
+    geom_mat_local = geom_mat_local.reshape(3, 3)
+    obj_mass = float(model.body_mass[object_body])
+    out["object_mass_kg"] = obj_mass
+    out["object_half_extents_m"] = "|".join(f"{v:.4f}" for v in half)
+    out["object_max_half_extent_m"] = float(np.max(half))
+    out["object_weight_N"] = obj_mass * float(-model.opt.gravity[2])
+
+    # Hand gate saturation is contact-based and needs no reference.
+    if hand_frame_min_con_dist:
+        floor_cut = config.hand_gate_hard_floor_m + config.hand_gate_floor_tol_m
+        out["hand_gate_floor_saturation_frac"] = frac(
+            np.asarray(hand_frame_min_con_dist, dtype=np.float64) <= floor_cut
+        )
+
+    if kin_ref_path is None or not Path(kin_ref_path).is_file():
+        return out
+    kin = np.asarray(np.load(kin_ref_path, allow_pickle=True)["qpos"], dtype=np.float64)
+    if kin.ndim == 3:
+        kin = kin[:, 0, :]
+    H = min(run_qpos.shape[0], kin.shape[0])
+    nq_robot = min(36, max(0, model.nq - 6), run_qpos.shape[1], kin.shape[1])
+    if H == 0 or nq_robot <= 7:
+        return out
+    ref_in_scene_layout = kin.shape[1] == model.nq
+    if not ref_in_scene_layout and kin.shape[1] < nq_robot + 7:
+        return out
+
+    hand_gids = [gid for name in HAND_GEOMS if (gid := mj_id(model, mujoco.mjtObj.mjOBJ_GEOM, name)) >= 0]
+    long_axis = int(np.argmax(half))
+
+    data_run = mujoco.MjData(model)
+    data_ref = mujoco.MjData(model)
+    dz: list[float] = []
+    dxy: list[float] = []
+    force: list[np.ndarray] = []
+    torque: list[float] = []
+    near_run: list[float] = []
+    near_ref: list[float] = []
+    far_run: list[float] = []
+    far_ref: list[float] = []
+    grip_t: list[float] = []
+    ref_hand_sdf: list[float] = []
+    ref_obj_z: list[float] = []
+
+    for i in range(H):
+        data_run.qpos[:] = run_qpos[i]
+        data_run.qvel[:] = 0.0
+        mujoco.mj_forward(model, data_run)
+        run_center = data_run.geom_xpos[obj_gid].copy()
+        run_mat = data_run.geom_xmat[obj_gid].reshape(3, 3).copy()
+
+        # Reference object pose: either replay it in scene layout, or read the
+        # 7-DoF freejoint pose that follows the shared robot prefix.
+        if ref_in_scene_layout:
+            data_ref.qpos[:] = kin[i, : model.nq]
+            data_ref.qvel[:] = 0.0
+            mujoco.mj_forward(model, data_ref)
+            ref_center = data_ref.geom_xpos[obj_gid].copy()
+            ref_mat = data_ref.geom_xmat[obj_gid].reshape(3, 3).copy()
+            ref_body_pos = data_ref.xpos[object_body].copy()
+            ref_body_quat = data_ref.xquat[object_body].copy()
+        else:
+            ref_body_pos = kin[i, nq_robot : nq_robot + 3].copy()
+            ref_body_quat = kin[i, nq_robot + 3 : nq_robot + 7].copy()
+            body_mat = np.zeros(9, dtype=np.float64)
+            mujoco.mju_quat2Mat(body_mat, ref_body_quat)
+            body_mat = body_mat.reshape(3, 3)
+            ref_center = ref_body_pos + body_mat @ geom_pos_local
+            ref_mat = body_mat @ geom_mat_local
+            # robot-only FK for the reference hand pose
+            data_ref.qpos[:] = 0.0
+            data_ref.qpos[:nq_robot] = kin[i, :nq_robot]
+            data_ref.qvel[:] = 0.0
+            mujoco.mj_forward(model, data_ref)
+
+        ref_obj_z.append(float(ref_center[2]))
+        delta = ref_center - run_center
+        dz.append(float(-delta[2]))  # run minus ref, negative = object sagged
+        dxy.append(float(np.linalg.norm(delta[:2])))
+
+        # P-only slide actuators along orthonormal body-local axes: the restoring
+        # force expressed in world coordinates is simply kp * (target - actual),
+        # because the body-fixed rotation cancels between the two representations.
+        force.append(config.object_pos_actuator_gain * delta)
+        ang = _quat_angle_deg(data_run.xquat[object_body], ref_body_quat)
+        torque.append(config.object_rot_actuator_gain * math.radians(ang) if np.isfinite(ang) else math.nan)
+
+        # Side split on the reference geometry, along pelvis -> object centre.
+        if pelvis_body >= 0:
+            lateral = ref_center[:2] - data_run.xpos[pelvis_body, :2]
+            norm = float(np.linalg.norm(lateral))
+            if norm > 1e-9:
+                lateral = lateral / norm
+                c_run = _box_corners_world(run_center, run_mat, half)
+                c_ref = _box_corners_world(ref_center, ref_mat, half)
+                proj = (c_ref[:, :2] - ref_center[:2]) @ lateral
+                far = proj > 0.0
+                if far.any() and (~far).any():
+                    near_run.append(float(c_run[~far, 2].min()))
+                    near_ref.append(float(c_ref[~far, 2].min()))
+                    far_run.append(float(c_run[far, 2].min()))
+                    far_ref.append(float(c_ref[far, 2].min()))
+
+        # Grip position along the object's longest local axis, and the hand
+        # penetration the reference already carries.
+        if hand_gids:
+            centers = [data_ref.geom_xpos[gid].copy() for gid in hand_gids]
+            mid_local = ref_mat.T @ (np.mean(centers, axis=0) - ref_center)
+            grip_t.append(float(mid_local[long_axis]))
+            best = math.inf
+            for gid in hand_gids:
+                pts, radius = geom_sample_points(model, data_ref, gid, config.mesh_sample_count)
+                vals = [signed_point_box(p, ref_center, ref_mat, half) for p in pts]
+                best = min(best, min(vals) - radius)
+            ref_hand_sdf.append(float(best))
+
+    dz_arr = np.asarray(dz)
+    dxy_arr = np.asarray(dxy)
+    out["track_obj_z_err_m_mean"] = float(np.nanmean(dz_arr))
+    out["track_obj_z_err_m_p10"] = float(np.nanpercentile(dz_arr, 10))
+    out["track_obj_xy_err_cm_mean"] = float(np.nanmean(dxy_arr) * 100.0)
+
+    # Lifted-frame selection: side heights, grip lever and the servo wrench are
+    # only interpretable while the object is off the floor. The fraction column
+    # makes the fallback-to-all-frames case visible.
+    ref_z_arr = np.asarray(ref_obj_z)
+    lifted = ref_z_arr > (float(np.nanmin(ref_z_arr)) + config.object_lift_threshold_m)
+    out["obj_lifted_frame_frac"] = frac(lifted)
+    if int(np.count_nonzero(lifted)) < config.object_lift_min_frames:
+        lifted = np.ones_like(lifted, dtype=bool)
+
+    z_lift = float(np.nanmean(np.abs(dz_arr[lifted])))
+    xy_lift = float(np.nanmean(dxy_arr[lifted]))
+    out["track_obj_z_err_m_lifted_mean"] = float(np.nanmean(dz_arr[lifted]))
+    out["track_obj_xy_err_cm_lifted_mean"] = xy_lift * 100.0
+    if z_lift + xy_lift > 1e-12:
+        out["track_obj_z_err_share_lifted"] = z_lift / (z_lift + xy_lift)
+
+    force_arr = np.asarray(force)[lifted]
+    out["object_guidance_force_N_p95"] = float(np.nanpercentile(np.linalg.norm(force_arr, axis=1), 95))
+    out["object_guidance_force_z_N_p95"] = float(np.nanpercentile(np.abs(force_arr[:, 2]), 95))
+    torque_arr = np.asarray(torque, dtype=np.float64)[lifted]
+    if np.isfinite(torque_arr).any():
+        out["object_guidance_torque_Nm_p95"] = float(np.nanpercentile(torque_arr, 95))
+
+    if ref_hand_sdf:
+        ref_sdf_arr = np.asarray(ref_hand_sdf)
+        out["ref_hand_geom_penetration_frac"] = frac(ref_sdf_arr < 0.0)
+        out["ref_hand_geom_penetration_3mm_frac"] = frac(ref_sdf_arr < -0.003)
+        out["ref_hand_geom_min_sdf_m"] = float(np.nanmin(ref_sdf_arr))
+
+    if len(near_run) == len(lifted) and len(near_run) > 0:
+        near_err = np.asarray(near_run)[lifted] - np.asarray(near_ref)[lifted]
+        far_err = np.asarray(far_run)[lifted] - np.asarray(far_ref)[lifted]
+        if near_err.size:
+            out["obj_side_near_z_err_m"] = float(np.nanmean(near_err))
+            out["obj_side_far_z_err_m"] = float(np.nanmean(far_err))
+            out["obj_side_z_asym_cm"] = float((np.nanmean(near_err) - np.nanmean(far_err)) * 100.0)
+
+    if len(grip_t) == len(lifted) and len(grip_t) > 0:
+        t = float(np.nanmean(np.asarray(grip_t)[lifted]))
+        h = float(half[long_axis])
+        out["grip_near_arm_m"] = min(h - t, h + t)
+        out["grip_far_arm_m"] = max(h - t, h + t)
+    return out
+
+
 def _fill_internal_false_gaps(mask: np.ndarray, max_gap_frames: int) -> tuple[np.ndarray, int]:
     filled = np.asarray(mask, dtype=np.bool_).copy()
     if filled.ndim == 1:
@@ -942,6 +1205,7 @@ def evaluate_sequence(
     hand_object_deep3mm_frame: list[bool] = []
     hand_object_deep_frame: list[bool] = []
     hand_object_contact_dists: list[float] = []
+    hand_frame_min_con_dist: list[float] = []  # E191: per-frame min, inf when no contact
     leg_physics: list[bool] = []
     object_floor: list[bool] = []
     hand_floor_sdf: list[float] = []
@@ -1036,6 +1300,9 @@ def evaluate_sequence(
             and min(hand_object_frame_dists) < config.deep_contact_dist_m
         )
         hand_object_contact_dists.extend(hand_object_frame_dists)
+        hand_frame_min_con_dist.append(
+            min(hand_object_frame_dists) if hand_object_frame_dists else math.inf
+        )
         leg_physics.append(leg_contact)
         object_floor.append(floor_contact)
         hand_floor_physics.append(hand_floor_contact)
@@ -1148,4 +1415,7 @@ def evaluate_sequence(
     # Always populated (NaN when refs not supplied) so METRIC_FIELDS stays complete.
     out.update(_tracking_metrics(qpos, kin_ref_path, config, model=model))
     out.update(_masked_contact_metrics(hand_physics, hand_clean_physics, hand_clean3_physics, hand_clean5_physics, hand_arr, contact_mask_path, person_idx))
+    # E191: object-support diagnostics. Additive only — no existing column and no
+    # 12-gate rule depends on these.
+    out.update(_object_support_metrics(qpos, kin_ref_path, model, config, hand_frame_min_con_dist))
     return out

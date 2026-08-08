@@ -4,6 +4,11 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E194 | 2026-08-08 | Phase 57 | 2×2三臂G1/G2/G3(gravcomp×kp)×box024(9)+box004(6)：拆开「箱子位置错」与「伺服在顶」，不引入partner | 📝 计划态，待批准 | [plan220](plan/220_E194_object_gravity_compensation_plan.md) |
+| E193 | 2026-08-08 | Phase 56 | 抓取拓扑：造接触法向对置度量→在141条已有rollout上判定→gated对置面抓握点重定位 | 📝 计划态，待批准 | [plan219](plan/219_E193_grasp_topology_plan.md) |
+| E192 | 2026-08-08 | Phase 55 | 收紧CEM手门硬地板(-0.020→-0.010)单臂×box024(9)+box004(6)阴性对照，判(a)是否尺寸专属 | 📝 计划态，待批准 | [plan218](plan/218_E192_gate_threshold_size_dependence_plan.md) |
+| E190 | 2026-08-08 | Phase 54 | 38-case noPRG RL-ready 导出（PRG 侧冻结 38-case 的对照版本）：box001/004/024来自E189、box023来自E179、box021标准9例来自E168、box021 bridge 2例来自E167；未新跑CEM，未做新人工review，partner原样复用PRG侧 | ✅ 38/38 RL_EXPORT_READY；38/38 PAIR_COMPLETE；独立审计status=pass（case_id一致性/文件哈希/PRG-negative逐行核验/partner一致性全部通过） | [267](log/267_E190_38case_noprg_rl_export_results.md) · [plan217](plan/217_E190_38case_noprg_rl_export_plan.md) |
+| E191 | 2026-08-08 | Phase 53 | 物体支撑建模离线审计：eval 补 22 列（分侧物体高度/伺服恢复力矩/参考侧穿透/抓握力臂），在 E172/E173/E174/E189 已落盘 rollout 上重打分，零 CEM 算力 | ✅ 141/169（28 例 box021 数据目录缺失）；回归 43/43 逐列零差异；远端下沉证实（box024 非机器人侧 −13.7cm vs 机器人侧 −6.5cm，全 9 例无例外）；H4 PASS、H1/H3 证伪、H2 未达标、H5 不可检验（**E174 不是 Omni 对照**） | [266](log/266_E191_object_support_offline_audit_results.md) · [plan216](plan/216_E191_object_support_offline_audit_plan.md) |
 | E189 | 2026-08-06 | Phase 52 | box004(6)/box024(9)/box001(28)共43例E167A no-PRG vs PRG配对消融；box023复用E179结论不重跑 | ✅ 43/43完成；box004 NONINFERIOR/box024 PRG_BETTER/box001 NONINFERIOR；lower-body三物体一致退化 | [265](log/265_E189_box004_box024_box001_e167a_no_prg_vs_prg_results.md) · [plan215](plan/215_E189_box004_box024_box001_e167a_no_prg_full_cem_plan.md) |
 | E178-export | 2026-08-05 | Phase 41 S6 | 最终人工USE13全配对；Holosoma 26 motion通过pre-train | ✅ RL export 13/13；downstream 26/26 ready | [264](log/264_E178_manual_use_partner_rl_export_results.md) · [plan214](plan/214_E178_manual_use_partner_rl_export_plan.md) |
 | E188-analysis | 2026-08-05 | Phase 51 | bucket/box object tracking分层；E188全15条双指标退化 | ✅ 分析完成；新增高优先级风险 | [263](log/263_E188_object_tracking_cross_object_audit_results.md) · [plan213](plan/213_E188_object_tracking_cross_object_audit_plan.md) |
