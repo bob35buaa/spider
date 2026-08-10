@@ -173,6 +173,15 @@ def _geom_box_sdf_min(
     return torch.stack(candidates, dim=1).min(dim=1).values
 
 
+def _uses_single_box_sdf(env: MJWPEnv, object_geom_ids: list[int]) -> bool:
+    """Whether this object has the historical single-box SDF contract."""
+    return (
+        len(object_geom_ids) == 1
+        and int(env.model_cpu.geom_type[object_geom_ids[0]])
+        == int(mujoco.mjtGeom.mjGEOM_BOX)
+    )
+
+
 def _geom_box_union_sdf_min(
     config: Config,
     env: MJWPEnv,
@@ -1880,6 +1889,7 @@ def get_reward(
             geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
                 geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
             )
+            use_single_box_sdf = _uses_single_box_sdf(env, object_geom_ids)
             body_xpos = None
             body_xmat = None
             if config.object_distance_backend == "grid_sdf":
@@ -1904,6 +1914,18 @@ def get_reward(
             def geom_object_sdf_min(
                 geom_ids: list[int], *, conservative: bool = False
             ) -> torch.Tensor:
+                if use_single_box_sdf:
+                    # Preserve E172/E173 single-box reward and gate numerics.
+                    # Compound box proxies and all non-box objects stay on the
+                    # cache-backed object-distance implementation below.
+                    return _geom_box_sdf_min(
+                        config,
+                        env,
+                        geom_ids,
+                        object_geom_id,
+                        geom_xpos=geom_xpos,
+                        geom_xmat=geom_xmat,
+                    )
                 return _cached_object_distance_sdf_min(
                     object_sdf_cache,
                     config,
@@ -2935,6 +2957,7 @@ def _terminal_carry_gate(
         geom_xmat = wp.to_torch(env.data_wp.geom_xmat).reshape(
             geom_xpos.shape[0], geom_xpos.shape[1], 3, 3
         )
+        use_single_box_sdf = _uses_single_box_sdf(env, object_geom_ids)
         body_xpos = None
         body_xmat = None
         if config.object_distance_backend == "grid_sdf":
@@ -2945,6 +2968,15 @@ def _terminal_carry_gate(
         object_sdf_cache: dict[tuple[int, ...], torch.Tensor] = {}
 
         def terminal_object_sdf(geom_ids: list[int]) -> torch.Tensor:
+            if use_single_box_sdf:
+                return _geom_box_sdf_min(
+                    config,
+                    env,
+                    geom_ids,
+                    object_geom_id,
+                    geom_xpos=geom_xpos,
+                    geom_xmat=geom_xmat,
+                )
             return _cached_object_distance_sdf_min(
                 object_sdf_cache,
                 config,

@@ -32,6 +32,7 @@ from spider.optimizers.sampling import (
     _compute_weights_compiled,
     _compute_weights_impl,
     _compute_weights_with_gate_impl,
+    _record_selected_hand_gate_stats,
     sample_ctrls,
 )
 
@@ -593,6 +594,7 @@ def make_optimize_once_fn_fast(rollout):  # noqa: D103
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
                 )
+                _record_selected_hand_gate_stats(info, rollout_info, selected_indices)
             if "sample_body_gate_valid_mask" in rollout_info:
                 body_mask = rollout_info["sample_body_gate_valid_mask"]
                 info["cem_body_gate_valid_frac"] = body_mask.float().mean().item()

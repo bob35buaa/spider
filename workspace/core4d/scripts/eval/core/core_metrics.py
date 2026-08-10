@@ -168,6 +168,7 @@ TRACK_MASK_FIELDS = [
     "track_root_pos_err_cm_mean",
     "track_root_ori_err_deg_mean",
     "track_obj_pos_err_cm_mean",
+    "track_obj_z_abs_err_cm_mean",
     "track_obj_ori_err_deg_mean",
     "ref_contact_frac",
     "hand_object_physics_contact_in_mask_frac",
@@ -227,6 +228,13 @@ E191_SUPPORT_FIELDS = [
     "ref_hand_geom_min_sdf_m",
     # is the CEM hand gate hard floor the binding constraint?
     "hand_gate_floor_saturation_frac",
+    # fixed absolute-depth diagnostics shared by A0/A2 (E192); unlike the
+    # arm-relative floor saturation above these never move with config.
+    "hand_gate_fixed_depth_8mm_frame_frac",
+    "hand_gate_fixed_depth_10mm_frame_frac",
+    "hand_gate_fixed_depth_12mm_frame_frac",
+    "hand_gate_fixed_depth_15mm_frame_frac",
+    "hand_gate_fixed_depth_20mm_frame_frac",
     # object geometry / grasp lever arm (regression covariates)
     "object_mass_kg",
     "object_half_extents_m",
@@ -625,6 +633,7 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
         "track_root_pos_err_cm_mean",
         "track_root_ori_err_deg_mean",
         "track_obj_pos_err_cm_mean",
+        "track_obj_z_abs_err_cm_mean",
         "track_obj_ori_err_deg_mean",
     ]
     out: dict[str, float] = {k: math.nan for k in keys}
@@ -656,6 +665,7 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
     root_pos: list[float] = []
     root_ori: list[float] = []
     obj_pos: list[float] = []
+    obj_z_abs: list[float] = []
     obj_ori: list[float] = []
 
     for i in range(H):
@@ -698,6 +708,7 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
                 ref_obj_quat = None
             if ref_obj_pos is not None and ref_obj_quat is not None:
                 obj_pos.append(float(np.linalg.norm(data_run.xpos[object_id] - ref_obj_pos)))
+                obj_z_abs.append(float(abs(data_run.xpos[object_id, 2] - ref_obj_pos[2])))
                 obj_ori.append(_quat_angle_deg(data_run.xquat[object_id], ref_obj_quat))
 
     if eef_pos:
@@ -710,6 +721,8 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
         out["track_root_ori_err_deg_mean"] = float(np.nanmean(root_ori))
     if obj_pos:
         out["track_obj_pos_err_cm_mean"] = float(np.nanmean(obj_pos) * 100.0)
+    if obj_z_abs:
+        out["track_obj_z_abs_err_cm_mean"] = float(np.nanmean(obj_z_abs) * 100.0)
     if obj_ori:
         out["track_obj_ori_err_deg_mean"] = float(np.nanmean(obj_ori))
     return out
@@ -734,7 +747,8 @@ def _tracking_metrics(
         "track_joint_err_deg_mean",
         "track_eef_pos_err_cm_mean", "track_eef_ori_err_deg_mean",
         "track_root_pos_err_cm_mean", "track_root_ori_err_deg_mean",
-        "track_obj_pos_err_cm_mean", "track_obj_ori_err_deg_mean",
+        "track_obj_pos_err_cm_mean", "track_obj_z_abs_err_cm_mean",
+        "track_obj_ori_err_deg_mean",
     ]
     out: dict[str, float] = {k: math.nan for k in keys}
     if kin_ref_path is None or not Path(kin_ref_path).is_file():
@@ -820,10 +834,16 @@ def _object_support_metrics(
 
     # Hand gate saturation is contact-based and needs no reference.
     if hand_frame_min_con_dist:
+        frame_min = np.asarray(hand_frame_min_con_dist, dtype=np.float64)
         floor_cut = config.hand_gate_hard_floor_m + config.hand_gate_floor_tol_m
         out["hand_gate_floor_saturation_frac"] = frac(
-            np.asarray(hand_frame_min_con_dist, dtype=np.float64) <= floor_cut
+            frame_min <= floor_cut
         )
+        out["hand_gate_fixed_depth_8mm_frame_frac"] = frac(frame_min <= -0.008)
+        out["hand_gate_fixed_depth_10mm_frame_frac"] = frac(frame_min <= -0.010)
+        out["hand_gate_fixed_depth_12mm_frame_frac"] = frac(frame_min <= -0.012)
+        out["hand_gate_fixed_depth_15mm_frame_frac"] = frac(frame_min <= -0.015)
+        out["hand_gate_fixed_depth_20mm_frame_frac"] = frac(frame_min <= -0.020)
 
     if kin_ref_path is None or not Path(kin_ref_path).is_file():
         return out

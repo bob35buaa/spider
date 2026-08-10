@@ -496,6 +496,34 @@ def _compute_sample_gate_info(
     return out
 
 
+def _record_selected_hand_gate_stats(
+    info: dict,
+    rollout_info: dict[str, torch.Tensor],
+    selected_indices: torch.Tensor | None,
+) -> None:
+    """Append observation-only SDF diagnostics for the selected CEM elites.
+
+    This helper deliberately runs after weights and the output control have
+    already been computed.  It only reads the selected indices and hand-gate
+    candidate SDFs, and therefore cannot affect gate validity, ranking, or
+    control selection.
+    """
+    if (
+        selected_indices is None
+        or selected_indices.numel() == 0
+        or "sample_hand_gate_min_sdf" not in rollout_info
+    ):
+        return
+    selected = rollout_info["sample_hand_gate_min_sdf"][selected_indices]
+    if selected.numel() == 0:
+        return
+    info["cem_hand_gate_selected_min_sdf_m"] = selected.min().item()
+    info["cem_hand_gate_selected_mean_sdf_m"] = selected.mean().item()
+    info["cem_hand_gate_selected_p05_sdf_m"] = torch.quantile(
+        selected.float(), 0.05
+    ).item()
+
+
 def make_rollout_fn(
     step_env,
     save_state,
@@ -1065,6 +1093,9 @@ def make_optimize_once_fn(
                     hand_mask[selected_indices].float().mean().item()
                     if selected_indices is not None and selected_indices.numel() > 0
                     else 0.0
+                )
+                _record_selected_hand_gate_stats(
+                    info, rollout_info, recorded_selected_indices
                 )
             if "sample_body_gate_valid_mask" in rollout_info:
                 body_mask = rollout_info["sample_body_gate_valid_mask"]

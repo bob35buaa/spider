@@ -1,7 +1,39 @@
 # 实验日志索引
 
-> 自动生成，共 264 个日志文件。
+> 自动生成，共 271 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 58 (E195-E195)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 272 | E195 | 2026-08-10 | Stricter hand gate results | [272_E195_stricter_hand_gate_results.md](272_E195_stricter_hand_gate_results.md) |
+
+## Phase 57 (E194-E194)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 268 | E194 | 2026-08-08 | Object gravity compensation results | [268_E194_object_gravity_compensation_res...](268_E194_object_gravity_compensation_results.md) |
+
+## Phase 55 (E192-E192)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 269 | E192 | 2026-08-10 | Corrected box sdf sentinel results | [269_E192_corrected_box_sdf_sentinel_resu...](269_E192_corrected_box_sdf_sentinel_results.md) |
+| 270 | E192 | 2026-08-10 | A2 Ada6000 canary stop loss results | [270_E192_A2_Ada6000_canary_stop_loss_res...](270_E192_A2_Ada6000_canary_stop_loss_results.md) |
+| 271 | E192 | 2026-08-10 | A2 full diagnostic results | [271_E192_A2_full_diagnostic_results.md](271_E192_A2_full_diagnostic_results.md) |
+
+## Phase 54 (E190-E190)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 267 | E190 | 2026-08-08 | 38case noprg rl export results | [267_E190_38case_noprg_rl_export_results....](267_E190_38case_noprg_rl_export_results.md) |
+
+## Phase 53 (E191-E191)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 266 | E191 | 2026-08-08 | Object support offline audit results | [266_E191_object_support_offline_audit_re...](266_E191_object_support_offline_audit_results.md) |
 
 ## Phase 52 (E189-E189)
 
