@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified case index + annotation store for the PRG review player (E170-E189).
+"""Unified case index + annotation store for the PRG review player (E170-E194).
 
 Pure-python (no viser / no spider imports) so it is importable headless for the
 `--check` self-test. Reads each experiment's ``*_case_metrics.tsv`` by column
@@ -20,8 +20,16 @@ from pathlib import Path
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
 DEFAULT_EXPS = (
-    "E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188", "E189",
+    "E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188", "E189", "E194",
 )
+SOURCE_OVERRIDES = {
+    "E194": {
+        "eval_subdir": "full_g1_expansion",
+        "case_metrics": "e194_g1_expansion_case_metrics.tsv",
+        "arm": "G1",
+        "threshold_exp": "E173",
+    },
+}
 
 GATE_FIELDS = (
     "fall_gate_pass",
@@ -136,6 +144,7 @@ def resolve_scene(exp_id: str, case_id: str, scene_xml: str) -> str:
 @dataclass
 class CaseRecord:
     exp_id: str
+    arm: str
     case_id: str
     variant: str
     object_key: str
@@ -168,10 +177,15 @@ class CaseRecord:
 
 
 def eval_dir(exp: str) -> Path:
-    return REPO / "workspace/core4d/results" / exp / "s6_downstream/eval/full"
+    subdir = SOURCE_OVERRIDES.get(exp, {}).get("eval_subdir", "full")
+    return REPO / "workspace/core4d/results" / exp / "s6_downstream/eval" / subdir
 
 
 def _case_metrics_path(exp: str) -> Path | None:
+    filename = SOURCE_OVERRIDES.get(exp, {}).get("case_metrics")
+    if filename:
+        path = eval_dir(exp) / filename
+        return path if path.is_file() else None
     hits = sorted(eval_dir(exp).glob("*_case_metrics.tsv"))
     return hits[0] if hits else None
 
@@ -185,9 +199,15 @@ def load_thresholds(exp: str) -> dict[str, float]:
     import json
 
     summ = eval_dir(exp) / "summary.json"
-    if not summ.is_file():
-        return {}
-    return json.loads(summ.read_text(encoding="utf-8")).get("thresholds", {})
+    thresholds = {}
+    if summ.is_file():
+        thresholds = json.loads(summ.read_text(encoding="utf-8")).get("thresholds", {})
+    fallback_exp = SOURCE_OVERRIDES.get(exp, {}).get("threshold_exp")
+    if not thresholds and fallback_exp:
+        fallback = eval_dir(fallback_exp) / "summary.json"
+        if fallback.is_file():
+            thresholds = json.loads(fallback.read_text(encoding="utf-8")).get("thresholds", {})
+    return thresholds
 
 
 def load_annotations(exp: str) -> dict[str, dict[str, str]]:
@@ -234,9 +254,13 @@ def _read_exp(exp: str) -> list[CaseRecord]:
     if path is None:
         return []
     anns = load_annotations(exp)
+    required_arm = SOURCE_OVERRIDES.get(exp, {}).get("arm")
     records: list[CaseRecord] = []
     with path.open("r", encoding="utf-8", newline="") as fh:
         for row in csv.DictReader(fh, delimiter="\t"):
+            arm = (row.get("arm") or "").strip()
+            if required_arm and arm != required_arm:
+                continue
             case_id = (row.get("case_id") or "").strip()
             if not case_id:
                 continue
@@ -247,6 +271,7 @@ def _read_exp(exp: str) -> list[CaseRecord]:
             records.append(
                 CaseRecord(
                     exp_id=exp,
+                    arm=arm,
                     case_id=case_id,
                     variant=(row.get("variant") or "").strip(),
                     object_key=(row.get("object_key") or "").strip(),
@@ -256,7 +281,7 @@ def _read_exp(exp: str) -> list[CaseRecord]:
                         m.strip() for m in modes.split(",") if m.strip()
                     ],
                     gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
-                    status=(row.get("status") or "").strip(),
+                    status=(row.get("status") or (f"{arm}_FULL_COMPLETE" if arm else "")).strip(),
                     outdir_npz=normalize_path(row.get("outdir_npz", "")),
                     scene_xml=scene_xml,
                     config_act=normalize_path(row.get("config_act", "")),
@@ -306,9 +331,17 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
         summ = eval_dir(exp) / "summary.json"
         evaluated = npass = -1
         if summ.is_file():
-            counts = json.loads(summ.read_text(encoding="utf-8")).get("counts", {})
+            summary = json.loads(summ.read_text(encoding="utf-8"))
+            counts = summary.get("counts", {})
             evaluated = int(counts.get("evaluated", -1))
             npass = int(counts.get("numeric_pass", -1))
+            if exp == "E194":
+                evaluated = int(summary.get("g1_scored", -1))
+                overall = eval_dir(exp) / "e194_three_arm_12gate_overall.tsv"
+                if overall.is_file():
+                    with overall.open("r", encoding="utf-8", newline="") as fh:
+                        all_row = next((r for r in csv.DictReader(fh, delimiter="\t") if r.get("object_key") == "ALL"), {})
+                    npass = int(all_row.get("G1_strict12_pass_count", -1))
         idx_pass = sum(1 for r in recs if r.numeric_release_pass)
         reviewed = sum(1 for r in recs if r.reviewed)
         playable = sum(1 for r in recs if r.playable)

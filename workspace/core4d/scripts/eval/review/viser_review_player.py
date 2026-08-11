@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive viser review player for PRG retargeting results (E170-E189).
+"""Interactive viser review player for PRG retargeting results (E170-E194).
 
 Browse every CEM-complete case across the registered experiments, filter by object /
 numeric pass / failure mode / retarget variant, play back the executed 3D
@@ -48,6 +48,12 @@ import review_index as idx  # noqa: E402
 
 USE_DECISIONS = ("PENDING", "USE", "DO_NOT_USE")
 QUALITY_LABELS = ("", "CLEAN", "MINOR_ACCEPTABLE", "MAJOR_DEFECT", "UNUSABLE")
+
+
+def case_name_matches(case_id: str, query: str) -> bool:
+    """Case-insensitive substring search; whitespace separates required tokens."""
+    normalized = case_id.casefold()
+    return all(token in normalized for token in query.casefold().split())
 
 # top metrics bar: (metric column, 中文, threshold key, direction, unit)
 #   direction "max" → red if value > threshold; "min" → red if value < threshold;
@@ -414,6 +420,9 @@ class ReviewApp:
             self.metrics_md = s.gui.add_markdown("")
 
         with s.gui.add_folder("筛选"):
+            self.f_case = s.gui.add_text(
+                "Case 名称（支持子串）", initial_value=""
+            )
             self.f_exp = s.gui.add_dropdown("实验", options=exps, initial_value="全部")
             self.f_obj = s.gui.add_dropdown("物体", options=objs, initial_value="全部")
             self.f_num = s.gui.add_dropdown(
@@ -425,7 +434,14 @@ class ReviewApp:
             self.f_var = s.gui.add_dropdown(
                 "变体", options=variants, initial_value="全部"
             )
-            for w in (self.f_exp, self.f_obj, self.f_num, self.f_mode, self.f_var):
+            for w in (
+                self.f_case,
+                self.f_exp,
+                self.f_obj,
+                self.f_num,
+                self.f_mode,
+                self.f_var,
+            ):
                 w.on_update(lambda _=None: self._refresh_case_list())
 
         with s.gui.add_folder("样本"):
@@ -479,6 +495,8 @@ class ReviewApp:
     def _filtered(self):
         out = []
         for r in self.records:
+            if not case_name_matches(r.case_id, self.f_case.value):
+                continue
             if self.f_exp.value != "全部" and r.exp_id != self.f_exp.value:
                 continue
             if self.f_obj.value != "全部" and r.object_key != self.f_obj.value:
@@ -515,7 +533,8 @@ class ReviewApp:
     def _label(self, r: idx.CaseRecord):
         mark = "✓" if r.numeric_release_pass else "✗"
         v = r.retarget_variant_id.replace("omnirt_", "")
-        return f"{self._ann_tag(r)} {mark} {r.exp_id} {r.case_id} [{v}]"
+        source = f"{r.exp_id}/{r.arm}" if r.arm else r.exp_id
+        return f"{self._ann_tag(r)} {mark} {source} {r.case_id} [{v}]"
 
     def _refresh_case_list(self, initial=False):
         self._filtered_recs = self._filtered()
@@ -810,7 +829,7 @@ class ReviewApp:
             ann = "⬜ 尚未人工标注"
         pass_mark = "✅ 达标" if r.numeric_release_pass else "❌ 不达标"
         lines = [
-            f"### {r.exp_id} · {r.case_id}",
+            f"### {r.exp_id}{f' · {r.arm}' if r.arm else ''} · {r.case_id}",
             f"- 人工标注: {ann}",
             f"- 物体 **{r.object_key}** · 变体 **{r.retarget_variant_id}**",
             f"- 数值: {pass_mark}",

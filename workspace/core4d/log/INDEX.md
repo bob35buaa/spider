@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 271 个日志文件。
+> 自动生成，共 275 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 58 (E195-E195)
@@ -13,7 +13,11 @@
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
-| 268 | E194 | 2026-08-08 | Object gravity compensation results | [268_E194_object_gravity_compensation_res...](268_E194_object_gravity_compensation_results.md) |
+| 268 | E194 | 2026-08-10 | Object gravity compensation results | [268_E194_object_gravity_compensation_res...](268_E194_object_gravity_compensation_results.md) |
+| 273 | E194 | 2026-08-10 | G1 box001 box023 box021 expansion results | [273_E194_G1_box001_box023_box021_expansi...](273_E194_G1_box001_box023_box021_expansion_results.md) |
+| 274 | E194 | 2026-08-10 | PRG box001 authority correction | [274_E194_PRG_box001_authority_correction...](274_E194_PRG_box001_authority_correction.md) |
+| 275 | E194 | 2026-08-10 | G1 box001 completed manual review reevaluation | [275_E194_G1_box001_completed_manual_revi...](275_E194_G1_box001_completed_manual_review_reevaluation.md) |
+| 276 | E194 | 2026-08-10 | G1 object orientation outlier diagnosis | [276_E194_G1_object_orientation_outlier_d...](276_E194_G1_object_orientation_outlier_diagnosis.md) |
 
 ## Phase 55 (E192-E192)
 

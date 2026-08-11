@@ -27,11 +27,13 @@ from eval.core.core_metrics import _table4_tracking_metrics, npz_qpos  # noqa: E
 E173_INPUT = REPO / "workspace/core4d/results/E173/s6_downstream/eval/full/e173_case_metrics.tsv"
 E172_INPUT = REPO / "workspace/core4d/results/E172/s6_downstream/eval/full/e171_case_metrics.tsv"
 E194_INPUT = REPO / "workspace/core4d/results/E194/s6_downstream/eval/full/e194_arm_case_metrics.tsv"
+E194_EXPANSION_INPUT = REPO / "workspace/core4d/results/E194/s6_downstream/eval/full_g1_expansion/e194_g1_expansion_case_metrics.tsv"
 DEFAULT_OUT = E173_INPUT.parent
 SOURCE_SPECS = (
     ("E173", "A0", E173_INPUT, ("box001", "box023", "box024"), ""),
     ("E172", "A0", E172_INPUT, ("box004",), ""),
     ("E194", "G1", E194_INPUT, ("box024", "box004"), "G1"),
+    ("E194", "G1", E194_EXPANSION_INPUT, ("box001", "box023", "box021"), "G1"),
 )
 GROUPS = (
     ("E173", "A0", "box001"),
@@ -40,6 +42,9 @@ GROUPS = (
     ("E172", "A0", "box004"),
     ("E194", "G1", "box024"),
     ("E194", "G1", "box004"),
+    ("E194", "G1", "box001"),
+    ("E194", "G1", "box023"),
+    ("E194", "G1", "box021"),
 )
 EXPECTED_COUNTS = {
     ("E173", "A0", "box001"): 28,
@@ -48,6 +53,9 @@ EXPECTED_COUNTS = {
     ("E172", "A0", "box004"): 6,
     ("E194", "G1", "box024"): 9,
     ("E194", "G1", "box004"): 6,
+    ("E194", "G1", "box001"): 28,
+    ("E194", "G1", "box023"): 16,
+    ("E194", "G1", "box021"): 28,
 }
 METRIC = "track_obj_z_abs_err_cm_mean"
 FROZEN_3D_TOL_CM = 1e-4

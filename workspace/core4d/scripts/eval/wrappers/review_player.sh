@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Launch the PRG retargeting review player (viser, E170-E189).
+# Launch the PRG retargeting review player (viser, E170-E194).
 #
 # Usage:
-#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E188] [--port 8080] [--check] [...]
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194] [--port 8080] [--check] [...]
+# E194 is the 72-case G1 expansion only (box001/box023/box021), not the older
+# E194 15-case arm sweep or its PRG authority rows.
 #
 # --check runs a headless index audit (case counts vs summary.json) and exits.
 set -uo pipefail
