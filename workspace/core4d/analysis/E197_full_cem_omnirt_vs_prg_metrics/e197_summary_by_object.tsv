@@ -1,0 +1,50 @@
+group	aggregation	case_count	object_count	metric	metric_label	spider_field	direction	omnirt_mean	prg_mean	delta_prg_minus_omnirt_mean	improvement_mean	improvement_median	improvement_bootstrap_ci95_low	improvement_bootstrap_ci95_high	prg_improved_cases	tied_cases	prg_worsened_cases
+box001	case_micro	28	1	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.02046021925	0.4876885728	0.4672283536	0.4672283536	0.4787918503	0.3979422621	0.5327349665	27	0	1
+box001	case_micro	28	1	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.9616419223	0.7886001059	-0.1730418163	-0.1730418163	-0.1498005982	-0.2563141945	-0.09497954691	2	0	26
+box001	case_micro	28	1	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.6438499319	0.2120230987	-0.4318268333	0.4318268333	0.4088461539	0.3761558794	0.4894115449	28	0	0
+box001	case_micro	28	1	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.1106783488	0.07312301885	-0.03755532998	0.03755532998	0.008513708514	-0.01036708267	0.08747098022	15	8	5
+box001	case_micro	28	1	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.292603884	0.9099889454	-0.3826149387	0.3826149387	0.2913246497	0.2295665182	0.5482564117	22	0	6
+box001	case_micro	28	1	obj_speed_max	Object speed max	obj_speed_max	lower	2.320347014	1.258746898	-1.061600116	1.061600116	0.556835201	0.6819650363	1.486121642	27	0	1
+box001	case_micro	28	1	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	1500.207644	657.4390342	-842.7686097	842.7686097	822.5881043	729.908398	983.1848645	28	0	0
+box004	case_micro	6	1	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.06612380485	0.4507487807	0.3846249758	0.3846249758	0.3618266979	0.3000960788	0.4782509157	6	0	0
+box004	case_micro	6	1	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.8566733055	0.6943944034	-0.162278902	-0.162278902	-0.1933385376	-0.2824457722	-0.0002802298167	1	0	5
+box004	case_micro	6	1	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.4798263037	0.1469421532	-0.3328841505	0.3328841505	0.3232608112	0.1922725551	0.4813097805	6	0	0
+box004	case_micro	6	1	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.04109589042	0.05646456959	0.01536867917	-0.01536867917	0	-0.03697361744	0	0	4	2
+box004	case_micro	6	1	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.09866914	0.8982860114	-0.200383129	0.200383129	0.1747717198	0.004909846623	0.3964890062	5	0	1
+box004	case_micro	6	1	obj_speed_max	Object speed max	obj_speed_max	lower	3.17436622	1.452108228	-1.722257992	1.722257992	1.232064292	0.5820954632	2.879473347	6	0	0
+box004	case_micro	6	1	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	2162.501967	685.0460893	-1477.455878	1477.455878	846.5868384	805.5010417	2662.174452	6	0	0
+box021	case_micro	28	1	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.225941122	0.4258425447	0.1999014227	0.1999014227	0.2519774011	0.08918273492	0.3076891919	19	1	8
+box021	case_micro	28	1	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.8851805422	0.6706559099	-0.2145246322	-0.2145246322	-0.1730769231	-0.3022087272	-0.1234162766	3	0	25
+box021	case_micro	28	1	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.4592206684	0.1760489273	-0.2831717411	0.2831717411	0.2758411215	0.2004422324	0.3632466002	25	0	3
+box021	case_micro	28	1	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.04668344724	0.1203012362	0.07361778901	-0.07361778901	-0.0304067395	-0.1349195764	-0.0195498973	6	7	15
+box021	case_micro	28	1	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.29613294	0.8864168512	-0.4097160888	0.4097160888	0.2870770197	0.2615407094	0.5648100775	23	0	5
+box021	case_micro	28	1	obj_speed_max	Object speed max	obj_speed_max	lower	3.68471589	1.792335391	-1.892380499	1.892380499	2.189500771	1.517959501	2.234020863	26	0	2
+box021	case_micro	28	1	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	2060.722087	861.927423	-1198.794664	1198.794664	1028.159083	993.8381239	1447.373926	28	0	0
+box023	case_micro	16	1	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.2488100576	0.4727279298	0.2239178722	0.2239178722	0.2277777778	0.1284442115	0.3156535383	13	0	3
+box023	case_micro	16	1	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.8885802778	0.7118865913	-0.1766936865	-0.1766936865	-0.2068914956	-0.2570957335	-0.08206234461	2	0	14
+box023	case_micro	16	1	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.3819469336	0.1480965975	-0.233850336	0.233850336	0.2235474413	0.1632217763	0.3060226546	16	0	0
+box023	case_micro	16	1	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.0309958134	0.03147939777	0.0004835843692	-0.0004835843692	0	-0.03770361541	0.04437336903	4	8	4
+box023	case_micro	16	1	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.218233092	0.7331713791	-0.4850617128	0.4850617128	0.4881511458	0.2845803066	0.6924180687	15	0	1
+box023	case_micro	16	1	obj_speed_max	Object speed max	obj_speed_max	lower	3.372169386	1.792221061	-1.579948325	1.579948325	1.614189674	1.216456633	1.941630975	16	0	0
+box023	case_micro	16	1	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	2735.968453	844.9348581	-1891.033594	1891.033594	990.0214236	841.2047612	3632.518477	16	0	0
+box024	case_micro	9	1	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.001111111111	0.3079420705	0.3068309594	0.3068309594	0.1630434783	0.1745664794	0.4535237776	9	0	0
+box024	case_micro	9	1	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.9988888889	0.8187692181	-0.1801196707	-0.1801196707	-0.1630434783	-0.2406132259	-0.1291899472	0	0	9
+box024	case_micro	9	1	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.7470170362	0.3776062662	-0.36941077	0.36941077	0.3391304348	0.2661229993	0.475260217	9	0	0
+box024	case_micro	9	1	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.2247113381	0.03863585807	-0.18607548	0.18607548	0.185483871	0.1216094832	0.2488646974	9	0	0
+box024	case_micro	9	1	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.270533616	0.679277715	-0.5912559014	0.5912559014	0.8353690038	0.3035905188	0.8659501434	7	0	2
+box024	case_micro	9	1	obj_speed_max	Object speed max	obj_speed_max	lower	3.204488001	1.543679234	-1.660808766	1.660808766	0.994962006	0.7401148101	2.625851511	9	0	0
+box024	case_micro	9	1	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	2373.60423	779.8549622	-1593.749267	1593.749267	1579.935881	1153.602181	2049.628453	9	0	0
+ALL_MICRO	case_micro	87	5	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.1297349575	0.4438906838	0.3141557262	0.3141557262	0.34375	0.2601909852	0.3670489365	74	1	12
+ALL_MICRO	case_micro	87	5	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.9202109573	0.7331568194	-0.1870541379	-0.1870541379	-0.1730769231	-0.2299009145	-0.1429358103	8	0	79
+ALL_MICRO	case_micro	87	5	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.5356234356	0.2013295587	-0.3342938769	0.3342938769	0.3391304348	0.2940420832	0.375433654	84	0	3
+ALL_MICRO	case_micro	87	5	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.08242575505	0.07593172008	-0.006494034969	0.006494034969	0	-0.02529500239	0.03634057593	34	27	26
+ALL_MICRO	case_micro	87	5	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.264404344	0.8452105733	-0.4191937708	0.4191937708	0.3157161153	0.3342771369	0.5084918973	72	0	15
+ALL_MICRO	case_micro	87	5	obj_speed_max	Object speed max	obj_speed_max	lower	3.103253573	1.571397742	-1.531855831	1.531855831	1.41577386	1.295569233	1.776275732	84	0	3
+ALL_MICRO	case_micro	87	5	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	2043.896294	772.3010314	-1271.595263	1271.595263	921.087007	1024.098426	1624.045445	87	0	0
+ALL_MACRO	object_balanced_macro	87	5	contact_3mm_in_mask	3mm in-mask 接触	hand_object_physics_contact_3mm_in_mask_frac	higher	0.112489263	0.4289899797	0.3165007167	0.3165007167	0.34375	0.2699671194	0.3644060095	74	1	12
+ALL_MACRO	object_balanced_macro	87	5	raw_contact_in_mask	Raw in-mask 接触	hand_object_physics_contact_in_mask_frac	higher	0.9181929873	0.7368612457	-0.1813317416	-0.1813317416	-0.1730769231	-0.2225419866	-0.1371463514	8	0	79
+ALL_MACRO	object_balanced_macro	87	5	hand_object_penetration_3mm	手物穿透 >3mm	hand_object_physics_penetration_3mm_frame_frac	lower	0.5423721748	0.2121434086	-0.3302287662	0.3302287662	0.3391304348	0.2878067385	0.3744960069	84	0	3
+ALL_MACRO	object_balanced_macro	87	5	lower_body_penetration	Lower-body 穿透	leg_penetration_frac	lower	0.09083296759	0.0640008161	-0.02683215149	0.02683215149	0	0.005623372846	0.04812981766	34	27	26
+ALL_MACRO	object_balanced_macro	87	5	foot_slip_max_m	Foot slip max	foot_slip_max_m	lower	1.235234535	0.8214281804	-0.4138063541	0.4138063541	0.3157161153	0.3217487318	0.5057026	72	0	15
+ALL_MACRO	object_balanced_macro	87	5	obj_speed_max	Object speed max	obj_speed_max	lower	3.151217302	1.567818162	-1.58339914	1.58339914	1.41577386	1.272660758	1.9135127	84	0	3
+ALL_MACRO	object_balanced_macro	87	5	ankle_jerk_p95	Ankle jerk P95	ankle_jerk_p95	lower	2166.600876	765.8404734	-1400.760403	1400.760403	921.087007	1070.858018	1805.472796	87	0	0

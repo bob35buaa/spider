@@ -1,0 +1,53 @@
+case_id	batch	fall_flag	jitter_flag	evidence_times	notes
+box001_20231003_1_041_p2	a	false	false	0,1,2,3,4	Standing/bending and manipulating box; no person-on-ground posture or abrupt pose jump visible at 1fps.
+box001_20231003_1_042_p1	a	false	false	0,1,2,3	Smooth bend-to-stand beside box; no obvious fall or large-range jitter.
+box001_20231003_2_037_p2	a	false	false	0,1,2,3	Bending/reaching around box; continuous poses, no clear fall or jitter.
+box001_20231003_2_038_p1	a	false	false	0,1,2,3	Standing and leaning over box; no clear fall or abrupt oscillation.
+box001_20231003_2_038_p2	a	false	false	0,1,2,3	Bend/reach then stand; no clear fall or large-range jitter.
+box001_20231023_107_p1	a	false	false	0,1,2	Three sampled frames show smooth crouch/reach; no clear fall/jitter.
+box001_20231023_107_p2	a	false	false	0,1,2	Leaning over box then upright; no clear fall or large-range jitter.
+box001_20231023_108_p1	a	false	false	0,1,2,3	Standing/reaching sequence is coherent; no obvious fall/jitter.
+box001_20231023_110_p1	a	false	false	0,1,2,3,4,5	Subject remains upright near/behind box; small framing only, no fall or large-range jitter.
+box004_20231003_2_082_p1	a	false	false	0,1,2,3	Bending to lift/place box; no clear fall or abrupt pose change.
+box004_20231003_2_083_p1	a	false	false	0,1,2	Squat/bend with box and return; no obvious fall/jitter.
+box004_20231003_2_083_p2	a	false	false	0,1,2,3	Lift/hold box while upright; smooth 1fps progression, no fall/jitter.
+box021_20231011_036_p2	a	false	false	0,1,2,3,4	Bend/lift/handle box; no person collapse or high-amplitude shaking.
+box021_20231011_037_p1	a	false	false	0,1,2,3	Crouch to stand while holding box; no clear fall or jitter.
+box021_20231011_038_p1	a	false	false	0,1,2,3	Repeated bend/reach around box; poses remain coherent, no clear fall/jitter.
+box021_20231011_038_p2	a	false	false	0,1,2,3	Bend/stand manipulation; no obvious fall or large-range jitter.
+box021_20231018_028_p2	a	false	false	0,0.5,1,1.5,2,2.5,3	Wide leg extension/low pose around box at 0-1.5s, then crouch/stand; reviewed 0.5s neighbors, not an unambiguous fall and no jitter.
+box021_20231018_029_p1	a	false	false	0,1,2	Bend then stand holding box; no clear fall or jitter.
+box021_20231018_030_p1	b	false	false	0s,1s,2s	Upright/bending manipulation around box; no collapse or broad tremor visible in 1-fps samples.
+box021_20231018_030_p2	b	false	false	0s,1s,2s	Bending and standing transitions remain coherent; no fall or large-range jitter.
+box021_20231018_032_p1	b	false	false	0s,1s,2s	Standing-to-step motion with object; stable body trajectory, no fall/jitter.
+box021_20231018_032_p2	b	false	false	0s,1s,2s	Object interaction and side step are coherent; no obvious instability.
+box021_20231018_033_p1	b	false	false	0s,1s,2s	Bend/lift/stand sequence; no ground impact or collapse, no broad oscillation.
+box021_20231018_033_p2	b	false	false	0s,1s,2s	Squat/stand manipulation; pose progression smooth at sampled times.
+box021_20231018_034_p2	b	false	false	0s,1s,2s	Bending beside box then upright; no fall or large-range jitter detected.
+box021_20231018_035_p2	b	false	false	0s,1s,2s	Object moved while subject remains controlled; no collapse/tremor.
+box021_20231020_019_p1	b	false	false	0s,1s,2s	Bend-to-stand with box; stable support and continuous motion.
+box021_20231020_019_p2	b	false	false	0s,1s,2s	Repeated bend/stand interaction; no obvious fall or broad jitter.
+box021_20231020_020_p1	b	false	false	0s,1s,2s	Manipulation with stepping; posture remains plausible and stable.
+box021_20231020_020_p2	b	false	false	0s,1s,2s	Bend, lift, and upright transition; no collapse or large oscillation.
+box021_20231020_022_p1	b	false	false	0s,1s,2s	Front-facing squat/stand around box; no fall or broad jitter visible.
+box021_20231020_022_p2	b	false	false	0s,1s,2s,3s	Longer sequence with alternating bend/stand; stable, no obvious fall/jitter.
+box021_20231020_023_p1	b	false	false	0s,1s,2s,3s	Standing and box interaction; consistent pose progression, no instability.
+box021_20231020_023_p2	b	false	false	0s,1s,2s,3s	Bend-to-stand and walk-away motion; no collapse or large-range jitter.
+box023_20231008_045_p1	b	false	false	0s,1s,2s,3s	Bend/lift/step sequence; subject remains upright and controlled, no obvious jitter.
+box023_20231008_045_p2	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.467 s); person bends/lifts box and returns upright, no fall or large-range jitter.
+box023_20231008_046_p2	c	false	false	none	1 fps samples at 0,1,2 s (video 2.600 s); crouch-to-stand interaction is coherent, no fall or large-range jitter.
+box023_20231011_018_p1	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.334 s); object/person separation at ~2.6-3.4 s is a normal placement transition; neighboring frames reviewed, no fall/jitter.
+box023_20231011_021_p1	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.334 s); repeated bend/stand manipulation remains stable; neighboring frames around 2.6-3.4 s reviewed, no fall/jitter.
+box023_20231011_021_p2	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.300 s); crouch and recovery while holding box, no uncontrolled fall or broad jitter.
+box023_20231020_039_p2	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.167 s); bend/stand sequence is smooth, no fall/jitter.
+box023_20231020_040_p1	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.567 s); crouch/stand and box carry are coherent, no fall/jitter.
+box023_20231020_040_p2	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.667 s); squat/stand manipulation is stable, no fall/jitter.
+box023_20231020_041_p1	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.734 s); bend/stand interaction with box, no fall or large-range jitter.
+box023_20231020_042_p1	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.500 s); kneel/bend-to-stand motion is coherent; neighboring frames around 1.6-2.4 s reviewed, no fall/jitter.
+box023_20231020_042_p2	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.567 s); bend/stand manipulation, no fall/jitter.
+box024_20231011_027_p1	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.400 s); large object interaction with person partly occluded, but posture remains controlled; no fall/jitter.
+box024_20231011_027_p2	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.134 s); crouch/stand beside large box is smooth, no fall/jitter.
+box024_20231011_028_p1	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.800 s); person moves around large box with stable posture; neighboring frames around 2.6-3.4 s reviewed, no fall/jitter.
+box024_20231011_028_p2	c	false	false	none	1 fps samples at 0,1,2,3,4 s (video 4.500 s); person remains upright beside large box; neighboring frames around 2.6-3.4 s reviewed, no fall/jitter.
+box024_20231011_030_p1	c	false	false	none	1 fps samples at 0,1,2,3 s (video 3.400 s); person leans on/around large box, no fall or large-range jitter; neighboring frames around 1.6-2.4 s reviewed.
+box024_20231011_031_p1	c	false	false	none	1 fps samples at 0,1 s (video 2.267 s); upright interaction with large box, no fall/jitter.

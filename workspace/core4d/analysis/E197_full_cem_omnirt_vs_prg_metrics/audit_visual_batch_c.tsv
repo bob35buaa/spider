@@ -1,0 +1,18 @@
+case_id	fall_flag	jitter_flag	evidence_times	notes
+box023_20231008_045_p2	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.467 s); person bends/lifts box and returns upright, no fall or large-range jitter.
+box023_20231008_046_p2	0	0	none	1 fps samples at 0,1,2 s (video 2.600 s); crouch-to-stand interaction is coherent, no fall or large-range jitter.
+box023_20231011_018_p1	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.334 s); object/person separation at ~2.6-3.4 s is a normal placement transition; neighboring frames reviewed, no fall/jitter.
+box023_20231011_021_p1	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.334 s); repeated bend/stand manipulation remains stable; neighboring frames around 2.6-3.4 s reviewed, no fall/jitter.
+box023_20231011_021_p2	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.300 s); crouch and recovery while holding box, no uncontrolled fall or broad jitter.
+box023_20231020_039_p2	0	0	none	1 fps samples at 0,1,2,3 s (video 3.167 s); bend/stand sequence is smooth, no fall/jitter.
+box023_20231020_040_p1	0	0	none	1 fps samples at 0,1,2,3 s (video 3.567 s); crouch/stand and box carry are coherent, no fall/jitter.
+box023_20231020_040_p2	0	0	none	1 fps samples at 0,1,2,3 s (video 3.667 s); squat/stand manipulation is stable, no fall/jitter.
+box023_20231020_041_p1	0	0	none	1 fps samples at 0,1,2,3 s (video 3.734 s); bend/stand interaction with box, no fall or large-range jitter.
+box023_20231020_042_p1	0	0	none	1 fps samples at 0,1,2,3 s (video 3.500 s); kneel/bend-to-stand motion is coherent; neighboring frames around 1.6-2.4 s reviewed, no fall/jitter.
+box023_20231020_042_p2	0	0	none	1 fps samples at 0,1,2,3 s (video 3.567 s); bend/stand manipulation, no fall/jitter.
+box024_20231011_027_p1	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.400 s); large object interaction with person partly occluded, but posture remains controlled; no fall/jitter.
+box024_20231011_027_p2	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.134 s); crouch/stand beside large box is smooth, no fall/jitter.
+box024_20231011_028_p1	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.800 s); person moves around large box with stable posture; neighboring frames around 2.6-3.4 s reviewed, no fall/jitter.
+box024_20231011_028_p2	0	0	none	1 fps samples at 0,1,2,3,4 s (video 4.500 s); person remains upright beside large box; neighboring frames around 2.6-3.4 s reviewed, no fall/jitter.
+box024_20231011_030_p1	0	0	none	1 fps samples at 0,1,2,3 s (video 3.400 s); person leans on/around large box, no fall or large-range jitter; neighboring frames around 1.6-2.4 s reviewed.
+box024_20231011_031_p1	0	0	none	1 fps samples at 0,1 s (video 2.267 s); upright interaction with large box, no fall/jitter.

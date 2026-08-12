@@ -20,9 +20,23 @@ from pathlib import Path
 # repo root: .../spider/workspace/core4d/scripts/eval/review/review_index.py
 REPO = Path(__file__).resolve().parents[5]
 DEFAULT_EXPS = (
-    "E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188", "E189", "E194",
+    "E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188", "E189", "E192", "E194",
 )
 SOURCE_OVERRIDES = {
+    # Alias for the older E194 four-arm sweep under eval/full. Keep E194 itself
+    # bound to the canonical 72-case G1 expansion review set.
+    "E194_FULL": {
+        "result_exp": "E194",
+        "eval_subdir": "full",
+        "case_metrics": "e194_arm_case_metrics_G1.tsv",
+        "arm_sweep": True,
+    },
+    "E192": {
+        "eval_subdir": "full",
+        "case_metrics": "e192_case_metrics.tsv",
+        "summary": "e192_eval_summary.json",
+        "arm": "A2",
+    },
     "E194": {
         "eval_subdir": "full_g1_expansion",
         "case_metrics": "e194_g1_expansion_case_metrics.tsv",
@@ -185,7 +199,8 @@ class CaseRecord:
 
 def eval_dir(exp: str) -> Path:
     subdir = SOURCE_OVERRIDES.get(exp, {}).get("eval_subdir", "full")
-    return REPO / "workspace/core4d/results" / exp / "s6_downstream/eval" / subdir
+    result_exp = SOURCE_OVERRIDES.get(exp, {}).get("result_exp", exp)
+    return REPO / "workspace/core4d/results" / result_exp / "s6_downstream/eval" / subdir
 
 
 def _case_metrics_path(exp: str) -> Path | None:
@@ -205,7 +220,7 @@ def load_thresholds(exp: str) -> dict[str, float]:
     """Numeric thresholds from the experiment's summary.json (metric standard)."""
     import json
 
-    summ = eval_dir(exp) / "summary.json"
+    summ = eval_dir(exp) / SOURCE_OVERRIDES.get(exp, {}).get("summary", "summary.json")
     thresholds = {}
     if summ.is_file():
         thresholds = json.loads(summ.read_text(encoding="utf-8")).get("thresholds", {})
@@ -214,6 +229,16 @@ def load_thresholds(exp: str) -> dict[str, float]:
         fallback = eval_dir(fallback_exp) / "summary.json"
         if fallback.is_file():
             thresholds = json.loads(fallback.read_text(encoding="utf-8")).get("thresholds", {})
+    if exp == "E192" and not thresholds:
+        # E192's evaluator stores the frozen gate contract in the source code
+        # rather than repeating a summary threshold object.
+        thresholds = {
+            "body_z_err_p95_m_max": 0.20,
+            "leg_penetration_max": 0.10,
+            "hand_penetration_3mm_max": 0.30,
+            "release_false_3mm_max": 0.30,
+            "raw_contact_min": 0.50,
+        }
     return thresholds
 
 
@@ -272,6 +297,17 @@ def _read_exp(exp: str) -> list[CaseRecord]:
             if not case_id:
                 continue
             modes = (row.get("numeric_failure_modes") or "").replace(";", ",")
+            outdir_npz = normalize_path(row.get("outdir_npz", ""))
+            config_act = normalize_path(row.get("config_act", ""))
+            if not config_act:
+                # E192 evaluator metrics intentionally omit config/video columns;
+                # the canonical CEM outdir always carries config_act.yaml.
+                candidate = Path(outdir_npz).parent / "config_act.yaml"
+                config_act = str(candidate) if candidate.is_file() else ""
+            video = normalize_path(row.get("video", ""))
+            if not video and exp == "E192":
+                candidate = REPO / "workspace/core4d/results/E192/s6_downstream/render/full" / f"E192_{case_id}_A2_full.mp4"
+                video = str(candidate) if candidate.is_file() else ""
             scene_xml = resolve_scene(
                 exp, case_id, normalize_path(row.get("scene_xml", ""))
             )
@@ -283,17 +319,24 @@ def _read_exp(exp: str) -> list[CaseRecord]:
                     variant=(row.get("variant") or "").strip(),
                     object_key=(row.get("object_key") or "").strip(),
                     retarget_variant_id=(row.get("retarget_variant_id") or "").strip(),
-                    numeric_release_pass=_as_bool(row.get("numeric_release_pass", "")),
+                    numeric_release_pass=_as_bool(
+                        row.get(
+                            "numeric_release_pass_12gate"
+                            if exp == "E192"
+                            else "numeric_release_pass",
+                            row.get("numeric_release_pass", ""),
+                        )
+                    ),
                     numeric_failure_modes=[
                         m.strip() for m in modes.split(",") if m.strip()
                     ],
                     gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
                     status=(row.get("status") or (f"{arm}_FULL_COMPLETE" if arm else "")).strip(),
-                    outdir_npz=normalize_path(row.get("outdir_npz", "")),
+                    outdir_npz=outdir_npz,
                     scene_xml=scene_xml,
-                    config_act=normalize_path(row.get("config_act", "")),
+                    config_act=config_act,
                     trajectory=normalize_path(row.get("trajectory", "")),
-                    video=normalize_path(row.get("video", "")),
+                    video=video,
                     annotation=anns.get(case_id, {}),
                     metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
                 )
@@ -392,13 +435,22 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
     )
     for exp in exps:
         recs = [r for r in records if r.exp_id == exp]
-        summ = eval_dir(exp) / "summary.json"
+        summ = eval_dir(exp) / SOURCE_OVERRIDES.get(exp, {}).get("summary", "summary.json")
         evaluated = npass = -1
         if summ.is_file():
             summary = json.loads(summ.read_text(encoding="utf-8"))
             counts = summary.get("counts", {})
-            evaluated = int(counts.get("evaluated", -1))
+            evaluated = int(counts.get("evaluated", summary.get("evaluated", -1)))
             npass = int(counts.get("numeric_pass", -1))
+            if exp == "E192":
+                evaluated = int(summary.get("evaluated", -1))
+                npass = sum(1 for r in recs if r.numeric_release_pass)
+        elif exp == "E194_FULL":
+            evaluated = len(recs)
+            npass = sum(1 for r in recs if r.numeric_release_pass)
+            if exp == "E194_FULL":
+                evaluated = len(recs)
+                npass = sum(1 for r in recs if r.numeric_release_pass)
             if exp == "E194":
                 evaluated = int(summary.get("g1_scored", -1))
                 # The review player uses the E196-corrected 29-row overlay,

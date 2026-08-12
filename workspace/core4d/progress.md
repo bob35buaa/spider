@@ -1039,13 +1039,25 @@
 - 用户追加 `foot_slip_max_m`、`obj_speed_max`、`ankle_jerk_p95` 和 Omni-based RL
   宽口径过滤。E197 runner 已扩展为 7 指标，motion-health 通过公共
   `eval.core.motion_health.run_health` 统一重算；方法行仍为 Omni/PRG 各 87。
-- `E197-omni-wide-v1` gate 已冻结：contact 允许 PRG 比 Omni 低 0.10，penetration 允许
-  高 0.10，foot slip/object speed/ankle jerk 允许至 Omni×1.50，并叠加绝对安全门
-  raw contact≥0.50、hand penetration≤0.30、lower-body≤0.10。结果 `12/87`
-  标记 `RL_CANDIDATE_WIDE_GATE_PASS`；此标签不等于既有 `RL_EXPORT_READY`。
-- XLSX 已更新为 1,610 formulas，LibreOffice `0` errors；新增 sheets=`Omni Wide Gates`,
-  `RL Wide Filter`，新增 `e197_omni_wide_gate_thresholds.tsv` 与
-  `e197_rl_wide_gate_filter.tsv`。计划已补充 gate 定义。
+- 用户澄清宽 gate 必须只看 OmniRetarget，已切换到 `E197-omni-absolute-wide-v2`：
+  3mm in-mask≥0.09、raw in-mask≥0.50、手物穿透≤0.80、lower-body≤0.30、
+  foot slip≤1.90m、ankle jerk P95≤4000m/s³；obj_speed_max 仅展示、不参与 gate，PRG 不参与判定。
+- Omni-only gate 结果为 `30/87`，按 box001/004/021/023/024=`0/1/18/11/0`；新增
+  `e197_omni_absolute_wide_gate_thresholds.tsv`、`e197_omni_absolute_wide_gate_filter.tsv`，
+  XLSX sheet 为 `Omni Wide Gates`/`Omni Wide Filter`。
+- 新增只读 E197 OmniRetarget Viser player：
+  `workspace/core4d/scripts/eval/review/viser_e197_omnirt_player.py` 与 wrapper
+  `review_E197_omnirt_player.sh`；`--check` 审计 87/87 playable，Viser smoke 在 8097 监听成功。
+- 用户继续调整 gate：升级到 `E197-omni-absolute-wide-v4`，3mm in-mask 接触默认≥0.01、
+  box024 特例≥0.0；其余 Omni-only gate 保持不变。
+- v4 重算完成：OmniRetarget `52/87` 通过，按 box001/004/021/023/024=`9/3/22/12/6`；
+  6 个指标对应 7 条规则（3mm 接触含 box024 特例）。
+- v4 最终校验：box024 行跳过默认 0.01，仅应用 0.0 特例；Viser `--check`=`52/87`，
+  `e197_summary.json` 已同步 post-recalc XLSX SHA，Python compile、XLSX 1,610 formulas/0 errors、
+  `git diff --check` 全部 PASS。
+  Viser `--check` 87/87 playable，XLSX LibreOffice 1,610 formulas/0 errors。
+- 最终 post-recalc SHA 已同步 `e197_summary.json`：XLSX=`0daf0d...a982e`，Markdown=`4d7f59...b568`；
+  LibreOffice 1,610 formulas/0 errors，gate/filter/cardinality 和 `git diff --check` 均 PASS。
 - E197 最终交付核查修正了两处展示/说明问题：Markdown 中旧的 pooled P05/P95 判定说明
   已改为实际的逐 case Omni-relative tolerance，并明确 P05/P50/P95 仅为分布证据；XLSX 与
   Markdown 的三项 motion-health 已从错误的百分比展示改为 m、m/s、m/s³，底层值不变。
@@ -1054,3 +1066,9 @@
   raw contact（62）和绝对 lower-body penetration（25）最多。LibreOffice 再验 1,610 formulas、
   0 errors；delta 公式抽查为 `PRG − OmniRetarget`，最终 XLSX SHA256=`f89f99...d725`，
   `e197_summary.json` 已同步 post-recalc hash，`git diff --check` PASS。
+- 用户指出 E196 workbook 仅含 29 个 affected case，需恢复 E194 同款 72-case 三臂表。
+  新增 `build_E194_corrected_overlay_workbook.py`：冻结 E194 的 72-case noPRG/PRG authority，
+  将 29 条受 Euler bug 影响的 G1 行替换为 E196 `G1_corrected`，其余 43 条沿用 E194 G1；
+  原始 E194 TSV 不改写。输出 `E194_noPRG_PRG_G1_comparison.xlsx` 已通过
+  `11,512` formulas / `0` errors，cardinality=`72×3 arm rows, 144 paired, 1,728 gate migrations`，
+  并保留方向感知渐变色。overlay manifest 为 `e194_corrected_g1_overlay_manifest.json`。

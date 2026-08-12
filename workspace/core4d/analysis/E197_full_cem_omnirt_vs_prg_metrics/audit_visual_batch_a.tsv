@@ -1,0 +1,19 @@
+case_id	fall_flag	jitter_flag	evidence_times_s	notes
+box001_20231003_1_041_p2	0	0	0,1,2,3,4	Standing/bending and manipulating box; no person-on-ground posture or abrupt pose jump visible at 1fps.
+box001_20231003_1_042_p1	0	0	0,1,2,3	Smooth bend-to-stand beside box; no obvious fall or large-range jitter.
+box001_20231003_2_037_p2	0	0	0,1,2,3	Bending/reaching around box; continuous poses, no clear fall or jitter.
+box001_20231003_2_038_p1	0	0	0,1,2,3	Standing and leaning over box; no clear fall or abrupt oscillation.
+box001_20231003_2_038_p2	0	0	0,1,2,3	Bend/reach then stand; no clear fall or large-range jitter.
+box001_20231023_107_p1	0	0	0,1,2	Three sampled frames show smooth crouch/reach; no clear fall/jitter.
+box001_20231023_107_p2	0	0	0,1,2	Leaning over box then upright; no clear fall or large-range jitter.
+box001_20231023_108_p1	0	0	0,1,2,3	Standing/reaching sequence is coherent; no obvious fall/jitter.
+box001_20231023_110_p1	0	0	0,1,2,3,4,5	Subject remains upright near/behind box; small framing only, no fall or large-range jitter.
+box004_20231003_2_082_p1	0	0	0,1,2,3	Bending to lift/place box; no clear fall or abrupt pose change.
+box004_20231003_2_083_p1	0	0	0,1,2	Squat/bend with box and return; no obvious fall/jitter.
+box004_20231003_2_083_p2	0	0	0,1,2,3	Lift/hold box while upright; smooth 1fps progression, no fall/jitter.
+box021_20231011_036_p2	0	0	0,1,2,3,4	Bend/lift/handle box; no person collapse or high-amplitude shaking.
+box021_20231011_037_p1	0	0	0,1,2,3	Crouch to stand while holding box; no clear fall or jitter.
+box021_20231011_038_p1	0	0	0,1,2,3	Repeated bend/reach around box; poses remain coherent, no clear fall/jitter.
+box021_20231011_038_p2	0	0	0,1,2,3	Bend/stand manipulation; no obvious fall or large-range jitter.
+box021_20231018_028_p2	0	0	0,0.5,1,1.5,2,2.5,3	Wide leg extension/low pose around box at 0-1.5s, then crouch/stand; reviewed 0.5s neighbors, not an unambiguous fall and no jitter.
+box021_20231018_029_p1	0	0	0,1,2	Bend then stand holding box; no clear fall or jitter.
