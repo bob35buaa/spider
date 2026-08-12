@@ -1,0 +1,492 @@
+{
+ "box001_20231003_1_041_p1": {
+  "raw_frame_count": 166,
+  "trim_start": 19,
+  "trim_end": 166,
+  "trimmed_frames": 147,
+  "fps": 30
+ },
+ "box001_20231003_1_041_p2": {
+  "raw_frame_count": 166,
+  "trim_start": 24,
+  "trim_end": 166,
+  "trimmed_frames": 142,
+  "fps": 30
+ },
+ "box001_20231003_1_042_p1": {
+  "raw_frame_count": 156,
+  "trim_start": 47,
+  "trim_end": 156,
+  "trimmed_frames": 109,
+  "fps": 30
+ },
+ "box001_20231003_1_042_p2": {
+  "raw_frame_count": 156,
+  "trim_start": 34,
+  "trim_end": 156,
+  "trimmed_frames": 122,
+  "fps": 30
+ },
+ "box001_20231003_2_037_p1": {
+  "raw_frame_count": 128,
+  "trim_start": 18,
+  "trim_end": 128,
+  "trimmed_frames": 110,
+  "fps": 30
+ },
+ "box001_20231003_2_037_p2": {
+  "raw_frame_count": 128,
+  "trim_start": 13,
+  "trim_end": 128,
+  "trimmed_frames": 115,
+  "fps": 30
+ },
+ "box001_20231003_2_038_p1": {
+  "raw_frame_count": 130,
+  "trim_start": 21,
+  "trim_end": 130,
+  "trimmed_frames": 109,
+  "fps": 30
+ },
+ "box001_20231003_2_038_p2": {
+  "raw_frame_count": 130,
+  "trim_start": 20,
+  "trim_end": 130,
+  "trimmed_frames": 110,
+  "fps": 30
+ },
+ "box001_20231023_107_p1": {
+  "raw_frame_count": 117,
+  "trim_start": 15,
+  "trim_end": 117,
+  "trimmed_frames": 102,
+  "fps": 30
+ },
+ "box001_20231023_107_p2": {
+  "raw_frame_count": 117,
+  "trim_start": 20,
+  "trim_end": 117,
+  "trimmed_frames": 97,
+  "fps": 30
+ },
+ "box001_20231023_108_p1": {
+  "raw_frame_count": 145,
+  "trim_start": 26,
+  "trim_end": 145,
+  "trimmed_frames": 119,
+  "fps": 30
+ },
+ "box001_20231023_108_p2": {
+  "raw_frame_count": 145,
+  "trim_start": 38,
+  "trim_end": 145,
+  "trimmed_frames": 107,
+  "fps": 30
+ },
+ "box001_20231023_110_p1": {
+  "raw_frame_count": 201,
+  "trim_start": 27,
+  "trim_end": 201,
+  "trimmed_frames": 174,
+  "fps": 30
+ },
+ "box001_20231023_110_p2": {
+  "raw_frame_count": 201,
+  "trim_start": 11,
+  "trim_end": 201,
+  "trimmed_frames": 190,
+  "fps": 30
+ },
+ "box004_20231003_2_082_p1": {
+  "raw_frame_count": 139,
+  "trim_start": 30,
+  "trim_end": 139,
+  "trimmed_frames": 109,
+  "fps": 30
+ },
+ "box004_20231003_2_082_p2": {
+  "raw_frame_count": 139,
+  "trim_start": 31,
+  "trim_end": 139,
+  "trimmed_frames": 108,
+  "fps": 30
+ },
+ "box004_20231003_2_083_p1": {
+  "raw_frame_count": 121,
+  "trim_start": 19,
+  "trim_end": 121,
+  "trimmed_frames": 102,
+  "fps": 30
+ },
+ "box004_20231003_2_083_p2": {
+  "raw_frame_count": 121,
+  "trim_start": 16,
+  "trim_end": 121,
+  "trimmed_frames": 105,
+  "fps": 30
+ },
+ "box021_20231011_036_p1": {
+  "raw_frame_count": 201,
+  "trim_start": 58,
+  "trim_end": 201,
+  "trimmed_frames": 143,
+  "fps": 30
+ },
+ "box021_20231011_036_p2": {
+  "raw_frame_count": 201,
+  "trim_start": 57,
+  "trim_end": 201,
+  "trimmed_frames": 144,
+  "fps": 30
+ },
+ "box021_20231011_037_p1": {
+  "raw_frame_count": 217,
+  "trim_start": 109,
+  "trim_end": 217,
+  "trimmed_frames": 108,
+  "fps": 30
+ },
+ "box021_20231011_037_p2": {
+  "raw_frame_count": 217,
+  "trim_start": 93,
+  "trim_end": 217,
+  "trimmed_frames": 124,
+  "fps": 30
+ },
+ "box021_20231011_038_p1": {
+  "raw_frame_count": 193,
+  "trim_start": 79,
+  "trim_end": 193,
+  "trimmed_frames": 114,
+  "fps": 30
+ },
+ "box021_20231011_038_p2": {
+  "raw_frame_count": 193,
+  "trim_start": 76,
+  "trim_end": 193,
+  "trimmed_frames": 117,
+  "fps": 30
+ },
+ "box021_20231018_028_p1": {
+  "raw_frame_count": 101,
+  "trim_start": 27,
+  "trim_end": 101,
+  "trimmed_frames": 74,
+  "fps": 30
+ },
+ "box021_20231018_028_p2": {
+  "raw_frame_count": 101,
+  "trim_start": 8,
+  "trim_end": 101,
+  "trimmed_frames": 93,
+  "fps": 30
+ },
+ "box021_20231018_029_p1": {
+  "raw_frame_count": 134,
+  "trim_start": 63,
+  "trim_end": 134,
+  "trimmed_frames": 71,
+  "fps": 30
+ },
+ "box021_20231018_029_p2": {
+  "raw_frame_count": 134,
+  "trim_start": 59,
+  "trim_end": 134,
+  "trimmed_frames": 75,
+  "fps": 30
+ },
+ "box021_20231018_030_p1": {
+  "raw_frame_count": 172,
+  "trim_start": 84,
+  "trim_end": 172,
+  "trimmed_frames": 88,
+  "fps": 30
+ },
+ "box021_20231018_030_p2": {
+  "raw_frame_count": 172,
+  "trim_start": 84,
+  "trim_end": 172,
+  "trimmed_frames": 88,
+  "fps": 30
+ },
+ "box021_20231018_032_p1": {
+  "raw_frame_count": 119,
+  "trim_start": 37,
+  "trim_end": 119,
+  "trimmed_frames": 82,
+  "fps": 30
+ },
+ "box021_20231018_032_p2": {
+  "raw_frame_count": 119,
+  "trim_start": 43,
+  "trim_end": 119,
+  "trimmed_frames": 76,
+  "fps": 30
+ },
+ "box021_20231018_033_p1": {
+  "raw_frame_count": 101,
+  "trim_start": 15,
+  "trim_end": 101,
+  "trimmed_frames": 86,
+  "fps": 30
+ },
+ "box021_20231018_033_p2": {
+  "raw_frame_count": 101,
+  "trim_start": 4,
+  "trim_end": 101,
+  "trimmed_frames": 97,
+  "fps": 30
+ },
+ "box021_20231018_034_p1": {
+  "raw_frame_count": 102,
+  "trim_start": 37,
+  "trim_end": 102,
+  "trimmed_frames": 65,
+  "fps": 30
+ },
+ "box021_20231018_034_p2": {
+  "raw_frame_count": 102,
+  "trim_start": 5,
+  "trim_end": 102,
+  "trimmed_frames": 97,
+  "fps": 30
+ },
+ "box021_20231018_035_p1": {
+  "raw_frame_count": 125,
+  "trim_start": 38,
+  "trim_end": 125,
+  "trimmed_frames": 87,
+  "fps": 30
+ },
+ "box021_20231018_035_p2": {
+  "raw_frame_count": 125,
+  "trim_start": 31,
+  "trim_end": 125,
+  "trimmed_frames": 94,
+  "fps": 30
+ },
+ "box021_20231020_019_p1": {
+  "raw_frame_count": 142,
+  "trim_start": 45,
+  "trim_end": 142,
+  "trimmed_frames": 97,
+  "fps": 30
+ },
+ "box021_20231020_019_p2": {
+  "raw_frame_count": 142,
+  "trim_start": 42,
+  "trim_end": 142,
+  "trimmed_frames": 100,
+  "fps": 30
+ },
+ "box021_20231020_020_p1": {
+  "raw_frame_count": 126,
+  "trim_start": 40,
+  "trim_end": 126,
+  "trimmed_frames": 86,
+  "fps": 30
+ },
+ "box021_20231020_020_p2": {
+  "raw_frame_count": 126,
+  "trim_start": 40,
+  "trim_end": 126,
+  "trimmed_frames": 86,
+  "fps": 30
+ },
+ "box021_20231020_022_p1": {
+  "raw_frame_count": 141,
+  "trim_start": 37,
+  "trim_end": 141,
+  "trimmed_frames": 104,
+  "fps": 30
+ },
+ "box021_20231020_022_p2": {
+  "raw_frame_count": 141,
+  "trim_start": 36,
+  "trim_end": 141,
+  "trimmed_frames": 105,
+  "fps": 30
+ },
+ "box021_20231020_023_p1": {
+  "raw_frame_count": 145,
+  "trim_start": 38,
+  "trim_end": 145,
+  "trimmed_frames": 107,
+  "fps": 30
+ },
+ "box021_20231020_023_p2": {
+  "raw_frame_count": 145,
+  "trim_start": 35,
+  "trim_end": 145,
+  "trimmed_frames": 110,
+  "fps": 30
+ },
+ "box023_20231008_045_p1": {
+  "raw_frame_count": 178,
+  "trim_start": 44,
+  "trim_end": 178,
+  "trimmed_frames": 134,
+  "fps": 30
+ },
+ "box023_20231008_045_p2": {
+  "raw_frame_count": 178,
+  "trim_start": 44,
+  "trim_end": 178,
+  "trimmed_frames": 134,
+  "fps": 30
+ },
+ "box023_20231008_046_p1": {
+  "raw_frame_count": 113,
+  "trim_start": 34,
+  "trim_end": 113,
+  "trimmed_frames": 79,
+  "fps": 30
+ },
+ "box023_20231008_046_p2": {
+  "raw_frame_count": 113,
+  "trim_start": 35,
+  "trim_end": 113,
+  "trimmed_frames": 78,
+  "fps": 30
+ },
+ "box023_20231011_018_p1": {
+  "raw_frame_count": 175,
+  "trim_start": 45,
+  "trim_end": 175,
+  "trimmed_frames": 130,
+  "fps": 30
+ },
+ "box023_20231011_018_p2": {
+  "raw_frame_count": 175,
+  "trim_start": 59,
+  "trim_end": 175,
+  "trimmed_frames": 116,
+  "fps": 30
+ },
+ "box023_20231011_021_p1": {
+  "raw_frame_count": 207,
+  "trim_start": 77,
+  "trim_end": 207,
+  "trimmed_frames": 130,
+  "fps": 30
+ },
+ "box023_20231011_021_p2": {
+  "raw_frame_count": 207,
+  "trim_start": 78,
+  "trim_end": 207,
+  "trimmed_frames": 129,
+  "fps": 30
+ },
+ "box023_20231020_039_p1": {
+  "raw_frame_count": 134,
+  "trim_start": 39,
+  "trim_end": 134,
+  "trimmed_frames": 95,
+  "fps": 30
+ },
+ "box023_20231020_039_p2": {
+  "raw_frame_count": 134,
+  "trim_start": 39,
+  "trim_end": 134,
+  "trimmed_frames": 95,
+  "fps": 30
+ },
+ "box023_20231020_040_p1": {
+  "raw_frame_count": 151,
+  "trim_start": 44,
+  "trim_end": 151,
+  "trimmed_frames": 107,
+  "fps": 30
+ },
+ "box023_20231020_040_p2": {
+  "raw_frame_count": 151,
+  "trim_start": 41,
+  "trim_end": 151,
+  "trimmed_frames": 110,
+  "fps": 30
+ },
+ "box023_20231020_041_p1": {
+  "raw_frame_count": 148,
+  "trim_start": 36,
+  "trim_end": 148,
+  "trimmed_frames": 112,
+  "fps": 30
+ },
+ "box023_20231020_041_p2": {
+  "raw_frame_count": 148,
+  "trim_start": 35,
+  "trim_end": 148,
+  "trimmed_frames": 113,
+  "fps": 30
+ },
+ "box023_20231020_042_p1": {
+  "raw_frame_count": 160,
+  "trim_start": 55,
+  "trim_end": 160,
+  "trimmed_frames": 105,
+  "fps": 30
+ },
+ "box023_20231020_042_p2": {
+  "raw_frame_count": 160,
+  "trim_start": 53,
+  "trim_end": 160,
+  "trimmed_frames": 107,
+  "fps": 30
+ },
+ "box024_20231011_027_p1": {
+  "raw_frame_count": 192,
+  "trim_start": 60,
+  "trim_end": 192,
+  "trimmed_frames": 132,
+  "fps": 30
+ },
+ "box024_20231011_027_p2": {
+  "raw_frame_count": 192,
+  "trim_start": 68,
+  "trim_end": 192,
+  "trimmed_frames": 124,
+  "fps": 30
+ },
+ "box024_20231011_028_p1": {
+  "raw_frame_count": 179,
+  "trim_start": 35,
+  "trim_end": 179,
+  "trimmed_frames": 144,
+  "fps": 30
+ },
+ "box024_20231011_028_p2": {
+  "raw_frame_count": 179,
+  "trim_start": 44,
+  "trim_end": 179,
+  "trimmed_frames": 135,
+  "fps": 30
+ },
+ "box024_20231011_030_p1": {
+  "raw_frame_count": 202,
+  "trim_start": 100,
+  "trim_end": 202,
+  "trimmed_frames": 102,
+  "fps": 30
+ },
+ "box024_20231011_030_p2": {
+  "raw_frame_count": 202,
+  "trim_start": 103,
+  "trim_end": 202,
+  "trimmed_frames": 99,
+  "fps": 30
+ },
+ "box024_20231011_031_p1": {
+  "raw_frame_count": 241,
+  "trim_start": 173,
+  "trim_end": 241,
+  "trimmed_frames": 68,
+  "fps": 30
+ },
+ "box024_20231011_031_p2": {
+  "raw_frame_count": 241,
+  "trim_start": 167,
+  "trim_end": 241,
+  "trimmed_frames": 74,
+  "fps": 30
+ }
+}

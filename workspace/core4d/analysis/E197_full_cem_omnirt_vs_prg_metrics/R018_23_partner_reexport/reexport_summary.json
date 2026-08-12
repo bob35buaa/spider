@@ -1,0 +1,28 @@
+{
+  "deliverable": "E197 OmniRetarget partner re-export for R018-23",
+  "spider_git_commit": "4e643e74446ab053b763d2ab6a072895cf33ac27",
+  "gate_pass_targets": 52,
+  "unique_person_cases": 70,
+  "rerun_partners_contact_from_sibling": [
+    "box021_20231018_029_p2",
+    "box021_20231018_034_p1",
+    "box021_20231018_035_p1",
+    "box023_20231020_039_p1"
+  ],
+  "variant_tally_targets": {
+    "omnirt_v1": 46,
+    "omnirt_v2": 6
+  },
+  "source_exp_tally_targets": {
+    "E173": 27,
+    "E172": 3,
+    "E170": 22
+  },
+  "raw_fps": 30,
+  "canonical_fps": 50,
+  "contact_threshold_m": 0.03,
+  "delivery_root": "SPIDER_ROOT::workspace/core4d/results/E197/s6_downstream/rl_export/partner_reexport_v1",
+  "release_root": "SPIDER_ROOT::workspace/core4d/results/E197/s6_downstream/rl_export/partner_reexport_v1/release/omnirt_v1_ref_fk",
+  "pairing_manifest": "SPIDER_ROOT::workspace/core4d/results/E197/s6_downstream/rl_export/partner_reexport_v1/manifests/source_pairing_manifest.tsv",
+  "files_hashed": 280
+}
