@@ -31,6 +31,13 @@ SOURCE_OVERRIDES = {
     },
 }
 
+E194_CORRECTED_EVAL = (
+    REPO / "workspace/core4d/results/E196/s6_downstream/eval/full_reference_fix"
+)
+E194_CORRECTED_RENDER = (
+    REPO / "workspace/core4d/results/E196/s6_downstream/render/full_reference_fix"
+)
+
 GATE_FIELDS = (
     "fall_gate_pass",
     "body_z_gate_pass",
@@ -294,10 +301,67 @@ def _read_exp(exp: str) -> list[CaseRecord]:
     return records
 
 
+def _read_e194_corrected_overlay() -> list[CaseRecord]:
+    """Read the E194 72-case G1 review set with the E196 fix overlaid.
+
+    Only the 29 Euler-mismatch cases are taken from E196 corrected output;
+    the remaining 43 G1 rows remain the original E194 expansion results.
+    """
+    import csv
+
+    base_path = REPO / "workspace/core4d/results/E194/s6_downstream/eval/full_g1_expansion/e194_g1_expansion_case_metrics.tsv"
+    corrected_path = E194_CORRECTED_EVAL / "e196_reference_fix_case_metrics.tsv"
+    if not base_path.is_file() or not corrected_path.is_file():
+        return _read_exp("E194")
+    annotations = load_annotations("E194")
+    # E196 is a new corrected rollout. Do not carry over human decisions made
+    # on the contaminated E194 videos for exactly these 29 case IDs. The
+    # source TSV is cleaned once below; this filter is also fail-safe for an
+    # older checkout or a stale annotation file.
+    with base_path.open("r", encoding="utf-8", newline="") as fh:
+        base_rows = [r for r in csv.DictReader(fh, delimiter="\t") if r.get("arm") == "G1"]
+    with corrected_path.open("r", encoding="utf-8", newline="") as fh:
+        fixed_rows = [r for r in csv.DictReader(fh, delimiter="\t") if r.get("arm") == "G1_corrected"]
+    fixed = {r["case_id"]: r for r in fixed_rows}
+    if len(base_rows) != 72 or len(fixed) != 29:
+        raise ValueError(f"E194 review overlay cardinality: base={len(base_rows)} corrected={len(fixed)}")
+    rows = [fixed.get(r["case_id"], r) for r in base_rows]
+    records: list[CaseRecord] = []
+    for row in rows:
+        case_id = row["case_id"]
+        corrected = case_id in fixed
+        video = (
+            E194_CORRECTED_RENDER / f"E196_{case_id}_G1_reference_fix.mp4"
+            if corrected else
+            REPO / "workspace/core4d/results/E194/s6_downstream/render/full_g1_expansion" / f"E194_{case_id}_G1_expansion.mp4"
+        )
+        modes = (row.get("numeric_failure_modes") or "").replace(";", ",")
+        records.append(CaseRecord(
+            exp_id="E194", arm="G1", case_id=case_id,
+            variant=(row.get("variant") or "").strip(),
+            object_key=(row.get("object_key") or "").strip(),
+            retarget_variant_id=(row.get("retarget_variant_id") or "").strip(),
+            # E194's public strict review gate is the frozen 12-gate field;
+            # `numeric_release_pass` may additionally include legacy health.
+            numeric_release_pass=_as_bool(row.get("numeric_release_pass_12gate", row.get("numeric_release_pass", ""))),
+            numeric_failure_modes=[m.strip() for m in modes.split(",") if m.strip()],
+            gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
+            status=(row.get("status") or "G1_FULL_COMPLETE").strip(),
+            outdir_npz=normalize_path(row.get("outdir_npz", "")),
+            scene_xml=resolve_scene("E196" if corrected else "E194", case_id, normalize_path(row.get("scene_xml", ""))),
+            config_act=normalize_path(row.get("config_act", "")),
+            trajectory=normalize_path(row.get("trajectory", "")),
+            video=str(video),
+            annotation={} if corrected else annotations.get(case_id, {}),
+            metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
+        ))
+    return records
+
+
 def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
     out: list[CaseRecord] = []
     for exp in exps:
-        out.extend(_read_exp(exp))
+        out.extend(_read_e194_corrected_overlay() if exp == "E194" else _read_exp(exp))
     return out
 
 
@@ -337,11 +401,10 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
             npass = int(counts.get("numeric_pass", -1))
             if exp == "E194":
                 evaluated = int(summary.get("g1_scored", -1))
-                overall = eval_dir(exp) / "e194_three_arm_12gate_overall.tsv"
-                if overall.is_file():
-                    with overall.open("r", encoding="utf-8", newline="") as fh:
-                        all_row = next((r for r in csv.DictReader(fh, delimiter="\t") if r.get("object_key") == "ALL"), {})
-                    npass = int(all_row.get("G1_strict12_pass_count", -1))
+                # The review player uses the E196-corrected 29-row overlay,
+                # so its expected strict count must be derived from the
+                # overlaid records rather than the historical E194 summary.
+                npass = sum(1 for r in recs if r.numeric_release_pass)
         idx_pass = sum(1 for r in recs if r.numeric_release_pass)
         reviewed = sum(1 for r in recs if r.reviewed)
         playable = sum(1 for r in recs if r.playable)

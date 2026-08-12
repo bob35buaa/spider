@@ -4,7 +4,10 @@
 # Usage:
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194] [--port 8080] [--check] [...]
 # E194 is the 72-case G1 expansion only (box001/box023/box021), not the older
-# E194 15-case arm sweep or its PRG authority rows.
+# E194 15-case arm sweep or its PRG authority rows. Its review index overlays
+# only the 29 Euler-mismatch cases with E196 corrected G1 videos/metrics; the
+# other 43 cases keep their original E194 videos. Existing annotations for the
+# 29-case set are intentionally reset, while all other annotations are kept.
 #
 # --check runs a headless index audit (case counts vs summary.json) and exits.
 set -uo pipefail
