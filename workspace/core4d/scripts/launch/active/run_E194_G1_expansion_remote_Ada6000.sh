@@ -10,6 +10,7 @@ REMOTE_ROOT="${E194_ADA_ROOT:-/home/xiayb/pHRI_workspace/spider}"
 ROOT="workspace/core4d/results/E194"
 RUNNER="workspace/core4d/scripts/experiments/E194/run_g1_expansion_queue.py"
 COMMON="workspace/core4d/scripts/experiments/E194/e194_g1_expansion_common.py"
+AUDITOR="workspace/core4d/scripts/experiments/E194/audit_g1_expansion.py"
 case "$MODE:$SENTINEL_ONLY" in
   canary:*) TAG="canary"; MANIFEST="$ROOT/s6_downstream/manifests/g1_expansion_canary_manifest.tsv" ;;
   full:1) TAG="sentinel"; MANIFEST="$ROOT/s6_downstream/manifests/g1_expansion_sentinel_manifest.tsv" ;;
@@ -39,19 +40,24 @@ import csv,sys
 rows=list(csv.DictReader(open(sys.argv[1]),delimiter="\t"))
 files={sys.argv[1],"examples/run_mjwp.py","spider/config.py","spider/io.py","spider/interp.py","spider/query_tape.py",
  "spider/optimizers/sampling.py","spider/optimizers/sampling_fast.py","spider/simulators/mjwp.py","spider/simulators/mjwp_object_distance.py",
+ "spider/simulators/scene_act_reference.py",
  "spider/rewards/__init__.py","spider/rewards/surface_distance.py","spider/geometry/__init__.py","spider/geometry/grid_sdf.py"}
 for row in rows:
  files.add(f"examples/config/override/core4d_{row['target_task']}.yaml")
  for key in ("target_scene","trajectory","contact_mask","override_path","scene_act"):
   if row.get(key): files.add(row[key])
+ files.add(str(Path(row["scene_act"]).with_name("scene_act_meta.json")))
 print("\n".join(sorted(files)))
 PY
 )
 for path in "${FILES[@]}"; do [ -f "$path" ] || { echo "missing sync input: $path" >&2; exit 3; }; done
 rsync -az -e "$RSH" "$STAGE/" "$REMOTE:$REMOTE_ROOT/$STAGE/"
-for path in "${FILES[@]}" "$RUNNER" "$COMMON"; do
+for path in "${FILES[@]}" "$RUNNER" "$COMMON" "$AUDITOR"; do
   "${SSH[@]}" "mkdir -p '$REMOTE_ROOT/$(dirname "$path")'"
   rsync -az -e "$RSH" "$path" "$REMOTE:$REMOTE_ROOT/$(dirname "$path")/"
+done
+for gpu in 0 1; do
+  "${SSH[@]}" "cd '$REMOTE_ROOT' && '$PYTHON_BIN' '$AUDITOR' --manifest '$STAGE/ada-gpu${gpu}.tsv' --allow-subset --require-all"
 done
 REMOTE_SCRIPT="$STAGE/run_remote.sh"
 {

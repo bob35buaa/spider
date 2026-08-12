@@ -113,7 +113,7 @@ def restore_e173_missing(rows: list[dict[str, str]], *, apply: bool) -> list[dic
         task = C.TASK_ROOT / row["target_task"]
         state = primary_state(task)
         stage = index[(row["case_id"], row["retarget_variant_id"])]
-        runtime_complete = state["scene.xml"] and state["0/trajectory_kinematic.npz"]
+        runtime_complete = all(state.values())
         if runtime_complete:
             trajectory_exact = C.sha256(task / "0/trajectory_kinematic.npz") == row["trajectory_sha256"]
             scene = mujoco.MjModel.from_xml_path(str(task / "scene.xml"))

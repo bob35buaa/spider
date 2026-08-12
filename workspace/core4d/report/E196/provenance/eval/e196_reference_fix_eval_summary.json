@@ -1,0 +1,12 @@
+{
+  "complete": 29,
+  "corrected_scored": 29,
+  "created_at": "2026-08-12T17:18:01+08:00",
+  "errors": 0,
+  "expected": 29,
+  "integrity_pass": 29,
+  "metric_standard_id": "core4d-e154-physics-contact-v1",
+  "paired": 29,
+  "scope": "full",
+  "status": "pass"
+}

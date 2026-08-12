@@ -1,0 +1,19 @@
+{
+  "cardinal_failures": [],
+  "case_set_sha256": "b7255fbb0bc67dde9fb8fd0c19cd5b2285a3aee8e74ddc0b8de4f392b2941dac",
+  "created_at": "2026-08-12T17:28:30+08:00",
+  "manifest": "/home/ubuntu/Workspace/spider/workspace/core4d/results/E196/s6_downstream/manifests/reference_fix_full_manifest.tsv",
+  "objects": {
+    "box001": 21,
+    "box023": 8
+  },
+  "row_failures": 0,
+  "rows": 29,
+  "scope": "full",
+  "status": "pass",
+  "workers": {
+    "ada-gpu0": 10,
+    "ada-gpu1": 9,
+    "local-gpu0": 10
+  }
+}

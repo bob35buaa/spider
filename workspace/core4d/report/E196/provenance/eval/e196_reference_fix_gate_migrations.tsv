@@ -1,0 +1,697 @@
+comparison	baseline_arm	candidate_arm	case_id	object_key	gate	baseline_pass	candidate_pass	migration
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_041_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_041_p1	box001	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_039_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	release	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_039_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	hand_penetration	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	root_pos	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_041_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	root_pos	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_041_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	hand_penetration	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	release	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_039_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	release	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_039_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	hand_ori	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_107_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	release	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	root_pos	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	hand_pos	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_107_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	release	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_109_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	release	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_109_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p1	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	hand_penetration	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p1	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_021_p1	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_021_p1	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p1	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p1	box023	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	lower_body	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	contact	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	lower_body	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p1	box001	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	root_pos	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	hand_penetration	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	root_pos	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	root_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	hand_pos	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_037_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	hand_penetration	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	root_pos	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_037_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	root_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	hand_pos	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_010_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	root_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_010_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	hand_penetration	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	fall	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	body_z	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	contact	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	root_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	fall	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	body_z	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	contact	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	root_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p1	box001	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231008_046_p2	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231008_046_p2	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	root_pos	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	hand_pos	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p1	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	root_pos	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	hand_ori	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p1	box023	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_042_p2	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_042_p2	box023	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_014_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	contact	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_014_p2	box001	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	release	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	hand_penetration	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_040_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	release	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_040_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_1_042_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	hand_ori	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_1_042_p2	box001	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	release	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231003_2_038_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	release	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231003_2_038_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	hand_penetration	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	hand_ori	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231020_011_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231020_011_p1	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	hand_ori	true	false	PASS_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_108_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	hand_ori	true	false	PASS_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_108_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	root_pos	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	hand_pos	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box001_20231023_110_p2	box001	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box001_20231023_110_p2	box001	object_ori	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	object_pos	false	true	FAIL_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231011_019_p2	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	lower_body	false	true	FAIL_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	root_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	hand_pos	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	hand_ori	false	false	FAIL_TO_FAIL
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231011_019_p2	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_prg	PRG	G1 corrected	box023_20231020_040_p2	box023	object_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	fall	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	body_z	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	contact	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	release	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	hand_penetration	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	lower_body	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	root_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	root_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	hand_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	hand_ori	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	object_pos	true	true	PASS_TO_PASS
+corrected_vs_contaminated_g1	G1 contaminated	G1 corrected	box023_20231020_040_p2	box023	object_ori	false	true	FAIL_TO_PASS

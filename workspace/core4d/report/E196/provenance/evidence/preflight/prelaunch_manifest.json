@@ -1,0 +1,17 @@
+{
+  "cardinal_failures": [],
+  "case_set_sha256": "b1af63f822c134a2cbedd911ebc99613f47ada90125f3f61b3a6f031f14e08dd",
+  "created_at": "2026-08-12T12:15:02+08:00",
+  "manifest": "workspace/core4d/results/E196/s6_downstream/execution/local/remaining/manifest.tsv",
+  "objects": {
+    "box001": 6,
+    "box023": 3
+  },
+  "row_failures": 0,
+  "rows": 9,
+  "scope": "prelaunch",
+  "status": "pass",
+  "workers": {
+    "local-gpu0": 9
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "created_at": "2026-08-12T17:26:32+08:00",
+  "method": "ffmpeg midpoint frame contact-sheet screening",
+  "corrected_videos": 29,
+  "visual_review_status": {
+    "midframe_screened": 29
+  },
+  "cluster7_cases": [
+    "box001_20231003_2_041_p1",
+    "box001_20231020_014_p1",
+    "box001_20231020_014_p2",
+    "box023_20231020_040_p1",
+    "box023_20231020_040_p2",
+    "box023_20231020_042_p1",
+    "box023_20231020_042_p2"
+  ],
+  "priority_cases": 20,
+  "clear_midframe_followup": [
+    "box001_20231023_110_p1"
+  ],
+  "caveat": "Mid-frame screening is not a substitute for full temporal human review; flagged follow-up is retained."
+}

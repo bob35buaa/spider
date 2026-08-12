@@ -1,0 +1,18 @@
+{
+  "cardinal_failures": [],
+  "case_set_sha256": "ea8d0494cc1629fac43a3bce329b0dae94c5ebf5ab7424c4945c2ba90329e046",
+  "created_at": "2026-08-12T04:06:14+08:00",
+  "manifest": "/home/ubuntu/Workspace/spider/workspace/core4d/results/E196/s6_downstream/manifests/reference_fix_wave0_manifest.tsv",
+  "objects": {
+    "box001": 3
+  },
+  "row_failures": 0,
+  "rows": 3,
+  "scope": "wave0",
+  "status": "pass",
+  "workers": {
+    "ada-gpu0": 1,
+    "ada-gpu1": 1,
+    "local-gpu0": 1
+  }
+}

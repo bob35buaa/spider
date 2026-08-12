@@ -1,7 +1,19 @@
 # 实验日志索引
 
-> 自动生成，共 275 个日志文件。
+> 自动生成，共 277 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 60 (E197-E197)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 277 | E197 | 2026-08-12 | Full cem omnirt vs prg metrics | [277_E197_full_cem_omnirt_vs_prg_metrics....](277_E197_full_cem_omnirt_vs_prg_metrics.md) |
+
+## Phase 59 (E196-E196)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 278 | E196 | 2026-08-12 | Reference metadata integrity fix results | [278_E196_reference_metadata_integrity_fi...](278_E196_reference_metadata_integrity_fix_results.md) |
 
 ## Phase 58 (E195-E195)
 

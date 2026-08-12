@@ -1,0 +1,4 @@
+case_id	object_key	worker	wave	status	failures
+box001_20231003_2_041_p1	box001	local-gpu0	wave0	pass	
+box001_20231020_014_p1	box001	ada-gpu0	wave0	pass	
+box001_20231020_014_p2	box001	ada-gpu1	wave0	pass	

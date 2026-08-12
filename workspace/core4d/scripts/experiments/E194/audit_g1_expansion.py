@@ -15,6 +15,7 @@ from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import e194_g1_expansion_common as C  # noqa: E402
+from spider.simulators.scene_act_reference import resolve_scene_act_reference  # noqa: E402
 
 CONFIG_DIR = str((C.REPO / "examples/config").resolve())
 MODEL_ARRAYS = (
@@ -43,6 +44,9 @@ def audit_row(row: dict[str, str]) -> list[str]:
         if not path.is_file(): failures.append(f"missing:{label}")
         elif C.sha256(path) != row[sha_field]: failures.append(f"sha:{label}")
     if not C.repo_path(row["target_scene"]).is_file(): failures.append("missing:target_scene")
+    meta_path = C.repo_path(row["scene_act"]).with_name("scene_act_meta.json")
+    if not meta_path.is_file():
+        failures.append("missing:scene_act_meta")
     if failures: return failures
     cfg = compose_config(row)
     if cfg.get("scene_name") != C.SCENE_NAME: failures.append(f"scene_name:{cfg.get('scene_name')}")
@@ -53,6 +57,10 @@ def audit_row(row: dict[str, str]) -> list[str]:
     g1 = mujoco.MjModel.from_xml_path(str(C.repo_path(row["scene_act"])))
     obj = mujoco.mj_name2id(g1, mujoco.mjtObj.mjOBJ_BODY, "object")
     if obj < 0: return failures + ["missing:object_body"]
+    try:
+        resolve_scene_act_reference(C.repo_path(row["scene_act"]), g1, emit_log=False)
+    except (FileNotFoundError, ValueError) as exc:
+        failures.append(f"reference_contract:{exc}")
     if float(g1.body_gravcomp[obj]) != C.GRAVCOMP: failures.append(f"object_gravcomp:{g1.body_gravcomp[obj]}")
     delta = np.asarray(g1.body_gravcomp) - np.asarray(base.body_gravcomp)
     if np.flatnonzero(delta).tolist() != [obj] or float(delta[obj]) != 1.0: failures.append("gravcomp_delta")
@@ -64,7 +72,8 @@ def audit_row(row: dict[str, str]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(); parser.add_argument("--manifest", type=Path, default=C.FULL_MANIFEST)
-    parser.add_argument("--require-all", action="store_true"); args = parser.parse_args()
+    parser.add_argument("--require-all", action="store_true"); parser.add_argument("--allow-subset", action="store_true")
+    args = parser.parse_args()
     rows = C.read_tsv(args.manifest); details = []; failures = 0
     for row in rows:
         errors = audit_row(row); failures += bool(errors)
@@ -72,9 +81,10 @@ def main() -> int:
                         "status": "pass" if not errors else "fail", "failures": ";".join(errors)})
         if errors: print(f"[FAIL] {row['case_id']}: {';'.join(errors)}")
     counts = Counter(row["object_key"] for row in rows); workers = Counter(row["worker"] for row in rows)
-    if len(rows) != C.N_CASES or dict(counts) != C.OBJECT_COUNTS: failures += 1
-    try: C.validate_worker_balance(rows)
-    except ValueError as exc: print(f"[FAIL] {exc}"); failures += 1
+    if not args.allow_subset:
+        if len(rows) != C.N_CASES or dict(counts) != C.OBJECT_COUNTS: failures += 1
+        try: C.validate_worker_balance(rows)
+        except ValueError as exc: print(f"[FAIL] {exc}"); failures += 1
     summary = {"created_at": C.now(), "manifest": C.rel(args.manifest), "rows": len(rows), "objects": dict(counts),
                "workers": dict(workers), "row_failures": sum(row["status"] == "fail" for row in details),
                "status": "pass" if failures == 0 else "fail"}

@@ -870,3 +870,187 @@
 - 第二次 Markdown 审计发现 `rg -c` 零匹配时变量为空，数值 `test` 报“需要整数表达式”；以 `${var:-0}` 规范化后第三次检查有效 PASS：H1=`1`、H2=`10`、placeholder/init/inline-style=`0/0/0`。这是检查脚本问题，不是日志内容问题。
 - 72-case 主诊断 runner 最终复跑 exit 0：frame `16 case / 2,089 rows`、reference `72/72`、full-substep `144/144`；headline 精确复现 all72 `+1.570/−0.065°`、box001 primary27 去 top3 `+0.361°`、box023 去 pair4 `−0.00048°`、box021 `−0.218°`。runner 的统一执行会先由 Codex async cell 返回 PTY session，再经 `write_stdin` 回收；这不是实验错误。
 - 最终 cardinality/JSON assertion/hash/diff audit PASS。runner 会刷新 summary JSON 的 `created_at`，因此本次复跑后 JSON SHA 从此前 `67a18e...` 变为当前 `649486...`；日志已更新为当前 snapshot hash，所有 TSV hash 保持不变。
+
+### 2026-08-12 — E194 原始 box004/box024 orientation reference 快速审计
+
+- 用户询问原始 E194 G1 的 box004/box024 是否有与 expansion 相同的 Euler reference mismatch。已恢复 E194 context 并确认范围为 box004 `6` 条、box024 `9` 条 G1，共 `15` 条。
+- 与 expansion 不同，E194 原始 scene snapshot 对 15/15 task 都保存了 `scene_act_meta.json`；meta convention 分布包含 box004 `YZX/ZYX`、box024 `ZYX/XZY`。manifest 指向的原始 Full stdout 当前已不存在，因此不能只凭 config 默认字段断言历史 runtime convention，下一步结合 launch staging 路径、XML axes 和 PRG→G1 orientation delta 判断是否存在同类数值签名。
+- 首次按 manifest log glob 查询得到 no-such-file；这是 evidence 缺失，不是 rollout 失败。将继续搜索搬迁/归档日志和 launch worker stdout。
+- 原始 E194 是 `run_E194_local_8gpu.sh` 本机 GPU4–7 执行，不经过 expansion 的 Ada rsync staging，因此不存在已定位的“远端 allowlist 漏 meta”路径。15 条 G1 的 snapshot meta 完整；当前 task 13/15 仍与 snapshot byte-identical，box004 `083_p1/p2` 当前 meta 缺失但 snapshot 仍有 `ZYX` authority。
+- PRG→G1 public orientation 数值没有 expansion 的长尾签名：box004 `n=6` mean delta=`−0.210°`、box024 `n=9`=`−0.299°`、all-15=`−0.264°`；正/负=`6/9`，`delta>5°=0`。最大回退是 box024 `028_p2 +4.008°`，其次 box004 `082_p2 +2.316°`，远低于 expansion 的 `+8.3~21.9°` cluster。
+- MuJoCo FK 反推前两次只读尝试均在加载输入前 fail：metrics TSV 的 `outdir_npz`、manifest 的 `trajectory` 仍保存旧 `/mnt/tidal...` 与 `/mnt/ali...` authority 绝对路径，当前机器不存在。已确认本地 canonical landed result 与 task trajectory 均存在；第三次改为用 manifest `target_task` 和 artifact basename解析本地路径，不重复使用旧挂载字段。
+- MuJoCo FK 反推最终完成 15/15：snapshot meta convention 与 compiled XML hinge axes `15/15` parity，axis-correct target 对 raw quaternion 最大误差 `2.41e-6°`，public metric 重算最大偏差 `1.33e-12°`；landed rollout `15/15` 都比假设 fallback 的 `XYZ` target 更接近正确 axis target。
+- 假设发生 `XYZ` fallback，wrong-target world error mean 应为 box004 `17.423°`、box024 `5.173°`、all-15 `10.073°`；实际 PRG→G1 mean 为 `−0.210/−0.299°` 且无 `delta>5°`，两组证据共同排除与 expansion 相同的 Euler reference mismatch。box024 `028_p2 +4.008°` 和 box004 `082_p2 +2.316°` 是真实但较小的个例回退，二者 meta/XML parity 均正确，不能归入该 bug。
+
+### 2026-08-12 — E196 reference metadata integrity fix 计划启动
+
+- 用户确认新实验编号为 `E196`（`E195` 已被 stricter hand gate 占用），本轮仅写计划，不修代码、不启动 Full。
+- 冻结重跑集合为 E194 reference audit 中的 `29` 个 mismatch case：`box001=21`、`box023=8`、`box021=0`；排序 case ID SHA256=`b7255fbb0bc67dde9fb8fd0c19cd5b2285a3aee8e74ddc0b8de4f392b2941dac`。
+- 计划将同时关闭四个漏洞：`run_mjwp.py` 缺 meta 时静默 `XYZ` fallback、`hdmi.py` loader 的同类 fallback、E194 builder 的 scene+trajectory-only completeness、Ada rsync allowlist 遗漏 `scene_act_meta.json`。E196 独立 namespace，不覆盖 E194 artifact。
+- 资源冻结为本地 `1 GPU` + Ada `2 GPU`；首波三个 box001 重症 case 各占一卡并使用 Full budget，通过 reference/runtime/result gate 后再续跑余下 `26`条，首波结果直接计入29条、不重复跑。
+- 已重新从 authority TSV 机械核验 mismatch：`29` 条、object=`21/8/0`、原 E194 worker=`7/11/11`，case-set SHA 与冻结值一致。29 条全部是 runtime `XYZ` 与 compiled XML `XZY/ZYX` 不一致。
+- 代码证据再核对：`run_mjwp.py:598-607` 实存 meta-missing→`XYZ`；`build_g1_expansion_manifest.py:116-124` 仅用 scene+trajectory 判 complete；Ada launcher 仅同步 manifest 里的 scene/trajectory/contact/override/sidecar，未同步 meta。这三处将分别作为 runtime、local builder 和 remote deployment 的独立回归面。
+- runtime 不只 `run_mjwp.py` 有 fallback；`spider/simulators/hdmi.py::_load_scene_act_for_hdmi()` 也在缺 meta 时默认 `XYZ`。E196 计划将用一个共享 resolver 同时替换两处，以 compiled `object_rot_*` hinge axis/order 校验 meta，避免只修转换点却留下 loader 静默 fallback。
+- 29 条 mismatch 中当前本地 meta 存在/缺失=`16/13`；已有 meta 是最小 schema `{"euler_convention": "..."}`。计划将对13条缺失项由 compiled hinge axis 序列生成该最小 metadata，立即做 raw-world-quaternion round-trip parity；既有但不一致的 meta 不允许覆盖，而是 hard fail。
+- `markdown-mermaid-writing` 规范已接入 E196 计划写作：保持单 H1、H2 统一结构，并用带 `accTitle`/`accDescr` 的 Mermaid flowchart 固化“修复→全量 preflight→三条 Full 首波→阻断门→剩26条→eval”。
+- Markdown/Mermaid 样式指南及 flowchart 类型指南已完整读取；plan224 不使用外部数据或无引用声称，所有数值都指向 repo 内 E194 authority/log276。
+- 已新建 `plan/224_E196_reference_metadata_integrity_fix_plan.md`：固结 runtime/local/Ada 四处修复面、29-case authority、首波3条 Full 阻断门、剩26条三卡队列、E196 独立 namespace、eval/XLSX/可视化产物与 stop-loss。本轮没有修代码或启动 GPU。
+- 已在 `EXPERIMENT_TRACKER.md` 新增 E196 / Phase 59 计划行，状态为 `Full 0/29`并链接 plan224。plan 内冻结的 29 个唯一 case 与 authority 精确集合相等，SHA 重算仍为 `b7255f...2941dac`；Mermaid 引号已修正为标准语法。
+- 最终静态验收 PASS：Markdown 单 H1/H2 emoji/围栏闭合、Mermaid `accTitle`/`accDescr`/无 init/无 inline style 均合规；三 worker 配额=`10/10/9`，29 条唯一、无重复、与 authority 精确相等，且每个 worker 都是 box001 优先；内部链接缺失=`0`，Tracker 描述 `52<80` 字符，`git diff --check` PASS。
+
+### 2026-08-12 — E196 实验实施启动
+
+- 用户授权按 plan224 持续推进到 runtime/local/Ada 修复、29-case preflight、3-case Full 首波、剩26条、eval/可视化/报告/日志闭合。已建立对应的7步执行计划，当前从代码和外部运行状态审计开始。
+- 启动前状态：本地 E196 实现/results/logs 均尚未存在，本地 RTX 5090 空闲（`374/32607 MB`, util `0%`）；Ada GPU0/1 分别约 `8382/7618 MB`且 util `60/62%`，当前不可抢占。先完成实现和零 GPU preflight，Full 启动前重新检查资源。
+- 代码接入点已复核：`run_mjwp.py` 在转换 raw freejoint 前已 compile `config.model_path`，可直接用 compiled object axes；`hdmi.py` 在重命名 object→suitcase 后 compile，共享 resolver 需同时支持 `object/suitcase` body name。
+- 已实现 `spider/simulators/scene_act_reference.py`：对 meta 缺失/JSON错误/非法排列/meta≠compiled axes/非正单位或重复 hinge axes 全部 fail-close，并记录 convention/meta SHA/XML axis/body。`run_mjwp.py` 和 `hdmi.py` 已同时移除静默 fallback 并改用该 resolver。
+- 历史入口已修：E194 builder 的 runtime completeness 改为要求全部 `PRIMARY_ARTIFACTS`；E194 auditor 增加 reference parity 与 `--allow-subset`；Ada launcher 显式同步 meta/resolver/auditor 并在 tmux 前对两个 shard 远端审计。plan224 已补记该 auditor 支撑文件。
+- Stage0 首批验证 PASS：direct-entry resolver tests、Python compile、E194 remote shell `bash -n`、fallback 静态检查与 `git diff --check` 全部通过。
+- 已实现 E196 common/builder/manifest test：29-case authority 只由 E194 audit 的 mismatch boolean 产生，冻结 wave0=`3`、remaining=`26`、worker=`10/10/9`与 box001-first 队列；builder 对缺 meta 从 compiled axes 原子生成最小 JSON，并对29条做 raw world pose round-trip、source SHA、E194 config/artifact provenance 和 scene/meta snapshot。
+- 第一次 Stage1 builder 在读入任何 case 前失败：按 plan 使用 `MUJOCO_GL=osmesa` 时本机 PyOpenGL/OSMesa 初始化报 `AttributeError: NoneType.glGetError`。direct tests 在不设 GL backend 时已正常 import MuJoCo，因此下一步不重复同配置，改为无 renderer 的默认 backend 运行 builder；这是环境后端问题，尚未生成/修改任何 meta。
+- 改用默认无渲染 backend 后 Stage1 builder PASS：29 rows，objects=`21/8`，workers=`10/10/9`，waves=`3/26`，case-set SHA 精确匹配；meta 修复=`13 generated + 16 preserved`，29/29 现已存在，snapshot 产生 `59` 个文件（29 scene + 29 meta + manifest）。
+- 29-case raw world parity：orientation max=`2.9575586669421963e-06°` < `1e-4°`，position max=`1.4499465946348186e-13 cm` < `1e-9 cm`。全部 29 个 E194 G1 sidecar 已在 git tracking 中，不需新增 force-add scene XML。
+- 已实现 E196 preflight/landed auditor 和 resume-safe queue runner；compile、manifest test 与3条 wave0 dry-run command 均通过。首次 preflight 在尝试 compile 移到 `results/E196/scene_snapshot/...` 的 XML copy 时失败，原因是 XML 内的相对 mesh path 以原 task 目录为基准，移动后不再可解析。这不是 source scene 失效，而是 snapshot 不应在新目录直接 compile。
+- 下一步改为 builder 对原路径 compiled physical arrays 生成 deterministic SHA 并写入 manifest/snapshot，auditor 对当前原路径模型重算该 SHA；snapshot XML 仅做 bytes SHA 验证。不再重复对 relocated XML 的失败 compile 方法。
+- 已完成 compiled physical arrays deterministic SHA 方案：哈希覆盖 plan 冻结的 body/geom/joint/dof/contact-pair/actuator arrays，snapshot XML 只检 bytes SHA。builder 重跑仍保留首次 meta action=`13 generated + 16 preserved`，不被第二次执行改写为29 preserved。
+- E196 `--scope prelaunch --require-all` 已 PASS：29 rows、case/object/worker/SHA 闭合，`row_failures=0`。这同时验证了 source/meta/config key/PRG/gain/budget/seed、compiled physical SHA、snapshot bytes 和 E194 输出路径冲突。
+- 已实现 E196 四个固化入口：本地单卡、Ada 双卡、hybrid 三卡及按 manifest 回收/合并。所有 shell `bash -n` PASS，local wave0 `CHECK_ONLY=1` PASS，29-row prelaunch 再次 PASS。
+- Ada 部署冻结为隔离 overlay `/home/xiayb/pHRI_workspace/spider_e196_reference_fix`：用 hard-link copy 作为基底，只通过显式 allowlist 同步 E196 所需文件并核对 deployment SHA，不改动远程 dirty source worktree。Ada GPU0/1 仍有其他任务，所以目前只允许 `PREPARE_ONLY=1`，禁止启动 Full 或抢占/终止现有进程。
+- 逐行复核 queue runner 与四个启动入口：29/3/26 manifest 当前全为 `READY_FOR_FULL`，E196 输出碰撞=`0`；runner 同 GPU 串行、逐 case 原子回写状态，已有完整产物时先校验再 resume，不会默认重跑。
+- 启动复核发现一个需在部署前加固的可复现性缺口：`run_remote.sh` 是 prepare 之后生成的，尚未纳入传输后 SHA 校验。下一步先增加启动脚本 SHA fail-close，再执行 Ada `PREPARE_ONLY=1`；此前不启动 GPU Full。
+- 已在 Ada launcher 中增加临时 `run_remote.sh` 的 rsync 后 SHA fail-close，并再次 `bash -n` PASS。该校验在真正 launch 时执行，传输字节不一致则 tmux 不会启动。
+- Ada wave0 `PREPARE_ONLY=1` 已成功：显式 deployment SHA PASS，`ada-gpu0/1` 各1条 box001 shard 的远程 prelaunch 均 `row_failures=0/status=pass`，pointer 指向 `deploy_wave0_20260812_030035`。全过程未启动 tmux 或 GPU Full。
+- 远程 source worktree 保护已实测：部署前后 HEAD 均为 `6c0e9e78ee824d094d40174b9b421f0c2c8cdce6`，`git status --porcelain -uall` 的 SHA 均为 `3cbf2e8451ff8dc2693f213d17b7a3152d8a3ece41cb6355debb494a98ccc226`。隔离 overlay 生效，远程 dirty source 零变化。
+- 用户明确授权 E196 与 Ada 上的 SUGAR 进程叠加运行。资源门将改为显式 `ALLOW_SUGAR_OVERLAP=1`：仅当现有 compute app 全部可识别为 SUGAR 且每卡保留充足显存时放行，任何未知进程仍 hard fail。这只可能降低吞吐，不改 seed/budget/input/scientific config。
+- 已实现并验证 `ALLOW_SUGAR_OVERLAP=1`：Ada GPU0/1 启动前总/已用显存为 `49140/8383 MB` 和 `49140/7618 MB`，每卡均保留 `>24 GiB`；4 条 compute-app 记录全部命中 `.sugar_deps/.../sugar/bin/python` allowlist，未出现未知进程。
+- 2026-08-12 03:03 已正式启动 E196 wave0 三条 Full：local=`box001_20231003_2_041_p1`、Ada0=`box001_20231020_014_p1`、Ada1=`box001_20231020_014_p2`。启动前 29-row 总 preflight、local shard、两个 Ada shard、deployment SHA、SUGAR overlap 资源门全部 PASS；会话为 `E196_reference_wave0_local` / `E196_reference_wave0_ada`，Full 当前运行中 `0/3 terminal`。
+- wave0 首次 health check 正常：本地 E196 使用约 `2.0 GB / 48% util`，Ada 叠加后 GPU0/1 约 `9.9/9.2 GB` 且 util `97/98%`；三个 worker 均已打印正确 `[start]` case，无报错或早退。本地已落盘首个 `config_act.yaml`。
+- 后处理复用路径已定位：指标使用 `eval/core/core_metrics.py`，E194 的 runner/report/render 仅作结构参考；E196 新 runner 将直接 import 公共 core，不用 `importlib` 动态调用历史 evaluator。
+- 已核实 E194 `A0` 行就是 E173/E170 的 PRG authority（例如 focal `041_p1` 指向 `E173_..._PRG.npz`），E194 `G1` 为已污染对照。E196 manifest 逐条保留了 E194 G1 路径，因此最终可以用同一 public-core 口径组成 PRG / contaminated G1 / corrected G1 三臂配对。
+- 已按要求完整读取 `xlsx` skill。最终 workbook 将使用公式而非硬编码派生值，Arial 字体，raw delta 与 direction-aware improvement 分列，improvement 正值绿/负值红渐变，并必须经 LibreOffice 重算及 `#REF!/#DIV0!/#VALUE!/#NAME?` 零错误扫描。
+- 已新增 E196 eval runner/wrapper：corrected G1 重新调用 public core + E194 冻结 12-gate 口径，PRG/污染 G1 从已通过 authority audit 的 E194 case metrics 读取。输出三臂 case metrics、wide paired rows、gate flip 与 direction-aware improvement。
+- eval runner 已接入 world-quaternion reference audit：逐 case 复算 runtime-target/raw、axis-target/raw、rollout/raw orientation，同时要求 convention/meta/XML parity、target max `<1e-4°` 和 public metric reproduction `<1e-6°`。这是 wave0 释放 remaining 的数值门。
+- 已新增 E196 renderer、render wrapper 和 watcher/finalizer：render 前再跑共享 resolver fail-close，生成29条 corrected self MP4 及 PRG/污染G1/correctedG1 三臂视频 manifest；watcher 先等 local/Ada session 终止，再 manifest-scoped pull/audit/eval，wave0 不会自动跳过人工审证启动 remaining。
+- 新 eval/render/watcher 入口已通过 Python compile、shell `bash -n` 和 import smoke test：eval 见到 `22` 个冻结 key metrics 与 `12` gates。public core 当前对手部只公开左右 EEF 合并的 position/orientation mean，因此 workbook 将保持这个权威口径，不伪造未有的分手列。
+- 本地 focal Full 的 runtime evidence 已落盘：resolver 记录 `convention=XZY`、meta SHA=`0a2150...e70c`、XML axes=`XZY`、`parity=pass`；run_mjwp 同时记录 `quat→XZY euler`。这证明修复后的实际 runtime 没有再 fallback，但仍需等三条 landed artifact 完整后才能通过 wave0 gate。
+- 已启用 `markdown-mermaid-writing` 规范最终 E196 科学报告：单 H1、H2 单 emoji、观测/解释/局限分离、结构数据用表格，合同流程用带 `accTitle`/`accDescr` 的 Mermaid，禁止 `%%{init}` 和 inline style。内部 repo evidence 用相对路径，不伪造外部引用。
+- `markdown_style_guide.md` 已分段完整读取；最终 report 还将遵守标题下 context line + horizontal rule、H3 无 emoji、技术字段用 code 格式、表格数值右对齐与文件尾单换行等细则。
+- `mermaid_style_guide.md`、flowchart 指南与 research-analysis 模板已完整读取。E196 报告只需一个简单 LR flowchart，节点 `<10`、主方向单一、decision 最多1个，用 action/success/danger 三类 `classDef`，同时用 label 与 shape 承载语义，不仅依赖颜色。
+- 已实现 E196 report/XLSX generator：4个 subset×2个 comparison×14个核心 metric 的 by-object effect/paired bootstrap CI，29×2×12 gate migration，三臂 case metrics、integrity sheet 与符合 Markdown/Mermaid 规范的最终报告。
+- XLSX 首次 synthetic 29-case 公式 smoke 成功生成 `7,860` 个公式，LibreOffice 扫描抓到 `32` 个 `#DIV/0!`，全部定位到 By Object 的 `fall_flag` 行。根因是历史 TSV 将 bool 序列化为 `true/false`，数值转换将其当成缺失；下一步统一 bool→0/1 并重算，不会将带公式错误的 workbook 交付。
+- 已修复 bool→0/1 数值合同，重跑 synthetic 29-case workbook + LibreOffice 后 PASS：`5,308` formulas、`0` errors，6个 sheets 完整，Paired Comparison 和 By Object 各有1个零中心渐变规则。抽查公式确认 Raw Delta=`candidate-baseline`，Improvement 对 higher/lower 指标自动选择正号/反号。
+- 03:15 wave0 仍健康推进：local 约 `136/314`，Ada0/1 约 `56/230`、`54/234`；三条均保持 Full `opt_steps=32`，未见 exception/non-finite。SUGAR 叠加使 Ada 每2个 sim step约 `32–34s`，本地约 `11.5s`；这是用户授权的吞吐竞争，不改变实验合同，预计 Ada 首波仍需约45–50分钟。
+- 首次把 Tracker E196 状态改为 wave0 running 的 `apply_patch` 在工具输入解析阶段因 emoji 被转成无效 JavaScript Unicode escape 而失败，文件零变化；第二次 progress patch 又因 `String.raw` 保留了上下文中的转义反斜杠而未匹配，同样零变化。本次改用精确未转义上下文，后续不重复上述两种工具输入错误。
+- Tracker E196 已成功改为 `runtime/local/Ada修复与29-row preflight通过；wave0 Full 0/3运行中`，描述仍低于80字符，未提前宣称任何性能结论。
+- Stage0/1 回归重跑全 PASS：reference contract direct test、frozen manifest test、29-row prelaunch audit、全部 E196 Python compile、7个 shell `bash -n`、`git diff --check`。prelaunch 仍为 `row_failures=0`、case SHA=`b7255f...2941dac`。
+- 已启动本地 tmux `E196_reference_wave0_finalize`：每30秒只读检查 local/Ada wave0 session；全部退出后自动执行 manifest-scoped pull、3-row landed audit和wave0 public-core eval。monitor 首条记录为 `03:16:52 still running`，脚本明确不会自动启动 remaining 26。
+- 用户授权的 SUGAR overlap 需正式写回 plan224：已定位资源、Stage1、启动命令和风险段落。首次 plan patch 因 JavaScript template literal 中的 Markdown backtick 提前终止而在工具输入阶段失败，文件零变化；下一步改用普通双引号字符串，不重复 template-literal 方式。
+- 第二次 plan patch 改用普通字符串后已通过输入解析，但一个大型 multi-hunk patch 在最后风险表上下文校验失败，因 apply_patch 原子性仍然文件零变化。已重读确认目标文本均在；下一步拆成2个小 patch，避免一个非关键上下文阻断整体。
+- plan224 的 SUGAR overlap 执行修订已用2个小 patch 成功落盘：计划页状态改为 wave0 执行中，资源行和 Ada 章增加显式 allowlist/24GiB headroom/未知进程 hard-fail 合同，Stage1 与 wave0/remaining 固化命令同步增加 `ALLOW_SUGAR_OVERLAP=1`。
+- plan 风险表的单行措辞 patch 仍因 Unicode 上下文验证差异未应用，但执行合同已在资源/Ada/Stage1/命令四处完整落盘，不影响实际 gate。后续用行号 hunk 只修该表行，不再依赖 Unicode 旧行匹配。
+- plan 静态审计：Mermaid init/inline-style=`0/0`，`accTitle/accDescr=1/1`，overlap 显式开关出现3次、`24 GiB`门出现2次。naive H1 计数为9是命令代码块内 `#` 注释被计入，不是 Markdown 多 H1；finalizer 仍每30秒正常记录 wave0 running。
+- plan 风险表已通过在 `99% 可推进信心` 前增加独立 `Ada SUGAR overlap` 行闭合，不再删改难匹配的旧行。有效 Markdown H1 排除 fenced code 后精确为1，overlap/24GiB 提及=`3/3`，`git diff --check` PASS。
+- 03:21 wave0 进度：local=`192/314`，Ada0=`76/230`，Ada1=`74/234`，三条都持续以 Full `opt_steps=32` 推进；finalizer 仍存活且按30秒记录。
+- 最终 Markdown generator 已用 synthetic 29-case authority 完成 `/tmp` smoke：单 H1、6个 H2 均单 emoji、Mermaid `accTitle/accDescr=1/1`、fence 成对、init/inline-style/placeholder=`0/0/0`，by-object、12-gate、long-tail 和 artifact 章节均能生成具体数值。正式报告仍只会在29/29 landed 后生成。
+- 03:22 wave0 进度：local=`204/314`，Ada0=`80/230`，Ada1=`78/234`；local/Ada/finalizer 三个 tmux session 均存活，日志扫描 `traceback/exception/nan/non-finite/OOM/error:` 全部零命中。
+- watcher 审核发现并修复一个 fail-close 边界：旧 `running()` 在本地 session 结束后无法区分 Ada session 已停与 SSH 查询失败，存在过早 pull 风险。新逻辑将 SSH 失联/未知状态一律保留 wait gate，只有明确 `stopped` 才回收。
+- 已 `bash -n` PASS 并仅重启 monitor tmux `E196_reference_wave0_finalize`；local/Ada Full sessions 原创建时间 `03:03:26/03:03:25` 未变，未触碰或中断任何 GPU 运行。
+- renderer 已增加配对视频 fail-close：corrected MP4 之外，PRG 和 E194 污染 G1 视频也必须存在且非空才写入 ready manifest。现有29-case 预检的历史配对路径=`58/58` 存在，missing=`0`，Python compile PASS。
+- 03:23 wave0 进度：local=`222/314`，Ada0=`86/230`，Ada1=`84/234`，持续无错误推进。
+- Ada launcher 已加强 launch evidence：通过资源门后、tmux 前保存 GPU total/used/util、compute apps、overlap 开关和时间戳；latest launch pointer 新增 snapshot 路径、`run_remote.sh` SHA、`allow_sugar_overlap` 与 `launched_at`。`bash -n` 和 `git diff --check` PASS。
+- 已在 03:03 启动的 wave0 pointer 早于上述代码，当前仅包含 created/session/stage/root；其实际启动前 GPU/allowlist 数值已在本 progress 和 launcher stdout evidence 中冻结。remaining 将自动生成完整指针，wave0 不为补 pointer 而重启或修改运行。
+- 03:24 wave0 进度：local=`228/314`，Ada0=`90/230`，Ada1=`86/234`，finalizer 正常。
+- eval 历史臂新增 metric-standard fail-close：29个 PRG/污染G1 authority 行必须逐条等于当前 `EVAL_METRIC_STANDARD_ID=core4d-e154-physics-contact-v1`，否则不与 corrected G1 混合。compile/import smoke PASS，authority case=`29/29`。
+- 03:25 wave0 进度：local=`236/314`，Ada0=`92/230`，Ada1=`88/234`。
+- claim-to-test 审核发现 Stage0 计划中的“历史 convention-match 实例不受影响”目前只有 synthetic XYZ/XZY/ZYX 正例，尚缺真实 E194 good-case fixture。已从72-row authority 定位稳定候选 `box001_20231003_1_039_p2`：meta/runtime/XML 均为 `XZY`，scene/meta 当前存在。下一步将它加入 direct test，只读验证 resolver 与历史 authority 一致。
+- 已将真实 E194 good case `box001_20231003_1_039_p2` 加入 reference direct test：读取72-row authority，校验历史 runtime/XML match=`true`，并确认新 resolver 对实际 compiled scene/meta 返回 `XZY/XZY`。direct test、compile 和 `git diff --check` 均 PASS。
+- 03:26 wave0 进度：local=`248/314`，Ada0=`96/230`，Ada1=`92/234`。
+- local launcher 也已补齐 launch evidence：在真正 tmux 前保存 GPU state/compute PIDs、git HEAD 和 runner/run_mjwp/resolver SHA，latest local pointer 记录 snapshot 路径。该修改只影响 remaining 等未启动队列，当前 wave0 进程未重启；`bash -n`/`git diff --check` PASS。
+- 03:27 wave0 进度：local=`258/314`，Ada0=`100/230`，Ada1=`96/234`。
+- 03:29 用户再次确认 Ada 两卡允许与 SUGAR 进程叠加；执行边界保持不变：仅 `ALLOW_SUGAR_OVERLAP=1` 且所有 compute app 命中 SUGAR allowlist、每卡至少保留 `24 GiB` 时放行，未知进程/显存不足 hard fail，不暂停或抢占 SUGAR。
+- 03:29 wave0 三个正式 Full session 与只读 finalizer 均存活：本地 GPU=`2020/32607 MiB, 49%`，Ada GPU0/1=`9934/9169 MiB, 98%/95%`；finalizer 尚未进入 pull/eval，未启动 remaining。
+- 03:29 精确日志进度更新为 local=`286/314`、Ada0=`110/230`、Ada1=`104/234`；三条均为 Full `opt_steps=32`。本地与远端 worker PID/命令均对应冻结的 wave0 三 case，未发生重复启动。
+- E196 results 不出现在 Git 状态的根因已确定：`workspace/core4d/results` 本身是指向 `/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/spider_workdirs/core4d/results` 的目录 symlink；Git 对 symlink 内路径报 `pathspec is beyond a symbolic link`，因此既不是 `.gitignore`，也不能直接 `git add -f workspace/core4d/results/E196/...`。最终提交前需把轻量 manifest/snapshot/eval/report 复制到 repo 内可跟踪的 E196 provenance 路径；NPZ/MP4 仍留在外置 results，不复制。
+- 仓库结构复核确认没有既有 tracked `results/**` 或 `scene_snapshot` 先例；E194/E196 的活跃 source XML/meta 本体已在 `example_datasets/...` 中跟踪。计划采用 repo 内轻量 provenance mirror 保存 E196 manifest/snapshot/eval/report，而正式运行产物仍留在用户指定的外置 `results/E196`。
+- 03:31 wave0 进度：local=`298/314`、Ada0=`114/230`、Ada1=`108/234`；local/Ada/finalizer session 均存活，日志错误扫描零命中。
+- plan224 已补充外置 `results` symlink 的可复现性方案：正式 artifact 仍以 `results/E196` 为 canonical；完成后仅将 scene/meta snapshot、manifest、eval/report 与 SHA 清单镜像到 `workspace/core4d/report/E196/provenance/` 供 Git 跟踪，明确排除 NPZ/MP4/CEM outdir/log。
+- 03:31 wave0 本地条目到 `304/314`，Full session 仍在正常收尾；当前 outdir 仅有运行期 `config_act.yaml`，因此 finalizer 继续等待 artifact 完整落盘，不提前将该 case 计为完成。
+- 执行计划状态已同步：修复与29-row preflight完成；wave0 landed/reference/public-core gate 为唯一进行中步骤；remaining、full eval/XLSX/可视化、日志/provenance、commit/push 均保持 pending，未越过首波阻断门。
+- 03:32:34 wave0 local `box001_20231003_2_041_p1` 正式 Full 完成：`314/314`、`opt_steps=32`、总耗时 `1743.16s`，落盘 `trajectory_mjwp_act.npz`=`11,213,724 bytes`。日志仅有 `improvement` 可变 shape 的非致命聚合 warning，无 traceback/NaN/OOM；finalizer 正确继续等待 Ada 两条。
+- local queue manifest 已原子更新为 `run_complete_pending_eval`，launch log 有唯一 `[start]`/`[done]`。03:33 Ada0/1=`124/230`、`118/234`，GPU=`9934/9169 MiB`、util=`97/98%`，错误扫描仍为零；预计远端仍需约30分钟，期间不启动 remaining。
+- 已将外置 results 的 Git provenance 方案固化为 `sync_E196_reference_fix_provenance.py`：full eval/XLSX 重算后只镜像59个 scene/meta snapshot、5个 manifest、10个 eval/report 和轻量 evidence，限制后缀与单文件32 MiB，生成 `SHA256SUMS`；显式排除 NPZ/MP4/log。full eval wrapper 已接入 `--require-all --replace`。
+- provenance sync 静态/负门测试 PASS：Python compile、eval wrapper `bash -n`、`git diff --check` 均通过；在 full eval 尚未生成时脚本按预期 rc=1 并逐项列出10个缺失文件，且没有创建半成品 destination。
+- Git 状态复核：E196 新 plan/runner/report/launch/provenance 文件当前均为预期的 untracked，runtime/E194 修复与 Tracker/progress 为 modified；符合 plan 的“Claims 闭合前不提交”。未发现 E196 文件被 skip-worktree 隐藏；外置 results 是唯一不可直接跟踪区域。
+- 03:35 已对 landed local wave0 单行运行同一个正式 auditor（`--scope full --allow-subset --require-all`）：`rows=1`、`row_failures=0`、`status=pass`。这已验证 result/outdir NPZ 完整有限、runtime convention/meta/XML 日志、scientific config projection、输入/快照 SHA；三行 wave0 总门仍等待 Ada，不以单行测试替代。
+- 单行 public-core 只读预演的第一次临时 harness 在导入前错误加入了 `scripts/eval` 而非 `scripts`，触发 `ModuleNotFoundError: eval`；这是临时命令路径错误，正式 runner 自身使用正确的 `parents[2]`。未写 partial eval artifact；下一次改正 harness 路径，不重复原命令。
+- 修正临时 harness 后，local focal 的正式 public-core 单行预演 PASS：corrected orientation=`6.966659°`，PRG=`7.646132°`，污染 G1=`29.522246°`，corrected−PRG=`−0.679473°`；runtime/axis target max 均=`2.41484e-06°`，public reproduction diff=`2.04e-14°`，runtime/XML/meta 两个 parity 均 true。该单例表明最重长尾已消失，但不替代29-case总体性能结论。
+- 03:36 Ada0/1=`136/230`、`128/234`，继续无错误；finalizer 仍保持等待门。
+- 复核了复用的 `e194_orientation_reference_conversion.audit_case`：函数只依赖传入 metric row 的 scene/trajectory/outdir/log 与 public orientation 值，字段名虽保留历史 `g1_*` 前缀但计算对象确实是 E196 corrected rollout；单行预演的 `2.04e-14°` reproduction 也实证接口兼容，无需为 E196 复制算法。
+- provenance `--replace` 已改为安全替换：只有现有目录带 E196 canonical marker 才允许更新，先 rename 为 backup，staging rename 失败会恢复，成功后才删除 backup；拒绝覆盖未归属/foreign provenance。compile、负门、destination 零半成品和 `git diff --check` 再次 PASS。
+- 03:38 当前状态：local wave0 已完成，Ada0/1=`142/230`、`134/234`，GPU=`9935/9169 MiB`、util=`97/98%`；SUGAR overlap 下运行健康。只读 finalizer 存活，远端两条结束后会自动 pull、3-row landed audit 与 wave0 eval，但不会自动启动 remaining。
+- 04:06 wave0 后处理已闭合：`eval/full_reference_fix/e196_reference_fix_eval_summary.json` 返回 `complete=3/3`、`paired=3`、`integrity_pass=3/3`、`errors=0`、`status=pass`。`E196_reference_wave0_local` 与 `E196_reference_wave0_ada` 已不再在 tmux 中运行；当前只剩 remaining 26 条和最终报告/镜像整理。
+- remaining 26 当时没有启动的直接原因：`watch_E196_reference_fix_and_finalize.sh` 先把 wave0 当门控，只在三条落地并完成 pull/audit/eval 后才允许进入 remaining；Ada6000 两卡的 remaining 启动脚本存在，但当时未触发，因此只有 wave0 的 launch pointer，没有 `latest_remaining_ada6000.json` 或 `E196_reference_remaining_ada` session。
+- 2026-08-12 用户已明确要求继续启动 E196 remaining 26：执行资源分配保持 local GPU0=9 条、Ada GPU0=9 条、Ada GPU1=8 条；远端仅在 `ALLOW_SUGAR_OVERLAP=1`、现存 compute app 全部命中 SUGAR allowlist 且每卡至少 24 GiB 空闲时叠加，未知进程 hard-fail。
+- 12:11 remaining 首次 hybrid launch：29-row 总 preflight PASS、local 9-row preflight PASS、local GPU0 空闲（372 MiB/0%）；在 Ada shard 准备后的首次 `rsync` SSH 握手发生 `Connection reset by peer`（rc=255）。launcher 尚未进入 local/remote tmux 启动阶段；先核查零半启动，再重试 SSH/完整 launcher。
+- 12:12 半启动核查：本地不存在 `E196_reference_remaining*` tmux；独立远端只读 SSH 仍在 `kex_exchange_identification` 前被 `10.100.71.70:58122` reset，因而未能取得远端 tmux/GPU 状态。当前 remaining 启动数仍为 0/26。
+- 12:12 显式绕过用户 SSH config（`ssh -F /dev/null ...`）首试直连成功：Ada host=`embodied-2x6000Ada`，GPU0/1 used=`8384/7618 MiB`、free=`40117/40892 MiB`，无 remaining tmux。完整 launcher 第二次仍在 alias SSH 握手处 reset；证据将问题收敛到本机 SSH 配置链路，Ada 在线且资源满足门，仍未启动任何 remaining worker。
+- 为保持完整部署/SHA/资源门不被手工拆分，Ada launcher 新增可选 `E196_ADA_SSH_CONFIG`、`E196_ADA_PORT`、`E196_ADA_BIND_INTERFACE`，并让 SSH 与 rsync 共用同一参数数组；默认 alias 行为不变。本次将使用已验证的 `/dev/null + xiayb@10.100.71.70:58122 + enp5s0` 直连。
+- 12:13 直连参数下完整 launcher 仍在第一个远端握手偶发 reset，remaining 仍为 0/26。为降低握手次数，部署由逐文件 rsync 合并为单次多源 rsync；所有远端 SSH/rsync 增加最多5次、间隔3秒的有限重试，最终失败仍 hard-fail，传输后的逐文件 SHA 与 prelaunch audit 不放宽。
+- 12:15 E196 remaining 26 已正式三卡启动：local GPU0=9、Ada GPU0=9、Ada GPU1=8；sessions=`E196_reference_remaining_local` / `E196_reference_remaining_ada`。启动前 29-row 总 preflight、三张 shard preflight、远端逐文件 SHA、SUGAR-only allowlist、每卡 24 GiB headroom 均 PASS；Ada 启动门快照 used=`8385/7618 MiB`、util=`60/62%`。SSH/rsync 各发生过一次或两次 reset，但有限重试成功，最终 hybrid launcher rc=0。
+- 12:15 首轮 health check PASS：local/Ada0/Ada1 分别进入 `box001_20231003_1_039_p1` / `box001_20231003_1_040_p1` / `box001_20231003_1_040_p2`；Ada 叠加后 used=`9936/9169 MiB`、util=`98/97%`。已启动 `E196_reference_remaining_finalize`，完成后自动 pull remaining、29-row full audit/eval 与 render；并将直连有限重试透传至 watcher/pull，不重启 GPU worker。
+- 12:17 进程级复核 PASS：local `run_mjwp.py` PID=962404（GPU0 `2016 MiB/51%`）；Ada 两个 queue 与两个 `run_mjwp.py` 均存活（GPU0/1 `9936/9169 MiB`, `93/97%`），实际命令保持 `num_samples=1024`、`max_num_iterations=32`、`seed=0`。当前 remaining 已启动 26/26、完成 0/26，自动 finalizer 正常等待。
+- 13:13 速度采样：当前 remaining 为 2/26 完成、3 条运行中、21 条排队。local 当前 case `114/220`，稳定约 11.2–11.7 s/模拟步；Ada 当前 case 分别 `232/260`、`224/256`，叠加 SUGAR 后稳定约 32–34 s/模拟步。估计首批 Ada case 还需约15–20 min；local 余下6条约2.5–3.5 h，Ada0余8条、Ada1余7条，按每条约60–75 min计，三卡全部 Full 预计约 21:30–23:00（当前时间起约8–10 h）。回收、audit/eval/render再预留约20–60 min，最终报告预计约22:00–00:00；若 SUGAR 负载变化，优先以 Ada 实际 case 完成速率修正。
+- 15:48 进度复核：remaining 已完成 `19/26`（local `9/9`、Ada0 `5/9`、Ada1 `5/8`），Ada 两条运行中，剩余5条排队；无 traceback/OOM/non-finite，finalizer 存活。SUGAR 占用下降后 Ada 最近4条真实耗时约 `26–32 min/case`，当前两条为 `276/348`、`310/380`，后续5条均是短序列（预计总 sim steps：Ada0 `28+57+57`，Ada1 `48+60`）。据此修正 Full 计算 ETA 为 `16:15–16:25`；自动 pull/full audit/eval/render 预计 `16:35–17:25` 闭合。此前 21:30–23:00 估计基于首条与 SUGAR 高竞争的63–64分钟样本，现已被后续实测推翻。
+- 17:12 completion 核验：remaining local/Ada0/Ada1=`9/9,9/9,8/8`，合计 `26/26` 全部为 `run_complete_pending_eval`；GPU worker tmux 均已退出，Ada GPU=`759/19 MiB`、util=`1/0%`。自动 finalizer 在逐文件 pull 时遭遇大量 `kex_exchange_identification reset`，最终一次 SSH 5/5 失败后退出，因此本地仍只有04:06的3-case wave0 eval。计算结果安全保留在远端；下一步把 pull 合并为单连接批量 rsync，缺文件仍 hard-fail，再执行 full audit/eval/render。
+- 17:14 远端 artifact 只读清点为 `68/68` 存在、总计约 `288 MB`。首次批量 pull 在一次 reset 后完成传输，但临时 `pull_files.txt` 错放在同步 stage 内并被目录同步覆盖，导致传输后审计因清单缺失 rc=1；已传文件未受损。修复为 `mktemp` 外置清单并用 trap 清理，重跑仍将执行68-path存在/非空 hard gate。
+- 17:16 存储分叉诊断：`workspace/core4d/results` 当前是02:49创建的普通本地目录，只含 E196 51文件/287.6 MB；原外置 canonical `/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/spider_workdirs/core4d/results/E196` 仍完整，含145文件/220.2 MB。两树 common=3 且 SHA 全同，conflict=0；本地独有48个均为已回收 Ada NPZ/config，外置独有142个含 manifest/execution/wave0/local9/eval。计划先 `--ignore-existing` 合并并做 union SHA，再将本地 split tree 改名保留为 backup、恢复 workspace results symlink；不覆盖任一已有 artifact。
+- 17:16 split tree 已以 `--ignore-existing` 合并到外置 canonical，51/51 文件合并前后 SHA PASS；原目录保留为 `workspace/core4d/results_e196_split_backup_20260812_1716`，`workspace/core4d/results` 已恢复指向外置盘的 symlink。pull wrapper 增加 `--keep-dirlinks` 防止再次替换接收端 symlink。
+- 17:17 manifest-scoped pull 重跑 PASS：远端68路径 missing/empty=`0/0`，canonical full manifest=`29 run_complete_pending_eval`。full auditor PASS：rows=`29`、objects=`box001 21/box023 8`、workers=`local 10/Ada0 10/Ada1 9`、case-set SHA=`b7255f...2941dac`、row_failures=`0`。
+- 17:18 full eval/report/XLSX/provenance PASS：corrected scored=`29/29`、paired=`29`、integrity=`29/29`、errors=`0`；decision=`REFERENCE_FIX_VALIDATED_G1_IMPROVES`；strict12 pass PRG/G1 contaminated/G1 corrected=`7/6/10`；workbook `5308` formulas、LibreOffice errors=`0`；provenance mirror regenerated。
+- 17:20 render PASS：corrected MP4=`29/29`、failures=`0`，三臂 manifest=`29` rows。
+- 17:26 visual midframe screening PASS：29/29 corrected MP4 extracted midpoint frames；7 cluster7 cases included；representative paired frames inspected；`box001_20231023_110_p1` shows apparent midpoint object/body fragmentation and is retained as temporal-review follow-up. This is explicitly midpoint screening, not full temporal human approval.
+- 17:27 E196 result log written at `log/278_E196_reference_metadata_integrity_fix_results.md`; tracker status updated to ✅ with one explicit follow-up case. Remaining closure: rebuild log INDEX, sync provenance with visual evidence/log, run final static/artifact checks, then commit/push only if Claims and follow-up policy are accepted.
+- 17:29 final static checks PASS：scene reference contract、frozen manifest contract、full auditor、shell syntax、Python compile、git diff check 均通过；无 E196 tmux。下一步仅将 render/visual 轻量证据加入 provenance，随后提交 E196 闭环变更。
+- 2026-08-12 E197 离线分析已启动：用户要求 box001/004/021/023/024 所有进入
+  Full CEM case 的 OmniRetarget 接触/穿透指标并与 PRG 对比，输出到
+  `workspace/core4d/analysis/` 的 Markdown + XLSX。本轮不启动或重跑 CEM。
+- 已冻结 Full 母集为 87 unique case：E173 box001=28/box023=16/box024=9，
+  E172 box004=6，E170 统一 authority box021=28（含 24 条 E170 production 与
+  4 条 E169 SHA reuse）。E190 38-case 是 RL-ready/noPRG 子集，不作为母集。
+- 指标对齐公共 `eval.core.core_metrics`：3mm in-mask contact=
+  `hand_object_physics_contact_3mm_in_mask_frac`，raw in-mask contact=
+  `hand_object_physics_contact_in_mask_frac`，hand-object penetration=
+  `hand_object_physics_penetration_3mm_frame_frac`，lower-body penetration=
+  `leg_penetration_frac`。两臂将用同 scene/mask/person/frame domain 重算。
+- E197 计划已写入 `plan/225_E197_full_cem_omnirt_vs_prg_metrics_plan.md`；Omni
+  freejoint→scene_act 转换将从 compiled object hinge axes 推导 convention，并以
+  world-pose round-trip `<1e-4°` fail-close，避免继承 E196 已知 Euler fallback 污染。
+- E197 runner `gen_E197_full_cem_omnirt_vs_prg_metrics.py` 已完成 87-case 统一重算：
+  174 method rows、87 paired rows、28 summary rows，公共 metric standard=
+  `core4d-e154-physics-contact-v1`，validation=`pass`。最大 round-trip orientation
+  `2.9576e-6°`，position `1.4499e-13cm`。
+- 关键 object-balanced macro 结果：3mm in-mask contact `11.25%→42.90%`
+  (`+31.65pp`)，raw contact `91.82%→73.69%` (`-18.13pp`)，hand-object >3mm
+  penetration `54.24%→21.21%` (`+33.02pp improvement`)，lower-body penetration
+  `9.08%→6.40%` (`+2.68pp improvement`)；raw contact 是五物体一致 trade-off。
+- 已生成 `workspace/core4d/analysis/E197_full_cem_omnirt_vs_prg_metrics/` 下 Markdown、
+  XLSX、TSV/JSON 证据；LibreOffice 重算 `920` formulas，`0` errors。结果 log=`277`，
+  tracker 已加入 E197 行。
+- 用户追加 `foot_slip_max_m`、`obj_speed_max`、`ankle_jerk_p95` 和 Omni-based RL
+  宽口径过滤。E197 runner 已扩展为 7 指标，motion-health 通过公共
+  `eval.core.motion_health.run_health` 统一重算；方法行仍为 Omni/PRG 各 87。
+- `E197-omni-wide-v1` gate 已冻结：contact 允许 PRG 比 Omni 低 0.10，penetration 允许
+  高 0.10，foot slip/object speed/ankle jerk 允许至 Omni×1.50，并叠加绝对安全门
+  raw contact≥0.50、hand penetration≤0.30、lower-body≤0.10。结果 `12/87`
+  标记 `RL_CANDIDATE_WIDE_GATE_PASS`；此标签不等于既有 `RL_EXPORT_READY`。
+- XLSX 已更新为 1,610 formulas，LibreOffice `0` errors；新增 sheets=`Omni Wide Gates`,
+  `RL Wide Filter`，新增 `e197_omni_wide_gate_thresholds.tsv` 与
+  `e197_rl_wide_gate_filter.tsv`。计划已补充 gate 定义。
+- E197 最终交付核查修正了两处展示/说明问题：Markdown 中旧的 pooled P05/P95 判定说明
+  已改为实际的逐 case Omni-relative tolerance，并明确 P05/P50/P95 仅为分布证据；XLSX 与
+  Markdown 的三项 motion-health 已从错误的百分比展示改为 m、m/s、m/s³，底层值不变。
+- 重建后仍为 87 cases、174 method rows、49 summary rows、`12/87` wide pass；通过分布
+  box001/004/021/023/024=`4/1/4/3/0`，所有通过行 failure modes 为空。过滤原因以相对 Omni
+  raw contact（62）和绝对 lower-body penetration（25）最多。LibreOffice 再验 1,610 formulas、
+  0 errors；delta 公式抽查为 `PRG − OmniRetarget`，最终 XLSX SHA256=`f89f99...d725`，
+  `e197_summary.json` 已同步 post-recalc hash，`git diff --check` PASS。

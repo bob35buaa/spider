@@ -1,0 +1,21 @@
+{
+  "case_set_sha256": "b7255fbb0bc67dde9fb8fd0c19cd5b2285a3aee8e74ddc0b8de4f392b2941dac",
+  "cases": 29,
+  "created_at": "2026-08-12T17:18:02+08:00",
+  "decision": "REFERENCE_FIX_VALIDATED_G1_IMPROVES",
+  "integrity_pass": 29,
+  "sha256": {
+    "by_case": "dae41c506eeb878a7cd39ed3bd766d5011bfa2a18da3f57ae9b6a536092862ea",
+    "by_object": "a959747da18bec7c1ed8923fc278d89281d38ec1a49b2a7f5a6a3ea8536314ba",
+    "gate_migrations": "8953e848b599c9e6eab68b0d95710bde1f1f1713a1c2a81dfa6e87aa6fc60d44",
+    "integrity": "55066a9981e2b87dd9fe6c1fd58b81c6c36caa19d64187797dd9afe6cfde6e4b",
+    "report": "225fb8a7cc7b5797c78f676e9afeb8fa2eda96ca5a1feed847bb37061c78e0c7",
+    "workbook": "ce307f3fdd71402e854501c730e397c8b6e7de4ad4c9f4bc915d7115363734f0"
+  },
+  "strict12_pass": {
+    "G1_contaminated": 6,
+    "G1_corrected": 10,
+    "PRG": 7
+  },
+  "technical_reference_fix_validated": true
+}

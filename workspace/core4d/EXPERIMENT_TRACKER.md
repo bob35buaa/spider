@@ -4,6 +4,8 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E197 | 2026-08-12 | Phase 60 | 五类box Full CEM Omni/PRG七指标与RL宽gate | ✅ 87/87；wide pass 12 | [277](log/277_E197_full_cem_omnirt_vs_prg_metrics.md) |
+| E196 | 2026-08-12 | Phase 59 | Euler metadata修复；29 mismatch重跑、评测与可视化收尾 | ✅ 29/29；reference fix validated；待时序人审1例 | [278](log/278_E196_reference_metadata_integrity_fix_results.md) |
 | E195 | 2026-08-10 | Phase 58 | A3更紧hand gate Full15：穿透反增并出现跨门安全回退 | ⛔ SAFETY_REGRESSION；不升级A3 | [272](log/272_E195_stricter_hand_gate_results.md) · [plan221](plan/221_E195_stricter_hand_gate_plan.md) |
 | E194 | 2026-08-10 | Phase 57 | G1扩展72例；orientation长尾由Euler reference错配主导 | ⚠️ 修复meta同步并重跑29个mismatch；暂不归因gravcomp | [orientation diagnosis 276](log/276_E194_G1_object_orientation_outlier_diagnosis.md) · [manual re-eval 275](log/275_E194_G1_box001_completed_manual_review_reevaluation.md) · [authority correction 274](log/274_E194_PRG_box001_authority_correction.md) · [273](log/273_E194_G1_box001_box023_box021_expansion_results.md) · [268](log/268_E194_object_gravity_compensation_results.md) · [plan220](plan/220_E194_object_gravity_compensation_plan.md) · [扩展plan222](plan/222_E194_G1_box001_box023_box021_expansion_plan.md) |
 | E193 | 2026-08-08 | Phase 56 | 抓取拓扑：造接触法向对置度量→在141条已有rollout上判定→gated对置面抓握点重定位 | 📝 计划态，待批准 | [plan219](plan/219_E193_grasp_topology_plan.md) |

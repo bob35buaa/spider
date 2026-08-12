@@ -65,6 +65,7 @@ from spider.simulators.mjwp import (
     step_env,
     sync_env,
 )
+from spider.simulators.scene_act_reference import resolve_scene_act_reference
 from spider.viewers import (
     log_frame,
     render_image,
@@ -571,8 +572,6 @@ def main(config: Config):
     ] > config.nq:
         from scipy.spatial.transform import Rotation as R
         import mujoco as _mj
-        import json as _json
-        import os as _os
 
         nq_model = config.nq  # 42 for scene_act
         nq_robot = nq_model - 6  # 36
@@ -581,7 +580,8 @@ def main(config: Config):
         obj_quat_wxyz = qpos_ref[:, nq_robot + 3 : nq_robot + 7].detach().cpu().numpy()
         # Get object body_pos from scene_act model (slide joints are relative to this)
         _m_act = _mj.MjModel.from_xml_path(config.model_path)
-        _obj_body_id = _mj.mj_name2id(_m_act, _mj.mjtObj.mjOBJ_BODY, "object")
+        _reference_contract = resolve_scene_act_reference(config.model_path, _m_act)
+        _obj_body_id = _reference_contract.object_body_id
         body_pos = _m_act.body_pos[_obj_body_id]
         # Slide position = R_body^-1 * (world_pos - body_pos)
         # Slide joints operate in the body frame, not world frame
@@ -595,15 +595,8 @@ def main(config: Config):
         R_body_pos = R.from_quat(body_quat_xyzw_pos)
         world_offset = obj_pos_world - body_pos[np.newaxis, :]
         obj_slide_pos = R_body_pos.inv().apply(world_offset)
-        # Read euler convention from scene_act_meta.json
-        meta_path = _os.path.join(
-            _os.path.dirname(config.model_path), "scene_act_meta.json"
-        )
-        if _os.path.exists(meta_path):
-            with open(meta_path) as f:
-                euler_conv = _json.load(f)["euler_convention"]
-        else:
-            euler_conv = "XYZ"
+        # The convention is inferred from compiled hinge order and must match metadata.
+        euler_conv = _reference_contract.convention
         # Get body_quat for relative rotation: R_joint = R_body^-1 * R_world
         body_quat_wxyz = _m_act.body_quat[_obj_body_id]
         body_quat_xyzw = [

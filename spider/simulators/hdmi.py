@@ -31,6 +31,7 @@ import warp as wp
 from omegaconf import OmegaConf
 
 from spider.config import Config
+from spider.simulators.scene_act_reference import resolve_scene_act_reference
 
 # Initialize Warp once per process
 try:
@@ -526,18 +527,9 @@ def _load_scene_act_for_hdmi(scene_act_path: str) -> tuple[mujoco.MjModel, str]:
     Returns:
         (model, euler_convention) tuple.
     """
-    import json
-
     scene_dir = os.path.dirname(os.path.abspath(scene_act_path))
     tree = ET.parse(scene_act_path)
     root = tree.getroot()
-
-    # Read euler convention from meta
-    meta_path = os.path.join(scene_dir, "scene_act_meta.json")
-    euler_convention = "XYZ"
-    if os.path.exists(meta_path):
-        with open(meta_path) as f:
-            euler_convention = json.load(f).get("euler_convention", "XYZ")
 
     # Remove keyframe if present
     kf = root.find("keyframe")
@@ -582,6 +574,8 @@ def _load_scene_act_for_hdmi(scene_act_path: str) -> tuple[mujoco.MjModel, str]:
     tree.write(tmp_path, encoding="unicode")
     model = mujoco.MjModel.from_xml_path(tmp_path)
     os.remove(tmp_path)
+    reference_contract = resolve_scene_act_reference(scene_act_path, model)
+    euler_convention = reference_contract.convention
 
     loguru.logger.info(
         f"Loaded scene_act for HDMI: nq={model.nq}, nv={model.nv}, nu={model.nu}, "
