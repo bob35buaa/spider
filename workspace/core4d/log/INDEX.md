@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 277 个日志文件。
+> 自动生成，共 278 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 60 (E197-E197)
@@ -30,6 +30,7 @@
 | 274 | E194 | 2026-08-10 | PRG box001 authority correction | [274_E194_PRG_box001_authority_correction...](274_E194_PRG_box001_authority_correction.md) |
 | 275 | E194 | 2026-08-10 | G1 box001 completed manual review reevaluation | [275_E194_G1_box001_completed_manual_revi...](275_E194_G1_box001_completed_manual_review_reevaluation.md) |
 | 276 | E194 | 2026-08-10 | G1 object orientation outlier diagnosis | [276_E194_G1_object_orientation_outlier_d...](276_E194_G1_object_orientation_outlier_diagnosis.md) |
+| 279 | E194 | 2026-08-10 | Corrected g1 overlay workbook | [279_E194_corrected_g1_overlay_workbook.m...](279_E194_corrected_g1_overlay_workbook.md) |
 
 ## Phase 55 (E192-E192)
 

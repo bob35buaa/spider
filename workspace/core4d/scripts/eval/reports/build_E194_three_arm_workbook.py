@@ -134,17 +134,24 @@ def add_readme(
     summary: dict[str, Any],
     authority_sha256: str,
     g1_review_sha256: str,
+    corrected_overlay: bool = False,
+    corrected_count: int = 0,
 ) -> None:
     ws = wb.active
     ws.title = "README"
-    title(ws, "E194 noPRG / PRG / G1 Full comparison", "72 matched cases; each delta column marks whether higher or lower is better.", 4)
+    title(ws, "E194 noPRG / PRG / G1 Full comparison",
+          "72 matched cases; each delta column marks whether higher or lower is better.", 4)
+    g1_authority = (
+        f"E194 Full G1 with E196 corrected overlay ({corrected_count} cases)"
+        if corrected_overlay else "E194 Full expansion"
+    )
     rows = [
         ("Status", summary.get("status"), "Expected: pass", ""),
         ("Cardinality", "216 arm-case rows", "144 paired comparison rows", "1,728 gate migrations"),
         ("Objects", "box001: 28", "box023: 16", "box021: 28"),
         ("noPRG authority", "box001: E189 Full", "box023: E179 Full", "box021: E168 production"),
         ("PRG authority", "E173 Full (box001/box023)", "E170 Full (box021)", "exact E194 source authority"),
-        ("G1 authority", "E194 Full expansion", "kp_pos=500, kp_rot=50", "gravcomp=1.0"),
+        ("G1 authority", g1_authority, "kp_pos=500, kp_rot=50", "gravcomp=1.0"),
         ("Metric contract", summary.get("metric_standard_id", ""), "public core scorer", "12 frozen gates"),
         ("Formula convention", "Delta = after - before", "green = improvement; red = regression", "headers mark ↑/↓ better"),
         ("PRG human authority", "E173 box001_user_approved_source_rows.tsv", "box001: 13 USE / 15 DNU", "box023/box021: not applicable"),
@@ -152,7 +159,7 @@ def add_readme(
         ("G1 box001 human review", "28/28 reviewed: 15 USE / 13 DNU", "primary 27: PRG 13 USE / G1 15 USE", f"source SHA256: {g1_review_sha256}"),
         ("Manual paired result", "USE→USE 8 / USE→DNU 5", "DNU→USE 7 / DNU→DNU 7", "McNemar p=0.774414; not comprehensive"),
         ("Workbook sheets", "Arm Case Metrics / Paired Comparison", "Box001 Human Review / Failure Modes", "12-Gate / Gate migrations / Visual Review"),
-        ("Primary evidence", "e194_three_arm_case_metrics.tsv", "e194_three_arm_paired_deltas.tsv", "e194_three_arm_gate_migrations.tsv"),
+        ("Primary evidence", "E194 three-arm metrics + E196 corrected overlay" if corrected_overlay else "e194_three_arm_case_metrics.tsv", "formula-derived paired sheet", "formula-derived gate sheets"),
     ]
     for row_index, values in enumerate(rows, 4):
         for col_index, value in enumerate(values, 1):
@@ -348,12 +355,16 @@ def add_box001_human_review(
     box001_use_rows: dict[str, dict[str, str]],
     g1_reviews: dict[str, dict[str, str]],
     g1_review_sha256: str,
+    corrected_overlay: bool = False,
 ) -> None:
     ws = wb.create_sheet("Box001 Human Review")
     title(
         ws,
         "E194 G1 box001 completed human review",
-        "Primary scope excludes box001_20231023_110_p1. PRG membership authority: E173 final box001 RL export. G1 authority: completed 28-case E194 review.",
+        ("Primary scope excludes box001_20231023_110_p1. PRG membership authority: E173 final box001 RL export. "
+         "G1 authority: completed 28-case E194 review. Corrected E196 overlay rows are not re-labeled as human-reviewed."
+         if corrected_overlay else
+         "Primary scope excludes box001_20231023_110_p1. PRG membership authority: E173 final box001 RL export. G1 authority: completed 28-case E194 review."),
         21,
     )
     summary_labels = ["Primary 27-case summary", "Count / value", "Rate / secondary value", "Interpretation"]
