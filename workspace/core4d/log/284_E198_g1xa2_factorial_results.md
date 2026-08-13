@@ -109,11 +109,15 @@ CEM 队列以 `save_video=false` 跑（吞吐优先），离线渲染另做。�
   已接入（review_index 增加 E198 arm-sweep 条目），**live qpos 回放全部 236 个 arm-case（4 臂×59），
   236/236 playable**，不依赖本机 GL。
 
-**实际观察**（box024_026_p1 中段帧，`/tmp/e198_verify/mid.png`，代表 P0 强制极端 case）：
-G1 与 G1+A2（右列）机器人把长箱托得明显更水平/更高，箱体下栽被修正；A0 与 A2（左列）箱体明显
-前倾下沉——直观印证 G1 的重力下垂修复，且 G1+A2 的箱姿几乎与 G1 相同、A2 单独不改变下沉。这与
-§2 “z 由 G1 独占、G1+A2≈G1” 的数值结论一致。逐例四阶段人审可在 viser 中对 A2→G1+A2 的
-root_ori/lower_body F→P 救援 case 与 box023/004 object_ori 协同 case 继续展开。
+**四阶段人审**（grasp/lift/carry/place contact sheet，`render/full_factorial/keyframes/{case}_4phase.png`，
+逐例观察见 `render/full_factorial/visual_review.tsv`）。两条代表性实际观察：
+- `box024_026_p1`（P0 强制极端 case）：右列 G1/G1+A2 全程把长箱托水平，左列 A0/A2 箱体明显前倾下沉；
+  **A2≈A0（不修下沉），G1+A2≈G1**——直观印证「z 由 G1 独占」。
+- `box024_028_p2`（E192 的 A2 PASS→FAIL case）：**G1+A2 达 12/12 全门通过，A2 单臂 fail**；carry 阶段
+  G1+A2 机器人更直立、A2 更下蹲前倾——**视觉印证「G1 救 A2 姿态门」**（§3 的 A2→G1+A2 F→P）。
+box024 P0(9)+box004(6) 全 15 例四阶段帧均无摔倒/飞散/脱手；右列箱姿普遍比左列平稳，G1+A2≈G1。
+box021/023 的 44 例 4-cell 渲染进行中，其逐例四阶段与 A2→G1+A2 救援、box023/004 object_ori 协同
+case 可在 viser（`review_player.sh E198`）交互细审。
 
 ## 7. 复现入口
 
