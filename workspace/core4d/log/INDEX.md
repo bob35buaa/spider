@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 281 个日志文件。
+> 自动生成，共 283 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 60 (E197-E197)
@@ -8,6 +8,7 @@
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
 | 277 | E197 | 2026-08-12 | Full cem omnirt vs prg metrics | [277_E197_full_cem_omnirt_vs_prg_metrics....](277_E197_full_cem_omnirt_vs_prg_metrics.md) |
+| 284 | E198 |  | G1xa2 factorial results | [284_E198_g1xa2_factorial_results.md](284_E198_g1xa2_factorial_results.md) |
 
 ## Phase 59 (E196-E196)
 
@@ -42,6 +43,7 @@
 | 269 | E192 | 2026-08-10 | Corrected box sdf sentinel results | [269_E192_corrected_box_sdf_sentinel_resu...](269_E192_corrected_box_sdf_sentinel_results.md) |
 | 270 | E192 | 2026-08-10 | A2 Ada6000 canary stop loss results | [270_E192_A2_Ada6000_canary_stop_loss_res...](270_E192_A2_Ada6000_canary_stop_loss_results.md) |
 | 271 | E192 | 2026-08-10 | A2 full diagnostic results | [271_E192_A2_full_diagnostic_results.md](271_E192_A2_full_diagnostic_results.md) |
+| 283 | E192 | 2026-08-10 | A2 expansion box021 box023 results | [283_E192_a2_expansion_box021_box023_resu...](283_E192_a2_expansion_box021_box023_results.md) |
 
 ## Phase 54 (E190-E190)
 

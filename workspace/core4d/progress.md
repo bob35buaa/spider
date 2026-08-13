@@ -1,5 +1,53 @@
 # CORE4D 当前进度
 
+## 当前：E198 G1×A2 因子 + E192 A2 扩展（计划态，待批准）
+
+### 2026-08-13 · plan226 已写
+
+- 计划：[plan226](plan/226_E198_g1xa2_factorial_and_E192_a2_expansion_plan.md)
+- 用户澄清：box021/023 补 **A2 + G1+A2（完整 2×2）**；G1+A2 **含 box004**；编号
+  **E198（G1+A2）+ E192 扩展（A2-only 补 box021/023）**；目标 **纯因子探索（G1×A2 交互项）**，
+  A2 governance 仍冻结为诊断性。
+- 新增 GPU 运行 **103 条**：E192-ext A2 = box021(28)+box023(16)=44；E198 G1+A2 =
+  box004(6)+box024(9)+box021(28)+box023(16)=59。完成四物体各自 2×2（none/G1/A2/G1+A2）。
+- 关键机制：G1=object gravcomp（scene sidecar），A2=hand-gate 三字段（config override），
+  G1+A2=两者纯 CLI 组合。交互项 INT=M(G1+A2)−M(A2)−M(G1)+M(A0) 逐物体 paired bootstrap。
+- **执行（用户指定）**：本机 8× A100-80GB 统一 priority 队列，**与其他程序叠加共跑、不 kill/不抢占**
+  （查空闲显存派发）。tier 顺序 P0 box024 G1+A2(9) → P1 box021/023 A2(44) →
+  P2 box021/023 G1+A2(44) → P3 box004 G1+A2(6)。调度器
+  `run_local_priority_queue.py` 跨 E198+E192-ext 统一消费，记录落卡 GPU id（C8 分层）。
+  GPU 现状：0/2/4 有他人 job（7.5/3.8/8GB），1/3/5/6/7 空闲。放弃远程 hybrid 方案。
+- **未获批准前不写脚本、不占 GPU、不改 scene。** 下一步等用户批准执行。
+
+### 2026-08-13 · 执行中（用户批准 PER_GPU_MEM_MIB=5G，每卡1 run）
+
+- 已建脚本：`scripts/experiments/E198/{e198_common,build_g1a2_manifest,run_local_priority_queue}.py`
+  + `scripts/launch/active/run_E198_local_8gpu.sh`。复用 E194 gravcomp sidecar（已存在）+ E192 a2_overrides。
+- 构建：`e198_priority_full_manifest.tsv` 103 行（P0 box024 G1A2×9 / P1 box021+023 A2×44 /
+  P2 box021+023 G1A2×44 / P3 box004 G1A2×6）。SHA parity 全过；59 个 G1A2 单变量 gravcomp 审计全过；
+  A2_GATE==E192 校验过。scene 快照 + git add -f 完成。
+- **Canary 4/4 通过**（每 tier 1 例，64×4）：4 臂全部 run_complete_pending_eval，
+  validator 确认 scene_name/kp 500·50/A2 gate 三字段/finite qpos 均正确。
+- **Full 队列已启动**（run_in_background task `bbyr8grre`）：8 卡 0-7，PER_GPU_MEM_MIB=5000，
+  每卡1 run，P0→P3 严格优先级，与 GPU0/2/4 他人 job 叠加共跑（free 71/59/63GB）。
+  首波 8 个 box024 G1A2 已派发。预计数小时；完成后自动通知。
+- 待办：eval_E198_factorial（2×2 交互项 + bootstrap）、render、report、log283/284、tracker。
+
+### 2026-08-13 · 完成（103/103 + 因子分析）
+
+- **Full 103/103 完成**，0 失败。四臂 236/236 用公共 evaluator 打分，0 error（修了两个 eval bug：
+  three_arm 按 case_id 去重塌臂、E192 一个 trajectory 路径缺 /0/）。
+- **C3 parity PASS**：box021/023 复用 A0+G1 88 行重打分 vs 冻结 E194 表 z 差 `0.000000 cm`。
+- **判决 FACTORIAL_CHARACTERIZED**：G1×A2 非可加。z 由 G1 独占（A2 不贡献，组合≈G1）；
+  gate 迁移显示 **A2 单用砸姿态门**（A0→A2 root_ori −13.6pp p=0.021、hand_ori −16.9pp p=0.006），
+  **G1 叠加把 A2 的姿态门救回**（A2→G1+A2 root_ori +15.2pp p=0.004、lower_body +13.6pp p=0.039）。
+  box023/004 obj_ori 呈物体特异协同（A2 救 G1 的朝向回退）。**不升级 A2/G1+A2**。
+- 产物：`results/E198/s6_downstream/eval/full_factorial/`（by_case/by_object/gate_migrations/summary/
+  arm_cache 236 行 + report.md）。log283(E192-ext A2)、log284(E198 因子) 已写，INDEX 重建，Tracker +2 行。
+- **C9 视频待补**：本机 osmesa GL 损坏、无 display，未提取关键帧（rule 9 记录原因豁免）；
+  后续用 viser review_player 复核 box024 P0 + A2→G1+A2 救援 case。
+- 下一步：git commit + push（scoped）。
+
 ## 归档索引
 
 - [E195 至 E194 扩展启动前完整备份](progress_archive/E195_to_E194_expansion_prelaunch_full_backup_20260810.md)
