@@ -18,12 +18,13 @@ rewritten stable ``trim_window`` paths, SHA256 sidecars and a 52-row
 target<->partner pairing manifest.  It is fail-closed: any case that fails
 validation aborts the whole build before a single file is copied.
 
-Design note: the delivered qpos is the source retarget's NATIVE 43-dim
-free-joint qpos (already world-object-pose in [:,36:43], quat wxyz in
-[:,39:43]), NOT an E197 scene-act 42->43 re-conversion.  The native qpos is
-self-consistent with the same run's human_joints and contact mask, which is
-exactly what the anchor/controller resolvers need.  ``scene_act_to_free`` is
-therefore unnecessary here.
+Design note: the delivered qpos is the source retarget's NATIVE G1 43-dim
+free-joint qpos: root position + root quaternion (wxyz), 29 G1 joints, then
+world-object pose in [:,36:43] (quaternion wxyz).  ``human_joints`` is an
+additional FK product used by the partner anchor path; it does not make qpos
+a human-body coordinate vector.  The same trimmed qpos is also exported as an
+explicit ``target_g1_expansion_npz`` so SUGAR can run its standard Isaac
+converter on the re-export clock without ambiguity.
 """
 from __future__ import annotations
 
@@ -50,7 +51,7 @@ RERUN = (
     RESULTS
     / "E197/s6_downstream/rl_export/partner_omnirt_rerun/omnirt_v1/results/omnirt_v1"
 )
-DELIVERY = REPO / "workspace/core4d/results/E197/s6_downstream/rl_export/partner_reexport_v1"
+DELIVERY = REPO / "workspace/core4d/results/E197/s6_downstream/rl_export/partner_reexport_v2"
 RELEASE = DELIVERY / "release/omnirt_v1_ref_fk"
 MANIFESTS = DELIVERY / "manifests"
 
@@ -69,6 +70,41 @@ RERUN_PARTNERS = {
     "box021_20231018_035_p1",
     "box023_20231020_039_p1",
 }
+
+G1_EXPANSION = DELIVERY / "target_g1_expansion"
+SPIDER_PROCESSOR = REPO / "spider/process_datasets/core4d.py"
+SCENE_ROOT = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+G1_JOINT_NAMES = [
+    "left_hip_pitch_joint",
+    "left_hip_roll_joint",
+    "left_hip_yaw_joint",
+    "left_knee_joint",
+    "left_ankle_pitch_joint",
+    "left_ankle_roll_joint",
+    "right_hip_pitch_joint",
+    "right_hip_roll_joint",
+    "right_hip_yaw_joint",
+    "right_knee_joint",
+    "right_ankle_pitch_joint",
+    "right_ankle_roll_joint",
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint",
+    "left_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",
+    "left_shoulder_yaw_joint",
+    "left_elbow_joint",
+    "left_wrist_roll_joint",
+    "left_wrist_pitch_joint",
+    "left_wrist_yaw_joint",
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint",
+    "right_wrist_pitch_joint",
+    "right_wrist_yaw_joint",
+]
 
 
 def sha256_file(path: Path) -> str:
@@ -320,6 +356,93 @@ def copy_case(cid: str, src: dict[str, Any], contact_path: Path) -> dict[str, An
     }
 
 
+def _write_g1_expansion(cid: str, trimmed_npz: Path) -> dict[str, Path | int]:
+    """Export the target's native G1 free-joint qpos on the re-export 30Hz clock."""
+    with np.load(trimmed_npz, allow_pickle=True) as z:
+        qpos = np.asarray(z["qpos"], dtype=np.float64)
+        fps = int(z["fps"])
+    if qpos.ndim != 2 or qpos.shape[1] != 43 or fps != RAW_FPS:
+        raise SourceResolveError(
+            f"{cid}: G1 expansion requires qpos(T,43) at 30Hz, "
+            f"got {qpos.shape}, fps={fps}"
+        )
+    for sl, label in ((slice(3, 7), "floating-base"), (slice(39, 43), "object")):
+        dev = np.max(np.abs(np.linalg.norm(qpos[:, sl], axis=1) - 1.0))
+        if dev > 1e-4:
+            raise SourceResolveError(
+                f"{cid}: {label} quaternion not unit (max dev {dev:.2e})"
+            )
+    out = G1_EXPANSION / f"{cid}_g1_expansion_30hz.npz"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        out,
+        qpos=qpos,
+        fps=np.array(RAW_FPS, dtype=np.int32),
+        joint_names=np.asarray(G1_JOINT_NAMES),
+        qpos_layout=np.array(
+            "root_pos_xyz,root_quat_wxyz,g1_29dof,"
+            "object_pos_xyz,object_quat_wxyz"
+        ),
+        source_case_id=np.array(cid),
+    )
+    return {"path": out, "frames": len(qpos)}
+
+
+def _resolve_scene(cid: str) -> Path:
+    """Resolve the matching SPIDER scene, preferring the v1 scene."""
+    for variant in ("omnirt_v1", "omnirt_v2"):
+        path = SCENE_ROOT / f"dcv3_{variant}_ref_fk_{cid}" / "scene.xml"
+        if path.is_file():
+            return path
+    raise SourceResolveError(f"{cid}: no dcv3 scene.xml found for core4d processor")
+
+
+def _run_spider_processor(cid: str, trimmed_npz: Path, out_root: Path) -> dict[str, Path | int]:
+    """Run SPIDER's MuJoCo converter to produce qvel-bearing trajectory data."""
+    scene = _resolve_scene(cid)
+    task_root = scene.parent
+    task = task_root.name
+    source_trajectory = task_root / "0/trajectory_kinematic.npz"
+    if source_trajectory.is_file():
+        with np.load(source_trajectory, allow_pickle=False) as existing, np.load(trimmed_npz, allow_pickle=True) as src:
+            if existing["qpos"].shape == src["qpos"].shape and np.array_equal(existing["qpos"], src["qpos"]):
+                trajectory = out_root / "processed/trajectory_kinematic" / f"{cid}.npz"
+                trajectory.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_trajectory, trajectory)
+                with np.load(trajectory, allow_pickle=False) as data:
+                    if data["qvel"].shape[1] != 41:
+                        raise SourceResolveError(f"{cid}: existing trajectory qvel shape {data['qvel'].shape}")
+                    return {"path": trajectory, "frames": int(data["qvel"].shape[0]), "scene": scene}
+    cmd = [
+        "uv", "run", "python", str(SPIDER_PROCESSOR),
+        "--source-npz", str(trimmed_npz),
+        "--dataset-dir", str(REPO / "example_datasets"),
+        "--task", task,
+        "--data-id", "0",
+        "--no-save-video",
+    ]
+    proc = subprocess.run(cmd, cwd=REPO, text=True, capture_output=True)
+    if proc.returncode:
+        raise SourceResolveError(
+            f"{cid}: core4d.py failed ({proc.returncode}): {proc.stderr[-1200:]}"
+        )
+    if not source_trajectory.is_file():
+        raise SourceResolveError(f"{cid}: core4d.py did not write {source_trajectory}")
+    trajectory = out_root / "processed/trajectory_kinematic" / f"{cid}.npz"
+    trajectory.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_trajectory, trajectory)
+    with np.load(trajectory, allow_pickle=False) as data:
+        if data["qpos"].shape[1] != 43 or data["qvel"].shape[1] != 41:
+            raise SourceResolveError(
+                f"{cid}: unexpected trajectory schema qpos={data['qpos'].shape} qvel={data['qvel'].shape}"
+            )
+        if data["qpos"].shape[0] != data["qvel"].shape[0]:
+            raise SourceResolveError(f"{cid}: trajectory qpos/qvel frame mismatch")
+    with np.load(trajectory, allow_pickle=False) as data:
+        frames = int(data["qvel"].shape[0])
+    return {"path": trajectory, "frames": frames, "scene": scene}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true", help="overwrite existing delivery tree")
@@ -407,6 +530,18 @@ def main() -> int:
     for cid in needed:
         placed[cid] = copy_case(cid, resolved[cid], contact_for[cid])
 
+    print("      packaging 52 target G1 expansion inputs ...")
+    g1_expansion: dict[str, dict[str, Path | int]] = {}
+    for cid in sorted(targets):
+        g1_expansion[cid] = _write_g1_expansion(cid, placed[cid]["trimmed_npz"])
+
+    print("      running SPIDER core4d processor for qvel-bearing trajectories ...")
+    spider_trajectories: dict[str, dict[str, Path | int]] = {}
+    for cid in sorted(targets):
+        spider_trajectories[cid] = _run_spider_processor(
+            cid, placed[cid]["trimmed_npz"], DELIVERY
+        )
+
     # 3) SHA256 sidecar (every delivered file), pairing manifest, provenance, summary.
     print("[3/3] hashing + writing manifests ...")
     sha_rows: list[dict[str, str]] = []
@@ -438,6 +573,12 @@ def main() -> int:
         "target_untrimmed_npz_sha256", "target_trimmed_npz_sha256", "target_trim_window_json_sha256",
         "partner_untrimmed_npz_sha256", "partner_trimmed_npz_sha256", "partner_trim_window_json_sha256",
         "target_raw_contact_path_sha256", "raw_contact_path_sha256",
+        "target_g1_expansion_npz", "target_g1_expansion_npz_sha256",
+        "target_g1_expansion_frames", "target_g1_expansion_fps",
+        "target_g1_qpos_layout", "target_g1_joint_order",
+        "target_spider_trajectory_kinematic_npz",
+        "target_spider_trajectory_kinematic_npz_sha256",
+        "target_spider_trajectory_frames", "target_spider_qvel_shape",
     ]
     pair_rows: list[dict[str, str]] = []
     for cid in sorted(targets):
@@ -484,6 +625,21 @@ def main() -> int:
             "target_raw_contact_path_sha256": h(tp["raw_contact_path"]),
             "raw_contact_path_sha256": h(pp["raw_contact_path"]),
         }
+        g1 = g1_expansion[cid]
+        row["target_g1_expansion_npz"] = spider_rel(g1["path"])
+        row["target_g1_expansion_npz_sha256"] = h(g1["path"])
+        row["target_g1_expansion_frames"] = str(g1["frames"])
+        row["target_g1_expansion_fps"] = str(RAW_FPS)
+        row["target_g1_qpos_layout"] = (
+            "root_pos_xyz,root_quat_wxyz,g1_29dof,"
+            "object_pos_xyz,object_quat_wxyz"
+        )
+        row["target_g1_joint_order"] = ",".join(G1_JOINT_NAMES)
+        traj = spider_trajectories[cid]
+        row["target_spider_trajectory_kinematic_npz"] = spider_rel(traj["path"])
+        row["target_spider_trajectory_kinematic_npz_sha256"] = h(traj["path"])
+        row["target_spider_trajectory_frames"] = str(traj["frames"])
+        row["target_spider_qvel_shape"] = f"({traj['frames']},41)"
         pair_rows.append(row)
 
     _write_tsv(MANIFESTS / "source_pairing_manifest.tsv", pair_rows, pair_cols)
@@ -526,6 +682,13 @@ def main() -> int:
         "release_root": spider_rel(RELEASE),
         "pairing_manifest": spider_rel(MANIFESTS / "source_pairing_manifest.tsv"),
         "files_hashed": len(sha_rows),
+        "target_g1_expansion_cases": len(g1_expansion),
+        "target_g1_contract": (
+            "qpos(T,43): root pos+quat(wxyz), G1 29DoF, "
+            "object pos+quat(wxyz), fps=30"
+        ),
+        "target_spider_processor": "spider/process_datasets/core4d.py",
+        "target_spider_trajectory_cases": len(spider_trajectories),
     }
     (MANIFESTS / "reexport_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     validation = {cid: validated[cid] for cid in sorted(needed)}
