@@ -22,6 +22,7 @@ REPO = Path(__file__).resolve().parents[5]
 DEFAULT_EXPS = (
     "E170", "E171", "E172", "E173", "E174", "E178", "E187", "E188", "E189", "E192", "E194",
 )
+# E198 is the G1xA2 2x2 factorial (4 arms x 59 cases). Opt-in via --exps E198.
 SOURCE_OVERRIDES = {
     # Alias for the older E194 four-arm sweep under eval/full. Keep E194 itself
     # bound to the canonical 72-case G1 expansion review set.
@@ -42,6 +43,14 @@ SOURCE_OVERRIDES = {
         "case_metrics": "e194_g1_expansion_case_metrics.tsv",
         "arm": "G1",
         "threshold_exp": "E173",
+    },
+    # E198 G1xA2 factorial: keep all four arms (A0/G1/A2/G1+A2) as an arm sweep,
+    # so the player shows every 2x2 cell per case. Live qpos playback (no MP4).
+    "E198": {
+        "eval_subdir": "full_factorial",
+        "case_metrics": "e198_arm_cache.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E194",
     },
 }
 

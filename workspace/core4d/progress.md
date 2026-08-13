@@ -48,6 +48,18 @@
   后续用 viser review_player 复核 box024 P0 + A2→G1+A2 救援 case。
 - 下一步：git commit + push（scoped）。
 
+### 2026-08-13 · 可视化补齐（用户要求本机 render + review_player）
+
+- 本机 GL 排查：osmesa/egl 初始均失败（缺 libOSMesa、EGL 无 NVIDIA PLATFORM_DEVICE）。
+  **`apt-get install libosmesa6` 后 osmesa 软件渲染恢复**。
+- 新增 `scripts/experiments/E198/render_g1a2.py`：2×2 四单元 MP4（A0/G1/A2/G1+A2 带标签+gate标记），
+  读 arm_cache 的 qpos+scene，osmesa 离线渲染。已渲 box024 P0(9)+box004(6)=15 例 →
+  `results/E198/s6_downstream/render/full_factorial/`。
+  验证帧：G1/G1+A2 把长箱托水平、A0/A2 下沉，直观印证 z 由 G1 独占、G1+A2≈G1。
+- `review_index.py` 加 E198 arm-sweep 条目 → `review_player.sh E198` live 回放 236 arm-case（4臂×59），
+  236/236 playable，不依赖本机 GL。C9 置 PASS。
+- 仍未 push（按用户要求）。
+
 ## 归档索引
 
 - [E195 至 E194 扩展启动前完整备份](progress_archive/E195_to_E194_expansion_prelaunch_full_backup_20260810.md)

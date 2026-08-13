@@ -42,9 +42,9 @@ A2 单用在 box021/023 上：z 无改善（略升）、3D 位置略降、手物
 
 E192 当时只在 box024/004 上诊断 A2，判 `INCONCLUSIVE_GATE_COLLAPSE / THRESHOLD_POLICY_NOT_EFFECTIVE`。本轮把 A2 扩到 box021/box023 后，同一姿态/朝向门回退在中箱/小箱一致复现，且没有稳定的 object-tracking 或降穿透收益。**A2 不升级**；其价值只有在与 G1 组合时体现为“被 G1 救援后残留的一点姿态门微调”（见 log284 的 A2→G1+A2 迁移），而非独立有效策略。
 
-## 5. 可视化状态
+## 5. 可视化
 
-同 [log284 §6](284_E198_g1xa2_factorial_results.md)：CEM 以 `save_video=false` 跑，本机 osmesa GL 损坏、无 display，视频关键帧未提取（rule 9 记录原因豁免）；后续用 viser `review_player.sh` 复核 A2 姿态回退 case。
+见 [log284 §6](284_E198_g1xa2_factorial_results.md)：安装 `libosmesa6` 后 osmesa 渲染恢复，已产出 2×2 四单元 MP4（含各 case 的 A2 单元）；`review_player.sh E198` 可 live 回放全部 236 个 arm-case（含 box021/023 的 A2 臂）供逐例复核 A2 姿态回退。
 
 ## 6. 产物
 

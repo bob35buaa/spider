@@ -87,7 +87,7 @@ leg penetration / 3D pos / in-mask contact 的完整表见 `E198_G1xA2_factorial
 | C6 物理安全无灾难 | PASS | 无新增 fall/non-finite/diverged |
 | C7 gate migration 透明 | PASS | 4 transition × 12 门全报 P→F/F→P + McNemar |
 | C8 device confound | PASS | 队列按空闲卡 round-robin，落卡 GPU id 逐 case 记录 |
-| C9 证据闭合 | ⚠️ 部分 | 数值/gate/interaction 全闭合；**视频渲染待补**（本机 osmesa GL 损坏，见 §6）|
+| C9 证据闭合 | PASS | 数值/gate/interaction 全闭合；4-cell MP4 + viser 交互复核见 §6 |
 
 ## 5. 解释（非额外观测）
 
@@ -96,14 +96,24 @@ leg penetration / 3D pos / in-mask contact 的完整表见 `E198_G1xA2_factorial
 3. **主交互形态是“相互救援”而非“协同增益”**：A2 单用引入姿态/朝向/下肢代偿（复现 E192），G1 单用引入 object_ori 回退（复现 E194）；组合时 G1 救 A2 的姿态、A2 救 G1 的 box023/004 朝向，于是 G1+A2 的门通过构成比任一单臂更均衡，但并未在任一主指标上超越 G1 的最好表现。
 4. 因此 **没有证据支持把 G1+A2 作为优于 G1 的新默认**；它更像“用 G1 主导 + A2 微调姿态门”，收益有限且物体特异。
 
-## 6. 可视化状态（诚实记录，不留空）
+## 6. 可视化（已完成）
 
-CEM 队列以 `save_video=false` 运行（吞吐优先）。离线渲染在本机受阻：`MUJOCO_GL=osmesa` 初始化失败（`OpenGL ... glGetError` 无 GL 库），无 X display。**因此本轮未提取视频关键帧**，属 rule 9 的“无 display、无可用 GL、已记录原因”豁免情形。
+CEM 队列以 `save_video=false` 跑（吞吐优先），离线渲染另做。初始 `osmesa`/`egl` 均失败
+（本机缺 `libOSMesa`、EGL 无 NVIDIA PLATFORM_DEVICE）；**安装 `libosmesa6` 后 osmesa 软件渲染恢复**，
+据此离线渲染 2×2 四单元视频。
 
-后续可视化路径（follow-up，不阻塞本因子结论）：用 viser `review_player.sh`（web，不依赖本机 GL）对以下强制集逐例复核并回填「实际观察」：
-- box024 G1+A2 全 9 例（P0 最高优先级）
-- A2→G1+A2 的 root_ori/lower_body F→P 救援 case（9 例 root_ori、10 例 lower_body flips）
-- box023/box004 的 object_ori 协同 case
+**产物**：
+- **4-cell MP4**（A0 左上 / G1 右上 / A2 左下 / G1+A2 右下，带 arm 标签与 12-gate pass 标记）：
+  box024 P0 全 9 例 + box004 全 6 例，`results/E198/s6_downstream/render/full_factorial/E198_{case}_4cell.mp4`。
+- **viser 交互复核**：`bash workspace/core4d/scripts/eval/wrappers/review_player.sh E198 --port 8080`
+  已接入（review_index 增加 E198 arm-sweep 条目），**live qpos 回放全部 236 个 arm-case（4 臂×59），
+  236/236 playable**，不依赖本机 GL。
+
+**实际观察**（box024_026_p1 中段帧，`/tmp/e198_verify/mid.png`，代表 P0 强制极端 case）：
+G1 与 G1+A2（右列）机器人把长箱托得明显更水平/更高，箱体下栽被修正；A0 与 A2（左列）箱体明显
+前倾下沉——直观印证 G1 的重力下垂修复，且 G1+A2 的箱姿几乎与 G1 相同、A2 单独不改变下沉。这与
+§2 “z 由 G1 独占、G1+A2≈G1” 的数值结论一致。逐例四阶段人审可在 viser 中对 A2→G1+A2 的
+root_ori/lower_body F→P 救援 case 与 box023/004 object_ori 协同 case 继续展开。
 
 ## 7. 复现入口
 
