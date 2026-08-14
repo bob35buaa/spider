@@ -19,6 +19,16 @@
   GPU 现状：0/2/4 有他人 job（7.5/3.8/8GB），1/3/5/6/7 空闲。放弃远程 hybrid 方案。
 - **未获批准前不写脚本、不占 GPU、不改 scene。** 下一步等用户批准执行。
 
+### 2026-08-15 · E198 G1A2 RL export（3 物体，24 case）
+
+- 导出 E198 **G1+A2 arm** 为下游 RL 输入，schema 与 E173 共享工具逐字段对齐；每 case 带完整 partner。
+  box024 4/4、box004 4/4（用户显式 082/083 p1/p2）、box001 16/16（review USE）；partner 全部 PAIR_COMPLETE（24/24）。
+- **Phase 0 补 partner Stage2b**：box001 `2_039_p1`/`2_041_p1` 的 p2 从未 retarget，就地补建（写 E198，未动 E173）。
+  `2_041_p2` v1 pass；`2_039_p2` 弱接触(active≈0.29) override raw_contact→v1 infeasible→**v2 rescue pass**。
+- 新脚本：`export_E198_user_approved_rl.py`（参数化 G1A2 wrapper）、`build_box001_partner_raw_contact.py`。
+  产出 `results/E198/s6_downstream/rl_export/{obj}_user_approved/`。日志 [285](log/285_E198_g1a2_rl_export.md)。
+- 待办：**未 git push**（沿用会话约束）；RL 训练成功与否需另行评估（当前 `rl_status=not_run`）。
+
 ### 2026-08-14 · plan227 完成（box001 因子闭合）
 
 - **56/56 Full CEM 完成，0 failed**（G1+A2 28 + A2 28）；queue 999752 全程存活 ~6h；运行时 fail-closed parity

@@ -1,14 +1,20 @@
 # 实验日志索引
 
-> 自动生成，共 283 个日志文件。
+> 自动生成，共 284 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 61 (E192-E198)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 284 | E198 | 2026-08-15 | G1xa2 factorial results | [284_E198_g1xa2_factorial_results.md](284_E198_g1xa2_factorial_results.md) |
+| 285 | E198 | 2026-08-15 | G1a2 rl export | [285_E198_g1a2_rl_export.md](285_E198_g1a2_rl_export.md) |
 
 ## Phase 60 (E197-E197)
 
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
 | 277 | E197 | 2026-08-12 | Full cem omnirt vs prg metrics | [277_E197_full_cem_omnirt_vs_prg_metrics....](277_E197_full_cem_omnirt_vs_prg_metrics.md) |
-| 284 | E198 |  | G1xa2 factorial results | [284_E198_g1xa2_factorial_results.md](284_E198_g1xa2_factorial_results.md) |
 
 ## Phase 59 (E196-E196)
 
