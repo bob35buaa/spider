@@ -852,6 +852,10 @@ def main() -> int:
         "--no-reference", action="store_true", help="disable reference ghost"
     )
     ap.add_argument("--check", action="store_true", help="print index audit and exit")
+    ap.add_argument(
+        "--arm", default="",
+        help="only load these arm(s), comma-separated (e.g. G1A2); empty = all arms",
+    )
     args = ap.parse_args()
 
     exps = tuple(e.strip() for e in args.exps.split(",") if e.strip())
@@ -859,6 +863,10 @@ def main() -> int:
         return idx._check(exps)
 
     records = idx.build_index(exps)
+    if args.arm:
+        arms = {a.strip() for a in args.arm.split(",") if a.strip()}
+        records = [r for r in records if r.arm in arms]
+        print(f"[review] arm filter {sorted(arms)} -> {len(records)} cases")
     print(f"[review] indexed {len(records)} cases across {exps}")
     app = ReviewApp(  # noqa: F841
         records,

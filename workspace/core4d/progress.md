@@ -19,6 +19,54 @@
   GPU 现状：0/2/4 有他人 job（7.5/3.8/8GB），1/3/5/6/7 空闲。放弃远程 hybrid 方案。
 - **未获批准前不写脚本、不占 GPU、不改 scene。** 下一步等用户批准执行。
 
+### 2026-08-14 · plan227 完成（box001 因子闭合）
+
+- **56/56 Full CEM 完成，0 failed**（G1+A2 28 + A2 28）；queue 999752 全程存活 ~6h；运行时 fail-closed parity
+  `convention=XZY parity=pass` 确认 box001 用 E196 修正参考、未污染。
+- **5 物体 eval 闭合**：348/348 arm-case 打分（4×87），0 error；box001 接入 eval arm_rows
+  （A0=E173 / G1=E196 corrected21+E194 clean7 / A2+G1A2=box001 manifest）。
+- **box001 科学结论**：**无单臂朝向崩溃 → 交互退化为可加**（obj_ori INT=+0.180 CI 含 0；G1/A2 都单调改善 A0），
+  对照 box023(G1崩)/box004(A2崩) 的相互救援；G1 的 lower_body 改善最强(A0→G1 +25pp,p=0.016)。
+  强化「救援只在某单臂回退时出现」的机制论断。判决维持 FACTORIAL_CHARACTERIZED，不升级。
+- 交付：log284 §5.6 + TL;DR 更新；xlsx 加 box001 第5物体块 + 28 G1+A2逐例；tracker E198 行更新(159 run)。
+- box001 4-cell 渲染 **28/28 完成**；87 张四阶段 contact sheet 全出。视觉观察入 log284 §6（rule 9）：
+  `box001_20231020_014_p1`（G1+A2 12/12，右列托箱稳、朝向受控）、`box001_20231003_1_040_p1`
+  （右列 G1/G1+A2 更直立、印证 A0→G1 lower_body +25pp）。两个监控 cron 均已停。
+- **plan227 全闭合**。改动全部未 push（含 box001）。viser G1+A2-only：`review_player.sh E198 --arm G1A2 --port 8082`。
+
+### 2026-08-13 · plan227 执行中（box001 Full 队列已起）
+
+- 脚本扩展完成：e198_common（box001 scope+tiers+corrected-meta 解析）、build_g1a2_manifest（--scope box001，
+  meta 验证+快照）、run_E198_local_8gpu.sh（SCOPE=box001）。queue 脚本无需改（manifest 驱动+TIER_RANK 已含 P0-b1/P1-b1）。
+- Manifest：`e198_box001_full_manifest.tsv` 56 行（P0-b1 G1A2×28 先 / P1-b1 A2×28 后）；21 corrected+7 clean
+  meta 全验证通过（live euler_convention==compiled_xml_axis_sequence）；scene+meta 快照到 scene_snapshot/g1a2_box001。
+- **运行时确认 C1/C3**：run 日志 `scene-act-reference: convention=XZY xml_axis_sequence=XZY parity=pass` —— box001 用
+  E196 修正参考、fail-closed parity 通过，参考未污染。
+- **执行方式（用户定）**：现在就叠加跑；detached nohup 后台 queue **pid 999752**（PPID=1，扛会话断开），
+  日志 `results/E198/s6_downstream/manifests/box001_full_queue.log`。不在 tmux。
+- 曾遇他人 8 job 打满 8 卡（100% util）致 canary 慢 80×（时间片切分）；启动 Full 时他人 job 恰好结束、卡空出。
+  Full 单例 ~45min（1024×32, replan ~22s×126），56 例/8 卡 ≈ 6–8h。
+- 监控 cron `9101107e`（每 30min）：查状态/存活/GPU，failed 诊断，全完成后自动 eval+xlsx+render+log 并停 cron。
+
+### 2026-08-13 · plan227 已写（E198 补 box001，已批准执行）
+
+- [plan227](plan/227_E198_box001_g1a2_a2_supplement_plan.md)：E198 扩到第 5 物体 box001，新跑 **G1+A2(28)+A2(28)=56 条**，
+  G1+A2 先、A2 后，本地 8 卡 priority 队列（不 kill/抢占），实验号仍 E198。
+- 用户三决策：**参考=E196 修正版**（21 例 corrected meta / 7 例 E194 clean）、**基线=复用+重打分**
+  （PRG=E173、G1=E196 corrected 21 + E194 clean 7，已验证 rollout 0 缺失）、**范围=全 28 例**。
+- 最高风险：新跑前必须把 live scene 的 `scene_act_meta.json` 恢复为 E196 修正版，否则 C1/C3 FAIL。
+- **未获批准前不写脚本/不占 GPU/不改 meta。** 待用户批准执行。
+
+### 2026-08-13 · xlsx 交付 + 深入分析（用户请求）
+
+- 新增 `scripts/eval/reports/gen_E198_xlsx.py` → `results/E198/.../eval/full_factorial/E198_G1xA2_factorial.xlsx`
+  （3 sheet：四臂×物体对比 G1+A2/G1/A2/PRG + INT + 95%CI + 最优臂/显著高亮；Gate迁移(McNemar)；逐例59）。
+- log284 §5 升级为深入分析：**三种交互模式**（物体Z=可加零-G1独占 / 手物穿透=次可加竞争 /
+  姿态门=相互救援 / obj_ori=双向物体特异救援）；**核心 insight：G1+A2 价值是方差收缩而非均值提升**——
+  A2 崩 box004 朝向(11.5→15.2°)、G1 崩 box023 朝向(5.1→8.0°)，G1+A2 削平两次崩溃但均值不超 G1；
+  且 obj_ori「谁救谁」符号随物体翻转（box023 A2救G1 / box004 G1救A2）。结论维持不升级 A2/G1+A2。
+- box021/023 4cell 渲染仍在跑（18/44）。
+
 ### 2026-08-13 · 执行中（用户批准 PER_GPU_MEM_MIB=5G，每卡1 run）
 
 - 已建脚本：`scripts/experiments/E198/{e198_common,build_g1a2_manifest,run_local_priority_queue}.py`

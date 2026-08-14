@@ -35,6 +35,15 @@ TASK_ROOT = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object
 G1_EXPANSION_AUTHORITY = (
     REPO / "workspace/core4d/results/E194/s6_downstream/manifests/g1_expansion_source_authority.tsv"
 )
+# box001 (plan227): E196 corrected reference for the 21 Euler-mismatch cases; the
+# other 7 box001 cases stay on the clean E194 reference. Used for meta restore +
+# baseline (G1) reuse when the factorial is extended to box001.
+REFERENCE_FIX_AUTHORITY = (
+    REPO / "workspace/core4d/report/E196/provenance/manifests/reference_fix_case_authority.tsv"
+)
+REFERENCE_FIX_METRICS = (
+    REPO / "workspace/core4d/report/E196/provenance/eval/e196_reference_fix_case_metrics.tsv"
+)
 SOURCE_MANIFEST = {  # box004/box024 base PRG authority (A0 side, already landed)
     "box004": ("E172", REPO / "workspace/core4d/results/E172/s6_downstream/manifests/cem_full_manifest.tsv"),
     "box024": ("E173", REPO / "workspace/core4d/results/E173/s6_downstream/manifests/cem_full_manifest.tsv"),
@@ -69,7 +78,7 @@ FULL_SAMPLES, FULL_OPT_STEPS = 1024, 32
 CANARY_SAMPLES, CANARY_OPT_STEPS = 64, 4
 CEM_SEED = 0
 
-OBJECT_COUNTS = {"box024": 9, "box004": 6, "box021": 28, "box023": 16}
+OBJECT_COUNTS = {"box024": 9, "box004": 6, "box021": 28, "box023": 16, "box001": 28}
 
 # --- priority tiers ----------------------------------------------------------
 # (tier, experiment, arm, objects) -- strict P0->P3 dispatch order.
@@ -79,13 +88,32 @@ TIERS = [
     ("P2", "E198",     "G1A2", ["box021", "box023"]),
     ("P3", "E198",     "G1A2", ["box004"]),
 ]
-TIER_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+# plan227 supplement: box001 as the 5th object; G1+A2 first, then A2 (user order).
+BOX001_TIERS = [
+    ("P0-b1", "E198",     "G1A2", ["box001"]),
+    ("P1-b1", "E192-ext", "A2",   ["box001"]),
+]
+TIER_RANK = {"P0": 0, "P0-b1": 0, "P1": 1, "P1-b1": 1, "P2": 2, "P3": 3}
+SCOPES = {"default": TIERS, "box001": BOX001_TIERS}
 
 MANIFEST_DIR = RESULTS_E198 / "s6_downstream/manifests"
 FULL_MANIFEST = MANIFEST_DIR / "e198_priority_full_manifest.tsv"
 CANARY_MANIFEST = MANIFEST_DIR / "e198_priority_canary_manifest.tsv"
 SENTINEL_MANIFEST = MANIFEST_DIR / "e198_priority_sentinel_manifest.tsv"
 AUTHORITY_TSV = MANIFEST_DIR / "e198_factorial_authority.tsv"
+
+
+def manifest_paths(scope: str) -> dict[str, Path]:
+    """Scope-specific manifest/authority file paths (default keeps legacy names)."""
+    if scope == "default":
+        return {"full": FULL_MANIFEST, "canary": CANARY_MANIFEST,
+                "sentinel": SENTINEL_MANIFEST, "authority": AUTHORITY_TSV}
+    return {
+        "full": MANIFEST_DIR / f"e198_{scope}_full_manifest.tsv",
+        "canary": MANIFEST_DIR / f"e198_{scope}_canary_manifest.tsv",
+        "sentinel": MANIFEST_DIR / f"e198_{scope}_sentinel_manifest.tsv",
+        "authority": MANIFEST_DIR / f"e198_{scope}_authority.tsv",
+    }
 
 FIELDS = [
     "ordinal", "tier", "experiment", "arm", "object_key", "case_id",
@@ -197,14 +225,29 @@ def extra_overrides_for(arm: str, g1_scene_name: str) -> str:
 
 
 # --- authority loading -------------------------------------------------------
+EXPANSION_OBJECTS = {"box021", "box023", "box001"}
+
+
 def _expansion_rows() -> dict[str, dict[str, str]]:
-    """box021/box023 authority keyed by case_id (from E194 g1 expansion)."""
+    """box021/box023/box001 authority keyed by case_id (from E194 g1 expansion)."""
     out: dict[str, dict[str, str]] = {}
     for raw in read_tsv(G1_EXPANSION_AUTHORITY):
-        if raw.get("object_key") not in {"box021", "box023"}:
+        if raw.get("object_key") not in EXPANSION_OBJECTS:
             continue
         out[raw["case_id"]] = raw
     return out
+
+
+def box001_corrected_cases() -> set[str]:
+    """The 21 box001 case_ids whose reference was E196-corrected (Euler mismatch)."""
+    return {r["case_id"] for r in read_tsv(REFERENCE_FIX_AUTHORITY)
+            if r.get("object_key") == "box001"}
+
+
+def box001_corrected_meta() -> dict[str, dict[str, str]]:
+    """Per-case E196 corrected scene_act_meta authority for box001 (path + sha256)."""
+    return {r["case_id"]: r for r in read_tsv(REFERENCE_FIX_AUTHORITY)
+            if r.get("object_key") == "box001"}
 
 
 def _box2404_rows() -> dict[str, dict[str, str]]:
@@ -259,14 +302,19 @@ def _cell_from_box2404(raw: dict[str, str], arm: str, object_key: str) -> dict[s
     }
 
 
-def build_cells() -> list[dict[str, Any]]:
-    """Return the 103 run cells in strict tier order (P0->P3, then object,case_id)."""
+def build_cells(scope: str = "default") -> list[dict[str, Any]]:
+    """Return run cells in strict tier order.
+
+    scope="default" -> the original 103-run 4-object queue (P0->P3).
+    scope="box001"  -> plan227 supplement: box001 G1+A2 (28) then A2 (28) = 56.
+    """
+    tiers = SCOPES[scope]
     expansion = _expansion_rows()
-    box2404 = _box2404_rows()
+    box2404 = _box2404_rows() if scope == "default" else {}
     cells: list[dict[str, Any]] = []
-    for tier, experiment, arm, objects in TIERS:
+    for tier, experiment, arm, objects in tiers:
         for object_key in objects:
-            if object_key in ("box021", "box023"):
+            if object_key in EXPANSION_OBJECTS:
                 case_ids = sorted(cid for cid, r in expansion.items() if r["object_key"] == object_key)
                 for case_id in case_ids:
                     cell = _cell_from_expansion(expansion[case_id], arm, object_key)

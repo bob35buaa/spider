@@ -7,11 +7,13 @@
 #   MODE=canary                bash run_E198_local_8gpu.sh
 #   MODE=full SENTINEL_ONLY=1  bash run_E198_local_8gpu.sh
 #   MODE=full                  bash run_E198_local_8gpu.sh
-# Env overrides: GPUS, PER_GPU_MEM_MIB, MAX_PER_GPU, POLL_INTERVAL
+#   MODE=full SCOPE=box001     bash run_E198_local_8gpu.sh   # plan227 box001 supplement
+# Env overrides: GPUS, PER_GPU_MEM_MIB, MAX_PER_GPU, POLL_INTERVAL, SCOPE(default|box001)
 set -euo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 MODE="${MODE:-full}"
+SCOPE="${SCOPE:-default}"
 GPUS="${GPUS:-0,1,2,3,4,5,6,7}"
 PER_GPU_MEM_MIB="${PER_GPU_MEM_MIB:-5000}"
 MAX_PER_GPU="${MAX_PER_GPU:-1}"
@@ -21,14 +23,17 @@ PY=".venv/bin/python"
 Q="workspace/core4d/scripts/experiments/E198/run_local_priority_queue.py"
 MAN_DIR="workspace/core4d/results/E198/s6_downstream/manifests"
 
+if [[ "$SCOPE" == "default" ]]; then CAN="e198_priority_canary_manifest.tsv"; FUL="e198_priority_full_manifest.tsv"
+else CAN="e198_${SCOPE}_canary_manifest.tsv"; FUL="e198_${SCOPE}_full_manifest.tsv"; fi
+
 case "$MODE" in
-  canary)   MANIFEST="$MAN_DIR/e198_priority_canary_manifest.tsv"; EXTRA="" ;;
-  full)     MANIFEST="$MAN_DIR/e198_priority_full_manifest.tsv"
+  canary)   MANIFEST="$MAN_DIR/$CAN"; EXTRA="" ;;
+  full)     MANIFEST="$MAN_DIR/$FUL"
             if [[ "$SENTINEL_ONLY" == "1" ]]; then EXTRA="--sentinel-only"; else EXTRA=""; fi ;;
   *) echo "unknown MODE=$MODE" >&2; exit 2 ;;
 esac
 
-echo "[run_E198] MODE=$MODE GPUS=$GPUS PER_GPU_MEM_MIB=$PER_GPU_MEM_MIB MAX_PER_GPU=$MAX_PER_GPU manifest=$MANIFEST $EXTRA"
+echo "[run_E198] MODE=$MODE SCOPE=$SCOPE GPUS=$GPUS PER_GPU_MEM_MIB=$PER_GPU_MEM_MIB MAX_PER_GPU=$MAX_PER_GPU manifest=$MANIFEST $EXTRA"
 exec "$PY" "$Q" --manifest "$MANIFEST" --gpus "$GPUS" \
   --per-gpu-mem-mib "$PER_GPU_MEM_MIB" --max-per-gpu "$MAX_PER_GPU" \
   --poll-interval "$POLL_INTERVAL" $EXTRA

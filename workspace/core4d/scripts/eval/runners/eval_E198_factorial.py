@@ -36,8 +36,10 @@ REPO = C.REPO
 OUT = C.RESULTS_E198 / "s6_downstream/eval/full_factorial"
 CACHE = OUT / "e198_arm_cache.tsv"
 ARMS = ("A0", "G1", "A2", "G1A2")
-OBJECT_ORDER = ("box024", "box021", "box023", "box004")
+# plan227: box001 added as the 5th object (G1 baseline = E196 corrected 21 + E194 clean 7).
+OBJECT_ORDER = ("box024", "box021", "box023", "box004", "box001")
 OBJ_RANK = {k: i for i, k in enumerate(OBJECT_ORDER)}
+N_EXPECTED = 59 + C.OBJECT_COUNTS["box001"]  # 87
 
 E173 = REPO / "workspace/core4d/results/E173/s6_downstream/manifests/cem_full_manifest.tsv"
 E172 = REPO / "workspace/core4d/results/E172/s6_downstream/manifests/cem_full_manifest.tsv"
@@ -45,6 +47,10 @@ E194_ORIG = REPO / "workspace/core4d/results/E194/s6_downstream/manifests/cem_fu
 E192 = REPO / "workspace/core4d/results/E192/s6_downstream/manifests/cem_full_manifest.tsv"
 THREE_ARM = REPO / "workspace/core4d/results/E194/s6_downstream/eval/full_g1_expansion/e194_three_arm_case_metrics.tsv"
 E198_MAN = C.FULL_MANIFEST
+# box001 baseline sources
+E196_CORR = REPO / "workspace/core4d/report/E196/provenance/eval/e196_reference_fix_case_metrics.tsv"
+E194_G1EXP = REPO / "workspace/core4d/results/E194/s6_downstream/manifests/g1_expansion_full_manifest.tsv"
+E198_BOX001_MAN = C.manifest_paths("box001")["full"]
 
 BOX2404 = set(C.BOX2404_CASES["box024"]) | set(C.BOX2404_CASES["box004"])
 
@@ -96,6 +102,22 @@ def arm_rows() -> dict[str, dict[str, dict[str, str]]]:
     for cid, r in e198_g1a2.items():
         if r["object_key"] in ("box021", "box023"):
             out["G1A2"][cid] = norm(r)
+
+    # --- box001 (plan227): A0=E173 PRG, G1=E196 corrected(21)+E194 clean(7),
+    #     A2/G1A2 = E198 box001 supplement manifest -------------------------------
+    corr = {r["case_id"]: r for r in C.read_tsv(E196_CORR)
+            if r.get("object_key") == "box001" and r.get("arm") == "G1_corrected"}
+    g1exp = {r["case_id"]: r for r in C.read_tsv(E194_G1EXP)
+             if r.get("object_key") == "box001" and r.get("arm") == "G1"}
+    b1 = C.read_tsv(E198_BOX001_MAN)
+    b1_a2 = {r["case_id"]: r for r in b1 if r["arm"] == "A2"}
+    b1_g1a2 = {r["case_id"]: r for r in b1 if r["arm"] == "G1A2"}
+    for cid in b1_g1a2:
+        out["A0"][cid] = norm(e173[cid])
+        # corrected G1 for the 21 Euler-mismatch cases; clean E194 G1 for the other 7
+        out["G1"][cid] = norm(corr[cid], scene_field="scene_xml") if cid in corr else norm(g1exp[cid])
+        out["A2"][cid] = norm(b1_a2[cid])
+        out["G1A2"][cid] = norm(b1_g1a2[cid])
     return out
 
 
@@ -158,8 +180,8 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     rows = arm_rows()
     for arm in ARMS:
-        if len(rows[arm]) != 59:
-            raise SystemExit(f"arm {arm} has {len(rows[arm])} cases, expected 59")
+        if len(rows[arm]) != N_EXPECTED:
+            raise SystemExit(f"arm {arm} has {len(rows[arm])} cases, expected {N_EXPECTED}")
     scored, errors = score_all(rows)
     C.write_tsv(OUT / "e198_arm_eval_errors.tsv", errors or [{"arm": "", "case_id": "", "error": ""}])
     if errors:

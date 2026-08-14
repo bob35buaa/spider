@@ -4,7 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
-| E198 | 2026-08-13 | Phase 61 | G1×A2完整2×2因子(4物体103run)：非可加，G1救A2姿态门，组合≈G1 | ✅ FACTORIAL_CHARACTERIZED；103/103；不升级 | [284](log/284_E198_g1xa2_factorial_results.md) · [plan226](plan/226_E198_g1xa2_factorial_and_E192_a2_expansion_plan.md) |
+| E198 | 2026-08-14 | Phase 61 | G1×A2完整2×2(5物体159run,+box001 plan227)：非可加相互救援；box001无单臂回退→退化为可加 | ✅ FACTORIAL_CHARACTERIZED；159/159；不升级 | [284](log/284_E198_g1xa2_factorial_results.md) · [plan226](plan/226_E198_g1xa2_factorial_and_E192_a2_expansion_plan.md) · [plan227](plan/227_E198_box001_g1a2_a2_supplement_plan.md) |
 | E192-ext | 2026-08-13 | Phase 61 | A2补box021/023(44)：跨物体复现姿态门回退，无tracking收益 | ✅ 44/44；A2维持不升级 | [283](log/283_E192_a2_expansion_box021_box023_results.md) |
 | E197 | 2026-08-12 | Phase 60 | 五类box Full CEM Omni/PRG七指标与Omni gate v4 | ✅ 87/87；Omni gate 52 | [277](log/277_E197_full_cem_omnirt_vs_prg_metrics.md) |
 | E196 | 2026-08-12 | Phase 59 | Euler metadata修复；29 mismatch重跑、评测与可视化收尾 | ✅ 29/29；reference fix validated；待时序人审1例 | [278](log/278_E196_reference_metadata_integrity_fix_results.md) |

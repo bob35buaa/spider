@@ -102,6 +102,10 @@ def main() -> int:
         if set(arms) < set(ARMS):
             print(f"[skip] {cid}: missing arms {set(ARMS) - set(arms)}", file=sys.stderr)
             continue
+        out_existing = OUTDIR / f"E198_{cid}_4cell.mp4"
+        if out_existing.exists() and out_existing.stat().st_size > 0:
+            print(f"[skip] {cid}: already rendered", file=sys.stderr)
+            continue
         frames = {}
         passes = {}
         for a in ARMS:
