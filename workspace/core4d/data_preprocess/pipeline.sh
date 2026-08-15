@@ -22,6 +22,13 @@ RETARGET_ENABLE_FOOT_Z_CONSTRAINT="${RETARGET_ENABLE_FOOT_Z_CONSTRAINT:-0}"
 RETARGET_FOOT_SLIDE_PENALTY_WEIGHT="${RETARGET_FOOT_SLIDE_PENALTY_WEIGHT:-0.0}"
 RETARGET_ENABLE_CONTACT_PRESERVATION="${RETARGET_ENABLE_CONTACT_PRESERVATION:-0}"
 RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE="${RETARGET_OBJECT_PENETRATION_TOLERANCE_SCALE:-1.0}"
+# E199 object augmentation: when =1 the retarget step runs
+# parallel_robot_retarget.py (original + 5 native object-interaction augmentation
+# configs) instead of the single-run robot_retarget.py. Default 0 preserves the
+# legacy single `_original` behavior. Trimming/contact/SPIDER of augmented
+# variants is handled downstream by the E199 driver, not this script.
+RETARGET_AUGMENTATION="${RETARGET_AUGMENTATION:-0}"
+RETARGET_MAX_WORKERS="${RETARGET_MAX_WORKERS:-1}"
 CASE_FILE="workspace/core4d/data_preprocess/cases_box023.tsv"
 FORCE=0
 DRY_RUN=0
@@ -321,7 +328,13 @@ process_case() {
     sync_generated_object_model "$object_name"
     ensure_g1_object_xml "$object_name"
 
-    if [ "$FORCE" -eq 1 ] || [ ! -f "$retargeted_npz" ]; then
+    # In augmentation mode the "done" marker is the last native variant (_rot_1);
+    # otherwise it is the single _original retarget output.
+    retarget_done_marker="$retargeted_npz"
+    if [ "$RETARGET_AUGMENTATION" = "1" ]; then
+      retarget_done_marker="$retargeted_dir/${task_name}_rot_1.npz"
+    fi
+    if [ "$FORCE" -eq 1 ] || [ ! -f "$retarget_done_marker" ]; then
       echo "+ source $HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
       (
         if [ "$DRY_RUN" -eq 0 ]; then
@@ -329,15 +342,31 @@ process_case() {
           source "$HOLOSOMA_DIR/scripts/source_retargeting_setup.sh"
         fi
         cd "$HOLOSOMA_DIR/src/holosoma_retargeting/holosoma_retargeting"
-        retarget_args=(
-          "$(retarget_python)" examples/robot_retarget.py \
-          --data_path "$converted_abs" \
-          --task-type object_interaction \
-          --task-name "$task_name" \
-          --data_format smplx \
-          --task-config.object-name "$object_name" \
-          --save_dir "$retargeted_abs"
-        )
+        if [ "$RETARGET_AUGMENTATION" = "1" ]; then
+          # parallel driver loops the 6 native object_interaction configs
+          # (original + trans_0/1/2 + rot_0/1); k>0 warm-starts from _original,
+          # which it produces first (or reuses if present).
+          retarget_args=(
+            "$(retarget_python)" examples/parallel_robot_retarget.py \
+            --task-type object_interaction \
+            --data_format smplx \
+            --data_dir "$converted_abs" \
+            --save_dir "$retargeted_abs" \
+            --task-config.object-name "$object_name" \
+            --augmentation \
+            --max_workers "$RETARGET_MAX_WORKERS"
+          )
+        else
+          retarget_args=(
+            "$(retarget_python)" examples/robot_retarget.py \
+            --data_path "$converted_abs" \
+            --task-type object_interaction \
+            --task-name "$task_name" \
+            --data_format smplx \
+            --task-config.object-name "$object_name" \
+            --save_dir "$retargeted_abs"
+          )
+        fi
         if [ "$RETARGET_ENABLE_CONSTRAINT_RELAXATION" = "1" ]; then
           retarget_args+=(--retargeter.enable-constraint-relaxation)
         fi
@@ -354,7 +383,7 @@ process_case() {
         run_cmd "${retarget_args[@]}"
       )
     else
-      echo "skip retarget: $retargeted_npz exists"
+      echo "skip retarget: $retarget_done_marker exists"
     fi
 
     if [ "$FORCE" -eq 1 ] || [ ! -f "$trimmed_npz" ]; then

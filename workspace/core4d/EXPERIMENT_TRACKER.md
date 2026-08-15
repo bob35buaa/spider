@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| E199 | 2026-08-15 | Phase 62 | OmniRetarget object augmentation打通+full CEM(8物体, 31变体=8orig+23trans; rot全不可达/bucket007-trans2初始穿透被拦)：上游omnirt_v2增强→SPIDER→E199 rubber_hull PRG→CEM；修复holosoma增强2处bug；C3衰减锚定0.2m→0.027m | ✅ AUG有效(23/31评)：obj_pos+19.9%(<25%阈),接触/腿穿透/gate不劣于orig,0跌倒,视觉无artifact；旋转档位系统性不可达 | [286](log/286_E199_omniretarget_object_augmentation_results.md) · [plan228](plan/228_E199_omniretarget_object_augmentation_full_cem_plan.md) |
 | E198 | 2026-08-15 | Phase 61 | G1×A2完整2×2(5物体159run,+box001 plan227)：非可加相互救援；box001无单臂回退→退化为可加；G1A2-arm RL export 3物体24case(含box001 partner Stage2b补建) | ✅ FACTORIAL_CHARACTERIZED；159/159；RL export 24/24 | [284](log/284_E198_g1xa2_factorial_results.md) · [285](log/285_E198_g1a2_rl_export.md) · [plan226](plan/226_E198_g1xa2_factorial_and_E192_a2_expansion_plan.md) · [plan227](plan/227_E198_box001_g1a2_a2_supplement_plan.md) |
 | E192-ext | 2026-08-13 | Phase 61 | A2补box021/023(44)：跨物体复现姿态门回退，无tracking收益 | ✅ 44/44；A2维持不升级 | [283](log/283_E192_a2_expansion_box021_box023_results.md) |
 | E197 | 2026-08-12 | Phase 60 | 五类box Full CEM Omni/PRG七指标与Omni gate v4 | ✅ 87/87；Omni gate 52 | [277](log/277_E197_full_cem_omnirt_vs_prg_metrics.md) |

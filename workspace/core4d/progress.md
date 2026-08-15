@@ -1,5 +1,18 @@
 # CORE4D 当前进度
 
+## 当前：E199 全量 box 平移增强（plan229，计划态待批准）
+
+### 2026-08-16 · plan229 已写
+
+- 计划：[plan229](plan/229_E199_box_fullscale_translation_augmentation_plan.md)。承接 pilot（plan228/log286，已证增强有效）。
+- **范围（权威 = E198 A0 arm）**：box 类进入 s6 full CEM 的 87 case = box001(28)+box004(6)+box021(28)+box023(16)+box024(9)。
+  pilot 已跑 5 个代表 case（20 条 box run）跳过 → 新增 82 case × 3 平移 = **≤246 条 aug full CEM**。
+- **只做平移**（trans0/1/2），**不做旋转**（pilot 已证 rot 8/8 物体不可达）；实验号仍 E199，同分支。
+- **用户 2 决策（2026-08-16）**：① orig 同条件基线**复用现有 E198 A0/PRG full CEM**（不重跑 orig；代价=orig omnirt_v1 vs aug omnirt_v2 轻微混淆，pilot 已同条件证明可信，eval 标注）；
+  ② **全量 87 case 一次性 8 卡 priority 队列**（resume-safe，跳 pilot-done）。
+- **相对 pilot 唯一结构性改动**：case 注册表从硬编码 8-case 改为从 arm_cache 派生 87 box case；manifest orig 行改 `reused_a0` 状态隔离（不进 CEM 队列，仅供 eval 配对）；VARIANTS 去掉 rot。
+- **未批准前不写放量代码/不占 GPU**。前置：pilot 剩 5 条 bucket CEM 跑完（当前 26/31，bucket003/004/007 在跑）。
+
 ## 当前：E198 G1×A2 因子 + E192 A2 扩展（计划态，待批准）
 
 ### 2026-08-13 · plan226 已写
@@ -1190,3 +1203,11 @@
   原始 E194 TSV 不改写。输出 `E194_noPRG_PRG_G1_comparison.xlsx` 已通过
   `11,512` formulas / `0` errors，cardinality=`72×3 arm rows, 144 paired, 1,728 gate migrations`，
   并保留方向感知渐变色。overlay manifest 为 `e194_corrected_g1_overlay_manifest.json`。
+
+## E199 · OmniRetarget object augmentation 打通 + full CEM (Phase 62, 2026-08-15)
+- 目标：把上游 object augmentation(位置+朝向)接进 SPIDER 管线并跑正式 full CEM，看增强后重定向是否仍物理可信。8 物体各 1 case；scale 分 Phase 2。
+- 用户决策：原生固定 5 变体(+orig=6)；PRG arm 统一 E173 builder 但产新 E199 标签(不覆盖历史)；retarget 用 omnirt_v2(Phase-4 松弛)解决增强不可达导致的 IK 不可行。
+- 修复 holosoma parallel_robot_retarget.py 两处 bug(此增强路径此前从未跑过)：retargeter config 被实例覆盖(k>0 全 self_collision AttributeError)；单变体不可行中止全部。
+- box024 pilot(omnirt_v2)验证全链路：C3 接近段偏移 0.200m→终点 0.027m(衰减锚定)；可行性 3/5(trans 全可行, rot0/rot1 出可达域仍不可行)；CEM canary 产有限值输出、Hydra 契约与 E173 PRG 一致。
+- 进行中：7 case 数据构建(omnirt_v2)后台运行(~1.5h CPU)；随后 build_aug_manifest + 8 卡 priority CEM 队列 + orig-vs-aug 评估。
+- 详见 log 286 / plan 228。
