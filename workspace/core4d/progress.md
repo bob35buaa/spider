@@ -13,6 +13,39 @@
 - **相对 pilot 唯一结构性改动**：case 注册表从硬编码 8-case 改为从 arm_cache 派生 87 box case；manifest orig 行改 `reused_a0` 状态隔离（不进 CEM 队列，仅供 eval 配对）；VARIANTS 去掉 rot。
 - **未批准前不写放量代码/不占 GPU**。前置：pilot 剩 5 条 bucket CEM 跑完（当前 26/31，bucket003/004/007 在跑）。
 
+### 2026-08-16 · plan229 已批准执行（/goal）· 放量脚本实现完成
+
+- pilot CEM 队列已 **31/31 全完成**（bucket 收尾跑完）；正在重跑 pilot eval 补全 log286 31 条分布（后台 b664rrwta）。
+- **数据核查结论**：87 个 box s6-full-CEM case 的 scene+orig rollout **全在本机**，0 缺失。base dir 71 个 `dcv3_omnirt_v1_*` + 16 个 `dcv3_omnirt_v2_*`（之前误判缺失是查错前缀）。metric_standard_id 与当前 core 一致（`core4d-e154-physics-contact-v1`）→ orig 可在同 contract 下重打分配对。
+- **放量脚本改动（scope 开关，pilot 行为默认不变，isolation）**：
+  - `e199_common.py`：+`load_fullscale_cases()`（从 E198 A0 arm_cache 派生 87 box case，base 取 scene_xml 父目录）、`TRANS_VARIANTS`、`FULLSCALE_*` 独立路径、`aug_task_name()` 幂等（v2 base 保持 v2）。
+  - `build_augmented_tasks.py`：+`--scope box_fullscale`（trans-only，skip-existing 复用已建 trajectory/scene_act，独立 artifacts TSV，按 base_target_task 去重合并）。
+  - `build_aug_manifest.py`：+`--scope`（读/写 FULLSCALE_* 路径；trans-only manifest，无 orig 行）。
+  - `run_local_priority_queue.py`：无需改（manifest 驱动 + resume skip；pilot 已跑的 box trans 因 variant_id/CEM_ROOT 相同被 resume 自动跳过）。
+  - 新 `eval/runners/eval_E199_fullscale_augmentation.py` + wrapper：per-case 配对（orig=重打分的 A0 rollout，同 EvalConfig），逐物体分层 + C5 平移可行性分布。
+  - `train_E199.sh` / `run_E199_local_8gpu.sh`：+`SCOPE` 透传。
+- 全部 py_compile / bash -n 通过；`load_fullscale_cases()` 返回 87（28/6/28/16/9，v1=71/v2=16），aug_task_name 幂等验证过。
+- **单 case 端到端验证通过**：`box024_20231011_027_p1`（v2-base）全量 build [done] 3/3 trans，failures=0，manifest 3 行(P1)，blocker=0；trans0/1/2 approach=0.200m endpoint=0.024m（C3 衰减锚定正确）。
+- **上游 find_files bug 修复**（holosoma，isolation）：`find_files` 的 smplx 分支之前 glob 全部 `*.npz`，把 convert 产的 object-only（无 global_joint_positions）/person-only（无 object_poses）sidecar 也当任务 → 抛 KeyError（main 里 try/except 容错，非致命，但噪声+浪费）。修复：object_name 存在时过滤 `*{object_name}*.npz`（与 smplh 分支一致）→ 只处理 combined `*_with_obj.npz`。验证：Box024 → 恰好 1 个 combined 文件。
+- **放量数据构建已启动**（后台 orchestrator `run_E199_fullscale_build.sh`，6 shard 并行 CPU，各 14-15 case，共 87）；日志 `logs/E199/fullscale/build_shard_{0..5}.log` + `build_orchestrator.log`。CPU-only 不占 GPU。完成后自动 merge→manifest→snapshot。预计 ~3h。之后 `SCOPE=box_fullscale` 启 CEM 队列。
+- **pilot（plan228/log286）已 31/31 CEM 完成 + eval 补全 + log286 已闭合**：8 orig + 23 aug，0 error。最终分布：obj_pos 11.47→12.05cm(+5.0%)、obj_ori 6.29→6.59°(+4.9%，早先+33%证实为小样本假象)、接触 0.665→0.624、手穿透-9.2%、腿穿透-9.4%、fall 0/0、gate orig 3/8 aug 7/23。结论更稳（tracking 全维<10%、穿透 aug 更优、0跌倒）。
+- **放量全链路已托管自动跑**：finalizer `run_E199_fullscale_finalize.sh`（nohup pid 966584）等 build 完成→自动 CEM(8卡 SCOPE=box_fullscale)→eval→render QC(每物体≤6)；日志 `logs/E199/fullscale/{finalize,cem_queue,eval,render}.log`。
+- **监控 cron `6549faa4`**（每 2h :37，session-only）：finalizer DONE 后自动读 summary 写 **log287** + 更新 tracker + 删 cron；未完成则只报阶段。
+- **待办**：log287（自动/手动）；plan229 Claims C0–C6 验收；git commit（E199 分支 + holosoma find_files 修复，**未提交**，等用户）。Phase 2（scale）另开。
+
+### 2026-08-16 · 用户加第二台 8 卡机器 → CEM 双机并行（独立文件系统）
+
+- 用户决策：另一台 8 卡机器**独立文件系统**（非同一 JuiceFS，需拷文件）；**允许重启本机队列**。
+- **拆分**：停掉 finalizer + 全量队列 + 8 个在跑 run（已 104 done 保留）；把 249 行按 (object,case,variant) round-robin 拆成 **machineA(本机,125行/71待跑) + machineB(远程,124行/74待跑)**，逐物体均衡；killed running 行 status 重置为空。manifest：`e199_fullscale_machine{A,B}_manifest.tsv`。
+- **本机 machineA 已重启**（nohup queue → `logs/E199/fullscale/cem_machineA.log`，8 卡满载）。
+- **远程 machineB 交付物**（独立 FS，自包含）：
+  - 标准队列 `run_E199_machineB_remote.py`（**不 import e199_common**，仅 stdlib+numpy+yaml，避免远程 import 链）。
+  - 打包器 `pack_E199_machineB_remote.py` → `results/E199/s6_downstream/remote_bundle/e199_machineB_bundle.tar.gz`（15.4MB，1206 文件：124 aug task 目录+scene/trajectory、124 PRG override+base yaml、contact mask、5 物体碰撞 mesh、standalone queue、machineB manifest、launch 脚本、README）。
+  - 假设远程已有 spider repo+venv+robot mesh+examples/config；解压到远程 repo root → `GPUS=… bash run_E199_machineB_remote.sh`。
+  - 回收：远程 CEM 输出 rsync 回本机 `cem/full/`（文件名按 case+variant 唯一，与 machineA 不撞）。
+- **eval 依赖两机**：machineB 结果回收后，fullscale eval 按磁盘输出到位数打分（读全 249 manifest），不依赖 A/B status。
+- **监控 cron 换 `2c9b30b9`**（每 2h）：machineA 全 done 且 249 输出到位 → 自动 eval+render+log287+tracker；否则只报进度。
+
 ## 当前：E198 G1×A2 因子 + E192 A2 扩展（计划态，待批准）
 
 ### 2026-08-13 · plan226 已写

@@ -99,7 +99,8 @@ def _slice_time_axis(data: "np.lib.npyio.NpzFile", trim_start: int) -> dict[str,
     return out
 
 
-def fixed_window_trim(base_task: str, meta: dict[str, str]) -> tuple[int, list[str]]:
+def fixed_window_trim(base_task: str, meta: dict[str, str],
+                      aug_variants: list[tuple[str, str]] = C.AUG_VARIANTS) -> tuple[int, list[str]]:
     """Trim the feasible aug variants at the SAME trim_start as `_original`.
 
     Returns (trim_start, feasible_holo_names). Aug variants whose retarget was
@@ -122,7 +123,7 @@ def fixed_window_trim(base_task: str, meta: dict[str, str]) -> tuple[int, list[s
     (root / "trimmed").mkdir(parents=True, exist_ok=True)
     feasible: list[str] = ["original"]
     infeasible: list[str] = []
-    for _, holo_name in C.AUG_VARIANTS:
+    for _, holo_name in aug_variants:
         src = root / "retargeted" / f"{holo}_{holo_name}.npz"
         if not src.is_file():
             infeasible.append(holo_name)
@@ -132,12 +133,12 @@ def fixed_window_trim(base_task: str, meta: dict[str, str]) -> tuple[int, list[s
         np.savez(str(root / "trimmed" / f"{holo}_{holo_name}.npz"), **saved)
         feasible.append(holo_name)
     print(f"[trim] {base_task}: trim_start={trim_start} (orig {t_orig}->{t_trim}); "
-          f"feasible aug={len(feasible) - 1}/5 infeasible={infeasible}", flush=True)
+          f"feasible aug={len(feasible) - 1}/{len(aug_variants)} infeasible={infeasible}", flush=True)
     return trim_start, feasible
 
 
 def build_variant_task(base_task: str, meta: dict[str, str], e199_name: str, holo_name: str,
-                       *, overwrite: bool) -> dict[str, Any]:
+                       *, overwrite: bool, skip_existing: bool = False) -> dict[str, Any]:
     root = case_root(base_task)
     trimmed_npz = root / "trimmed" / f"{meta['holosoma_task']}_{holo_name}.npz"
     if not trimmed_npz.is_file():
@@ -147,6 +148,9 @@ def build_variant_task(base_task: str, meta: dict[str, str], e199_name: str, hol
     if not source_scene.is_file():
         raise FileNotFoundError(f"base geometry template scene missing: {source_scene}")
 
+    task_dir = C.TASK_ROOT / aug_task
+    trajectory = task_dir / "0/trajectory_kinematic.npz"
+    scene_act = task_dir / "scene_act.xml"
     scene_common = [
         str(C.SPIDER_PYTHON_BIN), CREATE_SCENE,
         "--source-scene", str(source_scene), "--task", aug_task,
@@ -154,24 +158,25 @@ def build_variant_task(base_task: str, meta: dict[str, str], e199_name: str, hol
         "--date", meta["date"], "--seq", meta["seq"], "--person", meta["person"],
         "--object-name", meta["object_name"], "--object-model-rel", meta["object_model_rel"],
     ]
-    # 1) standard scene.xml (base geometry + augmented initial object pose)
-    subprocess.run(scene_common, cwd=C.REPO, check=True)
+    if skip_existing and trajectory.is_file() and scene_act.is_file():
+        # already built (idempotent resume) -- only re-derive the E199 PRG sidecar
+        # (cheap, no CEM) below; skip the scene/trajectory regeneration subprocesses.
+        print(f"    [reuse] {aug_task} (trajectory + scene_act present)", flush=True)
+    else:
+        # 1) standard scene.xml (base geometry + augmented initial object pose)
+        subprocess.run(scene_common, cwd=C.REPO, check=True)
+        # 2) SPIDER trajectory (scene_act euler detection below reads this)
+        subprocess.run([
+            str(C.SPIDER_PYTHON_BIN), CORE4D,
+            "--source-npz", str(trimmed_npz), "--task", aug_task, "--data-id", "0",
+            "--dataset-name", "core4d", "--robot-type", "unitree_g1",
+            "--embodiment-type", "humanoid_object", "--no-show-viewer", "--no-save-video",
+        ], cwd=C.REPO, check=True)
+        # 3) scene_act (needs the trajectory to pick the euler convention)
+        subprocess.run(scene_common + ["--generate-scene-act"], cwd=C.REPO, check=True)
 
-    # 2) SPIDER trajectory (scene_act euler detection below reads this)
-    subprocess.run([
-        str(C.SPIDER_PYTHON_BIN), CORE4D,
-        "--source-npz", str(trimmed_npz), "--task", aug_task, "--data-id", "0",
-        "--dataset-name", "core4d", "--robot-type", "unitree_g1",
-        "--embodiment-type", "humanoid_object", "--no-show-viewer", "--no-save-video",
-    ], cwd=C.REPO, check=True)
-
-    # 3) scene_act (needs the trajectory to pick the euler convention)
-    subprocess.run(scene_common + ["--generate-scene-act"], cwd=C.REPO, check=True)
-
-    # 3) E199 rubber_hull + PRG sidecar
-    task_dir = C.TASK_ROOT / aug_task
-    trajectory = task_dir / "0/trajectory_kinematic.npz"
-    scene = C.build_prg_scene(aug_task, task_dir / "scene_act.xml", trajectory, overwrite=overwrite)
+    # 4) E199 rubber_hull + PRG sidecar (cheap; always (re)derived, idempotent)
+    scene = C.build_prg_scene(aug_task, scene_act, trajectory, overwrite=overwrite)
 
     return {
         "aug_variant": e199_name, "holosoma_variant": holo_name, "target_task": aug_task,
@@ -219,24 +224,28 @@ def pose_diff(base_task: str, meta: dict[str, str], e199_name: str, holo_name: s
 
 
 def process_case(case: dict[str, str], *, force: bool, max_workers: int,
-                 overwrite_scenes: bool, skip_upstream: bool) -> list[dict[str, Any]]:
+                 overwrite_scenes: bool, skip_upstream: bool,
+                 variants: list[tuple[str, str]] = C.VARIANTS,
+                 skip_existing: bool = False) -> list[dict[str, Any]]:
     base_task = case["base_target_task"]
     object_key = case["object_key"]
     meta = C.load_case_meta(base_task)
+    aug_variants = [v for v in variants if v[0] != "orig"]
     print(f"\n=== E199 case {object_key}: {base_task} ===", flush=True)
     if not skip_upstream:
         run_upstream(base_task, meta, force=force, max_workers=max_workers)
-    trim_start, feasible = fixed_window_trim(base_task, meta)
+    trim_start, feasible = fixed_window_trim(base_task, meta, aug_variants)
     fresh_mask = mask_path(base_task)
     if not fresh_mask.is_file():
         raise FileNotFoundError(f"contact mask not produced: {fresh_mask}")
     rows: list[dict[str, Any]] = []
-    for e199_name, holo_name in C.VARIANTS:
+    for e199_name, holo_name in variants:
         if holo_name not in feasible:
             print(f"  [skip] {e199_name} ({holo_name}) infeasible upstream -- no task built", flush=True)
             continue
         try:
-            artifact = build_variant_task(base_task, meta, e199_name, holo_name, overwrite=overwrite_scenes)
+            artifact = build_variant_task(base_task, meta, e199_name, holo_name,
+                                          overwrite=overwrite_scenes, skip_existing=skip_existing)
             diff = pose_diff(base_task, meta, e199_name, holo_name)
         except Exception as exc:  # noqa: BLE001
             # e.g. build_prg_scene runtime_initial_overlap: an augmented pose whose
@@ -263,17 +272,30 @@ def process_case(case: dict[str, str], *, force: bool, max_workers: int,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cases", default="", help="comma list of object_keys (default: all 8)")
+    parser.add_argument("--scope", default="pilot", choices=["pilot", "box_fullscale"],
+                        help="pilot=8-object 6-variant; box_fullscale=all s6 box cases, translation-only")
+    parser.add_argument("--cases", default="", help="comma list of object_keys or case_ids to restrict to")
     parser.add_argument("--force", action="store_true", help="force upstream re-run")
     parser.add_argument("--skip-upstream", action="store_true", help="reuse existing retarget/trim/mask")
     parser.add_argument("--overwrite-scenes", action="store_true")
     parser.add_argument("--max-workers", type=int, default=1)
+    parser.add_argument("--artifacts", default="",
+                        help="override output artifacts TSV path (for parallel sharded builds)")
     args = parser.parse_args()
 
+    fullscale = args.scope == "box_fullscale"
+    variants = C.TRANS_VARIANTS if fullscale else C.VARIANTS
+    registry = C.load_fullscale_cases() if fullscale else C.CASES
+    out = C.repo_path(args.artifacts) if args.artifacts else (
+        C.FULLSCALE_ARTIFACTS if fullscale else
+        C.RESULTS / "data_preprocess/manifests/e199_aug_artifacts.tsv")
+
     wanted = {c.strip() for c in args.cases.split(",") if c.strip()}
-    cases = [c for c in C.CASES if not wanted or c["object_key"] in wanted]
+    cases = [c for c in registry
+             if not wanted or c["object_key"] in wanted or c.get("case_id") in wanted]
     if not cases:
-        raise SystemExit(f"no cases match {wanted}")
+        raise SystemExit(f"no cases match {wanted} (scope={args.scope})")
+    print(f"[scope] {args.scope}: {len(cases)} case(s), variants={[v[0] for v in variants]}", flush=True)
 
     all_rows: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
@@ -281,7 +303,8 @@ def main() -> int:
         try:
             all_rows.extend(process_case(
                 case, force=args.force, max_workers=args.max_workers,
-                overwrite_scenes=args.overwrite_scenes, skip_upstream=args.skip_upstream))
+                overwrite_scenes=args.overwrite_scenes, skip_upstream=args.skip_upstream,
+                variants=variants, skip_existing=fullscale))
         except Exception as exc:  # noqa: BLE001
             import traceback
             traceback.print_exc()
@@ -289,17 +312,16 @@ def main() -> int:
                              "base_target_task": case["base_target_task"],
                              "error": f"{type(exc).__name__}: {exc}"})
 
-    out = C.RESULTS / "data_preprocess/manifests/e199_aug_artifacts.tsv"
-    # merge with prior runs: keep rows for objects not processed this run
-    processed = {c["object_key"] for c in cases}
+    # merge with prior runs of the SAME scope: keep rows for cases not processed now
+    processed = {c["base_target_task"] for c in cases}
     if C.repo_path(out).is_file():
-        prior = [r for r in C.read_tsv(out) if r.get("object_key") not in processed]
+        prior = [r for r in C.read_tsv(out) if r.get("base_target_task") not in processed]
         all_rows = prior + all_rows
-        all_rows.sort(key=lambda r: (r.get("object_key", ""), r.get("aug_variant", "")))
+    all_rows.sort(key=lambda r: (r.get("object_key", ""), r.get("case_id", ""), r.get("aug_variant", "")))
     C.write_tsv(out, all_rows)
-    C.write_json(C.RESULTS / "data_preprocess/manifests/e199_aug_artifacts.json", all_rows)
+    C.write_json(C.repo_path(out).with_suffix(".json"), all_rows)
     if failures:
-        C.write_json(C.RESULTS / "data_preprocess/manifests/e199_aug_failures.json", failures)
+        C.write_json(C.repo_path(out).with_name("e199_aug_failures.json"), failures)
     print(f"\n[done] {len(all_rows)} variant tasks across {len(cases) - len(failures)}/{len(cases)} cases; "
           f"failures={len(failures)} -> {C.rel(out)}")
     return 1 if failures else 0

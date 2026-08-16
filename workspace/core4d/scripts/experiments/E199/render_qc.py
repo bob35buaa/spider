@@ -74,12 +74,26 @@ def main() -> int:
                     help="comma list of object_keys to render (orig + its aug variants)")
     ap.add_argument("--out", type=Path, default=C.RESULTS / "s6_downstream/render/qc")
     ap.add_argument("--n-keyframes", type=int, default=5)
+    ap.add_argument("--manifest", type=Path, default=C.FULL_MANIFEST,
+                    help="manifest to render from (default pilot; use fullscale manifest for plan229)")
+    ap.add_argument("--max-per-object", type=int, default=0,
+                    help="cap rendered rows per object (0 = no cap); samples distinct cases first")
     args = ap.parse_args()
 
     wanted = {o.strip() for o in args.objects.split(",") if o.strip()}
-    rows = [r for r in C.read_tsv(C.FULL_MANIFEST)
+    rows = [r for r in C.read_tsv(args.manifest)
             if r["object_key"] in wanted and C.repo_path(r["outdir_npz"]).is_file()]
-    rows.sort(key=lambda r: (r["object_key"], r["aug_variant"]))
+    rows.sort(key=lambda r: (r["object_key"], r.get("case_id", ""), r["aug_variant"]))
+    if args.max_per_object > 0:
+        capped: list[dict] = []
+        per_obj: dict[str, int] = {}
+        for r in rows:
+            obj = r["object_key"]
+            if per_obj.get(obj, 0) >= args.max_per_object:
+                continue
+            per_obj[obj] = per_obj.get(obj, 0) + 1
+            capped.append(r)
+        rows = capped
     done = []
     for r in rows:
         try:

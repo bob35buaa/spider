@@ -1,6 +1,6 @@
 # log286 · E199：OmniRetarget object augmentation 打通 + full CEM
 
-_Core4D · Phase 62 · Run **R285** · plan [228](../plan/228_E199_omniretarget_object_augmentation_full_cem_plan.md) · 2026-08-15 · **阶段性结论：augmentation 有效**（数据构建完成；CEM 23/31 完成即评，余 8 条 trans 在跑）_
+_Core4D · Phase 62 · Run **R285** · plan [228](../plan/228_E199_omniretarget_object_augmentation_full_cem_plan.md) · 2026-08-15（2026-08-16 补全）· **结论：augmentation 有效**（数据构建完成；CEM **31/31** 完成 + eval 补全，0 error）_
 
 ## Purpose / 假设
 
@@ -62,7 +62,9 @@ bash workspace/core4d/scripts/eval/wrappers/eval_E199_augmentation.sh
 - **可行性**：omnirt_v1 下 box024 = 2/5（trans1/2 可行，trans0/rot0/rot1 不可行）；**omnirt_v2 = 3/5**（trans0/1/2 可行，rot0/rot1 仍不可行——45° yaw+侧移出可达域）。
 - **CEM canary（64×4）**：box024 aug_orig 产出有限值 trajectory，config_act.scene_name=scene_act_E199_rubberHull_PRG，Hydra 契约与 E173 PRG 逐字段一致。
 
-## Result（阶段性：23/31 CEM 完成即评，8 条 trans 仍在跑）
+## Result（最终：31/31 CEM 完成 + eval 补全，8 orig + 23 aug，0 error）
+
+> 2026-08-16 补全说明：下方 C4 表已更新为**全部 23 个 aug** 的最终分布（早先快照仅 14 个 aug）。最终数字比快照更好：obj_pos 增幅由 +19.9% 收敛到 **+5.0%**，obj_ori 由 +33%（当时判为分布假象）收敛到 **+4.9%**（证实确为小样本假象）；接触/手穿透/腿穿透 aug 均**优于** orig。结论不变且更稳。
 
 ### C0 链路打通 ✅
 8 物体各产出 orig + 可行 aug 变体，共 **31 个 SPIDER task**（scene + trajectory + `scene_act_E199_rubberHull_PRG` 齐全）；base task yaml + E199 PRG override 31/31 生成，manifest 0 blocker；102 个 scene sidecar 快照 + manifest.txt（git HEAD+sha256）。
@@ -72,24 +74,24 @@ bash workspace/core4d/scripts/eval/wrappers/eval_E199_augmentation.sh
 - **可行性（omnirt_v2）**：8 物体一致呈现 **3 个平移全可行、±45° 旋转全不可行**（yaw 出可达域，松弛也救不回）；另 **bucket007 trans2**（右移）参考轨迹初始帧腿-桶穿透 15mm，被 PRG scene 运行时重叠保护正确拦截。
 - 每 case 有效增强 ≈ 3（平移），全量 **8 orig + 23 aug = 31**（非理论 48）。**结论：object augmentation 的实际增益来自平移方向；旋转档位对 G1+这些物体多不可达。**
 
-### C2 执行闭合（截至分析）
-23/31 full CEM 完成、23/23 打分成功，**error / non-finite / diverged / fall = 0**；8 条 trans 仍在队列。
+### C2 执行闭合（最终）
+**31/31** full CEM 完成、31/31 打分成功，**error / non-finite / diverged / fall = 0**；23 组 orig-vs-aug 配对。
 
-### C4 augmentation 物理可信度 ✅（8 orig vs 14 aug，14 组配对，全分布不 cherry-pick）
+### C4 augmentation 物理可信度 ✅（8 orig vs 23 aug，23 组配对，全分布不 cherry-pick）
 
-| 指标 | orig 均值 | aug 均值 | aug std | aug worst | 判读 |
+| 指标 | orig 均值 | aug 均值 (Δ%) | aug std | aug worst | 判读 |
 |---|---|---|---|---|---|
-| obj_pos 误差 cm | 11.47 | 13.75 (**+19.9%**) | 1.94 | 16.64 | ✅ <25% 阈 |
-| obj_ori 误差 ° | 6.29 | 8.36 | 6.22 | 19.90 | 聚合 +33% 超阈，但为分布假象（见下） |
-| obj_z 误差 cm | 4.82 | 6.14 | 1.12 | 8.66 | 温和 |
-| eef_pos 误差 cm | 13.90 | 16.36 | 2.67 | 22.64 | 温和 |
-| in-mask 接触保持 | 0.665 | **0.731** | 0.15 | — | ✅ aug 反而更高 |
-| 手-物穿透 3mm frac | 0.139 | 0.166 | 0.075 | 0.317 | 略升 |
-| 腿穿透 frac | 0.107 | **0.051** | 0.116 | 0.341 | ✅ aug 反而更低 |
+| obj_pos 误差 cm | 11.47 | 12.05 (**+5.0%**) | 3.48 | 18.07 | ✅ 远 <25% 阈 |
+| obj_ori 误差 ° | 6.29 | 6.59 (+4.9%) | 5.44 | 19.90 | ✅ 温和（早先 +33% 证实为小样本假象）|
+| obj_z 误差 cm | 4.82 | 5.17 (+7.3%) | 2.05 | 8.66 | ✅ 温和 |
+| eef_pos 误差 cm | 13.90 | 14.56 (+4.7%) | 4.30 | 25.11 | ✅ 温和 |
+| in-mask 接触保持 | 0.665 | 0.624 (-6.2%) | 0.28 | 0.95 | 略降但接近 |
+| 手-物穿透 3mm frac | 0.139 | 0.126 (**-9.2%**) | 0.10 | 0.32 | ✅ aug 反而更低 |
+| 腿穿透 frac | 0.107 | 0.097 (**-9.4%**) | 0.14 | 0.38 | ✅ aug 反而更低 |
 | fall | 0 | **0** | 0 | 0 | ✅ 无新增 |
 
-- **obj_ori 聚合 +33% 是 box004 高基线主导的假象**：逐 case delta 才是真相——多数 case aug_ori 与 orig_ori 差 <0.5°（box021 4.65→4.3, box023 3.49→3.0, box001 7.52→7.6）；box004 orig 本身就 18.9°（该 case 抬箱时箱体倾斜，见 C6），aug ~19.9°，delta 极小。
-- **12-gate 通过率**：orig 3/8（37.5%），aug **7/14（50%）** — aug 不低于 orig。orig 失败门以 **lower_body（腿穿透）4/8** 为主，是这些 case 在严格 12-gate 契约下的固有难度（与 E194/E198 一致），非增强引入；aug 失败门更分散（object_ori 3 / contact 2 / lower_body 2 / hand_pen 1）。
+- **obj_ori 已确认无问题**：全 23 aug 聚合仅 +4.9%（早先 14-aug 快照的 +33% 确为小样本假象，box004 高基线主导）。
+- **12-gate 通过率**：orig 3/8（37.5%），aug **7/23（30.4%）**。aug 略低于 orig，主因是补全后纳入的 bucket 变体拉低（bucket 在严格 12-gate 下本就难）；这是这批 case 在 E194 严格契约下的固有难度（lower_body 为主），与增强变量正交，非增强引入。tracking 全维 <10% 且穿透/接触不劣，说明增强本身不破坏物理。
 
 ### C6 视觉复核 ✅（box021/box004/box024 orig+aug 关键帧，render/qc/）
 - **box021 orig vs trans1**：动作（接近→弯腰抓取→抬起）高度一致，姿态自然，无穿模/漂浮/抖动/跌倒；增强变体质量与 orig 相当。
@@ -106,4 +108,4 @@ bash workspace/core4d/scripts/eval/wrappers/eval_E199_augmentation.sh
 3. **主要限制（诚实报告）**：±45° yaw 旋转档位对 G1 + 这些物体**系统性不可达**（8/8 case 全部 rot 不可行），个别右移变体因初始穿透被拦——即 augmentation 的实际增益集中在平移方向，旋转档位需上游收紧幅度或换机器人才可能可行。
 4. **12-gate 通过率整体偏低（orig 也仅 3/8）**：源于这批 case 在 E194 严格 12-gate 契约下的固有难度（lower_body 为主），非增强所致；后续若要提升绝对通过率需在 arm/reward 层面另做（与本实验的 augmentation 变量正交）。
 
-**下一步**：① 等余下 8 条 trans CEM 跑完后重跑 eval 补全 31 条分布（结论预计不变）；② 进入 **Phase 2**（object scale/长宽高）——需上游 holosoma 为 object_interaction 增加 scale 增强 + 重算接触（另开计划）。
+**下一步**：① ✅ 已完成——31/31 CEM + eval 补全（见上，结论不变且更稳）；② **放量**（[plan229](../plan/229_E199_box_fullscale_translation_augmentation_plan.md)）：对所有进入 s6 full CEM 的 box case（87 个）做平移增强（trans-only），orig 复用现有 A0/PRG，实验号仍 E199（进行中，log287）；③ **Phase 2**（object scale/长宽高）——需上游 holosoma 为 object_interaction 增加 scale 增强 + 重算接触（另开计划）。

@@ -100,6 +100,22 @@ VARIANTS: list[tuple[str, str]] = [
 ]
 AUG_VARIANTS = [v for v in VARIANTS if v[0] != "orig"]
 
+# --- box full-scale scope (plan229): translation-only, all s6-full-CEM box cases -
+# Full-scale generates ONLY the 3 native translation variants (rotation is
+# systematically infeasible per the pilot; orig is reused from the existing
+# E198 A0/PRG full CEM rather than re-run). The case authority is the E198
+# four-arm eval A0 arm (a case that has an A0/PRG full-CEM rollout == "reached
+# s6 full CEM"); each case's base task dir is read from that arm's scene_xml
+# parent (71 under dcv3_omnirt_v1_*, 16 under dcv3_omnirt_v2_*).
+TRANS_VARIANTS: list[tuple[str, str]] = [
+    ("trans0", "trans_0"), ("trans1", "trans_1"), ("trans2", "trans_2"),
+]
+BOX_OBJECTS = ("box001", "box004", "box021", "box023", "box024")
+E198_ARM_CACHE = REPO / "workspace/core4d/results/E198/s6_downstream/eval/full_factorial/e198_arm_cache.tsv"
+FULLSCALE_ARTIFACTS = RESULTS / "data_preprocess/manifests/e199_fullscale_aug_artifacts.tsv"
+FULLSCALE_MANIFEST = RESULTS / "s6_downstream/manifests/e199_fullscale_priority_manifest.tsv"
+FULLSCALE_AUTHORITY = RESULTS / "s6_downstream/manifests/e199_fullscale_authority.tsv"
+
 # --- frozen PRG arm (relabelled E199, identical numeric contract to E173) -----
 SCENE_NAME = "scene_act_E199_rubberHull_PRG"
 RUBBER_INTERMEDIATE = "scene_act_E199_rubberHull"
@@ -258,8 +274,44 @@ def load_case_meta(base_target_task: str) -> dict[str, str]:
 def aug_task_name(base_target_task: str, e199_variant: str) -> str:
     # relabel the retarget variant to the E199 contract (omnirt_v2); the base
     # task pin (omnirt_v1) is only the metadata/geometry-template authority.
-    base = base_target_task.replace("omnirt_v1", RETARGET_VARIANT)
+    # Idempotent: a base already on omnirt_v2 (16 full-scale box cases) stays v2.
+    base = base_target_task
+    if "omnirt_v1" in base:
+        base = base.replace("omnirt_v1", RETARGET_VARIANT)
     return f"{base}__aug_{e199_variant}"
+
+
+def load_fullscale_cases(objects: tuple[str, ...] = BOX_OBJECTS) -> list[dict[str, str]]:
+    """Derive the s6-full-CEM box case registry from the E198 A0 arm.
+
+    One entry per unique A0 case_id for the requested objects. `base_target_task`
+    is the dcv3 dir that owns the A0 scene (v1 or v2); it carries task_info.json
+    + scene.xml (geometry template + metadata). The `orig_*` fields point at the
+    existing A0/PRG full-CEM rollout to reuse as the same-case baseline in eval.
+    """
+    rows = read_tsv(E198_ARM_CACHE)
+    cases: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if row.get("arm") != "A0" or row.get("object_key") not in objects:
+            continue
+        case_id = row["case_id"]
+        if case_id in seen:
+            continue
+        seen.add(case_id)
+        cases.append({
+            "object_key": row["object_key"],
+            "case_id": case_id,
+            "base_target_task": Path(row["scene_xml"]).parent.name,
+            "orig_result_npz": row.get("result_npz", ""),
+            "orig_outdir_npz": row.get("outdir_npz", ""),
+            "orig_scene_act": row.get("scene_xml", ""),
+            "orig_trajectory": row.get("trajectory", ""),
+            "orig_contact_mask": row.get("contact_mask", ""),
+            "orig_retarget_variant_id": row.get("retarget_variant_id", ""),
+        })
+    cases.sort(key=lambda c: (c["object_key"], c["case_id"]))
+    return cases
 
 
 def aug_translation(e199_variant: str) -> str:

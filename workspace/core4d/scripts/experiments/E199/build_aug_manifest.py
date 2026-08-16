@@ -78,10 +78,10 @@ def artifact_paths(variant_id: str) -> dict[str, str]:
     }
 
 
-def build() -> tuple[list[dict[str, Any]], list[str]]:
-    rows_in = C.read_tsv(ARTIFACTS)
+def build(artifacts: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    rows_in = C.read_tsv(artifacts)
     if not rows_in:
-        raise SystemExit(f"no artifact rows in {C.rel(ARTIFACTS)} -- run build_augmented_tasks.py first")
+        raise SystemExit(f"no artifact rows in {C.rel(artifacts)} -- run build_augmented_tasks.py first")
     rows: list[dict[str, Any]] = []
     blockers: list[str] = []
     for art in rows_in:
@@ -134,20 +134,28 @@ def build() -> tuple[list[dict[str, Any]], list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--scope", default="pilot", choices=["pilot", "box_fullscale"])
     parser.add_argument("--print-only", action="store_true")
-    parser.parse_args()
+    args = parser.parse_args()
 
-    rows, blockers = build()
-    C.write_tsv(C.FULL_MANIFEST, rows, C.FIELDS)
-    C.write_tsv(C.AUTHORITY_TSV, rows, C.FIELDS)
+    fullscale = args.scope == "box_fullscale"
+    artifacts = C.FULLSCALE_ARTIFACTS if fullscale else ARTIFACTS
+    manifest = C.FULLSCALE_MANIFEST if fullscale else C.FULL_MANIFEST
+    authority = C.FULLSCALE_AUTHORITY if fullscale else C.AUTHORITY_TSV
+
+    rows, blockers = build(C.repo_path(artifacts))
+    C.write_tsv(manifest, rows, C.FIELDS)
+    C.write_tsv(authority, rows, C.FIELDS)
     summary = {
         "created_at": C.now(), "rows": len(rows),
         "by_tier": {t: sum(r["tier"] == t for r in rows) for t in ("P0", "P1", "P2")},
         "by_object": {k: sum(r["object_key"] == k for r in rows) for k in sorted({r["object_key"] for r in rows})},
-        "blockers": blockers, "full_manifest": C.rel(C.FULL_MANIFEST),
+        "by_case": len({r["case_id"] for r in rows}),
+        "scope": args.scope, "blockers": blockers, "full_manifest": C.rel(manifest),
         "frozen_cem": {"seed": C.CEM_SEED, "samples": C.CEM_FULL_SAMPLES, "opt_steps": C.CEM_FULL_OPT_STEPS},
     }
-    C.write_json(C.MANIFEST_DIR / "e199_manifest_summary.json", summary)
+    summary_name = "e199_fullscale_manifest_summary.json" if fullscale else "e199_manifest_summary.json"
+    C.write_json(C.MANIFEST_DIR / summary_name, summary)
     import json
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 1 if blockers else 0
