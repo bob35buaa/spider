@@ -1,6 +1,103 @@
 # CORE4D 当前进度
 
-## 当前：E200 增强放量到 PRG+G1+A2 与 noPRG 两 arm（plan230，计划态待批准）
+## 当前：E201 三级数据筛选漏斗（plan231，计划态待批准，纯离线分析）
+
+### 2026-08-17 · plan231 已写（待批准）· 14-gate 三级漏斗
+
+- 计划：[plan231](plan/231_E201_data_filter_funnel_plan.md)。E199/E200 增强产出大量 rollout，人工逐条不可持续 → config 驱动三级漏斗自动分层 `L1 弃 / L2 人工复审 / L3 自动收(下游RL)`，只把中间带 + 家族不一致交人工。**纯分析，不跑 CEM/不占 GPU/不改 scene（rule 10b 快照豁免）。R289。**
+- **14 门 = 4 硬门(fall / body_z≤0.20 / ankle_jerk<1000 / obj_speed<3，全层强制) + 10 带门(6 tracking + contact/release/hand_pen/leg_pen，宽/窄双阈值)**。
+- **用户 5 决策(2026-08-17)**：① 接触宽 ≥0.40(修正草案 0.51 方向 bug，恢复 宽⊇窄 嵌套)；② 窄 leg_pen≤0.20 / hand_pen≤0.32 刻意放松(下游 RL 容忍，≠E178 canonical 0.10/0.30)；③ 运动健康全局硬门；④ 接触门沿用标准 in_mask(非 3mm)；⑤ tracking 宽带 +1(刻意收窄避免中间带过大)。
+- **核心不变量**：narrow⟹wide 对全 10 带门必须成立(C0 断言)。**家族**=同 case_id 的 {orig,trans0/1/2}；aug 过窄且家族全过窄→auto-accept，否则→人工二审。
+- **目标**：自动决策(L1+L3-auto) ≥60%(C2)。改动全新增隔离于 `scripts/experiments/E201/*` + `gen_E201_funnel_xlsx.py` + review_index filter；复用 gen_E199 的 body_z recompute/openpyxl 布局。**Agent 初审本轮仅占接口不实现(用户先不做动作)。**
+- **3 待确认已定(用户 2026-08-17)**：body_z 硬门 / C2≥60% 比例 / 家族不加额外约束——均保持默认。
+
+### 2026-08-17 · E201 分类器实现 + E199 跑通（sizing 出炉）
+
+- **新增脚本**：`scripts/experiments/E201/funnel_config.py`（14 门单一真源 + `assert_monotonic`）、`classify_funnel.py`（读 case_metrics + body_z recompute 复用 gen_E199 + 分层 + 家族仲裁）、`eval/reports/gen_E201_funnel_xlsx.py`。产出 `results/E201/funnel/{E199_funnel_rollout.tsv, E201_E199_funnel.xlsx}`。
+- **修复 1 个 bug**：orig case_id 用 `_p1/_p2`、aug 用 `_person1/_person2` → 家族分组曾把同一物理 case 的 orig 与 aug 拆成两个 family（aug 一致性没算 orig 臂）。加 `family_key()` 规范化 `_p{N}→_person{N}` 修复；修复后 aug 家族正确含 orig 臂。
+- **E199 分层结果（332 行，C0 monotonic 0 违反，C3 家族逻辑 0 错）**：
+  - ALL：L1_reject 186(56.0%) / L2_review 45(13.6%) / L3_auto 40(12.0%) / L3_review 61(18.4%) → **自动决策 226/332 = 68.1%**，人工 106(31.9%)。
+  - aug 249：自动 61.8%、人工 38.2%；orig 83：自动 86.7%、人工 13.3%。
+  - **C2 达标**（ALL 68.1% / aug 61.8% 均 ≥60%）。
+  - **人工负荷集中在 box001**：仅 45.8% 自动（52/96 人工）；box021 最好 80.4%。
+- **待办**：C4 视觉复核（各层抽样）、C6 review_player 载入待审子集；`export_review_queue.py` + `review_index` filter + `eval_E201_funnel.sh` wrapper + doc 定稿；跑完补 log + TRACKER。
+
+### 2026-08-17 · 用 user_manual_review_filled.tsv（69 条带变体人工标注）校验漏斗准确度 + 2 处修复
+
+- **校验口径**：漏斗只有 L1_reject(自动弃)/L3_auto(自动收)是自动决策；L2/L3_review 交人工不计对错。关键错误=假收(L3_auto 但人工 DO_NOT_USE，坏数据进 RL)/假弃(L1_reject 但人工 USE)。
+- **初版（修复前）**：自动决策 36 条准确率 80.6%；**L3_auto 假收 4/8=50%（严重）**、L1_reject 假弃 3。
+- **根因（决定性）**：4 个假收 100% 是 `orig` 行，14 门指标全干净通过但人工判 UNUSABLE/MAJOR_DEFECT（存在门捕捉不到的视觉失败模式）；且当时 **orig 跳过家族检查**，其家族全部不一致（aug 兄弟在 L2/L3_review/L1）。
+- **2 处修复**（用户 2026-08-17 批准）：
+  1. `classify_funnel.py`：**orig 也做家族检查**（去掉 orig 短路，与 aug 同规则：全家族过窄才 auto）。
+  2. `funnel_config.py`：**hand_pen 宽口径 0.50→0.55**（救回边界假弃）。
+- **修复后校验**：自动决策 27 条准确率 **92.6%**；**假收 4→0**、假弃 3→2（剩 2 个单门 wide 边界：eef_ori>21° / release 0.76>0.60，人工判 MINOR/CLEAN，良性产量损失）。
+- **全量 332 代价**：自动决策率 68.1%→**60.8%**（orig 家族检查移 20 条 orig 到人工 + hand_pen 放宽移 4 条 L1→L2），仍 ≥60% 达标但贴边。L3_auto 40→20。
+- **注意**：该标注是用户挑的难样本（偏 box001/偏 DO_NOT_USE），非随机；绝对率偏保守。box001 修复后自动率仅 37.5%（数据本身偏弱）。
+
+### 2026-08-17 · 补充计划 A 已写（plan231 追加）· L2/L3-review 的 VLM 全量初审
+
+- 需求：对 L2+L3_review 全部待审件（E199=130 条）全量调 VLM 初审（参考，无效力，人工拍板），减轻盲审。
+- **API**：`ecodata2` 的 `call_api_imitate_redaccel.py`（JSONL 驱动，images 按序 + `<image>` token + 空 assistant 作 GT 占位 + metadata 透传，多进程，输出 `0/generate_predictions.jsonl`）；**模型 `Qwen3-VL-235B-A22B-Instruct`**；`--image-size 512`。
+- **管线（全新增隔离）**：select_review_queue → render_frames_for_vlm（复用 render_qc 的 mujoco.Renderer，**2fps 抽帧**：步长=round((qpos_frames/duration_s)/2)，上限 32 帧）→ build_vlm_requests → call_api → parse_vlm_verdicts（回填 review_queue Agent 列）。prompt 单一真源 `vlm_review_prompt.txt`，输出严格 JSON，enum 对齐人工标注（USE/DO_NOT_USE + CLEAN/MINOR/MAJOR/UNUSABLE）便于混淆矩阵。
+- **校验**：修复后 42 条有人工标注落在 L2/L3_review → 直接算 VLM↔人工一致率 + **重点报 VLM 假收**（判 USE 但人工 DO_NOT_USE）。Claims C7/C8/C9。
+- **补充待确认**：分辨率≥512/image_size（默认512）、帧数上限（默认32）、是否加第二相机视角（默认单视角）。**待批准后实现。**
+
+### 2026-08-17 · VLM 初审管线实现 + E199 全量跑通（暴露单视角误判问题）
+
+- **实现（全新增隔离）**：`experiments/E201/{select_review_queue,render_frames_for_vlm,build_vlm_requests,parse_vlm_verdicts}.py` + `vlm_review_prompt.txt` + `eval/wrappers/run_E201_vlm_review.sh`。API 黑盒不改、路径不写死（`ECODATA_CALL_API`/`--call-api-path`）。ecodata python = `/root/miniconda3/bin/python`。用户决策：fps=5、封顶32帧、单视角、image_size=512、num_proc=16。
+- **踩坑**：① MuJoCo EGL + mp.Pool fork 崩（worker 第2任务 segfault→父卡死）→ 改**分片并行**（N 独立进程各串行渲 1/N，绕开 fork-pool）。② 环境只装 Mesa EGL（无 NVIDIA ICD）→ EGL 回退 **llvmpipe 软件渲染**（~330ms/帧）→ 用 24 分片（192 核，不占 GPU/不与 E200 抢卡），130 条含全帧 mp4 ~13min 渲完（0 error）。③ `python` 不在 PATH、.venv 无 ecodata → 用 miniconda。
+- **渲染产出**：`results/E201/vlm_review/frames/E199/{case#variant}/`（video.mp4 全帧 + f000..jpg 5fps帧 + frames.json），130/130。
+- **VLM 结果（Qwen3-VL-235B，130 条 0 API/解析错）**：判 DO_NOT_USE 123 / USE 7；失败类型 bad_grasp **122**、task_incomplete 92、jitter 20、floating 18、penetration 11、fall 1。vs 人工 60 重叠：一致 60.0%、**假收 0**、假弃 24。
+- **关键问题（诊断）**：VLM 因**单视角 2D 深度歧义**系统性误判"手未贴合→隔空搬运→bad_grasp"（122/130），把人工标 CLEAN 且接触门达标的也判废 → 判别力≈全拒基线(58%)，0假收只是近乎全拒的副产品。penetration/floating/jitter/fall（不依赖深度）判断可信。
+- **建议下一步**：加第二相机视角（侧视+俯视）重渲重跑，验证 bad_grasp 误报是否消失、判别力是否提升。待用户定。
+
+### 2026-08-17 · 双视角重跑（azimuth 135°+225° 左右并排，image_size 768）— 未改善，结论：VLM 初审在中间带不具判别力
+
+- 实现：render_frames_for_vlm 支持多视角（`VIEWS` 两相机 hconcat 拼图）；prompt 加"每图左右两视角、结合判断接触深度"；image_size 768。全量重跑 130 条（0 API/解析错）。
+- **对比（vs 人工重叠件）**：单视角一致 60.0%(36/60)、假收0；**双视角一致 58.8%(40/68)、假收3**。bad_grasp 误报 **122→121（没降）**，floating 18→31。
+- **决定性**：68 标注里人工 DNU=42/USE=26 → **全判拒基线=61.8%**；VLM 单/双视角(60%/58.8%)**均 ≤ 基线** → VLM 本质"几乎全判 bad_grasp/DO_NOT_USE"(121-123/130)，不是判别是复读。加视角治不了（问题在中间带本就最模糊 + G1扶箱接触细微 + 渲染噪声）。
+- **结论/待用户定方向**：① 放弃 VLM 做 USE/DNU 判别；② 或窄化只标不依赖深度的硬失败(fall/penetration/floating)作排序预警、不对接触/抓握表态；③ 人工仍复审 130 条，VLM 仅存档。**不再自行加视角/改 prompt 试。**
+- 产出：`vlm_review/{frames(双视角mp4+帧),verdicts/E199_vlm_verdicts.tsv,out/E199/0/generate_predictions.jsonl}` 均已落盘。
+
+### 2026-08-18 · HQ 画质修复 + 双模型 + 扩展 prompt — VLM 判别力仍不可用（决定性负结论）
+
+- **画质根因修复**：抽帧噪点真因 = `imwrite(quality=8)` 即 JPEG 8/100 块噪（mp4 用 libx264 q=7 正常故清晰）→ 改 **quality=95**；另 **关阴影**（默认光 shadow map 混叠成地面条纹）+ 分辨率 **640×480→960×720** + **image_size 512→1024**。smoke 确认噪点/条纹消失、手-箱接触清晰。
+- **prompt 增补**：新增 `back_of_hand`（手背接触）+ `inverted_joint`（反关节）两类。**结果检出极少**：back_of_hand Qwen 9/gemini 0、inverted_joint 两模型均 0。
+- **双模型同步**（wrapper `MODELS` 逗号列表，per-model out/verdicts）：`Qwen3-VL-235B` + `gemini-3.5-flash-huangxiaoshuang`，各 130 条 0 最终错（Qwen 中途 1 次 502 已重试）。
+- **结果（68 标注重叠，全判拒基线 61.8%）**：Qwen 一致 57.4%（DNU118/USE12，bad_grasp 118，假收5）；gemini 一致 52.9%（DNU97/USE33，floating71，假收11）。**两者 HQ 均 < 基线**（比单视角 60% 还略降）。
+- **集成也无用**：两模型都说 USE(n=3)真USE 1/3；都说 DNU(n=48)真DNU 28/48=58%；互相一致 73% 但主要是"一起拒"。
+- **决定性结论**：控制了画质/视角/prompt/模型后，VLM 及其集成在漏斗中间带都低于全判拒基线，**无法提供可用 USE/DNU 信号**。根因：CORE4D 搬箱多为"抵身托举"非干净抓握→VLM 系统性误判 bad_grasp；且 L2/L3 本就是最模糊件（人工自身对半开）。
+- **建议**：放弃 VLM 做中间带判别；130 条仍人工复审，VLM 产出仅作参考展示。漏斗省人工靠 L1自动弃(56%)+L3-auto自动收(0假收)=68% 自动决策（可靠）。待用户定是否写 log288 收口。
+
+### 2026-08-18 · E201 收口：家族门放松 sweep + 默认严格 + log288 + README
+
+- **家族门放松 sweep**（用户探索）：严格(all) 自动60.8%/人工130/假收0；≥2 自动72.6%/人工91/新增自动收假收62%；≥1 自动79.2%/人工69/假收70%。**放松=坏数据大量进 RL**。
+- **用户决策：默认保持严格（all）**，数据质量优先。已把家族门做成 `classify_funnel.py --family-min-other-pass {all|2|1}`（默认 all），并**修一个隐患**：原 apply_family 用会被就地改写的 layer 判断兄弟→顺序依赖；改用进入时快照的 narrow 标志（顺序无关；严格档结果不变，重跑确认 182/49/20/81 自动60.8% 0违反）。
+- **写 [log288](log/288_E201_data_filter_funnel_and_vlm_prescreen.md)**（E201 完整记录：14门漏斗+sizing+校验+VLM负结论+家族sweep）+ **[README](scripts/experiments/E201/README.md)**（数据筛选+评测引导，含扩展到 E200/新实验的步骤）。
+- **TRACKER 加 E201 行**（Phase 64，R289）；**log INDEX 重建**（288 files）。
+- **E201 收口完成**。待办：抽检 20 条 L3_auto；130 条导入 review_player 人工复审；E200 CEM 跑完套同 funnel（`--exp E200-*`）；git commit（等用户）。
+
+## 历史：E200 增强放量到 PRG+G1+A2 与 noPRG 两 arm（plan230，计划态待批准）
+
+### 2026-08-18 · 三 arm master xlsx（gate+人工+下游RL）+ G1A2 收尾托管
+
+- 新脚本 `eval/reports/gen_E200_three_arm_master_xlsx.py`：融合三层证据 → `results/E200/.../eval/E200_three_arm_master.xlsx`（sheet: by_rollout / by_case / summary）。
+  - 上游 gate = E201 14gate 宽窄 funnel（noPRG/PRG aug+orig；G1A2 orig 从 E198 arm_cache 现算，G1A2 aug 待收尾填）。
+  - 人工标注：PRG aug+orig（E199 fullscale `case#variant` + E170/E172/E173）、G1A2（E198）；noPRG 无。
+  - 下游 RL 二值（orig，规则 **FAIL iff SUGAR-W==0 或 Holo-W≤0.10**）：PRG←R018-12、noPRG←R018-20（tmp/ 下）；G1A2 无。case_id 归一 `_person→_p`、去 `#variant`。
+- **首版关键发现（反直觉）**：下游 RL 成功率 **noPRG 81.6%（31/38）> PRG 63.2%（24/38）**，与上游 gate（PRG NARROW 通过率更高）相反；上游 NARROW门/人工USE 与下游 RL 成功**相关性弱**（noPRG NARROW-fail 里 17/21 RL 仍 ok；PRG manual_USE 里 9 个 RL fail）。→ 「14gate 漏斗 proxy 下游可用性」存疑，待深挖。
+- **G1A2 收尾托管**：`launch/active/run_E200_g1a2_finalize.sh`（nohup pid 2557775）等 CEM 全 249 done→打分→classify→刷新 master xlsx→touch `.g1a2_master_DONE`；监控 cron `1b4f4ce4`（每~18min）完成即汇报+自删。CEM 剩 9 条。
+- PRG orig RL join 34/38（E199 A0 orig 覆盖 83 缺 4 canonical：box001_041_p1/107_p2、box021_035_p1/029_p2）；noPRG 37/38（缺 035_p1）。标注非 bug。
+
+### 2026-08-18 · noPRG 结果整理 + noPRG vs PRG 对比（E201 14gate 宽窄口径）→ log289
+
+- **口径变更**：用户要求改用 **E201 `funnel_config` 14-gate 宽/窄漏斗**（4 硬门+10 带门，L1弃/L2审/L3收）替代早期 12-gate。早期 12-gate 内部草算作废。
+- noPRG 249/249 rollout 用 **`eval_E199_augmentation.score()` 同 contract** 打分（`eval_E200_arm_augmentation.py`，0 err）→ `results/E200/.../eval/noprg/e200_noprg_case_metrics.tsv`。
+- noPRG 走 `classify_funnel.py`（EXPS +`E200_noprg`，纯新增不动 E199）分层 → `results/E201/funnel/E200_noprg_funnel_rollout.tsv`。PRG 复用 E199 funnel。
+- 对比脚本 `eval/reports/gen_E200_arm_funnel_compare_xlsx.py` → **`results/E200/.../eval/E200_noprg_vs_prg_funnel.xlsx`**（detail 两 arm 相邻×14门宽窄+layer；summary OVERALL+逐物体）。
+- **结论**：PRG 胜——L3 接受 30.5% vs noPRG 20.5%（NARROW 全通过同）；**差异几乎全在 leg_pen**（窄 82.3% vs 57.0%，−25.3pp；mean 0.086 vs 0.196），其余 13 门 ±6pp 等价，noPRG obj-tracking 反略好。写入 **log289**（R288）+ tracker + INDEX。
+- **补 E190 orig 作 family 锚（用户要求）**：E190 38-case noPRG orig（同 arm，omnirt_v1，与 PRG 侧 E198 A0 对称）用同 `score()` 打分 37/38（box021_035_p1 因 mask 帧 88≠129 跳过，E190 已知口径差异），加入 noPRG case_metrics(group=orig)。重跑 classify → 37 case 的 aug family 有 orig 锚，两 arm aug layer 对等：noPRG L3_auto 18→12/L3_review 33→39（L3 接受 51 不变）。结论不变（PRG L3 接受 30.5%>20.5%，差异全在 leg_pen）。仅 46 个无-orig case 的 L3 划分仍不完全对等；gate 通过率完全对齐。
+- **待办**：PRG+G1+A2 CEM 跑完→三 arm 对比；**视觉复核 render QC（rule 9，log289 暂缺，需补）**；git commit（E200 eval/对比脚本 + classify_funnel/eval_E200 的 E190-orig 扩展）。
 
 ### 2026-08-17 · 每卡 2-job 并行 benchmark → 结论：无收益，保持 max-per-gpu=1
 
