@@ -2,9 +2,12 @@
 # Launch the PRG retargeting review player (viser, E170-E199).
 #
 # Usage:
-#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E198|E199] [--port 8080] [--check] [...]
-# E199 = full-scale box translation augmentation (plan229/log287): 249 aug rows
-# (83 cases x trans0/1/2 as an arm sweep), live qpos playback. `review_player.sh E199`.
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E198|E199|E199P] [--port 8080] [--check] [...]
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E199,E199P [--port 8080]   # both in one session
+# E199 = full-scale box translation augmentation (plan229/log287): 332 rows
+# (83 cases x orig+trans0/1/2 as a 4-arm sweep), live qpos playback. `review_player.sh E199`.
+# E199P = the E199 pilot (plan228/log286): 8 objects (5 box + bucket003/004/007),
+# 31 rows (orig + trans0/1/2 per case). Only E199 source with the bucket cases.
 # E194 is the 72-case G1 expansion only (box001/box023/box021), not the older
 # E194 15-case arm sweep or its PRG authority rows. Its review index overlays
 # only the 29 Euler-mismatch cases with E196 corrected G1 videos/metrics; the
@@ -31,7 +34,9 @@ if ! "$PYTHON_BIN" -c "import viser, trimesh" 2>/dev/null; then
   uv pip install viser trimesh || "$PYTHON_BIN" -m pip install viser trimesh
 fi
 
-if [[ "${1:-}" =~ ^E[0-9]+$ ]]; then
+# First arg may be a single exp id (E199) or a comma-separated list (E199,E199P)
+# to load several experiments into one player session (filter by the 实验 dropdown).
+if [[ "${1:-}" =~ ^E[0-9]+[A-Za-z_]*(,E[0-9]+[A-Za-z_]*)*$ ]]; then
   exp_id="$1"
   shift
   exec "$PYTHON_BIN" "$APP" --exps "$exp_id" "$@"

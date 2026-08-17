@@ -52,14 +52,27 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E194",
     },
-    # E199 full-scale box translation augmentation (plan229/log287): the 3 native
-    # translation variants (trans0/1/2) are shown as an arm sweep per case. Live
-    # qpos playback (CEM ran save_video=false). Metrics come from the fullscale
-    # eval case_metrics; replay paths (outdir/config/scene) are joined from the
-    # fullscale priority manifest by (case_id, aug_variant). Opt-in via --exps E199.
+    # E199 full-scale box translation augmentation (plan229/log287): orig +
+    # trans0/1/2 shown as a 4-arm sweep per case. Live qpos playback (CEM ran
+    # save_video=false). Aug metrics/paths come from the fullscale eval
+    # case_metrics joined with the fullscale priority manifest by
+    # (case_id, aug_variant); orig replay paths are rebuilt from the A0 row.
+    # Opt-in via --exps E199.
     "E199": {
         "eval_subdir": "fullscale_augmentation",
         "case_metrics": "e199_fullscale_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E194",
+    },
+    # E199P = the E199 pilot (plan228/log286): 8 objects (5 box + bucket003/004/007),
+    # 31 rows = orig + trans0/1/2 per case, shown as an arm sweep. This is the ONLY
+    # E199 source that carries the bucket cases (the fullscale放量 is box-only).
+    # Same replay/join mechanics as E199, but points at the pilot eval + manifest and
+    # keeps orig as a 4th arm. Opt-in via --exps E199P.
+    "E199P": {
+        "result_exp": "E199",
+        "eval_subdir": "full_augmentation",
+        "case_metrics": "e199_aug_case_metrics.tsv",
         "arm_sweep": True,
         "threshold_exp": "E194",
     },
@@ -206,7 +219,16 @@ class CaseRecord:
 
     @property
     def key(self) -> str:
-        return f"{self.exp_id}/{self.case_id}"
+        # Arm-inclusive so arm-sweep records (multiple arms share a case_id) get
+        # distinct cache / lookup keys — otherwise one arm's geometry would be
+        # served for another arm of the same case.
+        return f"{self.exp_id}/{self.case_id}/{self.arm}"
+
+    @property
+    def ann_id(self) -> str:
+        # Annotation identity within a per-exp filled TSV: arm-namespaced so each
+        # arm of an arm-sweep case is annotated independently.
+        return _ann_id(self.case_id, self.arm)
 
     @property
     def reviewed(self) -> bool:
@@ -262,8 +284,18 @@ def load_thresholds(exp: str) -> dict[str, float]:
     return thresholds
 
 
+def _ann_id(case_id: str, arm: str) -> str:
+    """Arm-namespaced annotation id. Plain case_id when there is no arm (keeps
+    single-arm experiments' filled TSVs backward compatible); ``case_id#arm`` for
+    arm-sweep records so each arm is annotated independently."""
+    arm = (arm or "").strip()
+    return f"{case_id}#{arm}" if arm else case_id
+
+
 def load_annotations(exp: str) -> dict[str, dict[str, str]]:
-    """case_id -> annotation row (from the non-destructive filled TSV)."""
+    """ann_id -> annotation row (from the non-destructive filled TSV).
+
+    The ``case_id`` column stores the arm-namespaced ``ann_id`` (see `_ann_id`)."""
     path = filled_path(exp)
     if not path.is_file():
         return {}
@@ -272,18 +304,18 @@ def load_annotations(exp: str) -> dict[str, dict[str, str]]:
         return {r["case_id"]: dict(r) for r in reader if r.get("case_id")}
 
 
-def save_annotation(exp: str, case_id: str, values: dict[str, str]) -> Path:
-    """Upsert one case's annotation into the filled TSV. Atomic rewrite."""
+def save_annotation(exp: str, ann_id: str, values: dict[str, str]) -> Path:
+    """Upsert one arm's annotation into the filled TSV (keyed by ann_id). Atomic."""
     rows = load_annotations(exp)
     row = {k: "" for k in REVIEW_FIELDS}
-    row.update(rows.get(case_id, {}))
+    row.update(rows.get(ann_id, {}))
     row.update(values)
-    row["case_id"] = case_id
+    row["case_id"] = ann_id
     row["user_manual_review_status"] = "reviewed"
     row["manual_reviewed_at"] = (
         _dt.datetime.now().astimezone().isoformat(timespec="seconds")
     )
-    rows[case_id] = row
+    rows[ann_id] = row
 
     path = filled_path(exp)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -357,7 +389,7 @@ def _read_exp(exp: str) -> list[CaseRecord]:
                     config_act=config_act,
                     trajectory=normalize_path(row.get("trajectory", "")),
                     video=video,
-                    annotation=anns.get(case_id, {}),
+                    annotation=anns.get(_ann_id(case_id, arm), {}),
                     metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
                 )
             )
@@ -415,7 +447,7 @@ def _read_e194_corrected_overlay() -> list[CaseRecord]:
             config_act=normalize_path(row.get("config_act", "")),
             trajectory=normalize_path(row.get("trajectory", "")),
             video=str(video),
-            annotation={} if corrected else annotations.get(case_id, {}),
+            annotation={} if corrected else annotations.get(_ann_id(case_id, "G1"), {}),
             metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
         ))
     return records
@@ -426,13 +458,25 @@ E199_FS_MANIFEST = (
 )
 
 
-def _read_e199_fullscale() -> list[CaseRecord]:
-    """E199 full-scale augmentation review set (aug translation variants only).
+def _e199_person_cid(case_id: str) -> str:
+    """Normalize an orig `_p1/_p2` case id to the aug `_person1/_person2` form so
+    orig groups with its trans0/1/2 siblings under one case in the arm sweep."""
+    if case_id.endswith("_p1"):
+        return case_id[:-3] + "_person1"
+    if case_id.endswith("_p2"):
+        return case_id[:-3] + "_person2"
+    return case_id
 
-    Joins the fullscale eval case_metrics (metrics + the 6 physics gates) with the
-    fullscale priority manifest (replay paths) by (case_id, aug_variant). Each of
-    the 3 translation variants is exposed as an arm. `orig` rows are skipped here
-    (the same-case A0/PRG baseline is reviewable via its own E17x/E198 index).
+
+def _read_e199_fullscale() -> list[CaseRecord]:
+    """E199 full-scale augmentation review set: orig + trans0/1/2 per case.
+
+    Aug rows join the fullscale eval case_metrics (metrics + 6 physics gates) with
+    the fullscale priority manifest (replay paths) by (case_id, aug_variant); each
+    translation variant is one arm. The reused A0/PRG `orig` rows are NOT in that
+    manifest, so their replay paths (outdir/config/scene/ref) are reconstructed
+    from the case row itself and orig is exposed as a 4th arm (case id normalized
+    to the `_person` form so it groups with its trans siblings). Live qpos playback.
     """
     metrics_path = _case_metrics_path("E199")
     if metrics_path is None or not E199_FS_MANIFEST.is_file():
@@ -445,8 +489,92 @@ def _read_e199_fullscale() -> list[CaseRecord]:
     records: list[CaseRecord] = []
     with metrics_path.open("r", encoding="utf-8", newline="") as fh:
         for row in csv.DictReader(fh, delimiter="\t"):
-            if (row.get("group") or "").strip() != "aug":
+            group = (row.get("group") or "").strip()
+            case_id = (row.get("case_id") or "").strip()
+            variant = (row.get("aug_variant") or "").strip()
+            if not case_id:
                 continue
+            if group == "aug":
+                mrow = manifest.get((case_id, variant))
+                if mrow is None:
+                    continue
+                outdir_npz = normalize_path(mrow.get("outdir_npz", ""))
+                config_act = normalize_path(mrow.get("config_act", ""))
+                scene_src = mrow.get("scene_act", "") or row.get("scene_xml", "")
+                trajectory = normalize_path(mrow.get("trajectory", ""))
+                video = normalize_path(mrow.get("video", ""))
+                disp_cid = case_id
+                rvar, arm = "omnirt_v2", variant
+            elif group == "orig":
+                # orig has no manifest row: rebuild replay paths from the A0 row.
+                outdir_npz = normalize_path(row.get("qpos_path", ""))
+                config_act = ""
+                scene_src = row.get("scene_xml", "")
+                trajectory = ""
+                video = ""
+                disp_cid = _e199_person_cid(case_id)
+                rvar, arm = "omnirt_v1", "orig"
+            else:
+                continue
+            if not config_act and outdir_npz:
+                candidate = Path(outdir_npz).parent / "config_act.yaml"
+                config_act = str(candidate) if candidate.is_file() else ""
+            scene_xml = resolve_scene("E199", disp_cid, normalize_path(scene_src))
+            if group == "orig" and scene_xml:
+                cand_traj = Path(scene_xml).parent / "0" / "trajectory_kinematic.npz"
+                trajectory = str(cand_traj) if cand_traj.is_file() else ""
+            if video and not Path(video).is_file():
+                video = ""  # CEM ran save_video=false -> live qpos playback
+            modes = (row.get("numeric_failure_modes") or "").replace(";", ",")
+            records.append(
+                CaseRecord(
+                    exp_id="E199",
+                    arm=arm,
+                    case_id=disp_cid,
+                    variant=variant or arm,
+                    object_key=(row.get("object_key") or "").strip(),
+                    retarget_variant_id=rvar,
+                    numeric_release_pass=_as_bool(row.get("all_gates_pass", "")),
+                    numeric_failure_modes=[m.strip() for m in modes.split(",") if m.strip()],
+                    gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
+                    status=(row.get("status") or ("ORIG_A0_REUSED" if group == "orig" else "AUG_FULL_COMPLETE")).strip(),
+                    outdir_npz=outdir_npz,
+                    scene_xml=scene_xml,
+                    config_act=config_act,
+                    trajectory=trajectory,
+                    video=video,
+                    annotation=anns.get(_ann_id(disp_cid, arm), {}),
+                    metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
+                )
+            )
+    return records
+
+
+E199_PILOT_MANIFEST = (
+    REPO / "workspace/core4d/results/E199/s6_downstream/manifests/e199_priority_full_manifest.tsv"
+)
+
+
+def _read_e199_pilot() -> list[CaseRecord]:
+    """E199 pilot review set (plan228/log286): 8 objects, orig + trans0/1/2 per case.
+
+    Same join mechanics as `_read_e199_fullscale` — the pilot eval case_metrics
+    (metrics + 6 physics gates) joined with the pilot priority manifest by
+    (case_id, aug_variant) — but this file has no `group` column, so ALL variants
+    are kept (orig exposed as a 4th arm) and this is the only E199 source carrying
+    the bucket003/004/007 cases. Live qpos playback (CEM ran save_video=false).
+    """
+    metrics_path = _case_metrics_path("E199P")
+    if metrics_path is None or not E199_PILOT_MANIFEST.is_file():
+        return _read_exp("E199P") if metrics_path else []
+    manifest: dict[tuple[str, str], dict[str, str]] = {}
+    with E199_PILOT_MANIFEST.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            manifest[(row.get("case_id", ""), row.get("aug_variant", ""))] = row
+    anns = load_annotations("E199P")
+    records: list[CaseRecord] = []
+    with metrics_path.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
             case_id = (row.get("case_id") or "").strip()
             variant = (row.get("aug_variant") or "").strip()
             mrow = manifest.get((case_id, variant))
@@ -458,7 +586,7 @@ def _read_e199_fullscale() -> list[CaseRecord]:
                 candidate = Path(outdir_npz).parent / "config_act.yaml"
                 config_act = str(candidate) if candidate.is_file() else ""
             scene_xml = resolve_scene(
-                "E199", case_id,
+                "E199P", case_id,
                 normalize_path(mrow.get("scene_act", "") or row.get("scene_xml", "")),
             )
             video = normalize_path(mrow.get("video", ""))
@@ -467,22 +595,22 @@ def _read_e199_fullscale() -> list[CaseRecord]:
             modes = (row.get("numeric_failure_modes") or "").replace(";", ",")
             records.append(
                 CaseRecord(
-                    exp_id="E199",
+                    exp_id="E199P",
                     arm=variant,
                     case_id=case_id,
                     variant=variant,
                     object_key=(row.get("object_key") or "").strip(),
-                    retarget_variant_id="omnirt_v2",
+                    retarget_variant_id="omnirt_v1" if variant == "orig" else "omnirt_v2",
                     numeric_release_pass=_as_bool(row.get("all_gates_pass", "")),
                     numeric_failure_modes=[m.strip() for m in modes.split(",") if m.strip()],
                     gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
-                    status=(row.get("status") or "AUG_FULL_COMPLETE").strip(),
+                    status=(row.get("status") or "AUG_PILOT_COMPLETE").strip(),
                     outdir_npz=outdir_npz,
                     scene_xml=scene_xml,
                     config_act=config_act,
                     trajectory=normalize_path(mrow.get("trajectory", "")),
                     video=video,
-                    annotation=anns.get(case_id, {}),
+                    annotation=anns.get(_ann_id(case_id, variant), {}),
                     metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
                 )
             )
@@ -496,6 +624,8 @@ def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
             out.extend(_read_e194_corrected_overlay())
         elif exp == "E199":
             out.extend(_read_e199_fullscale())
+        elif exp == "E199P":
+            out.extend(_read_e199_pilot())
         else:
             out.extend(_read_exp(exp))
     return out
@@ -538,9 +668,10 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
             if exp == "E192":
                 evaluated = int(summary.get("evaluated", -1))
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-            if exp == "E199":
-                # E199 fullscale summary reports aug_scored (not `evaluated`);
-                # the indexed aug records are the review set (orig rows excluded).
+            if exp in ("E199", "E199P"):
+                # E199 fullscale/pilot summaries report aug_scored (not `evaluated`);
+                # both now index orig + trans as arms, so cross-check the review
+                # set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E194_FULL":

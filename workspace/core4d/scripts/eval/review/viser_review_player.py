@@ -141,6 +141,84 @@ TRACK_BAR = (
 ROBOT_MESH_DIR = REPO / "spider/assets/robots/unitree_g1/meshes"
 OBJECT_MESH_ROOT = REPO / "workspace/core4d/object_models/object_models"
 
+# --- performance knobs ------------------------------------------------------
+# The heavy `spider.config` + trimesh import (~25s cold on JuiceFS) and per-case
+# model compile / mesh decode used to run inside the very first (and every) case
+# load, freezing the page. We now (a) warm the heavy imports in a startup thread,
+# (b) LRU-cache compiled models + precomputed frames per case, (c) cache decoded
+# meshes across cases (the G1 robot geometry is identical everywhere), and
+# (d) decimate high-poly visual meshes so the browser scene stays light.
+# CORE4D_REVIEW_MAX_FACES=0 disables decimation.
+MAX_FACES = int(os.environ.get("CORE4D_REVIEW_MAX_FACES", "4000") or "0")
+_CASE_CACHE: dict = {}          # (rec.key, want_ref) -> loaded tuple  (LRU, bounded)
+_CASE_CACHE_MAX = 24
+_MESH_CACHE: dict = {}          # (path, scale, max_faces) -> base trimesh (uncolored)
+_WARMED = threading.Event()
+
+
+def _warmup() -> None:
+    """Import the heavy stack once, off the request path, then flag ready."""
+    try:
+        import trimesh  # noqa: F401
+        import render_a100_cem_videos  # noqa: F401  (pulls spider.config)
+        import spider.viewers.viser_viewer  # noqa: F401
+        if MAX_FACES > 0:
+            try:
+                import open3d  # noqa: F401
+            except Exception:
+                pass
+    except Exception as exc:  # pragma: no cover - best effort
+        print(f"[review] warmup import failed (non-fatal): {exc}")
+    finally:
+        _WARMED.set()
+
+
+def _decimate(tm, max_faces: int):
+    """Reduce a trimesh to ~max_faces via open3d quadric decimation (best effort)."""
+    try:
+        n = len(tm.faces)
+    except Exception:
+        return tm
+    if max_faces <= 0 or n <= max_faces:
+        return tm
+    try:
+        import open3d as o3d
+
+        mesh = o3d.geometry.TriangleMesh(
+            o3d.utility.Vector3dVector(np.asarray(tm.vertices, dtype=np.float64)),
+            o3d.utility.Vector3iVector(np.asarray(tm.faces, dtype=np.int32)),
+        )
+        red = mesh.simplify_quadric_decimation(int(max_faces))
+        import trimesh
+
+        return trimesh.Trimesh(
+            vertices=np.asarray(red.vertices),
+            faces=np.asarray(red.triangles),
+            process=False,
+        )
+    except Exception:
+        return tm  # open3d missing / decimation failed -> keep full mesh
+
+
+def _cached_mesh(mf, scale, max_faces: int):
+    """Decode (+scale +decimate) a mesh file once and reuse across cases."""
+    import trimesh
+
+    key = (str(mf), None if scale is None else tuple(np.ravel(scale).tolist()), max_faces)
+    base = _MESH_CACHE.get(key)
+    if base is None:
+        tm = trimesh.load(str(mf), force="mesh")
+        if isinstance(tm, trimesh.Scene):
+            tm = tm.to_mesh()
+        if scale is not None:
+            try:
+                tm.apply_scale(scale)
+            except Exception:
+                pass
+        base = _decimate(tm, max_faces)
+        _MESH_CACHE[key] = base
+    return base.copy()
+
 
 @functools.lru_cache(maxsize=None)
 def _object_mesh_fallback(filename: str) -> Path | None:
@@ -201,6 +279,20 @@ def _load_portable_spec(scene_path: Path):
 
 
 def _load_case_data(rec: idx.CaseRecord, want_ref: bool):
+    """Cached front for `_load_case_data_raw` (compile + qpos are expensive)."""
+    key = (rec.key, bool(want_ref))
+    hit = _CASE_CACHE.get(key)
+    if hit is not None:
+        _CASE_CACHE[key] = _CASE_CACHE.pop(key)  # mark most-recently-used
+        return hit
+    val = _load_case_data_raw(rec, want_ref)
+    _CASE_CACHE[key] = val
+    while len(_CASE_CACHE) > _CASE_CACHE_MAX:
+        _CASE_CACHE.pop(next(iter(_CASE_CACHE)))  # evict least-recently-used
+    return val
+
+
+def _load_case_data_raw(rec: idx.CaseRecord, want_ref: bool):
     """Return (spec, model, sim_qpos, ref_qpos|None, frame_ids, fps)."""
     from render_a100_cem_videos import (  # noqa: E402
         converted_reference_qpos,
@@ -253,15 +345,18 @@ def _compute_xforms(model, qpos, body_ids, frame_ids):
     return out
 
 
-def _build_scene(server, spec, model, root: str, ref_color=None):
+def _build_scene(server, spec, model, root: str, ref_color=None, include_collision=True):
     """Add one frame per body + one mesh per geom under ``root``.
 
     Mirrors spider.viewers.viser_viewer geom handling but writes under a root we
     own so it can be cleared on case swap. Returns
     (body_handles[(handle, body_id)], visual_handles, collision_handles).
+
+    ``include_collision=False`` skips uploading collision geoms entirely (they are
+    hidden by default, so uploading them just wastes transfer + browser memory);
+    they are built on demand the first time the collision toggle is enabled.
     """
     import mujoco
-    import trimesh
 
     from spider.viewers.viser_viewer import (
         _get_mesh_file,
@@ -295,6 +390,9 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
                 gv = 0
             if gv >= 5:
                 continue
+            is_collision = ("collision" in (gname or "").lower()) or gv >= 3
+            if is_collision and not include_collision:
+                continue
             try:
                 mg = model.geom(gname)
             except Exception:
@@ -317,9 +415,7 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
                 ms = _get_mesh_scale(spec, geom)
                 if mf is not None and mf.exists():
                     try:
-                        tm = trimesh.load(str(mf), force="mesh")
-                        if isinstance(tm, trimesh.Scene):
-                            tm = tm.to_mesh()
+                        tm = _cached_mesh(mf, ms, MAX_FACES)
                     except Exception:
                         tm = None
                 if tm is None:
@@ -327,15 +423,12 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
                         tm = _mujoco_mesh_to_trimesh(
                             model, mg.id if mg is not None else -1
                         )
+                        if tm is not None and ms is not None:
+                            tm.apply_scale(ms)
                     except Exception:
                         tm = None
                 if tm is None:
                     continue
-                if ms is not None:
-                    try:
-                        tm.apply_scale(ms)
-                    except Exception:
-                        pass
                 if rgba is not None:
                     _set_mesh_color(tm, rgba)
             else:
@@ -364,9 +457,7 @@ def _build_scene(server, spec, model, root: str, ref_color=None):
                 )
             except Exception:
                 continue
-            (collision if ("collision" in gname.lower() or gv >= 3) else visual).append(
-                h
-            )
+            (collision if is_collision else visual).append(h)
     return body_handles, visual, collision
 
 
@@ -403,10 +494,21 @@ class ReviewApp:
         self._next_t = 0.0
         self._prog = False  # programmatic slider write guard
         self.current = None  # current CaseRecord
+        self._collision_built = False
 
         self._build_gui()
-        self._refresh_case_list(initial=True)
+        self._refresh_case_list(initial=True)  # populates dropdown; defers geometry
+        threading.Thread(target=self._warm_then_load, daemon=True).start()
         threading.Thread(target=self._player_loop, daemon=True).start()
+
+    def _warm_then_load(self):
+        """Import the heavy stack off the request path, then load the first case."""
+        self._set_info("_首次启动：正在预热渲染依赖（约 15–25s），随后自动载入首个样本…_")
+        _warmup()
+        with self.lock:
+            rec = self._filtered_recs[0] if (self.current is None and self._filtered_recs) else None
+        if rec is not None:
+            self._load_case(rec)
 
     # -- GUI ----------------------------------------------------------------
     def _build_gui(self):
@@ -472,7 +574,7 @@ class ReviewApp:
                 "显示参考残影", initial_value=self.want_ref
             )
             self.cb_grid = s.gui.add_checkbox("显示网格", initial_value=True)
-            self.cb_collision.on_update(lambda _: self._apply_visibility())
+            self.cb_collision.on_update(self._on_collision_toggle)
             self.cb_reference.on_update(lambda _: self._apply_visibility())
             self.cb_grid.on_update(lambda _: self._apply_visibility())
 
@@ -543,10 +645,12 @@ class ReviewApp:
         self.case_dd.options = opts
         target = opts[0]
         self.case_dd.value = target
-        if self._filtered_recs:
+        if self._filtered_recs and not initial:
             self._load_case(self._filtered_recs[0])
-        elif not initial:
+        elif not self._filtered_recs and not initial:
             self._set_info("_当前筛选无匹配样本_")
+        # initial load is deferred to _warm_then_load (avoids a cold-import stall
+        # blocking server startup / the whole page).
 
     def _on_case_pick(self, _=None):
         if self.case_dd.value in self._labels:
@@ -598,8 +702,10 @@ class ReviewApp:
                     self.server.scene.add_grid("/grid")
                 except Exception:
                     pass
+            want_collision = bool(self.cb_collision.value)
+            self._collision_built = want_collision
             self.sim_bodies, self.visual_handles, self.collision_handles = _build_scene(
-                self.server, spec, model, "/sim"
+                self.server, spec, model, "/sim", include_collision=want_collision
             )
             self.frames = _compute_xforms(
                 model, sim_qpos, [b for _, b in self.sim_bodies], frame_ids
@@ -611,6 +717,7 @@ class ReviewApp:
                     model,
                     "/ref",
                     ref_color=np.array([0, 0, 1, 0.25], np.float32),
+                    include_collision=want_collision,
                 )
                 self.ref_geom_handles = rv + rc
                 self.ref_frames = _compute_xforms(
@@ -673,6 +780,16 @@ class ReviewApp:
         self.playing = not self.playing
         self._next_t = time.perf_counter()
 
+    def _on_collision_toggle(self, _=None):
+        # Collision geoms are not uploaded until first needed; build them lazily by
+        # reloading the current case, then just toggle visibility thereafter.
+        if self.cb_collision.value and self.current is not None and not getattr(
+            self, "_collision_built", False
+        ):
+            self._load_case(self.current)
+            return
+        self._apply_visibility()
+
     def _apply_visibility(self):
         for h in self.collision_handles:
             h.visible = bool(self.cb_collision.value)
@@ -706,8 +823,8 @@ class ReviewApp:
             "manual_review_note": self.a_note.value,
             "manual_reviewer": self.a_reviewer.value,
         }
-        path = idx.save_annotation(rec.exp_id, rec.case_id, values)
-        rec.annotation = idx.load_annotations(rec.exp_id).get(rec.case_id, {})
+        path = idx.save_annotation(rec.exp_id, rec.ann_id, values)
+        rec.annotation = idx.load_annotations(rec.exp_id).get(rec.ann_id, {})
         # refresh label (reviewed marker) in the dropdown
         if rec in self._filtered_recs:
             j = self._filtered_recs.index(rec)
@@ -715,7 +832,7 @@ class ReviewApp:
             keep = self._labels[j]
             self.case_dd.options = self._labels
             self.case_dd.value = keep
-        self._update_progress(saved=f"已保存 {rec.case_id} → {rec.exp_id}/{path.name}")
+        self._update_progress(saved=f"已保存 {rec.ann_id} → {rec.exp_id}/{path.name}")
         self._set_info(self._info_text(rec))
 
     def _update_progress(self, saved=""):
