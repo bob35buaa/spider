@@ -57,7 +57,15 @@ def write_tsv(path: Path, rows: list[dict], fields: list[str]) -> None:
         w.writeheader()
         for r in rows:
             w.writerow({k: r.get(k, "") for k in fields})
-    Path(tmp).replace(path)
+    # retry transient EIO (networked FS) so the queue survives storage hiccups
+    for _attempt in range(6):
+        try:
+            Path(tmp).replace(path)
+            return
+        except OSError:
+            if _attempt == 5:
+                raise
+            time.sleep(0.5 * (_attempt + 1))
 
 
 def gpu_free_mib(gpu: str) -> int:

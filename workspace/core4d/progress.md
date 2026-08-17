@@ -1,6 +1,42 @@
 # CORE4D 当前进度
 
-## 当前：E199 全量 box 平移增强（plan229，计划态待批准）
+## 当前：E200 增强放量到 PRG+G1+A2 与 noPRG 两 arm（plan230，计划态待批准）
+
+### 2026-08-17 · 每卡 2-job 并行 benchmark → 结论：无收益，保持 max-per-gpu=1
+
+- 动机：本机每卡显存仅 1.7/81GB、util 读数仅 45% → 疑似可每卡跑 2 job 提速。
+- **零中断实测**：GPU7 叠加 1 条 bench full CEM（独立 BENCH manifest + `_bench` 输出，不污染正式队列），对比 per-CEM-plan-step wall time：
+  - 1 job/卡（正式 log 稳态）：**~21.7s/step**，util 45%。
+  - 2 job/卡（叠加）：bench **45.1s/step** + 该卡正式 job 也涨到 **45.3s/step**，util **45%→99%**。
+- **结论**：per-step 精确翻倍、util 打满 → GPU **compute(SM) 是瓶颈**（45% 是 warp 突发占满的误导读数，非空闲）。单卡吞吐 2/45.1 ≈ 1/21.7，**2-job 无净收益（略降 ~4% 上下文切换）**。**保持 max-per-gpu=1**。（若另一台机器 GPU 型号不同需另测；本机 = L20Y 80GB。）
+- 正式队列不受影响：bench 后 noprg 114/249、prg_g1a2 106/249，0 fail。bench 进程已清理（`pkill -f` 又自杀 exit144，已改括号法 + pid kill 收尾）。
+
+### 2026-08-17 · plan230 已批准执行 · E200 脚本实现完成 + smoke 双 arm 通过
+
+- **实现（全新 `scripts/experiments/E200/` + `results/E200/`，不动 E198/E190/E199）**：
+  - `e200_common.py`：re-export E199 IO helpers（含 JuiceFS-EIO-safe write_tsv）+ E198 `A2_GATE`；`load_aug_rows()` 读 E199 fullscale manifest（**249 feasible aug / 83 case**——87 中 4 case 在 E199 无可行 aug，E200 复用 E199 实际可行集）；`build_gravcomp_sidecar()`（object gravcomp 0→1 单变量 diff + `assert_gravcomp_diff` 自检，ported from E198）；per-arm override/scene/extra_overrides 装配。
+  - `build_arm_scenes.py`：prg_g1a2 建 249 个 gravcomp sidecar（单变量自检过）；noprg 验证 249 个 rubber_hull(no-PRG) scene 已在盘；两 arm 各快照 + manifest.txt。
+  - `build_manifest.py`：两 arm 各 249 行 priority manifest，arm-tagged 输出路径（noprg/prg_g1a2/E199 三者不撞）。
+  - `run_local_priority_queue.py`：仿 E199（`--arm` 选 manifest，resume-safe，+smoke budget override `--samples/opt-steps-override`）。
+  - `train/train_E200.sh`（数据prep，CPU）；`launch/active/run_E200_prg_g1a2_8gpu.sh` + `run_E200_noprg_8gpu.sh`（**两个全量8卡脚本，交用户在两机启动**，共享FS→独立 manifest/输出，无争用）。
+- **踩坑修复**：noprg 起初把 `leg_object_penalty_scale=0.0 cem_leg_gate_enabled=false` 塞进 extra_overrides → Hydra `Key not in struct`（E167A base yaml 未声明该键）。修复：**不 override**（这俩本就是 SPIDER 默认 0/false），noPRG-negative 改为 config_act **事后验证**（同 E190 口径）。
+- **smoke 双 arm 通过**（reduced budget 64×2，分卡并行）：
+  - prg_g1a2 → run_complete_pending_eval；config_act 确认 scene=..._PRG_gravcomp / leg_penalty=2.0 / leg_gate=true / A2=(-0.01,0.05,-0.015)；gravcomp sidecar object `gravcomp="1"`（base PRG=0）✓。
+  - noprg → run_complete_pending_eval；config_act 确认 scene=scene_act_E199_rubberHull / leg_penalty=0.0 / leg_gate=false / e167_body_z_enabled=true ✓。
+- **两 real manifest pristine**（各 249 行 status 全空）→ 全量启动不会跳过。smoke 用独立 `_smoke/` 目录+SMOKE manifest（权限拦截未删，无害，可手动清）。
+- **待办**：用户两机启全量（≤498 aug CEM）；跑完建 eval runner（各 arm vs orig：prg_g1a2↔E198 G1A2 全87；noprg↔E190 38）+ E194 式三 arm workbook + render_qc → log288；git commit（E200 脚本，等 claims）。
+
+### 2026-08-17 · plan230 已写（待用户批准）
+
+- 计划：[plan230](plan/230_E200_augmentation_prg_g1a2_and_noprg_arms_plan.md)。承接 E199（增强已证有效）。
+- **用户 4 决策**：① 目标=两者都要（产两 arm 数据 + 三 arm 横向择优）；② noPRG=E167A（`E167A_zOnlyBody` base arm，无 16 碰撞对/无 leg gate/无 G1A2）；③ noPRG orig 复用 **E190 38-case**（box001=13/004=4/021=11/023=7/024=3）；④ 范围=全 87 box case。
+- **核心洞察**：平移增强只在 retarget 轨迹里，与下游 CEM arm 解耦 → E199 每个 aug task 目录已同时含 arm-independent trajectory + base `scene_act.xml`(noPRG) + `scene_act_E199_rubberHull_PRG.xml`(PRG)。**E200 不重跑上游/不重建轨迹**，只换 scene_act/override 重跑 CEM。
+- **两 arm**：Arm B=PRG+G1+A2(R287，从 PRG scene 建 G1 gravcomp 单变量 sidecar + A2_GATE，orig 复用 E198 G1A2 全 87)；Arm C=noPRG(R288，用 base scene_act + E167A negative-config，orig 复用 E190 38)。
+- **覆盖口径**：PRG+G1+A2 aug vs E198 G1A2 = 87 全配对；noPRG aug vs E190 = 仅 38 配对（余 49 produce-only）；三 arm 交集=38。
+- **成本**：≤498 aug full CEM（复用 E199 249 feasible aug × 2 arm），0 新 orig/0 新 retarget，8 卡 ~40-50h。
+- **待批准前不写脚本、不占 GPU、不建 sidecar。** 前置：E199 fullscale aug **数据构建**完成（不依赖 E199 CEM 100% 完成）。
+
+## 历史：E199 全量 box 平移增强（plan229，已执行）
 
 ### 2026-08-16 · plan229 已写
 
@@ -45,6 +81,48 @@
   - 回收：远程 CEM 输出 rsync 回本机 `cem/full/`（文件名按 case+variant 唯一，与 machineA 不撞）。
 - **eval 依赖两机**：machineB 结果回收后，fullscale eval 按磁盘输出到位数打分（读全 249 manifest），不依赖 A/B status。
 - **监控 cron 换 `2c9b30b9`**（每 2h）：machineA 全 done 且 249 输出到位 → 自动 eval+render+log287+tracker；否则只报进度。
+
+### 2026-08-16 · machineA 队列 JuiceFS EIO 崩溃 → 修复 + 自愈
+
+| 错误 | 尝试 | 解决 |
+|---|---|---|
+| machineA queue 崩：`OSError [Errno 5] I/O error` 于 `write_tsv` 的 `Path(tmp).replace(path)`（JuiceFS 瞬时 EIO），GPU 空转，8 行卡 `running` | 1 | ① `write_tsv`（e199_common + 远程 queue）的 os.replace 加 **6 次 EIO 重试**；② 重置卡住的 running→pending（否则 resume 跳过不重跑）；③ 重启队列（fresh import 载入 patch）；④ cron 换 `ba52930d` 加**自愈**：发现 machineA 队列已死且未 done 就重置 running + 重启 |
+| `pkill -f`/`pgrep -f` 匹配到自己的命令行 → 自杀（exit 144） | 2 | 改用显式 PID kill + `ps -eo pid,args | grep '[r]un_...'` 括号法 |
+
+- 崩溃时进度 78 done；已重启，8 卡满载续跑（47 pending）。bundle 已用 patch 后的远程 queue **重打包**。
+- **待办**：write_tsv EIO 重试 + 远程 queue 补丁**未提交**（等用户）。
+
+### 2026-08-17 · machineA 全 done；machineB 回收 + box024 转本机
+
+- **machineA 本机 125/125 done, 0 fail** ✅（队列正常退出）。
+- 用户把远程 machineB 结果迁到 `cem/machineB_full/`（非 canonical）→ 我并入 `cem/full/`，修好 5 个 box021（只有 outdir 缺 result.npz）。
+- **覆盖 223/249**。缺 26：box023×14（远程还在跑尾巴，待 rsync）+ box024×12。
+- **box024 报错原因**（用户告知）：远程机器**没有 box024 的 object mesh** → box024 全失败。故 **box024 12 条转本机跑**：建 `e199_fullscale_box024_local_manifest.tsv`（13 行，12 待跑），本机 8 卡 priority 队列（与他人 job 共存，各卡 free 26-47GB > 5G 门），日志 `logs/E199/fullscale/cem_box024_local.log`。
+- **待回收**：box023×14 仍需远程跑完后 rsync 回 `cem/full/`。
+- 凑齐 249 → cron 自动 eval+render+log287。
+
+### 2026-08-17 · 249/249 齐 → 收尾中
+
+- **249/249 CEM 全到位**（machineA 125 + machineB box021/023 回收 62 + box024 本机 12 + pilot 复用）。
+- render QC 完成（30 关键帧组 → `render/fullscale_qc/render_index.json`）。
+- **eval bug 修复**：fullscale eval 的 orig 配对按 case_id join，但 aug 用 `_person1/2`（build 从 task_info 重建）而 A0 arm_cache 用 `_p1/2` → 全 83 orig `no_A0_arm_cache_row`。修 `eval_E199_fullscale_augmentation.py` 加 `_norm_cid`（`_person→_p`）归一化 join；验证 83/83 匹配。重跑 eval 中。
+- **aug 分布（249，首轮已得）**：obj_pos 13.51cm、obj_ori 6.11°、接触 0.719、手穿透 0.177、腿穿透 0.086、fall 0.036、12-gate 通过 0.510。待 orig 配对补齐后写 log287。
+- **可行性 C5 = 100%**：box001 24/24、box004 6/6、box021 28/28、box023 16/16、box024 9/9 —— 全部 case 的 3 个平移档全可行（full_3of3，无 partial/none）。
+
+### 2026-08-17 · E199 全量放量闭合（log287 已写）
+
+- **eval status=pass**：249 aug + 83 orig，paired 249，0 error（修了 orig 配对的两个 bug：case_id person1↔p1 join 归一 + 合成 orig row 缺 `variant` 字段）。
+- **C4 达标**：obj_pos **+1.6%**(<25%阈)、obj_ori −1.4%、obj_z −2.4%、eef **−26.7%**、手穿透 −9.7%、接触 −1.1%、腿穿透 +17.8%、fall 同率 3.6% 未新增、12-gate 通过 orig 0.494→aug 0.510。逐物体表见 log287。
+- **C5**：平移 100% 可行（83/83 case full 3/3）。**C6**：box021/004/024 关键帧视觉复核无致命 artifact（box004 抬箱倾斜=固有；box024 大箱贴腿=leg_pen 偏高的几何必然；跌倒限 box004 083/086_p2 + box023 018_p1 难 case）。
+- **交付**：[log287](log/287_E199_box_fullscale_translation_augmentation.md) + tracker R286 行 + INDEX 重建。cron 7e26beee 已删。
+- **已知缺口**：box001 建成 24/28（4 case shard 级未产出，未捕获原因，后续可补）。
+- **待办**：EIO 重试 + eval join/variant 修复 + log287/tracker **未提交**（等用户）；249 条平移增强数据交下游 RL；Phase 2（scale）另开。
+
+### 2026-08-17 · E199 接入 viser review_player
+
+- `review_index.py`：+`SOURCE_OVERRIDES["E199"]`（eval_subdir=fullscale_augmentation, arm_sweep, threshold_exp=E194）+ 自定义 `_read_e199_fullscale()`：join fullscale case_metrics（metrics+6门）与 fullscale manifest（replay 路径 outdir/config/scene，按 case_id+aug_variant），只取 group==aug；trans0/1/2 作 3 arm；orig 跳过。build_index/`_check` 加 E199 分支。
+- **验证**：`review_player.sh E199 --check` → indexed 249 / evaluated 249 / **playable 249/249** / npass 127（=gate 0.51）/ 0 mismatch；5 物体；MuJoCo load 冒烟过（nq=42, qpos(126,42), scene_act_E199_rubberHull_PRG）。CEM save_video=false → live qpos 回放（同 E198）。
+- 用法：`bash workspace/core4d/scripts/eval/wrappers/review_player.sh E199 [--port 8080]`。review_index.py + review_player.sh 改动**未提交**。
 
 ## 当前：E198 G1×A2 因子 + E192 A2 扩展（计划态，待批准）
 

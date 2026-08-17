@@ -38,13 +38,19 @@ from eval_E199_augmentation import (  # noqa: E402
 )
 
 
+def _norm_cid(cid: str) -> str:
+    """Canonical case-id for joining aug rows (..._person1/person2, rebuilt from
+    task_info) with the E198 A0 arm_cache (..._p1/p2)."""
+    return cid.replace("_person", "_p")
+
+
 def a0_orig_rows() -> dict[str, dict[str, str]]:
-    """case_id -> synthetic scoring row for the reused E198 A0/PRG orig rollout."""
+    """norm(case_id) -> synthetic scoring row for the reused E198 A0/PRG orig rollout."""
     out: dict[str, dict[str, str]] = {}
     for r in C.read_tsv(C.E198_ARM_CACHE):
         if r.get("arm") != "A0" or r.get("object_key") not in C.BOX_OBJECTS:
             continue
-        cid = r["case_id"]
+        cid = _norm_cid(r["case_id"])
         if cid in out:
             continue
         out[cid] = {
@@ -55,6 +61,8 @@ def a0_orig_rows() -> dict[str, dict[str, str]]:
             "contact_mask": r["contact_mask"],
             "object_key": r["object_key"], "case_id": cid, "aug_variant": "orig",
             "target_task": Path(r["scene_xml"]).parent.name, "tier": "orig",
+            # metadata fields evaluate_sequence expects on the row:
+            "variant": r.get("variant", "orig"), "method": r.get("method", ""),
         }
     return out
 
@@ -110,7 +118,7 @@ def main() -> int:
 
     # score the reused A0 orig for every case that has >=1 completed aug (same contract)
     orig_pool = a0_orig_rows()
-    need_orig = sorted({r["case_id"] for r in aug_scored})
+    need_orig = sorted({_norm_cid(r["case_id"]) for r in aug_scored})
     orig_scored: dict[str, dict[str, Any]] = {}
     for cid in need_orig:
         base = orig_pool.get(cid)
@@ -128,7 +136,7 @@ def main() -> int:
     # per-case orig-vs-aug deltas
     deltas: list[dict[str, Any]] = []
     for a in aug_scored:
-        cid = a["case_id"]
+        cid = _norm_cid(a["case_id"])
         o = orig_scored.get(cid)
         if o is None:
             continue

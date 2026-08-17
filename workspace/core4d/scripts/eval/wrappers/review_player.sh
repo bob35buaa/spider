@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Launch the PRG retargeting review player (viser, E170-E194).
+# Launch the PRG retargeting review player (viser, E170-E199).
 #
 # Usage:
-#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194] [--port 8080] [--check] [...]
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E198|E199] [--port 8080] [--check] [...]
+# E199 = full-scale box translation augmentation (plan229/log287): 249 aug rows
+# (83 cases x trans0/1/2 as an arm sweep), live qpos playback. `review_player.sh E199`.
 # E194 is the 72-case G1 expansion only (box001/box023/box021), not the older
 # E194 15-case arm sweep or its PRG authority rows. Its review index overlays
 # only the 29 Euler-mismatch cases with E196 corrected G1 videos/metrics; the

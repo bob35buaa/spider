@@ -52,6 +52,17 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E194",
     },
+    # E199 full-scale box translation augmentation (plan229/log287): the 3 native
+    # translation variants (trans0/1/2) are shown as an arm sweep per case. Live
+    # qpos playback (CEM ran save_video=false). Metrics come from the fullscale
+    # eval case_metrics; replay paths (outdir/config/scene) are joined from the
+    # fullscale priority manifest by (case_id, aug_variant). Opt-in via --exps E199.
+    "E199": {
+        "eval_subdir": "fullscale_augmentation",
+        "case_metrics": "e199_fullscale_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E194",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -410,10 +421,83 @@ def _read_e194_corrected_overlay() -> list[CaseRecord]:
     return records
 
 
+E199_FS_MANIFEST = (
+    REPO / "workspace/core4d/results/E199/s6_downstream/manifests/e199_fullscale_priority_manifest.tsv"
+)
+
+
+def _read_e199_fullscale() -> list[CaseRecord]:
+    """E199 full-scale augmentation review set (aug translation variants only).
+
+    Joins the fullscale eval case_metrics (metrics + the 6 physics gates) with the
+    fullscale priority manifest (replay paths) by (case_id, aug_variant). Each of
+    the 3 translation variants is exposed as an arm. `orig` rows are skipped here
+    (the same-case A0/PRG baseline is reviewable via its own E17x/E198 index).
+    """
+    metrics_path = _case_metrics_path("E199")
+    if metrics_path is None or not E199_FS_MANIFEST.is_file():
+        return _read_exp("E199") if metrics_path else []
+    manifest: dict[tuple[str, str], dict[str, str]] = {}
+    with E199_FS_MANIFEST.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            manifest[(row.get("case_id", ""), row.get("aug_variant", ""))] = row
+    anns = load_annotations("E199")
+    records: list[CaseRecord] = []
+    with metrics_path.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            if (row.get("group") or "").strip() != "aug":
+                continue
+            case_id = (row.get("case_id") or "").strip()
+            variant = (row.get("aug_variant") or "").strip()
+            mrow = manifest.get((case_id, variant))
+            if not case_id or mrow is None:
+                continue
+            outdir_npz = normalize_path(mrow.get("outdir_npz", ""))
+            config_act = normalize_path(mrow.get("config_act", ""))
+            if not config_act and outdir_npz:
+                candidate = Path(outdir_npz).parent / "config_act.yaml"
+                config_act = str(candidate) if candidate.is_file() else ""
+            scene_xml = resolve_scene(
+                "E199", case_id,
+                normalize_path(mrow.get("scene_act", "") or row.get("scene_xml", "")),
+            )
+            video = normalize_path(mrow.get("video", ""))
+            if video and not Path(video).is_file():
+                video = ""  # CEM ran save_video=false -> live qpos playback
+            modes = (row.get("numeric_failure_modes") or "").replace(";", ",")
+            records.append(
+                CaseRecord(
+                    exp_id="E199",
+                    arm=variant,
+                    case_id=case_id,
+                    variant=variant,
+                    object_key=(row.get("object_key") or "").strip(),
+                    retarget_variant_id="omnirt_v2",
+                    numeric_release_pass=_as_bool(row.get("all_gates_pass", "")),
+                    numeric_failure_modes=[m.strip() for m in modes.split(",") if m.strip()],
+                    gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
+                    status=(row.get("status") or "AUG_FULL_COMPLETE").strip(),
+                    outdir_npz=outdir_npz,
+                    scene_xml=scene_xml,
+                    config_act=config_act,
+                    trajectory=normalize_path(mrow.get("trajectory", "")),
+                    video=video,
+                    annotation=anns.get(case_id, {}),
+                    metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
+                )
+            )
+    return records
+
+
 def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
     out: list[CaseRecord] = []
     for exp in exps:
-        out.extend(_read_e194_corrected_overlay() if exp == "E194" else _read_exp(exp))
+        if exp == "E194":
+            out.extend(_read_e194_corrected_overlay())
+        elif exp == "E199":
+            out.extend(_read_e199_fullscale())
+        else:
+            out.extend(_read_exp(exp))
     return out
 
 
@@ -453,6 +537,11 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
             npass = int(counts.get("numeric_pass", -1))
             if exp == "E192":
                 evaluated = int(summary.get("evaluated", -1))
+                npass = sum(1 for r in recs if r.numeric_release_pass)
+            if exp == "E199":
+                # E199 fullscale summary reports aug_scored (not `evaluated`);
+                # the indexed aug records are the review set (orig rows excluded).
+                evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E194_FULL":
             evaluated = len(recs)

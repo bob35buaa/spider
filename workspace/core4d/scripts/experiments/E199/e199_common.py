@@ -235,7 +235,18 @@ def write_tsv(value: str | Path, rows: list[dict[str, Any]], fields: list[str] |
             writer.writeheader()
             for row in rows:
                 writer.writerow({key: serial(row.get(key, "")) for key in fields})
-        Path(tmp).replace(path)
+        # JuiceFS occasionally throws a transient EIO on os.replace; retry a few
+        # times so the long-running CEM queue survives storage hiccups instead of
+        # crashing mid-run (it writes this manifest after every row).
+        import time as _time
+        for _attempt in range(6):
+            try:
+                Path(tmp).replace(path)
+                break
+            except OSError:
+                if _attempt == 5:
+                    raise
+                _time.sleep(0.5 * (_attempt + 1))
     except Exception:
         Path(tmp).unlink(missing_ok=True)
         raise

@@ -1,7 +1,14 @@
 # 实验日志索引
 
-> 自动生成，共 284 个日志文件。
+> 自动生成，共 286 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 62 (E199-E199)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 286 | E199 | 2026-08-15 | Omniretarget object augmentation results | [286_E199_omniretarget_object_augmentatio...](286_E199_omniretarget_object_augmentation_results.md) |
+| 287 | E199 | 2026-08-15 | Box fullscale translation augmentation | [287_E199_box_fullscale_translation_augme...](287_E199_box_fullscale_translation_augmentation.md) |
 
 ## Phase 61 (E192-E198)
 
