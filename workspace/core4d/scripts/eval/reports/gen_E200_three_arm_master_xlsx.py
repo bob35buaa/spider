@@ -75,10 +75,12 @@ MANUAL_G1A2 = RES / "E198/s6_downstream/eval/full_factorial/user_manual_review_f
 OUT = RES / "E200/s6_downstream/eval/E200_three_arm_master.xlsx"
 
 VARIANTS = ["orig", "trans0", "trans1", "trans2"]
-KEY_FIELDS = [("obj_pos_cm", "track_obj_pos_err_cm_mean"), ("obj_ori_deg", "track_obj_ori_err_deg_mean"),
-              ("contact", "hand_object_physics_contact_in_mask_frac"),
-              ("hand_pen", "hand_object_physics_penetration_3mm_frame_frac"),
-              ("leg_pen", "leg_penetration_frac"), ("body_z", "body_z_err_p95_m")]
+# full 14-gate value fields (from funnel_config, same order/口径): 4 hard + 10 banded
+HARD_VAL = [(n, f) for n, f, _op, _thr in FC.HARD_GATES]          # (name, field)
+BANDED_VAL = [(n, f, nar, wide) for n, f, _op, nar, wide in FC.BANDED_GATES]  # (name, field, narrow, wide)
+GATE_FIELDS_ALL = [f for _n, f in HARD_VAL] + [f for _n, f, _nr, _w in BANDED_VAL]
+# body_z is not stored in case_metrics (recomputed by classify); read it from the funnel row.
+_BODYZ = "body_z_err_p95_m"
 
 GREEN = PatternFill("solid", fgColor="C6EFCE"); RED = PatternFill("solid", fgColor="FFC7CE")
 GREY = PatternFill("solid", fgColor="D9D9D9"); NAVY = PatternFill("solid", fgColor="1F3864")
@@ -126,13 +128,13 @@ def load_funnel_arm(arm: str) -> dict[tuple[str, str], dict[str, Any]]:
         var = variant_of(r)
         key = (norm(r["case_id"]), var)
         v = vals.get((r["case_id"], var), {})
+        gatevals = {f: (r.get(_BODYZ) if f == _BODYZ else v.get(f)) for f in GATE_FIELDS_ALL}
         out[key] = {
             "arm": arm, "object_key": r.get("object_key", ""), "case_id": norm(r["case_id"]), "variant": var,
             "layer": r.get("layer", ""), "hard_pass": r.get("hard_pass", ""),
             "wide_pass": r.get("wide_pass", ""), "narrow_pass": r.get("narrow_pass", ""),
             "narrow_failed": r.get("narrow_failed", ""), "wide_failed": r.get("wide_failed", ""),
-            "hard_failed": r.get("hard_failed", ""),
-            **{k: (r.get("body_z_err_p95_m") if f == "body_z_err_p95_m" else v.get(f)) for k, f in KEY_FIELDS},
+            "hard_failed": r.get("hard_failed", ""), "gatevals": gatevals,
         }
     return out
 
@@ -151,7 +153,7 @@ def load_g1a2_orig_from_armcache() -> dict[tuple[str, str], dict[str, Any]]:
             "arm": "PRG+G1+A2", "object_key": r.get("object_key", ""), "case_id": norm(r["case_id"]),
             "variant": "orig", "layer": layer, "hard_pass": hard_ok, "wide_pass": wide_ok, "narrow_pass": narrow_ok,
             "narrow_failed": ",".join(narrow_f), "wide_failed": ",".join(wide_f), "hard_failed": ",".join(hard_f),
-            **{k: r.get(f) for k, f in KEY_FIELDS},
+            "gatevals": {f: r.get(f) for f in GATE_FIELDS_ALL},
         }
     return out
 
@@ -252,23 +254,45 @@ def _b(v) -> bool | None:
 
 
 def write_by_rollout(ws, rollouts):
-    hdr = ["arm", "object", "case_id", "variant", "layer", "hard", "WIDE", "NARROW",
-           "narrow_failed"] + [k for k, _ in KEY_FIELDS] + ["manual", "manual_label", "SUGAR-W", "Holo-W", "rl_ok"]
+    # id block -> hard-gate overall -> 4 hard (value + ✓) -> 10 banded (value + N + W)
+    # -> manual -> downstream RL. Every one of the 14 gates shows its numeric value.
+    hdr = ["arm", "object", "case_id", "variant", "layer", "hard_all", "WIDE_all", "NARROW_all"]
+    for name, _f in HARD_VAL:
+        hdr += [name, f"{name}✓"]
+    for name, _f, nar, wide in BANDED_VAL:
+        hdr += [name, f"{name} N({nar:g})", f"{name} W({wide:g})"]
+    hdr += ["manual", "manual_label", "SUGAR-W", "Holo-W", "rl_ok"]
     for c, h in enumerate(hdr, 1):
         _c(ws, 1, c, h, NAVY, HEAD)
+        ws.cell(row=1, column=c).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.freeze_panes = "E2"
     order = {"orig": 0, "trans0": 1, "trans1": 2, "trans2": 3}
     aorder = {"noPRG": 0, "PRG": 1, "PRG+G1+A2": 2}
     rollouts = sorted(rollouts, key=lambda r: (r["object_key"], r["case_id"], order.get(r["variant"], 9), aorder[r["arm"]]))
     for i, r in enumerate(rollouts, 2):
+        gv = r.get("gatevals", {})
+        hard_f = set((r.get("hard_failed") or "").split(","))
+        narrow_f = set((r.get("narrow_failed") or "").split(","))
+        wide_f = set((r.get("wide_failed") or "").split(","))
         _c(ws, i, 1, r["arm"]); _c(ws, i, 2, r["object_key"]); _c(ws, i, 3, r["case_id"]); _c(ws, i, 4, r["variant"])
         _c(ws, i, 5, r["layer"], LAYER_FILL.get(r["layer"]))
         for c, key in ((6, "hard_pass"), (7, "wide_pass"), (8, "narrow_pass")):
             b = _b(r[key]); _c(ws, i, c, "P" if b else "F" if b is False else "", GREEN if b else RED if b is False else None)
-        _c(ws, i, 9, r.get("narrow_failed", ""))
-        col = 10
-        for k, _f in KEY_FIELDS:
-            _n(ws, i, col, r.get(k)); col += 1
+        col = 9
+        for name, field in HARD_VAL:
+            if field == "fall_flag":
+                _c(ws, i, col, str(gv.get(field, "")))
+            else:
+                _n(ws, i, col, gv.get(field))
+            col += 1
+            ok = name not in hard_f
+            _c(ws, i, col, "P" if ok else "F", GREEN if ok else RED); col += 1
+        for name, field, _nr, _w in BANDED_VAL:
+            _n(ws, i, col, gv.get(field)); col += 1
+            n_ok = name not in narrow_f
+            _c(ws, i, col, "P" if n_ok else "F", GREEN if n_ok else RED); col += 1
+            w_ok = name not in wide_f
+            _c(ws, i, col, "P" if w_ok else "F", GREEN if w_ok else RED); col += 1
         md = r["manual_decision"]
         _c(ws, i, col, md, GREEN if md == "USE" else RED if md == "DO_NOT_USE" else None); col += 1
         _c(ws, i, col, r["manual_label"]); col += 1
@@ -276,7 +300,8 @@ def write_by_rollout(ws, rollouts):
         _n(ws, i, col, r["Holo_W"]); col += 1
         ok = r["rl_ok"]
         _c(ws, i, col, ("ok" if ok == 1 else "FAIL" if ok == 0 else ""), GREEN if ok == 1 else RED if ok == 0 else None)
-    for i, w in enumerate([10, 9, 30, 8, 11, 5, 5, 6, 22] + [9] * len(KEY_FIELDS) + [11, 15, 9, 9, 7], 1):
+    widths = [10, 9, 30, 8, 11, 6, 6, 7] + [9, 5] * len(HARD_VAL) + [9, 8, 8] * len(BANDED_VAL) + [11, 14, 9, 9, 7]
+    for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
