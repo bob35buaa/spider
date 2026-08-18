@@ -805,8 +805,15 @@ def _read_e200_arm(exp: str) -> list[CaseRecord]:
             else:
                 continue
             if not config_act and outdir_npz:
-                candidate = Path(outdir_npz).parent / "config_act.yaml"
-                config_act = str(candidate) if candidate.is_file() else ""
+                # E190/E168 orig qpos npz lives flat in cem/full/<stem>.npz, and its
+                # config sits in the sibling <stem>_outdir_full/config_act.yaml — not
+                # next to the npz. Try that first, then the adjacent-file layout.
+                p = Path(outdir_npz)
+                for candidate in (p.with_name(p.stem + "_outdir_full") / "config_act.yaml",
+                                  p.parent / "config_act.yaml"):
+                    if candidate.is_file():
+                        config_act = str(candidate)
+                        break
             scene_xml = resolve_scene(exp, disp_cid, normalize_path(scene_src))
             if group == "orig" and scene_xml:
                 cand_traj = Path(scene_xml).parent / "0" / "trajectory_kinematic.npz"
