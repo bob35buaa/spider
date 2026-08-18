@@ -292,8 +292,31 @@ def _load_case_data(rec: idx.CaseRecord, want_ref: bool):
     return val
 
 
+def _load_kinematic_data_raw(rec: idx.CaseRecord):
+    """Kinematic playback: replay the full qpos stored in outdir_npz directly
+    against scene_xml (no CEM config / physics). Used by E197 RL-export motions,
+    whose npz holds a complete MuJoCo qpos (root + joints + object)."""
+    from spider.viewers.viser_viewer import _ensure_names
+
+    spec = _load_portable_spec(Path(rec.scene_xml))
+    _ensure_names(spec)
+    model = spec.compile()
+
+    data = np.load(rec.outdir_npz, allow_pickle=True)
+    qpos = np.asarray(data["qpos"], dtype=np.float64)
+    if qpos.ndim != 2 or qpos.shape[1] != model.nq:
+        raise ValueError(f"kinematic qpos shape {qpos.shape} != model nq={model.nq}")
+    fps = int(data["fps"]) if "fps" in getattr(data, "files", []) else 30
+    frame_ids = list(range(len(qpos)))
+    if not frame_ids:
+        raise ValueError("no replay frames")
+    return spec, model, qpos, None, frame_ids, max(1, fps)
+
+
 def _load_case_data_raw(rec: idx.CaseRecord, want_ref: bool):
     """Return (spec, model, sim_qpos, ref_qpos|None, frame_ids, fps)."""
+    if getattr(rec, "kinematic", False):
+        return _load_kinematic_data_raw(rec)
     from render_a100_cem_videos import (  # noqa: E402
         converted_reference_qpos,
         load_render_config,

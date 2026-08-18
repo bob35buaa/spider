@@ -235,6 +235,9 @@ class CaseRecord:
     annotation: dict[str, str] = field(default_factory=dict)
     # continuous numeric metrics for the top bar
     metrics: dict[str, float | None] = field(default_factory=dict)
+    # kinematic playback: replay outdir_npz's full qpos directly against scene_xml
+    # (no CEM config / physics rollout). Used by E197 RL-export motions.
+    kinematic: bool = False
 
     @property
     def key(self) -> str:
@@ -696,6 +699,65 @@ def _read_e198_g1a2_orig(exp: str, anns: dict[str, dict[str, str]]) -> list[Case
     return records
 
 
+# E197 partner re-export v2 (plan?/log277): the RL-export set of 52 target cases,
+# sourced mostly from E170/E172/E173 CEM + 4 E197_rerun. Each case ships a
+# 43-dim g1_expansion qpos (root7 + G1 29dof + object7) — a full MuJoCo qpos we
+# replay kinematically against the source case's nq=43 scene.xml. There is NO
+# per-case numeric metrics file, so gates/metrics are blank (visual review only).
+E197_REEXPORT = REPO / "workspace/core4d/results/E197/s6_downstream/rl_export/partner_reexport_v2"
+_HUMANOID_OBJECT = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+
+
+def _read_e197_reexport() -> list[CaseRecord]:
+    """E197 partner_reexport_v2 target motions as kinematic-playback records."""
+    pairing = E197_REEXPORT / "manifests/source_pairing_manifest.tsv"
+    prov_path = E197_REEXPORT / "manifests/provenance.tsv"
+    if not pairing.is_file():
+        return []
+    prov: dict[str, dict[str, str]] = {}
+    if prov_path.is_file():
+        with prov_path.open("r", encoding="utf-8", newline="") as fh:
+            for r in csv.DictReader(fh, delimiter="\t"):
+                prov[r.get("case_id", "")] = r
+    anns = load_annotations("E197")
+    records: list[CaseRecord] = []
+    with pairing.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            case_id = (row.get("case_id") or "").strip()
+            if not case_id:
+                continue
+            pr = prov.get(case_id, {})
+            variant = (pr.get("source_variant") or row.get("upstream_version") or "").strip() or "omnirt_v1"
+            outdir_npz = normalize_path(row.get("target_g1_expansion_npz", ""))
+            # scene: the source case's nq=43 scene.xml (object pose is driven by qpos,
+            # so any G1+object scene for this case replays correctly).
+            slug = (pr.get("source_slug") or "").strip()
+            scene_xml = str(_HUMANOID_OBJECT / slug / "scene.xml") if slug else ""
+            records.append(
+                CaseRecord(
+                    exp_id="E197",
+                    arm=variant,
+                    case_id=case_id,
+                    variant=variant,
+                    object_key=(row.get("object_name") or "").strip().lower(),
+                    retarget_variant_id=variant,
+                    numeric_release_pass=None,
+                    numeric_failure_modes=[],
+                    gates={g: None for g in GATE_FIELDS},
+                    status=f"E197_REEXPORT_V2:{pr.get('source_exp', '')}",
+                    outdir_npz=outdir_npz,
+                    scene_xml=scene_xml,
+                    config_act="",
+                    trajectory="",
+                    video="",
+                    annotation=anns.get(_ann_id(case_id, variant), {}),
+                    metrics={c: None for c in METRIC_COLUMNS},
+                    kinematic=True,
+                )
+            )
+    return records
+
+
 def _read_e200_arm(exp: str) -> list[CaseRecord]:
     """E200 arm review set (plan230/log289): orig + trans0/1/2 per case, one arm each.
 
@@ -788,6 +850,8 @@ def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
             out.extend(_read_e199_fullscale())
         elif exp == "E199P":
             out.extend(_read_e199_pilot())
+        elif exp == "E197":
+            out.extend(_read_e197_reexport())
         elif exp in ("E200N", "E200G"):
             out.extend(_read_e200_arm(exp))
         else:
@@ -838,6 +902,10 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
+        elif exp == "E197":
+            # E197 is kinematic-playback only: no summary.json / no numeric gates.
+            evaluated = len(recs)
+            npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E194_FULL":
             evaluated = len(recs)
             npass = sum(1 for r in recs if r.numeric_release_pass)

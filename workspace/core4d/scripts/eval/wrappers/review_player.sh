@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Launch the PRG retargeting review player (viser, E170-E199).
+# Launch the PRG retargeting review player (viser, E170-E200).
 #
 # Usage:
-#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E198|E199|E199P|E200N|E200G] [--port 8080] [--check] [...]
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E197|E198|E199|E199P|E200N|E200G] [--port 8080] [--check] [...]
+# E197 = partner_reexport_v2 RL-export motions (52 target cases, log277): kinematic
+#   playback of the 43-dim g1_expansion qpos against each case's source scene.xml.
+#   Visual review only — no numeric metrics/gates (this is a kinematic export).
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E199,E199P [--port 8080]   # both in one session
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E200N,E200G [--port 8080]  # both E200 arms
 # E200N = E200 noPRG (E167A) arm (plan230/log289): orig(E190 37) + trans0/1/2 arm sweep.
