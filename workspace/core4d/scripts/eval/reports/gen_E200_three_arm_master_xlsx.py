@@ -27,6 +27,12 @@ Sheets:
   summary    — per arm x {aug,orig}: wide/narrow pass rate + layer mix; manual USE
                rate; RL success rate; and consistency cross-tabs (NARROW-pass and
                manual-USE vs RL success on the 38 canonical cases).
+  臂间对比(McNemar) — paired arm comparison on the aug set (three arms re-ran the
+               SAME E199 aug trajectories, so aug rollouts are genuinely paired;
+               orig baselines differ per pipeline and are excluded). Block A: per-
+               gate arm means across the 249 common rollouts + Δ(PRG−noPRG)/Δ(G1A2−PRG).
+               Block B: McNemar-exact gate migration for noPRG→PRG, PRG→G1A2,
+               noPRG→G1A2 (14 gates at hard/NARROW口径 + 3 composite funnel rows).
 
 Usage:
     .venv/bin/python workspace/core4d/scripts/eval/reports/gen_E200_three_arm_master_xlsx.py
@@ -410,6 +416,117 @@ def write_summary(ws, rollouts, rl):
         ws.column_dimensions[col].width = 16
 
 
+# ---- arm×arm paired comparison (McNemar) ------------------------------------
+# The three arms re-ran the SAME E199 aug trajectories, so aug rollouts are a
+# genuine paired set (same trajectory, different downstream arm). orig rollouts
+# are each arm's own baseline (different pipelines: noPRG=E190, PRG=E199 orig,
+# G1A2=E198) and are NOT paired, so this analysis is restricted to aug.
+DIR = {n: ("↑" if op == ">=" else "↓") for n, _f, op, *_ in FC.HARD_GATES}
+DIR.update({n: ("↑" if op == ">=" else "↓") for n, _f, op, *_ in FC.BANDED_GATES})
+GATE_META = ([(n, f, True) for n, f in HARD_VAL]              # (name, field, is_hard)
+             + [(n, f, False) for n, f, _nr, _w in BANDED_VAL])
+YELLOW = PatternFill("solid", fgColor="FFEB9C")
+
+
+def mcnemar_exact(p2f: int, f2p: int) -> float:
+    from math import comb
+    n = p2f + f2p
+    if n == 0:
+        return 1.0
+    k = min(p2f, f2p)
+    tail = sum(comb(n, i) for i in range(0, k + 1)) / (2 ** n)
+    return float(min(1.0, 2.0 * tail))
+
+
+def _gate_pass(rec: dict[str, Any], name: str, is_hard: bool) -> bool:
+    """per-gate pass on the primary口径 (hard for hard gates, NARROW for banded)."""
+    field = "hard_failed" if is_hard else "narrow_failed"
+    return name not in set((rec.get(field) or "").split(","))
+
+
+def write_arm_compare(ws, funnel):
+    aug = {a: {k: v for k, v in funnel[a].items() if k[1] != "orig"} for a in ARMS}
+    common = set(aug[ARMS[0]]) & set(aug[ARMS[1]]) & set(aug[ARMS[2]])
+    r = 1
+    _c(ws, r, 1, "本表仅用 aug 配对：三 arm 复跑同一条 E199 增强轨迹，逐 rollout 配对可比；"
+                 "orig 各 arm 基线不同管线，不做配对。", font=Font(bold=True, color="C00000")); r += 2
+
+    # -- Block A: per-gate arm means on the set common to all three arms --
+    _c(ws, r, 1, f"A) 三臂 × 14-gate 数值均值（aug，三臂共有 {len(common)} 条 rollout）", font=Font(bold=True)); r += 1
+    hdr = ["门", "方向", "n"] + ARMS + ["Δ(PRG−noPRG)", "Δ(G1A2−PRG)"]
+    for c, h in enumerate(hdr, 1):
+        _c(ws, r, c, h, NAVY, HEAD)
+    r += 1
+    for name, field, is_hard in GATE_META:
+        d = DIR[name]
+        _c(ws, r, 1, name); _c(ws, r, 2, d); _c(ws, r, 3, len(common))
+        means = {}
+        for c, a in enumerate(ARMS, 4):
+            if field == "fall_flag":
+                vals = [1.0 if _b(aug[a][k]["gatevals"].get(field)) else 0.0 for k in common]
+            else:
+                vals = [finite(aug[a][k]["gatevals"].get(field)) for k in common]
+                vals = [v for v in vals if math.isfinite(v)]
+            m = sum(vals) / len(vals) if vals else math.nan
+            means[a] = m
+            _c(ws, r, c, round(m, 4) if math.isfinite(m) else "")
+        for c, (hi, lo) in enumerate(((ARMS[1], ARMS[0]), (ARMS[2], ARMS[1])), 7):
+            delta = means[hi] - means[lo]
+            fill = None
+            if math.isfinite(delta) and abs(delta) > 1e-9:
+                improved = (delta > 0) if d == "↑" else (delta < 0)
+                fill = GREEN if improved else RED
+            _c(ws, r, c, round(delta, 4) if math.isfinite(delta) else "", fill)
+        r += 1
+    r += 1
+
+    # -- Block B: McNemar gate migration across arm pairs --
+    _c(ws, r, 1, "B) 臂间门迁移（McNemar exact，aug 配对；banded 用 NARROW 口径，p<0.05 高亮）",
+       font=Font(bold=True)); r += 1
+    hdr = ["迁移", "门", "口径", "n", "前通过", "后通过", "Δpp", "P→F", "F→P", "exact p"]
+    for c, h in enumerate(hdr, 1):
+        _c(ws, r, c, h, NAVY, HEAD)
+    r += 1
+    transitions = [("noPRG→PRG", "noPRG", "PRG"),
+                   ("PRG→G1A2", "PRG", "PRG+G1+A2"),
+                   ("noPRG→G1A2", "noPRG", "PRG+G1+A2")]
+    comp = [("NARROW_all", "narrow_pass", "复合"), ("WIDE_all", "wide_pass", "复合"),
+            ("hard_all", "hard_pass", "复合")]
+    for tname, before, after in transitions:
+        sel = sorted(set(aug[before]) & set(aug[after]))
+        # per-gate (hard + banded narrow)
+        for name, _field, is_hard in GATE_META:
+            kind = "hard" if is_hard else "narrow"
+            bp = sum(_gate_pass(aug[before][k], name, is_hard) for k in sel)
+            ap_ = sum(_gate_pass(aug[after][k], name, is_hard) for k in sel)
+            p2f = sum(_gate_pass(aug[before][k], name, is_hard)
+                      and not _gate_pass(aug[after][k], name, is_hard) for k in sel)
+            f2p = sum((not _gate_pass(aug[before][k], name, is_hard))
+                      and _gate_pass(aug[after][k], name, is_hard) for k in sel)
+            _write_mig_row(ws, r, tname, name, kind, len(sel), bp, ap_, p2f, f2p); r += 1
+        # composite funnel decisions
+        for cname, key, kind in comp:
+            bp = sum(1 for k in sel if _b(aug[before][k][key]))
+            ap_ = sum(1 for k in sel if _b(aug[after][k][key]))
+            p2f = sum(1 for k in sel if _b(aug[before][k][key]) and not _b(aug[after][k][key]))
+            f2p = sum(1 for k in sel if (not _b(aug[before][k][key])) and _b(aug[after][k][key]))
+            _write_mig_row(ws, r, tname, cname, kind, len(sel), bp, ap_, p2f, f2p); r += 1
+    widths = [12, 12, 8, 5, 8, 8, 8, 6, 6, 9]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+
+def _write_mig_row(ws, r, tname, gate, kind, n, bp, ap_, p2f, f2p):
+    dpp = round((ap_ - bp) / n * 100, 2) if n else 0.0
+    p = mcnemar_exact(p2f, f2p)
+    sig = p < 0.05
+    _c(ws, r, 1, tname); _c(ws, r, 2, gate); _c(ws, r, 3, kind); _c(ws, r, 4, n)
+    _c(ws, r, 5, bp); _c(ws, r, 6, ap_)
+    _c(ws, r, 7, dpp, GREEN if dpp > 0 else RED if dpp < 0 else None)
+    _c(ws, r, 8, p2f); _c(ws, r, 9, f2p)
+    _c(ws, r, 10, round(p, 6), YELLOW if sig else None)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=OUT)
@@ -424,6 +541,7 @@ def main() -> int:
     write_by_rollout(wb.active, rollouts); wb.active.title = "by_rollout"
     write_by_case(wb.create_sheet("by_case"), funnel, manual, rl)
     write_summary(wb.create_sheet("summary"), rollouts, rl)
+    write_arm_compare(wb.create_sheet("臂间对比(McNemar)"), funnel)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(args.out)
     print(f"[done] wrote {args.out} ({len(rollouts)} rollout rows)")
