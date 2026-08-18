@@ -564,6 +564,7 @@ class ReviewApp:
             self.frame_slider.on_update(self._on_slider)
             self.play_btn = s.gui.add_button("播放 / 暂停")
             self.play_btn.on_click(self._toggle_play)
+            self.cb_autoplay = s.gui.add_checkbox("切换后自动播放", initial_value=True)
             self.fps_num = s.gui.add_number(
                 "帧率", initial_value=30, min=1, max=120, step=1
             )
@@ -730,6 +731,10 @@ class ReviewApp:
             self._apply(0)
             self._apply_visibility()
             self._set_info(self._info_text(rec))
+            # auto-play the newly-loaded sequence (opt-out via the checkbox)
+            if len(self.frames) > 1 and self.cb_autoplay.value:
+                self.playing = True
+                self._next_t = time.perf_counter()
 
     # -- playback -----------------------------------------------------------
     def _player_loop(self):
