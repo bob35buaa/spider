@@ -457,46 +457,60 @@ def _gate_pass(rec: dict[str, Any], name: str, is_hard: bool) -> bool:
     return name not in set((rec.get(field) or "").split(","))
 
 
+def _object_groups(aug: dict) -> list[tuple[str, Any]]:
+    """[('ALL', None)] + one entry per object present, sorted."""
+    objs = sorted({v["object_key"] for a in ARMS for v in aug[a].values()})
+    return [("ALL", None)] + [(o, o) for o in objs]
+
+
+def _keys_in(recs: dict, obj: Any) -> set:
+    return {k for k, v in recs.items() if obj is None or v["object_key"] == obj}
+
+
 def write_arm_compare(ws, funnel):
     aug = {a: {k: v for k, v in funnel[a].items() if k[1] != "orig"} for a in ARMS}
-    common = set(aug[ARMS[0]]) & set(aug[ARMS[1]]) & set(aug[ARMS[2]])
+    groups = _object_groups(aug)
     r = 1
     _c(ws, r, 1, "本表仅用 aug 配对：三 arm 复跑同一条 E199 增强轨迹，逐 rollout 配对可比；"
-                 "orig 各 arm 基线不同管线，不做配对。", font=Font(bold=True, color="C00000")); r += 2
+                 "orig 各 arm 基线不同管线，不做配对。物体维含 ALL + 逐 box。",
+       font=Font(bold=True, color="C00000")); r += 2
 
-    # -- Block A: per-gate arm means on the set common to all three arms --
-    _c(ws, r, 1, f"A) 三臂 × 14-gate 数值均值（aug，三臂共有 {len(common)} 条 rollout）", font=Font(bold=True)); r += 1
-    hdr = ["门", "方向", "n"] + ARMS + ["Δ(PRG−noPRG)", "Δ(G1A2−PRG)"]
+    # -- Block A: per-gate arm means, by object (ALL + each box) --
+    _c(ws, r, 1, "A) 三臂 × 14-gate 数值均值（aug 配对，逐物体；Δ 着色=是否按方向改善）", font=Font(bold=True)); r += 1
+    hdr = ["物体", "门", "方向", "n"] + ARMS + ["Δ(PRG−noPRG)", "Δ(G1A2−PRG)"]
     for c, h in enumerate(hdr, 1):
         _c(ws, r, c, h, NAVY, HEAD)
     r += 1
-    for name, field, is_hard in GATE_META:
-        d = DIR[name]
-        _c(ws, r, 1, name); _c(ws, r, 2, d); _c(ws, r, 3, len(common))
-        means = {}
-        for c, a in enumerate(ARMS, 4):
-            if field == "fall_flag":
-                vals = [1.0 if _b(aug[a][k]["gatevals"].get(field)) else 0.0 for k in common]
-            else:
-                vals = [finite(aug[a][k]["gatevals"].get(field)) for k in common]
-                vals = [v for v in vals if math.isfinite(v)]
-            m = sum(vals) / len(vals) if vals else math.nan
-            means[a] = m
-            _c(ws, r, c, round(m, 4) if math.isfinite(m) else "")
-        for c, (hi, lo) in enumerate(((ARMS[1], ARMS[0]), (ARMS[2], ARMS[1])), 7):
-            delta = means[hi] - means[lo]
-            fill = None
-            if math.isfinite(delta) and abs(delta) > 1e-9:
-                improved = (delta > 0) if d == "↑" else (delta < 0)
-                fill = GREEN if improved else RED
-            _c(ws, r, c, round(delta, 4) if math.isfinite(delta) else "", fill)
-        r += 1
+    for gname, obj in groups:
+        common = _keys_in(aug[ARMS[0]], obj) & _keys_in(aug[ARMS[1]], obj) & _keys_in(aug[ARMS[2]], obj)
+        band = GREY if gname == "ALL" else None
+        for name, field, _is_hard in GATE_META:
+            d = DIR[name]
+            _c(ws, r, 1, gname, band); _c(ws, r, 2, name); _c(ws, r, 3, d); _c(ws, r, 4, len(common))
+            means = {}
+            for c, a in enumerate(ARMS, 5):
+                if field == "fall_flag":
+                    vals = [1.0 if _b(aug[a][k]["gatevals"].get(field)) else 0.0 for k in common]
+                else:
+                    vals = [finite(aug[a][k]["gatevals"].get(field)) for k in common]
+                    vals = [v for v in vals if math.isfinite(v)]
+                m = sum(vals) / len(vals) if vals else math.nan
+                means[a] = m
+                _c(ws, r, c, round(m, 4) if math.isfinite(m) else "")
+            for c, (hi, lo) in enumerate(((ARMS[1], ARMS[0]), (ARMS[2], ARMS[1])), 8):
+                delta = means[hi] - means[lo]
+                fill = None
+                if math.isfinite(delta) and abs(delta) > 1e-9:
+                    improved = (delta > 0) if d == "↑" else (delta < 0)
+                    fill = GREEN if improved else RED
+                _c(ws, r, c, round(delta, 4) if math.isfinite(delta) else "", fill)
+            r += 1
     r += 1
 
-    # -- Block B: McNemar gate migration across arm pairs --
-    _c(ws, r, 1, "B) 臂间门迁移（McNemar exact，aug 配对；banded 用 NARROW 口径，p<0.05 高亮）",
+    # -- Block B: McNemar gate migration across arm pairs, by object --
+    _c(ws, r, 1, "B) 臂间门迁移（McNemar exact，aug 配对，逐物体；banded 用 NARROW 口径，p<0.05 高亮）",
        font=Font(bold=True)); r += 1
-    hdr = ["迁移", "门", "口径", "n", "前通过", "后通过", "Δpp", "P→F", "F→P", "exact p"]
+    hdr = ["迁移", "物体", "门", "口径", "n", "前通过", "后通过", "Δpp", "P→F", "F→P", "exact p"]
     for c, h in enumerate(hdr, 1):
         _c(ws, r, c, h, NAVY, HEAD)
     r += 1
@@ -506,38 +520,41 @@ def write_arm_compare(ws, funnel):
     comp = [("NARROW_all", "narrow_pass", "复合"), ("WIDE_all", "wide_pass", "复合"),
             ("hard_all", "hard_pass", "复合")]
     for tname, before, after in transitions:
-        sel = sorted(set(aug[before]) & set(aug[after]))
-        # per-gate (hard + banded narrow)
-        for name, _field, is_hard in GATE_META:
-            kind = "hard" if is_hard else "narrow"
-            bp = sum(_gate_pass(aug[before][k], name, is_hard) for k in sel)
-            ap_ = sum(_gate_pass(aug[after][k], name, is_hard) for k in sel)
-            p2f = sum(_gate_pass(aug[before][k], name, is_hard)
-                      and not _gate_pass(aug[after][k], name, is_hard) for k in sel)
-            f2p = sum((not _gate_pass(aug[before][k], name, is_hard))
-                      and _gate_pass(aug[after][k], name, is_hard) for k in sel)
-            _write_mig_row(ws, r, tname, name, kind, len(sel), bp, ap_, p2f, f2p); r += 1
-        # composite funnel decisions
-        for cname, key, kind in comp:
-            bp = sum(1 for k in sel if _b(aug[before][k][key]))
-            ap_ = sum(1 for k in sel if _b(aug[after][k][key]))
-            p2f = sum(1 for k in sel if _b(aug[before][k][key]) and not _b(aug[after][k][key]))
-            f2p = sum(1 for k in sel if (not _b(aug[before][k][key])) and _b(aug[after][k][key]))
-            _write_mig_row(ws, r, tname, cname, kind, len(sel), bp, ap_, p2f, f2p); r += 1
-    widths = [12, 12, 8, 5, 8, 8, 8, 6, 6, 9]
+        paired = set(aug[before]) & set(aug[after])
+        for gname, obj in groups:
+            sel = sorted(k for k in paired if obj is None or aug[before][k]["object_key"] == obj)
+            band = GREY if gname == "ALL" else None
+            # per-gate (hard + banded narrow)
+            for name, _field, is_hard in GATE_META:
+                kind = "hard" if is_hard else "narrow"
+                bp = sum(_gate_pass(aug[before][k], name, is_hard) for k in sel)
+                ap_ = sum(_gate_pass(aug[after][k], name, is_hard) for k in sel)
+                p2f = sum(_gate_pass(aug[before][k], name, is_hard)
+                          and not _gate_pass(aug[after][k], name, is_hard) for k in sel)
+                f2p = sum((not _gate_pass(aug[before][k], name, is_hard))
+                          and _gate_pass(aug[after][k], name, is_hard) for k in sel)
+                _write_mig_row(ws, r, tname, gname, name, kind, len(sel), bp, ap_, p2f, f2p, band); r += 1
+            # composite funnel decisions
+            for cname, key, kind in comp:
+                bp = sum(1 for k in sel if _b(aug[before][k][key]))
+                ap_ = sum(1 for k in sel if _b(aug[after][k][key]))
+                p2f = sum(1 for k in sel if _b(aug[before][k][key]) and not _b(aug[after][k][key]))
+                f2p = sum(1 for k in sel if (not _b(aug[before][k][key])) and _b(aug[after][k][key]))
+                _write_mig_row(ws, r, tname, gname, cname, kind, len(sel), bp, ap_, p2f, f2p, band); r += 1
+    widths = [12, 9, 12, 8, 5, 8, 8, 8, 6, 6, 9]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
-def _write_mig_row(ws, r, tname, gate, kind, n, bp, ap_, p2f, f2p):
+def _write_mig_row(ws, r, tname, gname, gate, kind, n, bp, ap_, p2f, f2p, band=None):
     dpp = round((ap_ - bp) / n * 100, 2) if n else 0.0
     p = mcnemar_exact(p2f, f2p)
     sig = p < 0.05
-    _c(ws, r, 1, tname); _c(ws, r, 2, gate); _c(ws, r, 3, kind); _c(ws, r, 4, n)
-    _c(ws, r, 5, bp); _c(ws, r, 6, ap_)
-    _c(ws, r, 7, dpp, GREEN if dpp > 0 else RED if dpp < 0 else None)
-    _c(ws, r, 8, p2f); _c(ws, r, 9, f2p)
-    _c(ws, r, 10, round(p, 6), YELLOW if sig else None)
+    _c(ws, r, 1, tname); _c(ws, r, 2, gname, band); _c(ws, r, 3, gate); _c(ws, r, 4, kind); _c(ws, r, 5, n)
+    _c(ws, r, 6, bp); _c(ws, r, 7, ap_)
+    _c(ws, r, 8, dpp, GREEN if dpp > 0 else RED if dpp < 0 else None)
+    _c(ws, r, 9, p2f); _c(ws, r, 10, f2p)
+    _c(ws, r, 11, round(p, 6), YELLOW if sig else None)
 
 
 def main() -> int:
