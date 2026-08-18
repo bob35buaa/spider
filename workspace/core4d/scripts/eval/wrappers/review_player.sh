@@ -2,8 +2,12 @@
 # Launch the PRG retargeting review player (viser, E170-E199).
 #
 # Usage:
-#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E198|E199|E199P] [--port 8080] [--check] [...]
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh [E194|E198|E199|E199P|E200N|E200G] [--port 8080] [--check] [...]
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E199,E199P [--port 8080]   # both in one session
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E200N,E200G [--port 8080]  # both E200 arms
+# E200N = E200 noPRG (E167A) arm (plan230/log289): orig(E190 37) + trans0/1/2 arm sweep.
+# E200G = E200 PRG+G1+A2 arm: trans0/1/2 arm sweep (G1A2 orig via --exps E198).
+#   Both reuse the E199 aug trajectories; live qpos playback. Same join as E199.
 # E199 = full-scale box translation augmentation (plan229/log287): 332 rows
 # (83 cases x orig+trans0/1/2 as a 4-arm sweep), live qpos playback. `review_player.sh E199`.
 # E199P = the E199 pilot (plan228/log286): 8 objects (5 box + bucket003/004/007),
