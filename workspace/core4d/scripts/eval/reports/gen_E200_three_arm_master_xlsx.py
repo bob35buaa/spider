@@ -164,6 +164,18 @@ def load_g1a2_orig_from_armcache() -> dict[tuple[str, str], dict[str, Any]]:
     return out
 
 
+def _arbitrate_g1a2_orig(recs: dict[tuple[str, str], dict[str, Any]]) -> None:
+    """G1A2 orig comes from arm_cache un-arbitrated (L3_narrow). Family-check it
+    against the present aug siblings so its L3 label matches every other arm:
+    L3_auto iff all other present variants of the case pass narrow, else L3_review."""
+    for (nc, var), r in recs.items():
+        if var != "orig" or r.get("layer") != "L3_narrow":
+            continue
+        others = [recs[(nc, v)] for v in ("trans0", "trans1", "trans2") if (nc, v) in recs]
+        all_ok = all(_b(o["narrow_pass"]) for o in others)  # all([]) is True -> lone orig auto
+        r["layer"] = "L3_auto" if all_ok else "L3_review"
+
+
 # ---- manual review ----------------------------------------------------------
 def load_manual() -> dict[tuple[str, str, str], dict[str, str]]:
     """(norm_case, variant, arm) -> {decision, label, note}."""
@@ -215,6 +227,7 @@ def rl_ok(sugar_w: float, holo_w: float) -> Any:
 def build():
     funnel: dict[str, dict[tuple[str, str], dict[str, Any]]] = {a: load_funnel_arm(a) for a in ARMS}
     funnel["PRG+G1+A2"].update(load_g1a2_orig_from_armcache())  # add G1A2 orig
+    _arbitrate_g1a2_orig(funnel["PRG+G1+A2"])  # L3_narrow -> L3_auto/L3_review (same口径 as other arms)
     manual = load_manual()
     rl = {"PRG": _r018_by_case(R018_PRG), "noPRG": _r018_by_case(R018_NOPRG)}
     rl_arm = {"PRG": "PRG", "noPRG": "noPRG"}  # G1A2 has no RL
