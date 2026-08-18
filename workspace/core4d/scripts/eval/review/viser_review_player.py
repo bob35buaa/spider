@@ -509,6 +509,10 @@ class ReviewApp:
             rec = self._filtered_recs[0] if (self.current is None and self._filtered_recs) else None
         if rec is not None:
             self._load_case(rec)
+        elif not self._filtered_recs:
+            self._set_info(
+                "_当前筛选下没有可回放的样本。请放宽筛选条件，或换一个已评估的实验。_"
+            )
 
     # -- GUI ----------------------------------------------------------------
     def _build_gui(self):
@@ -990,6 +994,17 @@ def main() -> int:
         records = [r for r in records if r.arm in arms]
         print(f"[review] arm filter {sorted(arms)} -> {len(records)} cases")
     print(f"[review] indexed {len(records)} cases across {exps}")
+    if not records:
+        extra = [e for e in ("E194", "E199", "E199P", "E200N", "E200G") if e not in idx.DEFAULT_EXPS]
+        avail = ", ".join(list(idx.DEFAULT_EXPS) + extra)
+        print(
+            f"[review] no reviewable records for {exps} — this experiment has no "
+            f"*_case_metrics.tsv under results/<exp>/s6_downstream/eval/, so it was "
+            f"never wired into the review player.\n"
+            f"[review] available review sets: {avail}",
+            file=sys.stderr,
+        )
+        return 2
     app = ReviewApp(  # noqa: F841
         records,
         host=args.host,
