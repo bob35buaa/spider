@@ -640,6 +640,60 @@ E200_MANIFEST = {
     "E200N": REPO / "workspace/core4d/results/E200/s6_downstream/manifests/e200_noprg_priority_manifest.tsv",
     "E200G": REPO / "workspace/core4d/results/E200/s6_downstream/manifests/e200_prg_g1a2_priority_manifest.tsv",
 }
+# G1A2 arm has no same-arm orig CEM run in E200 (the prg_g1a2 CEM re-ran aug only);
+# its orig baseline is the E198 factorial G1A2 arm. Expose it inside E200G so the
+# review player shows orig alongside its trans0/1/2 siblings (symmetric to E200N,
+# whose orig comes from E190). Read-only: replay paths + metrics already live in
+# the E198 arm_cache, so this needs no eval re-run.
+E198_ARM_CACHE = REPO / "workspace/core4d/results/E198/s6_downstream/eval/full_factorial/e198_arm_cache.tsv"
+
+
+def _read_e198_g1a2_orig(exp: str, anns: dict[str, dict[str, str]]) -> list[CaseRecord]:
+    """G1A2 orig rollouts (E198 factorial arm=G1A2) as orig arm records for E200G."""
+    if not E198_ARM_CACHE.is_file():
+        return []
+    records: list[CaseRecord] = []
+    with E198_ARM_CACHE.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            if (row.get("arm") or "").strip() != "G1A2":
+                continue
+            case_id = (row.get("case_id") or "").strip()
+            if not case_id:
+                continue
+            disp_cid = _e199_person_cid(case_id)
+            outdir_npz = normalize_path(row.get("qpos_path", ""))
+            scene_xml = resolve_scene(exp, disp_cid, normalize_path(row.get("scene_xml", "")))
+            trajectory = normalize_path(row.get("trajectory", ""))
+            if (not trajectory) and scene_xml:
+                cand = Path(scene_xml).parent / "0" / "trajectory_kinematic.npz"
+                trajectory = str(cand) if cand.is_file() else ""
+            config_act = normalize_path(row.get("config_act", ""))
+            if not config_act and outdir_npz:
+                cand = Path(outdir_npz).parent / "config_act.yaml"
+                config_act = str(cand) if cand.is_file() else ""
+            modes = (row.get("numeric_failure_modes") or "").replace(";", ",")
+            records.append(
+                CaseRecord(
+                    exp_id=exp,
+                    arm="orig",
+                    case_id=disp_cid,
+                    variant="orig",
+                    object_key=(row.get("object_key") or "").strip(),
+                    retarget_variant_id="omnirt_v1",
+                    numeric_release_pass=_as_bool(row.get("numeric_release_pass", "")),
+                    numeric_failure_modes=[m.strip() for m in modes.split(",") if m.strip()],
+                    gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
+                    status="ORIG_E198_G1A2",
+                    outdir_npz=outdir_npz,
+                    scene_xml=scene_xml,
+                    config_act=config_act,
+                    trajectory=trajectory,
+                    video="",
+                    annotation=anns.get(_ann_id(disp_cid, "orig"), {}),
+                    metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
+                )
+            )
+    return records
 
 
 def _read_e200_arm(exp: str) -> list[CaseRecord]:
@@ -719,6 +773,9 @@ def _read_e200_arm(exp: str) -> list[CaseRecord]:
                     metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
                 )
             )
+    # G1A2 arm's orig baseline lives in E198, not in this arm's metrics -> inject it.
+    if exp == "E200G":
+        records.extend(_read_e198_g1a2_orig(exp, anns))
     return records
 
 
