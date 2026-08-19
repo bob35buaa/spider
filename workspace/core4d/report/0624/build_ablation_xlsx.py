@@ -39,11 +39,13 @@ sheet2 = [
     ["+releaseDecay", "E161", 0.716, 0.517, 0.137, 0.047, 4.49, 14.87, "③释放衰减"],
     ["+narrowBand = E163", "E163", 0.750, 0.566, 0.123, 0.045, 4.30, 14.60, "①窄对称带"],
     ["+z-only = E167A（拟定版本）", "E167A", 0.778, 0.644, 0.097, 0.042, 4.29, 14.05, "⑤z-only"],
+    ["PRG（E167A∩PRG，4-case）", "E172/E173/E197", 0.7240702376, 0.4711781161, 0.1477359847, 0.0606066499, 4.16, 14.21, "PRG方法包"],
     [],
     ["注", "rubberhand→E163 各行取自 E163 full 统一重评（同 3-case：box023_person2/box021_029_p2/box004_083_p2，口径 core4d-e154-physics-contact-v1）；E167A 行取自 E167 cem_metrics eval 同 3-case 子集（baseline 行与 E163 完全一致，验证可比）"],
     ["注", "OmniRetarget 关节/EEF≈0 为 self-eval 偏置；面接触带使 EEF 误差升高(12.6→23.4cm)即接触换跟踪的代价，E163 收敛到 14.6cm"],
     ["注", "E167A 参考层亦优于 E163(raw 0.750→0.778, clean3 0.566→0.644, physPen3 0.123→0.097, EEF 14.60→14.05)，但下游为重分布(SUGAR 7-case 聚合 56→51，见 sheet「F_zonly下游」)"],
     ["注", "jerk 指标判别力弱(类似 EEF)已移出主表；其数据见 sheet「G_zonly参考层E167eval」与「H_平滑度E166」"],
+    ["注", "PRG 行为 E167A 与 PRG 的精确 case 交集（box004_082_p1、box004_083_p1、box004_083_p2、box023_20231008_045_p2）均值；E167A 的 box021 条目没有同一 PRG authority，未纳入。"],
     ["来源", "results/E163/.../e163_method_summary.tsv ；results/E167/holosoma_zonly/eval/cem_metrics/full/e167_arm_metrics.tsv"],
 ]
 
@@ -185,6 +187,10 @@ def cell_xml(col, row, val, header):
         val = str(val)
     if isinstance(val, (int, float)):
         return f'<c r="{ref}"{style}><v>{val}</v></c>'
+    if isinstance(val, str) and val.startswith("="):
+        # Store derived values as real Excel formulas, not inline text.
+        formula = sx.escape(val[1:])
+        return f'<c r="{ref}"{style}><f>{formula}</f></c>'
     txt = sx.escape(str(val))
     return f'<c r="{ref}"{style} t="inlineStr"><is><t xml:space="preserve">{txt}</t></is></c>'
 
