@@ -1,6 +1,32 @@
 # CORE4D 当前进度
 
-## 当前：E201 三级数据筛选漏斗（plan231，计划态待批准，纯离线分析）
+## 当前：E202 bucket 平移增强（碰撞体+CEM 全用 E178）（plan232，计划态待批准）
+
+### 2026-08-19 · plan232 已写（待批准）· bucket 版 object augmentation 放量
+
+- 计划：[plan232](plan/232_E202_bucket_e178_translation_augmentation_plan.md)。承接 E199/E200 的 box 平移增强放量，把同一机制放到 **bucket 类 27 个 E178 full-CEM case**（bucket003×9/004×4/007×14），×3 平移（trans0/1/2），**不做旋转**（pilot 证 ±45° yaw 全不可达）。**新实验号 E202，R290，同 E199 分支。**
+- **与 box 放量唯一实质差别 = 碰撞体+CEM 栈整体换 E178**：E178 contact-aligned 五段 proxy（003=0.94/0.95×0.95、007=0.82/0.97×0.885、004 单 AABB，`union`+`batch_groups`，5geom→90pair / 004 1geom→18pair）+ E174 PRG arm（rubber_hull + `E170_PRG` reward/gate）+ 1024×32 seed0 + 3cm 掩码。**不是** E199 的 16-pair 单 geom PRG → pilot 3 个 bucket case 不能跳过，全 27 case 重跑。
+- **关键决策（待用户确认）**：① aug retarget = omnirt_v2（v1 增强 IK 不可达，E199 已证）；② orig 基线复用 E178 27-case full-CEM（omnirt_v1），不重跑 → 唯一 confound=retarget 变体（碰撞体 orig/aug 一致），eval 标注；③ 全 27 case 一次排队 8 卡 priority queue。
+- **C1 = E202 核心断言**：每 aug 变体 scene_act 的 object_collision geom/pair 逐字段对齐该物体 E178 orig proxy（增强只改位姿不改几何）。改动全新增隔离于 `scripts/experiments/E202/*`（仿 E199 骨架，只把 build_prg_scene 换成 E178 proxy+E174 90-pair union PRG），E199/E178/E174 零覆盖。
+- **用户 2026-08-19 确认**：① aug retarget=omnirt_v2 ✓；② orig 复用 E178（不重跑）✓。两项即计划默认 → 进入实现阶段。
+- **实现中**：`scripts/experiments/E202/{e202_common,build_augmented_tasks,build_aug_manifest,run_local_priority_queue}.py` + eval runner/wrapper + train/launch。
+- **2026-08-19 · e202_common.py 完成 + C1 几何 parity 自测 PASS**：`build_prg_scene(object_key=)` 复用 E175 base + E177 proxy + E178 `build_contact_aligned_boxes` + patch_hand_collision(rubber_hull)，从标准 scene_act.xml 重建 E178 碰撞体（rubber_hull → 5段 proxy → 18-pair/geom union）。`test_e202_scene_parity.py`（仅 mujoco 编译，无 GPU/conda）对 bucket003_20231018_001_p1 重建，object_collision geom（5）与 robot-object pair（90）与 E178 snapshot **逐字段一致**，mesh→proxy p90=0.0284（=E178），ref_first5_min=0.0904（>hard floor）。→ C1 逻辑已验证。
+- CEM/reward/gate 契约从 `e174_common` 单一真源导入（1024×32 seed0 + E170_PRG）；IO/上游 aug helper 从 `e199_common` 复用。
+
+### 2026-08-19 · E202 全套脚本实现完成（待跑 train→CEM→eval）
+
+- **新增文件（全部隔离于 E202，E199/E178/E174 零改动）**：
+  - `scripts/experiments/E202/e202_common.py`（契约 + `build_prg_scene(object_key=)` E178 碰撞体构建 + `load_e178_bucket_cases()` 27 case 注册表）
+  - `scripts/experiments/E202/build_augmented_tasks.py`（上游 aug omnirt_v2 → SPIDER task → E202 sidecar，仿 E199 自包含，E202 路径）
+  - `scripts/experiments/E202/build_aug_manifest.py`（P1 trans 队列行 + P0 reused_e178 orig 行入 authority 供 eval 配对）
+  - `scripts/experiments/E202/test_e202_scene_parity.py`（C1 几何自测，已 PASS）
+  - `scripts/eval/runners/eval_E202_bucket_augmentation.py` + `wrappers/eval_E202_bucket_augmentation.sh`（读 authority；per-case orig(E178)-vs-aug delta + 逐物体分层 + 可行性分布）
+  - `scripts/train/train_E202.sh`（snapshot + build 两步）、`scripts/launch/active/run_E202_local_8gpu.sh`（复用 E199 queue，`--manifest` 指 E202）
+- **验证**：py_compile + bash -n 全过；import smoke（27 case 9/4/14、CEM 1024×32、override union+E170_PRG）过；**C1 几何 parity 自测 PASS**（bucket003 重建 5geom/90pair 与 E178 逐字段一致）。
+- **未跑（GPU/conda 步骤，下一步）**：① `bash train_E202.sh`（27 case × 3 trans 上游增强 + 建 task + manifest + snapshot）；② `run_E202_local_8gpu.sh`（≤81 条 full CEM）；③ `eval_E202_bucket_augmentation.sh`；④ 视觉复核；⑤ 补 log291 + TRACKER(R290)。
+- **未 commit**（rule 11：claims 未验证前不提交）。orig 复用 E178 → 无新 orig CEM。
+
+## E201 三级数据筛选漏斗（plan231，计划态待批准，纯离线分析）
 
 ### 2026-08-17 · plan231 已写（待批准）· 14-gate 三级漏斗
 
