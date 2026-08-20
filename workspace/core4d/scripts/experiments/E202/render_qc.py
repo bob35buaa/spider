@@ -50,7 +50,10 @@ def main() -> int:
     done = []
     for r in selected:
         try:
-            info = RQC.render_row(r, args.out, args.n_keyframes)
+            # per-case subdir: render_row's tag is object_key+variant only, which
+            # collides across cases of the same object; isolate by case_id.
+            case_out = args.out / r.get("case_id", "case")
+            info = RQC.render_row(r, case_out, args.n_keyframes)
             info["case_id"] = r.get("case_id", "")
             done.append(info)
             print(f"[render] {r.get('case_id')} {info['tag']} frames={info['frames']} -> {info['mp4']}", flush=True)

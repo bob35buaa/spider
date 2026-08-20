@@ -1,6 +1,6 @@
 # log291 · E202：bucket 类 s6 full-CEM 平移增强（碰撞体 + CEM 全用 E178）
 
-_Core4D · Phase 63 · Run **R290** · 计划 [plan232](../plan/232_E202_bucket_e178_translation_augmentation_plan.md) · 2026-08-19-20 · **状态：完成（C0–C6 通过；C7 视觉因 EGL 渲染环境受阻，记录豁免）**_
+_Core4D · Phase 63 · Run **R290** · 计划 [plan232](../plan/232_E202_bucket_e178_translation_augmentation_plan.md) · 2026-08-19-20 · **状态：完成（C0/C1/C2/C4/C5/C6/C7 通过；C3 基本达成——0 err 但有 1 fall/个别发散 outlier，不劣于 orig）**_
 
 ## 摘要
 
@@ -45,7 +45,12 @@ _Core4D · Phase 63 · Run **R290** · 计划 [plan232](../plan/232_E202_bucket_
 - **C4 增强正确性** ✓：接近段偏移 0.200m；obj_pos 增幅 −0.6%（≤25%）。
 - **C5 物理可信度** ✓（主结论）：obj_pos/ori 保持、hand_pen 略好、fall/gate 与 orig 持平、leg_pen 略升；**接触保持率 0.70→0.60 是主要退化**。全分布 mean+std+worst 逐物体报告，未 cherry-pick。
 - **C6 可行性** ✓：90.1%，逐物体档位计数报告。
-- **C7 视觉复核** ✗（豁免记录，rule 9）：CEM `save_video=false`，离线渲染脚本 `render_qc.py` 已就位，但本环境 **mujoco EGL GLContext 初始化失败**（env.md 已知问题 #1，`MUJOCO_EGL_DEVICE_ID` 冲突）→ 无法 headless 渲染。**待 EGL 可用的卡/display 补渲染 + 关键帧观察**（重点看：bucket003_005_p1 fall、068_p1 腿穿透 0.44 的失败模式；对照健康档 bucket004/007）。
+- **C7 视觉复核** ✓（rule 9 达成）：本环境 mujoco **EGL 初始化失败**（env.md 已知问题：EGL 仅 device 0，且渲染卡被占）→ 改用 **`MUJOCO_GL=osmesa` 软件渲染**成功。渲染样本（`render_qc.py`，关键帧 strip 存 `results/E202/s6_downstream/render/qc/<case_id>/`）：
+  - **健康档（bucket007_20231003_1_021_p1 trans0）**：机器人站立接近圆桶、俯身抓取，全程直立、脚掌着地、无穿模/漂浮/抖动 —— 代表 73 条主体。
+  - **fall 档（bucket003_20231018_005_p1 trans0）**：episode 中段机器人**整个仰面倒地**（桶保持直立），视觉证实 `fall_flag=1`。
+  - **leg-pen 档（bucket003_20231020_068_p1 trans2）**：机器人**小腿/膝盖全程穿入桶体**（跨骑姿势腿穿桶壁），视觉证实 `leg_pen=0.32`。
+  - **结论**：视觉与数值完全一致，**无 reward-hacking/度量欺骗**；失败是真实物理（跌倒/穿透），且局限于 bucket003 难 case。主体档位物理自然。
+  - 渲染命令（EGL 坏时用 osmesa）：`MUJOCO_GL=osmesa .venv/bin/python workspace/core4d/scripts/experiments/E202/render_qc.py --only-cases <case_id> --objects <obj>`。**已知 bug 修复**：render_qc 按 case_id 分子目录输出（原 tag=object+variant 跨 case 覆盖）。
 
 ## 判定与结论
 
@@ -59,8 +64,9 @@ _Core4D · Phase 63 · Run **R290** · 计划 [plan232](../plan/232_E202_bucket_
 |---|---|
 | `scripts/experiments/E202/e202_common.py` | 契约 + `build_prg_scene(object_key=)` E178 碰撞体构建 + `load_e178_bucket_cases()` + `_drop_broken_torch()`（scipy/torch stub 兼容） |
 | `scripts/experiments/E202/build_augmented_tasks.py` · `build_aug_manifest.py` | 上游 aug → E202 task；P1 trans manifest + P0 reused_e178 orig 入 authority |
-| `scripts/experiments/E202/test_e202_scene_parity.py` · `render_qc.py` | C1 几何自测（PASS）· C7 渲染（就位，EGL 受阻） |
+| `scripts/experiments/E202/test_e202_scene_parity.py` · `render_qc.py` | C1 几何自测（PASS）· C7 渲染（osmesa 成功，按 case_id 分子目录） |
 | `scripts/eval/runners/eval_E202_bucket_augmentation.py` · wrappers/`*.sh` | orig 基线取 E178 `e178_case_metrics.tsv`；per-case delta + 逐物体分层 + 可行性 |
+| `scripts/eval/reports/gen_E202_bucket_gate_xlsx.py` | xlsx 报告：summary（aug vs orig + 逐物体 + 可行性）+ detail（per-rollout 12-gate + delta） |
 | `scripts/train/train_E202.sh` · `launch/active/run_E202_local_8gpu.sh` · `watch_E202_fanout.sh` | 数据构建 + 8 卡 CEM + 自动 fan-out watcher |
 | scene 快照 | `results/E202/scene_snapshot/cem_sidecars/*` + `manifest.txt`（git HEAD + sha256） |
 
@@ -68,7 +74,8 @@ _Core4D · Phase 63 · Run **R290** · 计划 [plan232](../plan/232_E202_bucket_
 
 - 增强 task/scene：`example_datasets/.../dcv3_omnirt_v2_ref_fk_bucket*__aug_trans*/`（gitignore；快照入 `results/E202/scene_snapshot/`）
 - CEM：`results/E202/s6_downstream/cem/full/E202_*_aug_trans*_PRG*`（73 条）
-- eval：`results/E202/s6_downstream/eval/full_augmentation/{e202_aug_case_metrics.tsv, e202_aug_orig_deltas.tsv, e202_aug_eval_summary.json}`
+- eval：`results/E202/s6_downstream/eval/full_augmentation/{e202_aug_case_metrics.tsv, e202_aug_orig_deltas.tsv, e202_aug_eval_summary.json, E202_bucket_gate_report.xlsx}`
+- 视觉：`results/E202/s6_downstream/render/qc/<case_id>/{*_keyframes.jpg, *.mp4}`（osmesa）
 - manifest：`results/E202/s6_downstream/manifests/{e202_bucket_priority_manifest.tsv(73), e202_bucket_authority.tsv}`
 
 ## 环境事故记录（本轮踩坑）
@@ -79,6 +86,6 @@ _Core4D · Phase 63 · Run **R290** · 计划 [plan232](../plan/232_E202_bucket_
 
 ## 下一步
 
-- 补 C7：EGL 可用时跑 `render_qc.py`，关键帧观察写回本 log。
-- （可选）bucket aug 的 RL-export（仿 E200 三版）；接 E201 漏斗过滤 bucket003 弱样本。
+- （可选）bucket aug 的 RL-export（仿 E200 三版）；接 E201 漏斗过滤 bucket003 弱样本（fall/腿穿透档）。
+- 交互式复核：`viewer=viser` 已支持（`spider/viewers/viser_viewer.py`，web 端 drop-in），可对完成 rollout 做 viser 回放（需端口转发）。
 - object scale 增强仍延后（需上游 holosoma 扩展）。

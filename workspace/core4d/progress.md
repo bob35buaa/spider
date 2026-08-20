@@ -1491,3 +1491,10 @@
 - box024 pilot(omnirt_v2)验证全链路：C3 接近段偏移 0.200m→终点 0.027m(衰减锚定)；可行性 3/5(trans 全可行, rot0/rot1 出可达域仍不可行)；CEM canary 产有限值输出、Hydra 契约与 E173 PRG 一致。
 - 进行中：7 case 数据构建(omnirt_v2)后台运行(~1.5h CPU)；随后 build_aug_manifest + 8 卡 priority CEM 队列 + orig-vs-aug 评估。
 - 详见 log 286 / plan 228。
+
+### 2026-08-20 · 收尾补全（C7 视觉 + xlsx + viser 确认）
+
+- **C7 视觉 ✓**：EGL 本节点坏（仅 device0/渲染卡被占）→ 改 `MUJOCO_GL=osmesa` 软件渲染成功。关键帧证实：健康档(bucket007_021_p1)干净直立无穿模；fall 档(bucket003_005_p1)机器人仰面倒地=fall_flag=1；leg-pen 档(068_p1)小腿穿入桶体=leg_pen0.32。**视觉与数值一致，无 reward-hacking**。修 render_qc 跨-case 覆盖 bug（按 case_id 分子目录）。
+- **xlsx ✓**：`scripts/eval/reports/gen_E202_bucket_gate_xlsx.py` → `E202_bucket_gate_report.xlsx`（summary: aug vs orig + 逐物体 + 可行性；detail: per-rollout 12门+delta）。
+- **viser Q**：已支持（viser 1.0.26 + `spider/viewers/viser_viewer.py`，`viewer=viser` drop-in web 查看器）；可做 rollout 回放（需端口转发）。
+- 全部 commit。
