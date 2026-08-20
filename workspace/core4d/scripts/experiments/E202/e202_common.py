@@ -35,6 +35,7 @@ import e199_common as E199  # noqa: E402
 
 # re-export the IO / path / upstream helpers E202 shares with E199
 REPO = E199.REPO
+OVERRIDE_DIR = E199.OVERRIDE_DIR
 TASK_ROOT = E199.TASK_ROOT
 CORE4D_RAW_ROOT = E199.CORE4D_RAW_ROOT
 SMPLX_MODEL_DIR = E199.SMPLX_MODEL_DIR
@@ -114,6 +115,21 @@ from patch_hand_collision import patch_scene  # noqa: E402
 EXPECTED_BOXES_BY_OBJECT = PROXY.EXPECTED_BOXES_BY_OBJECT  # {003:5, 004:1, 007:5}
 
 
+def _drop_broken_torch() -> None:
+    """The SPIDER venv ships a broken `torch` namespace stub (no `Tensor`); the
+    E175/E177/E178 geometry imports pull it into sys.modules, which poisons
+    scipy's `Rotation.from_quat` (array-api-compat probes `getattr(torch,'Tensor')`
+    for any iterable arg once torch is imported). Drop the broken stub so scipy
+    short-circuits -- E199/E174 never imported these modules so never hit this.
+    """
+    mod = sys.modules.get("torch")
+    if mod is not None and not hasattr(mod, "Tensor"):
+        del sys.modules["torch"]
+
+
+_drop_broken_torch()
+
+
 # manifest schema (consumed by the E199 priority queue, reused by E202).
 FIELDS = list(E199.FIELDS)
 
@@ -133,6 +149,7 @@ def load_e178_bucket_cases(objects: tuple[str, ...] = BUCKET_OBJECTS) -> list[di
     `e178_scene_act` is the authority for the C1 geometry-parity check.
     """
     rows = read_tsv(E178_FULL_MANIFEST)
+    snap_root = REPO / "workspace/core4d/results/E178/scene_snapshot/semantic_bucket_proxy"
     cases: list[dict[str, str]] = []
     seen: set[str] = set()
     for row in rows:
@@ -142,6 +159,13 @@ def load_e178_bucket_cases(objects: tuple[str, ...] = BUCKET_OBJECTS) -> list[di
         if case_id in seen:
             continue
         seen.add(case_id)
+        # E178's task-dir scene_act sidecar was often overwritten by later
+        # experiments; the E178 snapshot is the surviving authoritative copy.
+        orig_scene = row.get("scene_act", "")
+        if orig_scene and not repo_path(orig_scene).is_file():
+            snap = snap_root / case_id / "scene_act_E178_contactAlignedTop.xml"
+            if snap.is_file():
+                orig_scene = rel(snap)
         cases.append({
             "object_key": row["object_key"],
             "case_id": case_id,
@@ -152,7 +176,7 @@ def load_e178_bucket_cases(objects: tuple[str, ...] = BUCKET_OBJECTS) -> list[di
             "e178_pair_count": row.get("compiled_robot_object_pair_count", ""),
             "orig_result_npz": row.get("result_npz", ""),
             "orig_outdir_npz": row.get("outdir_npz", ""),
-            "orig_scene_act": row.get("scene_act", ""),
+            "orig_scene_act": orig_scene,
             "orig_trajectory": row.get("trajectory", ""),
             "orig_contact_mask": row.get("contact_mask", ""),
             "orig_override_id": row.get("override_id", ""),
@@ -319,6 +343,7 @@ def build_prg_scene(case_id: str, base_scene_act: Path, trajectory: Path, *,
     # runtime initial overlap (run_mjwp seeds from qpos_ref[0])
     with np.load(repo_path(trajectory), allow_pickle=True) as data:
         reference = np.asarray(data["qpos"], dtype=np.float64)
+    _drop_broken_torch()  # guard: keep scipy's Rotation off the broken torch stub
     converted = _convert_reference_to_scene(reference, output)
     reference_min = _reference_first5_union_min_distance(compiled["model"], converted[:min(5, len(converted))])
     if reference_min < CEM_LEG_GATE_HARD_FLOOR_M:

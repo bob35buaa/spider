@@ -33,6 +33,9 @@ import e202_common as C  # noqa: E402
 
 METHOD = "E167A_zOnlyBody"
 HAND_VARIANT = "rubber_hull"
+E178_CASE_METRICS = (
+    C.REPO / "workspace/core4d/results/E178/s6_downstream/eval/full/e178_case_metrics.tsv"
+)
 
 KEY_METRICS = (
     "track_obj_pos_err_cm_mean", "track_obj_ori_err_deg_mean", "track_obj_z_abs_err_cm_mean",
@@ -94,6 +97,39 @@ def score(row: dict[str, str], cfg: EvalConfig) -> dict[str, Any]:
         "result_npz": C.rel(row["result_npz"]), "scene_act": C.rel(scene),
     })
     return item
+
+
+def load_e178_orig(case_ids: set[str]) -> list[dict[str, Any]]:
+    """Orig baseline = E178's canonical full-CEM eval (same public core_metrics).
+
+    Avoids re-scoring the reused rollout (whose task-dir scene_act was overwritten
+    by later experiments; the snapshot copy has unresolvable relative mesh paths).
+    Pulls per-case KEY_METRICS from e178_case_metrics.tsv and recomputes the same
+    gate set so orig/aug are compared identically.
+    """
+    if not E178_CASE_METRICS.is_file():
+        return []
+    out: list[dict[str, Any]] = []
+    for row in C.read_tsv(E178_CASE_METRICS):
+        cid = row.get("case_id", "")
+        if cid not in case_ids:
+            continue
+        item: dict[str, Any] = {"case_id": cid, "aug_variant": "orig",
+                                "object_key": row.get("object_key", cid.split("_")[0])}
+        for metric in KEY_METRICS:
+            item[metric] = finite(row.get(metric)) if metric != "fall_flag" else row.get(metric)
+        gates = {
+            "fall": str(row.get("fall_flag", "")).strip().lower() not in {"true", "1"},
+            "object_pos": finite(row.get("track_obj_pos_err_cm_mean")) <= GATE_THRESHOLDS["object_pos"],
+            "object_ori": finite(row.get("track_obj_ori_err_deg_mean")) <= GATE_THRESHOLDS["object_ori"],
+            "contact": finite(row.get("hand_object_physics_contact_in_mask_frac")) >= GATE_THRESHOLDS["contact"],
+            "hand_penetration": finite(row.get("hand_object_physics_penetration_3mm_frame_frac")) <= GATE_THRESHOLDS["hand_penetration"],
+            "lower_body": finite(row.get("leg_penetration_frac")) <= GATE_THRESHOLDS["lower_body"],
+        }
+        item["fall_flag"] = 0.0 if gates["fall"] else 1.0
+        item["all_gates_pass"] = all(gates.values())
+        out.append(item)
+    return out
 
 
 def deltas_vs_orig(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -171,11 +207,14 @@ def main() -> int:
 
     authority = C.read_tsv(C.AUTHORITY_TSV)
     cfg = EvalConfig()
-    complete = [r for r in authority
+    # score only the aug (translation) rows we produced; orig baseline comes from
+    # E178's canonical eval (load_e178_orig), not re-scored here.
+    aug_authority = [r for r in authority if r.get("aug_variant") != "orig"]
+    complete = [r for r in aug_authority
                 if r.get("outdir_npz") and C.repo_path(r["outdir_npz"]).is_file()
                 and r.get("result_npz") and C.repo_path(r["result_npz"]).is_file()]
-    if args.require_all and len(complete) != len(authority):
-        raise SystemExit(f"complete rows={len(complete)} expected={len(authority)}")
+    if args.require_all and len(complete) != len(aug_authority):
+        raise SystemExit(f"complete aug rows={len(complete)} expected={len(aug_authority)}")
 
     scored: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
@@ -188,16 +227,23 @@ def main() -> int:
                            "error": f"{type(exc).__name__}: {exc}"})
             print(f"[error] {row['case_id']} {row['aug_variant']}: {errors[-1]['error']}", file=sys.stderr)
 
+    # orig baseline from E178 canonical eval, for the cases that have scored aug
+    orig_rows = load_e178_orig({r["case_id"] for r in scored})
+    scored = scored + orig_rows
+
     out = C.RESULTS / "s6_downstream/eval/full_augmentation"
     deltas = deltas_vs_orig(scored)
-    scored_ids = {(r["case_id"], r["aug_variant"]) for r in scored}
+    scored_ids = {(r["case_id"], r["aug_variant"]) for r in scored if r["aug_variant"] != "orig"}
     C.write_tsv(out / "e202_aug_case_metrics.tsv", scored)
     C.write_tsv(out / "e202_aug_orig_deltas.tsv", deltas)
     if errors:
         C.write_tsv(out / "e202_aug_eval_errors.tsv", errors)
+    n_aug_scored = sum(1 for r in scored if r["aug_variant"] != "orig")
+    n_orig = sum(1 for r in scored if r["aug_variant"] == "orig")
     summary = {
         "created_at": C.now(),
-        "scored": len(scored), "authority_rows": len(authority), "complete": len(complete),
+        "aug_scored": n_aug_scored, "orig_baseline": n_orig,
+        "aug_authority_rows": len(aug_authority), "complete": len(complete),
         "errors": len(errors),
         "confound_note": "orig=omnirt_v1 (reused E178 full-CEM); aug=omnirt_v2. Collision body identical (E178).",
         "distribution": distribution(scored),

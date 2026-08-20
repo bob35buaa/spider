@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 288 个日志文件。
+> 自动生成，共 290 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 64 (E201-E201)
@@ -9,6 +9,13 @@
 |---|------|------|------|------|
 | 288 | E201 | 2026-08-18 | Data filter funnel and vlm prescreen | [288_E201_data_filter_funnel_and_vlm_pres...](288_E201_data_filter_funnel_and_vlm_prescreen.md) |
 | 289 | E200 |  | Noprg vs prg arm comparison | [289_E200_noprg_vs_prg_arm_comparison.md](289_E200_noprg_vs_prg_arm_comparison.md) |
+| 290 | E200 |  | Rl export three version | [290_E200_rl_export_three_version.md](290_E200_rl_export_three_version.md) |
+
+## Phase 63 (E202-E202)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 291 | E202, e178 | 2026-08-20 | Bucket e178 translation augmentation | [291_E202_bucket_e178_translation_augment...](291_E202_bucket_e178_translation_augmentation.md) |
 
 ## Phase 62 (E199-E199)
 

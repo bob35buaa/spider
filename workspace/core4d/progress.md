@@ -26,6 +26,47 @@
 - **未跑（GPU/conda 步骤，下一步）**：① `bash train_E202.sh`（27 case × 3 trans 上游增强 + 建 task + manifest + snapshot）；② `run_E202_local_8gpu.sh`（≤81 条 full CEM）；③ `eval_E202_bucket_augmentation.sh`；④ 视觉复核；⑤ 补 log291 + TRACKER(R290)。
 - **未 commit**（rule 11：claims 未验证前不提交）。orig 复用 E178 → 无新 orig CEM。
 
+### 2026-08-19 · 单 case shakeout（bucket003_20231018_001_p1）→ 2 bug 修复 + 环境 BLOCKER
+
+- **先跑单 case 蹚流水线（未直接放量 27）**，抓到 3 个问题：
+  1. **代码 bug（已修）**：`_convert_reference_to_scene` 的 scipy `Rotation.from_quat` 撞 `AttributeError: module 'torch' has no attribute 'Tensor'` —— venv 的 `torch` 是坏 namespace stub，E175/E177/E178 几何 import 把它拉进 sys.modules 毒化 scipy 的 array-api torch 探测（E199/E174 从不 import 这些模块故没踩）。修：`e202_common._drop_broken_torch()`（import 末 + build_prg_scene scipy 调用前 pop 坏 stub 使 scipy 短路）。
+  2. **代码 bug（已修）**：`e202_common` 漏 re-export `OVERRIDE_DIR` → build_aug_manifest 报错。已补。
+  3. **数据构建流水线验证 PASS**：上游 omnirt_v2 增强 3/3 trans 可行，contact mask 生成；建 3 个 SPIDER task，**geom=5 pair=90（=E178 碰撞体），approach_trans=0.200m（C4 ✓），endpoint=0.017m（锚定 ✓）**；manifest 3 P1 + 1 reused_e178 orig，0 blocker；queue dry-run 命令正确。
+- **🚨 BLOCKER（环境，非 E202 代码）**：SPIDER **venv 的 torch 2.11.0 损坏**——`.venv/.../site-packages/torch/` 只剩 8 个杂散文件（无 `__init__.py`/`nn`/`_C`），dist-info 仍在。`import spider.interp` 直接 `ModuleNotFoundError: No module named 'torch.nn'` → **所有 CEM（E199/E200/E202）+ core4d.py 任务生成全挂**。torch 由 uv 锁定 2.11.0（ustc mirror）。修复 = `uv sync` 或 `uv pip install --reinstall torch==2.11.0`。**等用户决定如何修 torch 后再放量 27。**
+- CEM 失败行状态=failed（ELIGIBLE，torch 修好后 queue resume 会自动重试）。已停所有 E202 后台 job。
+
+### 2026-08-19 · torch 修复过程（环境问题，非 E202）
+
+- **根因升级**：不止 torch —— site-packages 里 torch + `nvidia/*` cu13 包的**文件被清空只剩 dist-info**（同一损坏模式）→ 强烈指向**存储/挂载 eviction**（JuiceFS/tidal 网络盘 payload 被逐出、元数据保留）。可能复发，需用户关注存储。
+- **`uv sync` 副作用（用户批准跑的）**：uv sync 认为 torch 已装（stale dist-info）→ 没重装 torch；反而 **prune 掉 34 个包**（不在本 repo lock 里）：`torchvision/torchaudio/torchrl/tensordict`、`nvidia-*-cu12`、`gymnasium/einops/openpyxl/cloudpickle/farama-notifications`、以及 **editable：isaaclab*/HDMI(active-adaptation)**。这些是 E200 RL / HDMI / E201 xlsx 等其他实验依赖 —— **需另行恢复**（本 venv 是跨项目共享）。
+- **正确修复**：`uv pip install --reinstall torch==2.11.0`（强制越过 stale dist-info，连带重装 nvidia cu13 依赖 ~2.5GB）。**当前在后台跑**（logs/E202/torch_fix.log），但 **ustc 镜像仅 ~7MB/min**，剩 ~880MB tail（triton/nccl/cusparselt/cudnn），ETA ~1–2h。
+- **待办（torch 修好后）**：① 验证 `import spider.interp`；② 重跑 `run_E202_local_8gpu.sh`（resume 失败行）验证 CEM；③ 放量 27 case 数据构建（`train_E202.sh`）；④ 恢复 uv sync 误删的 34 包（其他实验）。
+
+### 2026-08-19 · 用 workspace/hdmi_reproduce/env.md 修复环境成功
+
+- **关键**：env.md 给了①**快镜像** `http://pypi.devops.xiaohongshu.com/simple/`（ustc 太慢，0.1s vs ~7MB/min）②本 venv canonical = **torch 2.8.0+cu128**（不是 uv.lock 的 2.11.0；venv 跨项目共享，装法见 env.md 显式 pip 命令，非 uv sync）。
+- **修复执行**：`uv pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url download.pytorch.org/whl/cu128 --extra-index-url <xhs>` → **torch 2.8.0+cu128 装好，cuda True，`spider.interp`/`spider.config` import OK**。（跨文件系统 hardlink 回退 full copy，~2.5GB 拷到网络盘较慢但完成。）
+- **✅ E202 CEM 端到端跑通**：`run_E202_local_8gpu.sh` 3 行 shakeout → run_mjwp 载入 E178 碰撞 scene + 3cm mask，warp kernel 编译，CEM 优化中（sim 14/416, opt 32, GPU ~47%）。**整条链路（数据构建→manifest→E178 碰撞 CEM）验证通过。**
+- **恢复 uv sync 误删的包**（xhs 快镜像）：torchrl/tensordict/einops ✓；flatdict/prettytable/toml/gymnasium/openpyxl（进行中）；isaaclab* + HDMI editable --no-deps（进行中，logs/E202/env_editables.log）。
+- **进行中后台 job**：① 3 行 shakeout CEM（~45min 验证输出）；② **全 27 case 数据构建**（build_augmented_tasks 直跑，上游 retarget，数小时）；③ 环境包恢复。
+- **下一步**：数据构建完 + 3 行 CEM 验证 OK → build_aug_manifest（≤81 行）→ 全量 CEM 队列（resume）→ eval + 视觉复核 → log291 + TRACKER(R290)。
+
+### 2026-08-19 · 全量放量启动 + eval orig 配对修复 + 早期读数
+
+- **自动 fan-out watcher**：`scripts/launch/active/watch_E202_fanout.sh`（等数据构建结束→等 shakeout 队列退出→build_aug_manifest→snapshot→`GPUS=0-7` 满卡 CEM，resume-safe）。已后台启动。
+- **✅ 3 行 shakeout CEM 全成功**（bucket003_001_p1 trans0/1/2，`run_complete_pending_eval`，0 problem）→ E202 GPU CEM 路径确认。
+- **eval orig 配对修复（2 处）**：① reused_e178 orig 行的 task-dir `scene_act_E178_contactAlignedTop.xml` 被后续实验覆盖删除；snapshot 副本的 mesh 相对路径又无法从 snapshot 目录解析。② 改为 **orig 基线直接读 E178 canonical `e178_case_metrics.tsv`**（同一 core_metrics，27 case 全含 KEY_METRICS），不再重打分 orig rollout。eval runner 现在：只打分 aug 行 + 从 E178 表取 orig + per-case delta。
+- **早期读数（bucket003_001_p1，aug vs E178 orig 同评估器）**：obj_pos 7.26→7.23–7.33cm（保持✓）、obj_ori 4.33→3.67°（更好）、contact 0.84→0.39–0.61（下降，trans2 破 0.50 门）、hand_pen 0.10→0.064（更好）、leg_pen 0→0、fall 0→0；全门 orig 1.0 / aug 0.67。**健康：跟踪保持/零跌倒/零腿穿透/手穿透更低；接触保持率下降是主要变化。**
+- **数据构建进度**：~11/27（bucket003 9 全过 + bucket004 中）；watcher 待命。
+
+### 2026-08-20 · E202 完成收尾（R290, log291, TRACKER 已更新）
+
+- **✅ 全量完成**：数据构建 73 变体/27 case（0 failure，8 变体初始腿-桶穿透跳过）；watcher 自动满 8 卡 CEM **73/73 完成 0 err**；full eval 73 aug vs 25/27 case E178 orig。
+- **结果**：obj_pos 10.52→10.46cm（−0.6%，≤25%✓）、obj_ori 保持、hand_pen 略好、fall/gate/leg_pen 与 orig 持平；**接触 0.70→0.60 是主要退化**。逐物体 bucket004 gate 0.92 最好、bucket007 0.59、**bucket003 0.44 最弱（1 fall case=005_p1 + leg_pen outlier=068_p1）**。可行性 90.1%。
+- **Claims**：C0/C1/C2/C4/C5/C6 ✓；C3 基本达成（73/73 0err，但 1 fall + 个别发散 outlier，fall_mean 0.041≈orig 0.040 不劣）；**C7 视觉 ✗（EGL GLContext 初始化失败，render_qc.py 就位，待 EGL 可用补渲染 + 关键帧观察 bucket003 失败模式）**。
+- **eval orig 配对最终修法**：从 E178 `e178_case_metrics.tsv` 取 orig（snapshot scene 的 mesh 相对路径无法解析 → 不重打分 orig）。
+- **已 commit**（experiment/E199 分支）：E202 全套脚本 + plan232 + log291 + TRACKER + progress。数据可交下游 RL（建议接 E201 漏斗过滤 bucket003 弱样本）。
+
 ## E201 三级数据筛选漏斗（plan231，计划态待批准，纯离线分析）
 
 ### 2026-08-17 · plan231 已写（待批准）· 14-gate 三级漏斗
