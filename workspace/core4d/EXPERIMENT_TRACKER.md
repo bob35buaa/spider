@@ -4,6 +4,7 @@
 
 | Run | 日期 | Phase | 描述 | 状态 | Log |
 |-----|------|-------|------|------|-----|
+| R289/R290 | 2026-08-23 | Phase 65 | E204(noPRG/E167A)+E205(G1A2)：复用E178 27 bucket case(9/4/14)做两arm重定向,vs E178 PRG三arm对比;保留contactAlignedTop五段代理,复用omnirt_v1轨迹只重跑CEM | ⏳ 脚本实现+端到端验证(27×2场景/override审计PASS,canary双arm跑通,config_act确认arm生效)；54条full CEM待用户8卡机跑 | [plan234](plan/234_E204_E205_bucket_noprg_g1a2_arm_ablation_plan.md) |
 | E202 | 2026-08-20 | Phase 63 | bucket类平移增强放量(碰撞体+CEM全用E178：contact-aligned五段proxy+E174 PRG+E170_PRG+1024×32+3cm)：27 E178 case×3 trans，omnirt_v2增强，orig复用E178 full-CEM | ✅ 73/81可行(90.1%)、73/73 CEM 0err：obj_pos−0.6%(≤25%),fall/gate/穿透不劣于orig,接触0.70→0.60；bucket003最弱(gate0.44,1fall)；C7 osmesa视觉证实(健康档干净/fall/腿穿透真实,无度量欺骗)+xlsx报告 | [291](log/291_E202_bucket_e178_translation_augmentation.md) · [plan232](plan/232_E202_bucket_e178_translation_augmentation_plan.md) |
 | E201 | 2026-08-18 | Phase 64 | 三级数据筛选漏斗(14门宽/窄双口径:4硬门+10带门)+VLM初审：L1弃/L2人工/L3自动收；家族一致性默认严格；VLM(Qwen+gemini,双视角HQ)判别力均<全判拒基线 | ✅ 自动决策60.8%(0假收),人工332→130；漏斗上线，VLM弃用于判别(仅参考) | [288](log/288_E201_data_filter_funnel_and_vlm_prescreen.md) · [plan231](plan/231_E201_data_filter_funnel_plan.md) |
 | R288 | 2026-08-18 | Phase 63 | E200 noPRG(E167A) arm：复用E199 249 aug重跑CEM(249/249,0err)，与PRG同口径对比(E201 14gate宽窄漏斗) | ⏳ noPRG完成/PRG+G1+A2在跑：PRG胜(L3接受30.5%>noPRG20.5%)，差异全在leg穿透(窄82%vs57%,mean0.086vs0.196)，其余13门±6pp等价；视觉复核待补 | [289](log/289_E200_noprg_vs_prg_arm_comparison.md) · [plan230](plan/230_E200_augmentation_prg_g1a2_and_noprg_arms_plan.md) |

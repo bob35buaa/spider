@@ -1,6 +1,26 @@
 # CORE4D 当前进度
 
-## 当前：E202 bucket 平移增强（碰撞体+CEM 全用 E178）（plan232，计划态待批准）
+## 当前：E204(noPRG) / E205(G1A2) — 复用 E178 的 27 bucket case 做两 arm 重定向 + 三 arm 对比（plan234，脚本已实现+验证，待用户 8 卡机跑 CEM）
+
+### 2026-08-23 · plan234 + 全套脚本实现 + 端到端验证
+
+- **目标（用户 4 项决策）**：复用 E178 的 27 bucket case（9/4/14），做 **E204 noPRG(E167A)** 与 **E205 G1A2(PRG+G1+A2)** 两 arm 重定向，与 E178 现有 PRG 结果做三 arm paired 对比。① 两 arm 保留 E178 contactAlignedTop 五段物体代理（单变量）；② 复用 E178 omnirt_v1 ref_fk v1 轨迹只重跑 CEM；③ 产数据+三 arm 对比；④ 只交付 54 条 full CEM 自包含启动脚本，用户自己去另一台 8 卡机跑。
+- **继承链核实**：E178→E174_PRG→dcv3_omnirt_v{1,2}→E167A→E163(narrowSurfaceBand, hand-gate 已启用)。**26/27 是 omnirt_v1，1 例 `bucket007_20231020_055_p1` 是 omnirt_v2(rescue)** → base override 逐 case 从 source 行推导，不硬编码 v1。E178 contactAlignedTop 场景 114 pair = 80 腿↔物 + 10 手↔物 + 24 腿-地/自碰撞。
+- **新增文件（全部隔离于 `scripts/experiments/E204_E205/`，E178/E174/E198/E200 零改动）**：
+  - `e204e205_common.py`（27-case 源加载复用 E178 production；arm 定义/路径/逐 case task 推导；import A2_GATE+assert_gravcomp_diff(E198/E200)、HAND/LOWER_BODY_GEOMS(E175)、CEM 冻结量(E198)）
+  - `build_arm_scenes.py`（复用 E178 build_scene 再生 byte-parity E178 场景 → 派生 E205 gravcomp(单变量断言) + E204 noPRG(删 80 腿↔物,断言) + 快照 rule10b）
+  - `build_overrides.py`（27×2 override + Hydra compose 审计）
+  - `run_e204e205_cem.py`（54=27×2 8-GPU 驱动，一卡一 slot，skip-already-done，**逐 arm 独立 output_dir**，stage full/smoke 分离防 canary 遮蔽 full）
+  - `../../launch/active/run_E204_E205_8gpu.sh`（自包含入口：STEP0 建场景+快照→STEP1 建+审 override→STEP2 54 CEM）
+- **验证（本机 8×A100 空闲）**：
+  - 27×2 场景生成 + 快照(265 行 manifest)；E204 每例删 80 腿↔物、留 10 手↔物、gravcomp 0；E205 = E178 + gravcomp 单变量 diff（assert_gravcomp_diff 过）。
+  - 27×2 override compose 审计 **PASS**（E204: penalty=0/gate false/union/hand-gate=E163默认；E205: hand-gate==A2_GATE/PRG on/union）。
+  - **真跑 canary**（bucket003_20231018_001_p1, 64×4, GPU0/1 双 arm）→ 两 arm rollout NPZ 产出，`config_act.yaml` 确认 arm 生效（E204 penalty=0.0/gate false/hand max_viol=0.10；E205 penalty=2.0/gate true/hand max_viol=0.05）。skip-already-done + 54-job dry-run 全过。
+- **遇到并修复的 bug**：① PY 用 `.resolve()` 会解引用 venv 软链到系统 python（丢 venv）→ 改用未解析路径；② `--out-dir` 相对路径触发 relative_to 崩（仅 bookkeeping,CEM 已成功）→ 归一化绝对路径；③ canary 64×4 rollout 落 full/ 会被全量 skip → 加 stage full/smoke 分离；④ noPRG 删 pair 初版误删腿-地/自碰撞（96 vs 80）→ 改用 `base.is_robot_object_pair` 精确识别腿↔物。
+- **未跑（用户 8 卡机）**：54 条 full CEM（1024×32 seed0，约 5-6h）。**未 commit**（rule 11，claims 未验证前不提交）。
+- **下一步**：用户跑 CEM → 结果回收 → 建 eval runner + 三 arm workbook + render_qc（plan234 标 待建，将基于真实产出构建）→ 写 log292 + 更新 TRACKER(R289/R290)。
+
+## 历史：E202 bucket 平移增强（碰撞体+CEM 全用 E178）（plan232，✅ 完成）
 
 ### 2026-08-19 · plan232 已写（待批准）· bucket 版 object augmentation 放量
 
