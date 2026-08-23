@@ -120,6 +120,9 @@ def prepare_one(task: str, *, num_samples: int, max_iters: int, seed: int,
     if not contact_mask_path(task).is_file():
         result["status"] = "skip_missing_mask"
         return result
+    if (task_dir / "0/trajectory_mjwp_act.npz").is_file() and os.environ.get("E203_CEM_FORCE", "0") != "1":
+        result["status"] = "skip_already_done"
+        return result
     try:
         prg = E199.build_prg_scene(task, scene_act, trajectory, overwrite=True)
         result["prg_scene"] = prg["physical_scene"]
