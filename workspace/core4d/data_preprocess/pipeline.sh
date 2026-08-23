@@ -16,6 +16,10 @@ RESULT_ROOT="${RESULT_ROOT:-workspace/core4d/results/data_preprocess}"
 # SPIDER_SOURCE_DATASET (default = SPIDER_DATASET; E203 reuses core4d templates).
 SPIDER_DATASET="${SPIDER_DATASET:-core4d}"
 SPIDER_SOURCE_DATASET="${SPIDER_SOURCE_DATASET:-$SPIDER_DATASET}"
+# KEEP_GOING=1: isolate each case; on failure (e.g. OmniRetarget CVXPY infeasible)
+# log to pipeline_failed_cases.tsv and continue the batch instead of aborting.
+# Default 0 preserves legacy fail-fast behavior.
+KEEP_GOING="${KEEP_GOING:-0}"
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 RETARGET_PYTHON_BIN="${RETARGET_PYTHON_BIN:-}"
 REF_FPS="${REF_FPS:-30.0}"
@@ -515,7 +519,16 @@ while IFS=$'\t' read -r enabled date seq person object_name object_model_rel sou
     \#*) continue ;;
   esac
   [ "$enabled" = "1" ] || continue
-  process_case "$date" "$seq" "$person" "$object_name" "$object_model_rel" "$source_scene_task" "$target_task" "$trim_start" "$trim_frames" "$data_id" "$mask_slug"
+  if [ "$KEEP_GOING" -eq 1 ]; then
+    if ( process_case "$date" "$seq" "$person" "$object_name" "$object_model_rel" "$source_scene_task" "$target_task" "$trim_start" "$trim_frames" "$data_id" "$mask_slug" ); then
+      :
+    else
+      echo "WARN: case ${target_task} failed (date=$date seq=$seq person=$person); recording + continuing" >&2
+      printf '%s\t%s\t%s\t%s\t%s\n' "$date" "$seq" "$person" "$object_name" "$target_task" >> "${RESULT_ROOT}/pipeline_failed_cases.tsv"
+    fi
+  else
+    process_case "$date" "$seq" "$person" "$object_name" "$object_model_rel" "$source_scene_task" "$target_task" "$trim_start" "$trim_frames" "$data_id" "$mask_slug"
+  fi
 done < "$CASE_FILE"
 
 echo

@@ -233,6 +233,7 @@ def build_rows(
         f"REPO={spider_repo}",
         f"SPIDER_DATASET={spider_dataset}",
         f"SPIDER_SOURCE_DATASET={spider_source_dataset}",
+        f"KEEP_GOING={os.environ.get('KEEP_GOING', '0')}",
         f"HOLOSOMA_DIR={holosoma_repo}",
         f"CORE4D_REAL_ROOT={core4d_raw_root}",
         f"SMPLX_MODEL_DIR={smplx_model_dir}",
