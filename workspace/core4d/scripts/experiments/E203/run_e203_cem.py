@@ -44,8 +44,6 @@ E199.RESULTS = E203_RESULTS
 DATASET = "core4d_v2"
 TASK_ROOT = REPO / f"example_datasets/processed/{DATASET}/unitree_g1/humanoid_object"
 OVERRIDE_DIR = REPO / "examples/config/override"
-# S3 execution result root (contact masks live here).
-S3_RESULT_ROOT = E203_RESULTS / "s3_retarget/omnirt_v1/ref_fk/results/omnirt_v1_ref_fk"
 DEFAULT_BASE_REWARD = "core4d_E167_box004_082_p1_E167A"
 
 
@@ -54,7 +52,11 @@ def person_idx(task: str) -> int:
 
 
 def contact_mask_path(task: str) -> Path:
-    return S3_RESULT_ROOT / "contact_masks" / task / "raw_contact_mask_3cm.npz"
+    """Contact mask lives under the S3 result root of the task's retarget variant
+    (dcv3_omnirt_v1_ref_fk_... vs dcv3_omnirt_v2_ref_fk_...)."""
+    variant = "omnirt_v2" if "omnirt_v2" in task else "omnirt_v1"
+    root = E203_RESULTS / f"s3_retarget/{variant}/ref_fk/results/{variant}_ref_fk"
+    return root / "contact_masks" / task / "raw_contact_mask_3cm.npz"
 
 
 def write_override(task: str, base_reward: str) -> Path:
