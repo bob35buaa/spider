@@ -105,8 +105,10 @@ def write_override(task: str, base_reward: str) -> Path:
     return path
 
 
-def run_one(task: str, *, num_samples: int, max_iters: int, seed: int,
-            base_reward: str, log_dir: Path, dry_run: bool) -> dict:
+def prepare_one(task: str, *, num_samples: int, max_iters: int, seed: int,
+                base_reward: str) -> dict:
+    """Build PRG sidecar + override for one task. Returns dict with status and
+    (if ready) 'cmd'. Does NOT run CEM."""
     task_dir = TASK_ROOT / task
     scene_act = task_dir / "scene_act.xml"
     trajectory = task_dir / "0/trajectory_kinematic.npz"
@@ -118,7 +120,6 @@ def run_one(task: str, *, num_samples: int, max_iters: int, seed: int,
     if not contact_mask_path(task).is_file():
         result["status"] = "skip_missing_mask"
         return result
-    # 1. build PRG sidecar scene in the core4d_v2 task dir
     try:
         prg = E199.build_prg_scene(task, scene_act, trajectory, overwrite=True)
         result["prg_scene"] = prg["physical_scene"]
@@ -126,28 +127,42 @@ def run_one(task: str, *, num_samples: int, max_iters: int, seed: int,
         result["status"] = "prg_scene_error"
         result["note"] = str(e)[:300]
         return result
-    # 2. write override
     override_id = f"core4d_E203_{task}_PRG"
     write_override(task, base_reward)
-    # 3. run CEM
-    cmd = [
+    result["cmd"] = [
         str(E199.SPIDER_PYTHON_BIN), "-u", "examples/run_mjwp.py",
         f"+override={override_id}", "video_camera=auto",
         f"seed={seed}", f"num_samples={num_samples}", f"max_num_iterations={max_iters}",
     ]
+    result["status"] = "ready"
+    return result
+
+
+def cem_env(gpu: str | None) -> dict:
+    env = dict(os.environ)
+    env.setdefault("MUJOCO_GL", os.environ.get("E203_MUJOCO_GL", "egl"))
+    if os.environ.get("E203_TORCH_COMPILE", "0") != "1":
+        env["TORCHDYNAMO_DISABLE"] = "1"
+    if gpu is not None:
+        env["CUDA_VISIBLE_DEVICES"] = gpu
+    env["PYTHONUNBUFFERED"] = "1"
+    return env
+
+
+def run_one(task: str, *, num_samples: int, max_iters: int, seed: int,
+            base_reward: str, log_dir: Path, dry_run: bool) -> dict:
+    result = prepare_one(task, num_samples=num_samples, max_iters=max_iters,
+                         seed=seed, base_reward=base_reward)
+    if result["status"] != "ready":
+        return result
+    cmd = result["cmd"]
     result["command"] = " ".join(cmd)
     if dry_run:
         result["status"] = "dry_run"
         return result
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{task}.log"
-    env = dict(os.environ)
-    # headless GL backend for run_mjwp video rendering (video_camera=auto).
-    env.setdefault("MUJOCO_GL", os.environ.get("E203_MUJOCO_GL", "egl"))
-    # This environment's triton/gcc cannot build torch.compile kernels; make
-    # torch.compile a no-op (eager). Set E203_TORCH_COMPILE=1 on capable GPUs.
-    if os.environ.get("E203_TORCH_COMPILE", "0") != "1":
-        env["TORCHDYNAMO_DISABLE"] = "1"
+    env = cem_env(None)
     with open(log_path, "w") as f:
         f.write(f"# command={' '.join(cmd)} (MUJOCO_GL={env['MUJOCO_GL']})\n\n")
         f.flush()
@@ -155,6 +170,53 @@ def run_one(task: str, *, num_samples: int, max_iters: int, seed: int,
     result["status"] = "cem_ok" if rc == 0 else f"cem_fail_rc{rc}"
     result["log"] = str(log_path)
     return result
+
+
+def run_parallel(tasks: list[str], *, gpus: list[str], max_per_gpu: int,
+                 num_samples: int, max_iters: int, seed: int, base_reward: str,
+                 log_dir: Path) -> list[dict]:
+    """Prepare all tasks, then run CEM across a GPU pool (one slot = one GPU)."""
+    import time
+    log_dir.mkdir(parents=True, exist_ok=True)
+    prepared, results = [], []
+    for task in tasks:
+        r = prepare_one(task, num_samples=num_samples, max_iters=max_iters,
+                        seed=seed, base_reward=base_reward)
+        if r["status"] == "ready":
+            prepared.append(r)
+        else:
+            print(f"   prep {task} -> {r['status']} {r.get('note','')}", flush=True)
+            results.append(r)
+    slots = [(g, s) for g in gpus for s in range(max_per_gpu)]
+    running = {}  # slot -> (proc, result, fh)
+    pending = list(prepared)
+    while pending or running:
+        for slot in list(slots):
+            if not pending:
+                break
+            if slot in running:
+                continue
+            r = pending.pop(0)
+            gpu = slot[0]
+            fh = open(log_dir / f"{r['task']}.log", "w")
+            fh.write(f"# gpu={gpu} command={' '.join(r['cmd'])}\n\n"); fh.flush()
+            proc = subprocess.Popen(r["cmd"], cwd=REPO, stdout=fh,
+                                    stderr=subprocess.STDOUT, env=cem_env(gpu))
+            r["gpu"] = gpu
+            running[slot] = (proc, r, fh)
+            print(f"   launch {r['task']} on gpu {gpu} ({len(pending)} pending)", flush=True)
+        done = [(slot, v) for slot, v in running.items() if v[0].poll() is not None]
+        for slot, (proc, r, fh) in done:
+            fh.close()
+            r["status"] = "cem_ok" if proc.returncode == 0 else f"cem_fail_rc{proc.returncode}"
+            r["log"] = str(log_dir / f"{r['task']}.log")
+            r.pop("cmd", None)
+            print(f"   done {r['task']} -> {r['status']}", flush=True)
+            results.append(r)
+            del running[slot]
+        if running and not done:
+            time.sleep(15)
+    return results
 
 
 def enumerate_tasks(object_keys: list[str]) -> list[str]:
@@ -178,6 +240,8 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=E199.CEM_SEED)
     ap.add_argument("--base-reward", default=DEFAULT_BASE_REWARD)
     ap.add_argument("--out-dir", type=Path, default=E203_RESULTS / "s6_downstream/cem")
+    ap.add_argument("--gpus", default="", help="comma-separated GPU ids for parallel dispatch (e.g. 0,1,..,7); empty=serial")
+    ap.add_argument("--max-per-gpu", type=int, default=1)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--smoke", action="store_true", help="tag logs as smoke")
     args = ap.parse_args()
@@ -192,14 +256,21 @@ def main() -> int:
         return 2
 
     log_dir = args.out_dir / ("smoke" if args.smoke else "full")
-    results = []
-    for i, task in enumerate(tasks):
-        print(f"[{i+1}/{len(tasks)}] {task}", flush=True)
-        r = run_one(task, num_samples=args.num_samples, max_iters=args.max_iterations,
-                    seed=args.seed, base_reward=args.base_reward, log_dir=log_dir,
-                    dry_run=args.dry_run)
-        print(f"   -> {r['status']} {r.get('note','')}", flush=True)
-        results.append(r)
+    gpus = [g.strip() for g in args.gpus.split(",") if g.strip()]
+    if gpus and not args.dry_run:
+        print(f"parallel dispatch over gpus={gpus} max_per_gpu={args.max_per_gpu} ({len(tasks)} tasks)", flush=True)
+        results = run_parallel(tasks, gpus=gpus, max_per_gpu=args.max_per_gpu,
+                               num_samples=args.num_samples, max_iters=args.max_iterations,
+                               seed=args.seed, base_reward=args.base_reward, log_dir=log_dir)
+    else:
+        results = []
+        for i, task in enumerate(tasks):
+            print(f"[{i+1}/{len(tasks)}] {task}", flush=True)
+            r = run_one(task, num_samples=args.num_samples, max_iters=args.max_iterations,
+                        seed=args.seed, base_reward=args.base_reward, log_dir=log_dir,
+                        dry_run=args.dry_run)
+            print(f"   -> {r['status']} {r.get('note','')}", flush=True)
+            results.append(r)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     summary = args.out_dir / ("e203_cem_smoke_summary.json" if args.smoke else "e203_cem_summary.json")
