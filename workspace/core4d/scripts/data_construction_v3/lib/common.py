@@ -54,6 +54,7 @@ SCRIPT_RELATIVE_PATHS = {
     "run_raw_contact.py": "stages/s1_raw_contact/run_raw_contact.py",
     "build_or_audit_templates.py": "stages/s2_templates/build_or_audit_templates.py",
     "render_template_review_package.py": "stages/s2_templates/render_template_review_package.py",
+    "render_template_mesh_collision_review_package.py": "stages/s2_templates/render_template_mesh_collision_review_package.py",
     "register_retarget_variant.py": "stages/s3_retarget/register_retarget_variant.py",
     "run_stage2b.py": "stages/s3_retarget/run_stage2b.py",
     "make_visual_qc.py": "stages/s4_gate_visual_qc/make_visual_qc.py",

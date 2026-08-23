@@ -41,6 +41,10 @@ CASES = {
 
 BASE = "example_datasets/processed/core4d/unitree_g1/humanoid_object"
 
+
+def dataset_base(dataset_name: str = "core4d") -> str:
+    return f"example_datasets/processed/{dataset_name}/unitree_g1/humanoid_object"
+
 # Euler conventions to try (extrinsic = MuJoCo hinge order)
 EULER_CONVENTIONS = ["XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]
 
@@ -48,11 +52,11 @@ EULER_CONVENTIONS = ["XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]
 AXIS_MAP = {"X": "1 0 0", "Y": "0 1 0", "Z": "0 0 1"}
 
 
-def find_best_euler_convention(task: str) -> str:
+def find_best_euler_convention(task: str, base: str = BASE) -> str:
     """Find the euler convention that minimizes max |middle angle| over all frames."""
-    ref_path = f"{BASE}/{task}/0/trajectory_kinematic_anchored.npz"
+    ref_path = f"{base}/{task}/0/trajectory_kinematic_anchored.npz"
     if not os.path.exists(ref_path):
-        ref_path = f"{BASE}/{task}/0/trajectory_kinematic.npz"
+        ref_path = f"{base}/{task}/0/trajectory_kinematic.npz"
     ref = np.load(ref_path)
     quats_wxyz = ref["qpos"][:, 39:43]  # object quat (wxyz)
 
@@ -74,16 +78,17 @@ def find_best_euler_convention(task: str) -> str:
     return best_conv
 
 
-def generate_scene_act(task: str) -> tuple[str, str]:
+def generate_scene_act(task: str, dataset_name: str = "core4d") -> tuple[str, str]:
     """Generate scene_act.xml from scene.xml for a given task.
     Returns (output_path, euler_convention).
     """
-    scene_dir = f"{BASE}/{task}"
+    base = dataset_base(dataset_name)
+    scene_dir = f"{base}/{task}"
     scene_path = f"{scene_dir}/scene.xml"
     output_path = f"{scene_dir}/scene_act.xml"
 
     # Find best euler convention for this case
-    euler_conv = find_best_euler_convention(task)
+    euler_conv = find_best_euler_convention(task, base=base)
 
     tree = ET.parse(scene_path)
     root = tree.getroot()

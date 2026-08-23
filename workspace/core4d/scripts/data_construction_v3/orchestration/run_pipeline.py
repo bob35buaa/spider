@@ -460,7 +460,11 @@ def full_from_raw(args: argparse.Namespace, paths: dict[str, Path], manifest: di
                 str(paths["smplx_model_dir"]),
                 "--out-dir",
                 str(variant_dir),
+                "--spider-dataset",
+                args.spider_dataset,
             ]
+            if args.spider_source_dataset:
+                s3_cmd.extend(["--spider-source-dataset", args.spider_source_dataset])
             if args.execute_stage2b:
                 s3_cmd.extend(["--execute", "--allow-legacy-stage2b-wrapper"])
             for path in args.template_review_tsv:
@@ -714,6 +718,10 @@ def main() -> int:
     parser.add_argument("--smplx-model-dir", type=Path, default=None)
     parser.add_argument("--queue", default="selected-medium-box")
     parser.add_argument("--object-keys", default="")
+    parser.add_argument("--spider-dataset", default="core4d",
+                        help="SPIDER dataset_name for TARGET outputs (E203 uses core4d_v2)")
+    parser.add_argument("--spider-source-dataset", default=None,
+                        help="dataset holding source scene templates (default = --spider-dataset; E203 uses core4d)")
     parser.add_argument("--thresholds-m", default="0.03,0.05")
     parser.add_argument("--stage2b-contact-label", choices=("3cm", "5cm"), default="3cm")
     parser.add_argument("--sample-count", type=int, default=12000)

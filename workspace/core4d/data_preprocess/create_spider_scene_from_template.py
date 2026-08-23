@@ -111,7 +111,7 @@ def main() -> None:
         sys.path.insert(0, str(REPO / "workspace/core4d/scripts/convert"))
         from generate_scene_act import generate_scene_act
 
-        scene_act_path, euler = generate_scene_act(args.task)
+        scene_act_path, euler = generate_scene_act(args.task, dataset_name=args.dataset_name)
         print(f"Wrote {scene_act_path} euler={euler}")
 
 
