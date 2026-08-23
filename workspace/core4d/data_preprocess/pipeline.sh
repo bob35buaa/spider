@@ -520,11 +520,17 @@ while IFS=$'\t' read -r enabled date seq person object_name object_model_rel sou
   esac
   [ "$enabled" = "1" ] || continue
   if [ "$KEEP_GOING" -eq 1 ]; then
-    if ( process_case "$date" "$seq" "$person" "$object_name" "$object_model_rel" "$source_scene_task" "$target_task" "$trim_start" "$trim_frames" "$data_id" "$mask_slug" ); then
-      :
-    else
-      echo "WARN: case ${target_task} failed (date=$date seq=$seq person=$person); recording + continuing" >&2
-      printf '%s\t%s\t%s\t%s\t%s\n' "$date" "$seq" "$person" "$object_name" "$target_task" >> "${RESULT_ROOT}/pipeline_failed_cases.tsv"
+    # Run each case in an isolated subshell with set -e ACTIVE (so it aborts
+    # cleanly at the first failing step, e.g. OmniRetarget CVXPY infeasible,
+    # without cascading). set +e around it prevents the outer batch from
+    # aborting; we capture the code and record failures, then continue.
+    set +e
+    ( set -e; process_case "$date" "$seq" "$person" "$object_name" "$object_model_rel" "$source_scene_task" "$target_task" "$trim_start" "$trim_frames" "$data_id" "$mask_slug" )
+    case_rc=$?
+    set -e
+    if [ "$case_rc" -ne 0 ]; then
+      echo "WARN: case ${target_task} failed rc=${case_rc} (date=$date seq=$seq person=$person); recording + continuing" >&2
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$date" "$seq" "$person" "$object_name" "$target_task" "$case_rc" >> "${RESULT_ROOT}/pipeline_failed_cases.tsv"
     fi
   else
     process_case "$date" "$seq" "$person" "$object_name" "$object_model_rel" "$source_scene_task" "$target_task" "$trim_start" "$trim_frames" "$data_id" "$mask_slug"
