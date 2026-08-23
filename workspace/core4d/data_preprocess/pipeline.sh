@@ -11,6 +11,11 @@ HOLOSOMA_DIR="${HOLOSOMA_DIR:-/home/ubuntu/Workspace/holosoma}"
 CORE4D_REAL_ROOT="${CORE4D_REAL_ROOT:-/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real}"
 SMPLX_MODEL_DIR="${SMPLX_MODEL_DIR:-/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/smplx}"
 RESULT_ROOT="${RESULT_ROOT:-workspace/core4d/results/data_preprocess}"
+# SPIDER dataset separation (E203): TARGET outputs go to SPIDER_DATASET
+# (default core4d; E203 uses core4d_v2). Source scene templates are read from
+# SPIDER_SOURCE_DATASET (default = SPIDER_DATASET; E203 reuses core4d templates).
+SPIDER_DATASET="${SPIDER_DATASET:-core4d}"
+SPIDER_SOURCE_DATASET="${SPIDER_SOURCE_DATASET:-$SPIDER_DATASET}"
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 RETARGET_PYTHON_BIN="${RETARGET_PYTHON_BIN:-}"
 REF_FPS="${REF_FPS:-30.0}"
@@ -282,7 +287,7 @@ process_case() {
   local task_name="${date}-${seq}-${person}-${object_name}_with_obj"
   local retargeted_npz="$retargeted_dir/${task_name}_original.npz"
   local trimmed_npz="$trimmed_dir/${task_name}_original.npz"
-  local source_scene="example_datasets/processed/core4d/unitree_g1/humanoid_object/${source_scene_task}/scene.xml"
+  local source_scene="example_datasets/processed/${SPIDER_SOURCE_DATASET}/unitree_g1/humanoid_object/${source_scene_task}/scene.xml"
   local mask_out="$RESULT_ROOT/contact_masks/$mask_slug"
   local trim_info="$case_root/trim_window.json"
   local effective_trim_start="$trim_start"
@@ -468,12 +473,14 @@ process_case() {
       --seq "$seq" \
       --person "$person" \
       --object-name "$object_name" \
-      --object-model-rel "$object_model_rel"
+      --object-model-rel "$object_model_rel" \
+      --dataset-name "$SPIDER_DATASET"
 
     run_cmd "$PYTHON_BIN" spider/process_datasets/core4d.py \
       --source-npz "$trimmed_npz" \
       --task "$target_task" \
       --data-id "$data_id" \
+      --dataset-name "$SPIDER_DATASET" \
       --no-show-viewer \
       --no-save-video
 
@@ -488,6 +495,7 @@ process_case() {
       --person "$person" \
       --object-name "$object_name" \
       --object-model-rel "$object_model_rel" \
+      --dataset-name "$SPIDER_DATASET" \
       --generate-scene-act
 
     run_cmd "$PYTHON_BIN" \
@@ -495,6 +503,7 @@ process_case() {
       --task "$target_task" \
       --source-scene "$source_scene" \
       --trimmed "$trimmed_npz" \
+      --dataset-name "$SPIDER_DATASET" \
       --out "$RESULT_ROOT/${target_task}_verify_summary.json"
   fi
 }

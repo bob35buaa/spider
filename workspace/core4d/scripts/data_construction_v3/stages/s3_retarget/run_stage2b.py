@@ -205,7 +205,15 @@ def build_rows(
     python_bin: str,
     retarget_python_bin: str,
     force: bool,
+    spider_dataset: str = "core4d",
+    spider_source_dataset: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[list[str]]]:
+    # spider_dataset: SPIDER dataset_name for TARGET outputs (default core4d).
+    # spider_source_dataset: dataset holding the source scene templates
+    # (defaults to spider_dataset). E203 uses target=core4d_v2, source=core4d
+    # so v2 outputs live in a parallel tree while reusing v1 templates/assets.
+    if spider_source_dataset is None:
+        spider_source_dataset = spider_dataset
     params = variant_params(variant)
     variant_id = variant["retarget_variant_id"]
     run_slug = safe_id(f"{variant_id}_{target_variant_id}")
@@ -223,6 +231,8 @@ def build_rows(
     command = [
         "env",
         f"REPO={spider_repo}",
+        f"SPIDER_DATASET={spider_dataset}",
+        f"SPIDER_SOURCE_DATASET={spider_source_dataset}",
         f"HOLOSOMA_DIR={holosoma_repo}",
         f"CORE4D_REAL_ROOT={core4d_raw_root}",
         f"SMPLX_MODEL_DIR={smplx_model_dir}",
@@ -268,7 +278,7 @@ def build_rows(
         converted_npz = case_root / "converted" / f"{holosoma_task}.npz"
         omniretarget_output_npz = case_root / "retargeted" / f"{holosoma_task}_original.npz"
         trimmed_npz = case_root / "trimmed" / f"{holosoma_task}_original.npz"
-        spider_task_dir = spider_repo / "example_datasets/processed/core4d/unitree_g1/humanoid_object" / target_task
+        spider_task_dir = spider_repo / f"example_datasets/processed/{spider_dataset}/unitree_g1/humanoid_object" / target_task
         spider_trajectory = spider_task_dir / "0/trajectory_kinematic.npz"
         stage2b_contact_mask_npz_expected = result_root / "contact_masks" / mask_slug / "raw_contact_mask_3cm.npz"
         verify_summary = result_root / f"{target_task}_verify_summary.json"
@@ -523,6 +533,10 @@ def main() -> int:
     parser.add_argument("--route-diagnostic-tsv", type=Path, action="append", default=[])
     parser.add_argument("--inventory-tsv", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--spider-dataset", default="core4d",
+                        help="SPIDER dataset_name for TARGET outputs (default core4d; E203 uses core4d_v2)")
+    parser.add_argument("--spider-source-dataset", default=None,
+                        help="dataset holding source scene templates (default = --spider-dataset; E203 uses core4d)")
     parser.add_argument("--spider-repo", type=Path, default=None)
     parser.add_argument("--holosoma-repo", type=Path, default=None)
     parser.add_argument("--core4d-raw-root", type=Path, default=None)
@@ -567,6 +581,8 @@ def main() -> int:
         python_bin=args.python_bin,
         retarget_python_bin=args.retarget_python_bin,
         force=args.force,
+        spider_dataset=args.spider_dataset,
+        spider_source_dataset=args.spider_source_dataset,
     )
     run_slug = safe_id(f"{args.retarget_variant_id}_{args.target_variant_id}")
     case_file = out_dir / f"cases_stage2b_ready_{run_slug}.tsv"

@@ -20,7 +20,10 @@ import numpy as np
 
 
 REPO = Path(__file__).resolve().parents[3]
-BASE = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+
+
+def dataset_base(dataset_name: str = "core4d") -> Path:
+    return REPO / f"example_datasets/processed/{dataset_name}/unitree_g1/humanoid_object"
 
 
 def fmt(values: np.ndarray, digits: int) -> str:
@@ -47,6 +50,8 @@ def main() -> None:
     parser.add_argument("--object-name", default=None)
     parser.add_argument("--object-model-rel", default=None)
     parser.add_argument("--generate-scene-act", action="store_true")
+    parser.add_argument("--dataset-name", default="core4d",
+                        help="SPIDER dataset_name for the TARGET task dir (default core4d)")
     args = parser.parse_args()
 
     if not args.source_scene.is_file():
@@ -54,7 +59,7 @@ def main() -> None:
     if not args.qpos.is_file():
         raise FileNotFoundError(args.qpos)
 
-    out_dir = BASE / args.task
+    out_dir = dataset_base(args.dataset_name) / args.task
     out_dir.mkdir(parents=True, exist_ok=True)
     scene_path = out_dir / "scene.xml"
 

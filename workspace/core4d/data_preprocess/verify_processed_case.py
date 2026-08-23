@@ -12,7 +12,10 @@ import numpy as np
 
 
 REPO = Path(__file__).resolve().parents[3]
-BASE = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+
+
+def dataset_base(dataset_name: str = "core4d") -> Path:
+    return REPO / f"example_datasets/processed/{dataset_name}/unitree_g1/humanoid_object"
 
 
 def load_npz(path: Path) -> dict:
@@ -28,9 +31,11 @@ def main() -> None:
     parser.add_argument("--trimmed", type=Path, required=True)
     parser.add_argument("--data-id", default="0")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--dataset-name", default="core4d",
+                        help="SPIDER dataset_name for the TARGET task dir (default core4d)")
     args = parser.parse_args()
 
-    case_dir = BASE / args.task
+    case_dir = dataset_base(args.dataset_name) / args.task
     scene = case_dir / "scene.xml"
     scene_act = case_dir / "scene_act.xml"
     traj = case_dir / str(args.data_id) / "trajectory_kinematic.npz"
