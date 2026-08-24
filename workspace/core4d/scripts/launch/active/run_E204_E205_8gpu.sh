@@ -39,7 +39,7 @@ NUM_SAMPLES="${NUM_SAMPLES:-1024}"
 MAX_ITERS="${MAX_ITERS:-32}"
 SEED="${SEED:-0}"
 export E204E205_MUJOCO_GL="${E204E205_MUJOCO_GL:-disable}"  # CEM is headless (save_video=false); 'disable' skips the GL backend import entirely -> works on boxes with no libGL/libOSMesa/EGL. Override to egl/osmesa only if you need on-the-fly rendering.
-export E204E205_TORCH_COMPILE="${E204E205_TORCH_COMPILE:-1}"
+export E204E205_TORCH_COMPILE="${E204E205_TORCH_COMPILE:-0}"  # 0 = no torch.compile (freeze); also sets TORCHDYNAMO_DISABLE=1 so triton JIT (needs python3.12-dev) is never invoked. CEM passes use_torch_compile=false regardless.
 [ "${FORCE:-0}" = "1" ] && export E204E205_FORCE=1
 
 SCENE_ARGS=""; [ "${REUSE_E178:-0}" = "1" ] && SCENE_ARGS="--reuse-existing-e178-scene"

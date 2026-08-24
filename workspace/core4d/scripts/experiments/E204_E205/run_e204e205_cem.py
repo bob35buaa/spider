@@ -71,6 +71,10 @@ def prepare_one(arm: str, case_id: str, *, num_samples: int, max_iters: int,
         PY, "-u", "examples/run_mjwp.py",
         f"+override={C.override_id(arm, case_id)}",
         "save_video=false", "video_camera=auto",
+        # freeze (plan234): no torch.compile. Also avoids triton JIT needing Python.h
+        # (python3.12-dev absent on some boxes). '+' append: key is a dataclass default,
+        # not in the composed Hydra struct (same as E179's +use_torch_compile=false).
+        "+use_torch_compile=false",
         f"seed={seed}", f"num_samples={num_samples}",
         f"max_num_iterations={max_iters}",
         f"output_dir={out_dir}",
