@@ -15,7 +15,7 @@ Usage:
     ... --arms noprg_e204                 # one arm only
     ... --limit 1 --num-samples 64 --max-iterations 4   # smoke (canary budget)
     ... --dry-run                         # print commands, run nothing
-Env: E204E205_MUJOCO_GL (default egl), E204E205_TORCH_COMPILE (0/1),
+Env: E204E205_MUJOCO_GL (default osmesa; set egl if box has working EGL), E204E205_TORCH_COMPILE (0/1),
      E204E205_FORCE=1 (ignore skip-already-done).
 """
 
@@ -40,7 +40,7 @@ PY = str(REPO / ".venv/bin/python")
 
 def cem_env(gpu: str | None) -> dict:
     env = dict(os.environ)
-    env.setdefault("MUJOCO_GL", os.environ.get("E204E205_MUJOCO_GL", "egl"))
+    env.setdefault("MUJOCO_GL", os.environ.get("E204E205_MUJOCO_GL", "osmesa"))
     if os.environ.get("E204E205_TORCH_COMPILE", "0") != "1":
         env["TORCHDYNAMO_DISABLE"] = "1"
     if gpu is not None:
