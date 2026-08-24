@@ -105,6 +105,19 @@ SOURCE_OVERRIDES = {
         "case_metrics": "e203_case_metrics.tsv",
         "threshold_exp": "E173",
     },
+    # E204ARM = three-arm ablation on E178's 27 bucket cases (plan234/log292):
+    # noPRG(E204) / PRG(E178 reused) / G1A2(E205) as a 3-arm sweep per case, same
+    # contactAlignedTop proxy + omnirt_v1 trajectory, only the reward arm differs.
+    # Live-qpos playback of each arm's CEM rollout. TSV built (no re-scoring) by
+    # workspace/core4d/scripts/experiments/E204_E205/build_arm_review_tsv.py.
+    # Opt-in via --exps E204ARM. Tracking red lines from the E178 numeric gates.
+    "E204ARM": {
+        "result_exp": "E204",
+        "eval_subdir": "three_arm",
+        "case_metrics": "e204e205_arm_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -923,6 +936,11 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
+        elif exp == "E204ARM":
+            # 3-arm sweep (noPRG/PRG/G1A2), no `evaluated`-style summary.json;
+            # cross-check against the index itself like the E199/E200 arm sweeps.
+            evaluated = len(recs)
+            npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E197":
             # E197 is kinematic-playback only: no summary.json / no numeric gates.
             evaluated = len(recs)

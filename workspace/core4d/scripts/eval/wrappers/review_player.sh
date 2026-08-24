@@ -12,6 +12,11 @@
 #   Single-arm live-qpos playback of s6_downstream/eval_P1/e203_case_metrics.tsv
 #   (built by workspace/core4d/scripts/experiments/E203/run_E203_p1_eval.py).
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E203 [--port 8080]
+# E204ARM = three-arm ablation on E178's 27 bucket cases (plan234/log292): a 3-arm
+#   sweep per case — noPRG(E204) / PRG(E178 reused) / G1A2(E205) — same contactAlignedTop
+#   proxy + omnirt_v1 trajectory, only the reward arm differs. Live-qpos playback; use
+#   the 实验/arm filters to A/B/C compare. TSV built by build_arm_review_tsv.py (no re-score).
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E204ARM [--port 8080]
 # E200N = E200 noPRG (E167A) arm (plan230/log289): orig(E190 37) + trans0/1/2 arm sweep.
 # E200G = E200 PRG+G1+A2 arm: orig(E198 G1A2 87) + trans0/1/2 arm sweep.
 #   The prg_g1a2 CEM re-ran aug only, so orig is pulled inline from the E198
