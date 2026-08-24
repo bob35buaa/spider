@@ -95,6 +95,16 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E194",
     },
+    # E203 P1 = CORE4D v2 human-motion orig retarget + CEM (box001/box024),
+    # evaluated by run_E203_p1_eval.py. Single-arm live-qpos playback (the CEM
+    # outdir trajectory_mjwp_act.npz holds the executed qpos + reference). The
+    # eval output lives at s6_downstream/eval_P1 (sibling of eval/), so the
+    # subdir hops up one level from the eval/ base. Opt-in via --exps E203.
+    "E203": {
+        "eval_subdir": "../eval_P1",
+        "case_metrics": "e203_case_metrics.tsv",
+        "threshold_exp": "E173",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -264,7 +274,11 @@ class CaseRecord:
 def eval_dir(exp: str) -> Path:
     subdir = SOURCE_OVERRIDES.get(exp, {}).get("eval_subdir", "full")
     result_exp = SOURCE_OVERRIDES.get(exp, {}).get("result_exp", exp)
-    return REPO / "workspace/core4d/results" / result_exp / "s6_downstream/eval" / subdir
+    base = REPO / "workspace/core4d/results" / result_exp / "s6_downstream/eval"
+    # normpath collapses a "../eval_P1"-style subdir lexically (the eval/ base may
+    # not exist on disk for experiments that write a sibling eval dir); a plain
+    # subdir is unchanged.
+    return Path(os.path.normpath(base / subdir))
 
 
 def _case_metrics_path(exp: str) -> Path | None:

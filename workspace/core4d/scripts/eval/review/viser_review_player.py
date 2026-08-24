@@ -1018,7 +1018,7 @@ def main() -> int:
         print(f"[review] arm filter {sorted(arms)} -> {len(records)} cases")
     print(f"[review] indexed {len(records)} cases across {exps}")
     if not records:
-        extra = [e for e in ("E194", "E199", "E199P", "E200N", "E200G") if e not in idx.DEFAULT_EXPS]
+        extra = [e for e in ("E194", "E199", "E199P", "E200N", "E200G", "E203") if e not in idx.DEFAULT_EXPS]
         avail = ", ".join(list(idx.DEFAULT_EXPS) + extra)
         print(
             f"[review] no reviewable records for {exps} — this experiment has no "
