@@ -26,7 +26,7 @@
 #   DRY_RUN=1 bash .../run_E204_E205_8gpu.sh                   # print CEM commands
 #   STAGE=smoke LIMIT=1 NUM_SAMPLES=64 MAX_ITERS=4 bash .../run_E204_E205_8gpu.sh   # canary smoke
 #   REUSE_E178=1 bash .../run_E204_E205_8gpu.sh                # skip E178 scene rebuild
-#   E204E205_MUJOCO_GL=egl bash .../run_E204_E205_8gpu.sh      # if your box has working EGL (osmesa is default)
+#   E204E205_MUJOCO_GL=egl bash .../run_E204_E205_8gpu.sh      # force a GL backend (default 'disable' is headless-safe)
 set -uo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 export PATH="$PWD/.venv/bin:$PATH"
@@ -38,7 +38,7 @@ ARMS="${ARMS:-noprg_e204,g1a2_e205}"
 NUM_SAMPLES="${NUM_SAMPLES:-1024}"
 MAX_ITERS="${MAX_ITERS:-32}"
 SEED="${SEED:-0}"
-export E204E205_MUJOCO_GL="${E204E205_MUJOCO_GL:-osmesa}"  # osmesa = robust headless default (egl lacks a GL platform on these boxes); override to egl if your box has working EGL
+export E204E205_MUJOCO_GL="${E204E205_MUJOCO_GL:-disable}"  # CEM is headless (save_video=false); 'disable' skips the GL backend import entirely -> works on boxes with no libGL/libOSMesa/EGL. Override to egl/osmesa only if you need on-the-fly rendering.
 export E204E205_TORCH_COMPILE="${E204E205_TORCH_COMPILE:-1}"
 [ "${FORCE:-0}" = "1" ] && export E204E205_FORCE=1
 
