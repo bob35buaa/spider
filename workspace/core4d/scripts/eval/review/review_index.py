@@ -105,6 +105,17 @@ SOURCE_OVERRIDES = {
         "case_metrics": "e203_case_metrics.tsv",
         "threshold_exp": "E173",
     },
+    # E203F = the FULL E203 run (all 171 CEM tasks: box001/021/023/024/026 +
+    # buckets, omnirt_v1 137 + omnirt_v2 rescue 34), evaluated by
+    # run_E203_p1_eval.py --object-keys "". Same single-arm live-qpos playback as
+    # E203; the only difference is the eval output directory (eval_full, superset
+    # of eval_P1's 54 box001/024 cases). Opt-in via --exps E203F.
+    "E203F": {
+        "result_exp": "E203",
+        "eval_subdir": "../eval_full",
+        "case_metrics": "e203_case_metrics.tsv",
+        "threshold_exp": "E173",
+    },
     # E204ARM = three-arm ablation on E178's 27 bucket cases (plan234/log292):
     # noPRG(E204) / PRG(E178 reused) / G1A2(E205) as a 3-arm sweep per case, same
     # contactAlignedTop proxy + omnirt_v1 trajectory, only the reward arm differs.
