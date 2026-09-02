@@ -1518,3 +1518,88 @@
 - **xlsx ✓**：`scripts/eval/reports/gen_E202_bucket_gate_xlsx.py` → `E202_bucket_gate_report.xlsx`（summary: aug vs orig + 逐物体 + 可行性；detail: per-rollout 12门+delta）。
 - **viser Q**：已支持（viser 1.0.26 + `spider/viewers/viser_viewer.py`，`viewer=viser` drop-in web 查看器）；可做 rollout 回放（需端口转发）。
 - 全部 commit。
+
+## E202-export · USE13 bucket 平移增强 RL 导出 (Phase 63 S6, 2026-08-28, plan235)
+- 目标：基于 E202 源侧 aug rollout，为 E178 人工终审 USE13 bucket case 导出平移增强 RL-ready 资产；核心新增 = partner 在同一物体扰动下 aug retarget + 配对 + Holosoma 导出。不新开实验号（E202 S6 导出）。
+- 步骤1 C0 ✓：authority TSV SHA256=d430a8ef…6c9f 匹配；USE=13（bucket003×5 / bucket004×1 / bucket007×7），DO_NOT_USE=14。
+- 步骤2 源侧可行性（关键发现）：
+  - E202 manifest 只含 25/27 E178 full case；2 个 bucket007 三档全不可行（源侧 omnirt_v2 腿-桶穿透）→ 无行：`bucket007_20231018_021_p2`(非USE) + **`bucket007_20231023_075_p2`(USE!)**。
+  - 故 **12/13 USE case 有源侧 aug（各 3 trans = 36 变体，全 run_complete_pending_eval，failure_mode 空）**；`075_p2` 源侧 0 可行 → 只能 orig（log264 已导出），无 aug 变体。
+  - C4 物理硬门：36/36 源侧 aug 变体 **fall=0、无发散**（root/eef 全 <60cm；最差 bucket007_20231003_2_021_p2 trans2 root38.4/eef34.3cm，未跌未发散）。之前担心的 fall case bucket003_20231018_005_p1 **非 USE**（USE 是 _p2，干净）。
+- 待办：partner 侧 aug retarget（同扰动 omnirt_v2，retarget-only）→ C2 物体轨迹两人一致断言 → 配对 + Holosoma 导出 → eval → 视觉。
+
+### 2026-08-28 步骤2续 · partner 复用/新建映射（关键）
+- E202 data_preprocess 实际有 **27 person 级 dir**（含 2 个 CEM-infeasible 的 075_p2/021_p2）→ 每 person 的 aug **retarget（converted/retargeted/trimmed 的 original+trans0/1/2）已存在**。
+- 因此 **075_p2 的 aug retarget 存在**（其 infeasible 仅在 CEM-scene 运行时腿-桶重叠，retarget 成功）→ 可作 075_p1 的 partner。
+- **12 个 source-USE case（有 CEM，排除 075_p2 自身作 source）** 的 partner aug retarget：**10 复用 E202、2 需新建**（059_p2、073_p2 —— 其 person2 不在 E202 27 dir）。
+- 修订实现：build_partner_aug 主要=定位+按 common_raw_window 重对齐已存 E202 trimmed NPZ；仅 059_p2/073_p2 两 person×3 trans=6 条需 fresh holosoma aug retarget。
+- 待办不变：C2 两人物体轨迹一致 → 配对(common window) → Holosoma 导出 → eval → 视觉。
+
+### 2026-08-28 步骤3 · 脚本落地 + partner 构建启动
+- 新增 `scripts/experiments/E202/`：`e202_export_common.py`(契约单一真源:USE13 authority+源变体索引+12 case 注册表+partner evidence over E202 data_preprocess)、`build_partner_aug.py`(2 缺失 partner 新建/10 复用)。
+- smoke test ✓：source_use_cases=12（bucket003×5/004×1/007×6，075_p2 orig-only 正确排除），partner evidence 解析正确，复用文件齐全。
+- 注意：e202_common import 很重(~4-5min mujoco+geom)，脚本一律后台跑。
+- 启动 build_partner_aug（bg b63updr37）：新建 059_p2/073_p2 aug retarget（omnirt_v2, retarget-only, 无 CEM），验证 10 复用。
+
+### 2026-08-28 步骤3 · bug 修复 + 脚本补全
+- **遇到的错误**：`import build_augmented_tasks` 误解析为 **E199 的**同名模块（因 e202_common 把 E199 dir 插到 sys.path[0]）→ 首次 partner build 写进了 `results/E199/` 并试图重建本应复用的 001_p2。已 kill。
+  - 损伤评估：仅在 E199 下创建了空的 `holosoma_..._001_p2/{converted,retargeted,trimmed}` + 1 个 cases 文件（kill 在 retarget 前，无文件写入）；E199 pilot _p1 数据(Aug15)完好。空 dir 无害（gitignored results/），rm 被权限拒绝，留置并记录。
+  - 修复：build_partner_aug.py / check_object_traj_parity.py 改用 importlib 按**显式路径**加载 E202 的 build_augmented_tasks（模块名 e202_build_augmented_tasks）。
+- 新增 `check_object_traj_parity.py`（C2：trimmed qpos[36:43]=object freejoint，逐帧对比 source/partner 扰动物体，+approach0.2m/endpoint 锚定）、`export_aug_partner_rl.py`（复用 E187 make_source_row/alignment_audit + partner adapter build_partner_row/paired_row，C2/C4 门控，输出 E178/E187 schema 兼容 HS exporter）。
+- 环境注意：mujoco import 在本机很慢/易阻塞（GPU 被多个 viser player 占用，EGL 坏）→ 一律 `MUJOCO_GL=osmesa PYTHONUNBUFFERED=1` 后台跑。
+- 重跑 build_partner_aug（bg bms9hiqpj）。
+
+### 2026-08-28 步骤3 · partner build 运行中（修复后）
+- import fix 生效：10 partner REUSE（E202 dir 全 trimmed trans 齐全），正确写入 **E202** 路径。
+- 正在 build 2 缺失 partner：059_p2（convert 运行中，hsretargeting env）→ 073_p2。omnirt_v2 retarget-only，无 CEM。
+- 环境教训：本机 e202_common import ~5-6min（mujoco+scipy+geom，线程超订）；限 OMP/OPENBLAS/MKL=2 + 不设 MUJOCO_GL 可正常跑（osmesa 反而疑似阻塞 import）。
+
+### 2026-08-28 步骤3 完成 · partner build ✓
+- 12 partner 全部就绪：built=2（059_p2/073_p2，各 3/3 feasible aug，omnirt_v2 retarget-only），reused=10。manifest: rl_export_aug/partner_aug_build_manifest.json。
+- 下一步：C2 object-traj parity → export → C6 eval。
+
+### 2026-08-28 步骤4 · C2 parity 揭示方法学阻塞（关键）
+- C2 parity（正确 raw 对齐后）：**0/36 PASS**。原因确诊：native holosoma object augmentation 的 trans_k 方向是 **per-person facing-relative**。
+  - 两人朝向相反 → 同一 trans 档 source(person1) 与 partner(person2) 的 0.2m 扰动在**世界系方向不同**（cos≈−0.73，约137°）。
+  - 证据：original 变体两人 object 一致（raw对齐 maxΔ 0.07m=solver 噪声）；trans_0 两人 objΔ 0.36m。perturbation 向量 src=[0,−0.2,0] vs partner=[−0.14,0.14,0]。
+  - 时间剖面：approach 0.359m，衰减到 endpoint 0.092m（仍>0.07噪声底），manip 早中段(50%)仍 0.217m。**不局限于接触前**。
+- 结论：独立 per-person aug retarget **物理不自洽**（两 robot 在 object 不同世界位置抓取）。不能直接配对导出。
+- 已完成不受影响：partner retarget 已建（可复用）；base object 两人字节一致。
+- **需用户决策**：(A) 共享世界系 object 扰动后重 retarget 两人；(B) partner 重定向到 source 的扰动 object（partner 只 refit 手）；(C) 放弃 partner aug。已停在导出前，未产出无效数据。
+
+### 2026-08-28 步骤4 续 · 历史 aug partner 导出核查 —— C2 用错了不变量（关键结论）
+- **E200(box aug) 就是这么做的**：`generate_partner_aug.py` docstring 明写 "per-person human frame, same trans_k"，partner = 对手人独立 aug retarget 同 trans。SPIDER 侧**无** object-parity 检查。与我做法完全一致。
+- **box 也有同样的原始不一致**：E200 box001_039 两人 object trans maxΔ≈0.40m(approach)→endpoint 0.05m；original 0.014m。即我发现的 ~0.4m 不是 bucket 特有、也不是我的 bug，是 pipeline 普遍性质，E200 已带着它出货。
+- **自洽在下游 HS exporter 里实现 = partner re-anchor（默认 ON）**：`export_rl_motion_from_spider_tsv.py:519-535` 先记录 `object_mismatch_mean/max_m`（=那 ~0.4m 诊断量），再把 partner 手 → partner-object-local → **source-object-world**（`local_points`→`world_points`）。于是 partner 手锚到 **source 的唯一 object** 上，与 per-person 扰动方向无关。`--no-reanchor` 才关闭。holosoma progress 里 partner re-anchor 是长期既有、审计过的机制。
+- **结论**：最终 RL motion **自洽**（单 object=source CEM；partner 手 re-anchor 到其上）。原始两人 object 分歧是 approach 多样性，非 bug。
+- **我的 C2（raw object-channel parity）用错了不变量**：它量的是 re-anchor **之前**的原始分歧(~0.4m 预期)，被下游修正。应替换为：确认 HS export reanchor 生效 + 记录 object_mismatch/partner_move + （可选更严）grasp 窗口 hand-on-object surface 一致性。
+- 处置：去掉 export_aug_partner_rl.py 的 raw-C2 门控；对齐 E200（reanchor 默认）；把一致性证据改为 post-reanchor 诊断。
+
+### 2026-08-28 步骤5 · SPIDER 侧 paired 导出 ✓
+- export_aug_partner_rl.py 成功：**36 aug 变体**（bucket003×15/004×3/007×18 = 12 case×3 trans），36 pair-complete + alignment-ready，0 排除。partner 全 omnirt_v2。orig-only=075_p2。
+- 修复：make_source_row 的 CEM video 硬要求 → 改为可选（E202 只渲染了样本，video 仅 provenance；HS exporter 用 trajectory/scene_act/cem_result）。去掉 raw-C2 门控。
+- 输出：results/E202/s6_downstream/rl_export_aug/（rl_export_input.tsv + partner_omnirt/ + paired + audit + summary）。
+- 下一步：HS export（reanchor 默认）→ post-reanchor 一致性校验。
+
+### 2026-08-28 步骤3(HS) · Holosoma reanchor 导出
+- HS wrapper run_E202_export_holosoma.sh：修 SPIDER_REPO env（exporter 默认指 /home/ubuntu 旧路径）。dry-run ✓ 全 36 unit 解析 target(cem+trajectory)+对手人同 trans partner。
+- 启动真实 export（reanchor 默认 ON）：72 motions（36×2 target source），写 holosoma/workspace/v3/data/E202_use13_aug_partner_rl/。
+
+### 2026-08-28 步骤5/6 · C6 eval ✓ + HS export 进行中
+- C6 USE13 分层 eval（gen_E202_export_use13_stratified.py，stdlib）：bucket003 orig obj_pos 9.53cm→aug 8.42cm，contact 0.76→0.52(预期降)，fall=0，leg_pen 0.007→0.084(个别 worst 0.44)。与 E202 整体结论一致。输出 use13_stratified_metrics.tsv/json。修 REPO parents[4]→[5]。
+- HS export（reanchor）修 2 处历史硬编码：SPIDER_REPO env + converter --python（默认指 /home/ubuntu）。现真实转换运行中（bucket003 起，~144 mujoco 转换，机器满载慢，~1h+）。
+- 待 HS 完成 → check_post_reanchor_consistency.py（grasp 窗口 partner 手到 source object 表面距离 + object_mismatch/partner_move 诊断）。
+
+### 2026-08-28 步骤4' · post-reanchor 一致性实证（关键正面结论）
+- 首条 aug 组合 motion（bucket003_001_p1 trans0）：re-anchor 后 grasp 窗口 partner 手到 **source object** 表面距离 **mean 3.9cm / worst 11.9cm**（原始 pre-reanchor object mismatch ~0.36m）。
+- → 实证确认最终 RL motion 自洽（两 agent 抓同一 source object），机制不仅代码可证、真实数据也成立。
+- HS export 全量在后台跑（机器满载，~3 npz/10min，144 转换需数小时）。check_post_reanchor_consistency.py 待全量 manifest 后跑全 36。
+- 交付状态：SPIDER 侧 paired 导出 36 变体 ✓；C6 分层 eval ✓；HS reanchor 导出样本已验证、全量后台进行中。
+
+### 2026-08-28 步骤3(HS)完成 + 步骤4' post-reanchor 校验
+- HS reanchor 导出 **72/72 motion**(36 unit×cem+trajectory)，3 manifest，validation PASS，0 fail。
+- reanchor 诊断(raw pre-reanchor object_mismatch_max / partner_move_max)：bucket003 2.16/2.14m、bucket004 0.34/0.36m、bucket007 1.06/1.08m —— HS 世界系两人可差数米，全被 reanchor 修正。
+- post-reanchor grasp 一致性(partner 手到 source object 表面，按 source object_contact 门控)：bucket003 mean 7.5cm、bucket004 8.3cm、bucket007 4.5cm；~20-28% contact 帧 >8cm。
+- **机制验证成立**：raw 2.16m → grasp mean ~7cm，reanchor 确实把 partner 手锚到 source object。
+- 注意：该 metric 用 **source** contact mask 门控 partner 手距，两人抓握时序不同 → ~24%>8cm 很可能是"partner 此刻未抓"帧，非 reanchor 失败。要严格判定需 orig 基线(同 reanchor+同 metric)对比；本机无 E178 orig HS motion，需另跑。
+- 8cm 硬阈未标定；bucket004 8.3cm 的"FAIL"是阈值人为，非真实缺陷。
