@@ -338,7 +338,7 @@
     </body>
     <body name="object" pos="0.155 -0.124 0.310">
       <freejoint name="object_joint" />
-      <inertial pos="0 0 0" mass="5.000" diaginertia="0.355804 0.229589 0.36699" />
+      <inertial pos="0 0 0" mass="5.000" diaginertia="0.35580359 0.22958879 0.36699043" />
       <geom name="object_visual" type="mesh" mesh="chair021" material="chair021_material" group="2" contype="0" conaffinity="0" />
       <geom name="object_collision" type="box" pos="-0.164853 0.274756 0.054951" size="0.096714 0.096714 0.206616" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
       <geom name="object_collision_coarse_001" type="box" pos="0.054951 0.054951 0.054951" size="0.206616 0.096714 0.096714" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />

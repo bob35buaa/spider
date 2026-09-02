@@ -268,6 +268,27 @@ def read_base_object_pos(base_text: str) -> str:
     return pos_match.group(1)
 
 
+# E206 fix: the base scene declares its object material as `box023_material`
+# (matching its object mesh), not `box_material`.  The old pattern therefore
+# matched nothing and `re.sub` silently returned the text unchanged, leaving the
+# base scene's `box023_material` in <asset> while the generated `object_visual`
+# geom referenced `<object_key>_material` -> "material not found" at MuJoCo load.
+# Only newly BUILT non-box templates hit it, which is why it lay dormant.
+BASE_OBJECT_MATERIAL_RE = re.compile(r'    <material name="box(?:023)?_material" rgba="[^"]+" />')
+
+
+def substitute_object_material(scene: str, object_key: str) -> str:
+    """Point the object material at `<object_key>_material`; never silently no-op."""
+    material = f'    <material name="{object_key}_material" rgba="0.40 0.50 0.60 1" />'
+    scene, count = BASE_OBJECT_MATERIAL_RE.subn(material, scene, count=1)
+    if count != 1:
+        raise ValueError(
+            "base scene object material line not found; expected "
+            'a `<material name="box_material"|"box023_material" ...>` line to replace'
+        )
+    return scene
+
+
 def build_box_scene_xml(
     base_text: str,
     object_key: str,
@@ -277,9 +298,8 @@ def build_box_scene_xml(
     robot_meshdir_attr: str | None = None,
 ) -> str:
     mesh_file = f'    <mesh name="{object_key}" file="{mesh_file_attr}" scale="1 1 1" />'
-    material = f'    <material name="{object_key}_material" rgba="0.40 0.50 0.60 1" />'
     scene = re.sub(r'    <mesh name="box023" file="[^"]+" scale="[^"]+" />', mesh_file, base_text, count=1)
-    scene = re.sub(r'    <material name="box_material" rgba="[^"]+" />', material, scene, count=1)
+    scene = substitute_object_material(scene, object_key)
     if robot_meshdir_attr is not None:
         scene = re.sub(r'meshdir="[^"]+"', f'meshdir="{robot_meshdir_attr}"', scene, count=1)
     pos = read_base_object_pos(base_text)
@@ -454,9 +474,8 @@ def build_object_proxy_scene_xml(
     robot_meshdir_attr: str | None = None,
 ) -> tuple[str, str]:
     mesh_file = f'    <mesh name="{object_key}" file="{mesh_file_attr}" scale="1 1 1" />'
-    material = f'    <material name="{object_key}_material" rgba="0.40 0.50 0.60 1" />'
     scene = re.sub(r'    <mesh name="box023" file="[^"]+" scale="[^"]+" />', mesh_file, base_text, count=1)
-    scene = re.sub(r'    <material name="box_material" rgba="[^"]+" />', material, scene, count=1)
+    scene = substitute_object_material(scene, object_key)
     if robot_meshdir_attr is not None:
         scene = re.sub(r'meshdir="[^"]+"', f'meshdir="{robot_meshdir_attr}"', scene, count=1)
     pos = read_base_object_pos(base_text)
