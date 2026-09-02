@@ -36,6 +36,7 @@ import trimesh
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import e206_common as C  # noqa: E402
 import lowgeom_proxy_v2 as L  # noqa: E402
+import semantic_proxy as S  # noqa: E402
 
 MESH_COLOR = (170, 170, 178)
 DELETED_COLOR = (120, 120, 120)
@@ -71,21 +72,55 @@ def source_task(object_key: str) -> str:
     return f"{object_key}_person1"
 
 
+_BOX_CACHE: dict[str, Any] | None = None
+
+
+def _cached(object_key: str) -> dict[str, Any] | None:
+    """Boxes frozen by the last audit run — avoids re-deriving them per launch."""
+    global _BOX_CACHE
+    if _BOX_CACHE is None:
+        path = C.S2_PROXY_DIR / "effective_boxes.json"
+        import json as _json
+
+        _BOX_CACHE = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    return _BOX_CACHE.get(object_key)
+
+
 def build_payload(object_key: str, row: dict[str, str], n_max: int) -> dict[str, Any]:
     mesh_path = C.object_mesh_path(object_key)
     mesh = trimesh.load_mesh(mesh_path, process=False)
     if isinstance(mesh, trimesh.Scene):
         mesh = mesh.dump(concatenate=True)
-    # `_boxes_at` is the same voxelise+merge+shrink used by `build_lowgeom_boxes`;
-    # we skip the latter only to avoid recomputing the fidelity/cavity metrics,
-    # which are already frozen in the contract TSV we display.  These are the
-    # PRE-edit boxes — the viewer works in original build-order indices, which is
-    # what `box_edits.json` records.
-    boxes, pitch = L._boxes_at(mesh_path, int(row["target_cells"]), n_max)
+    # Show the proxy that actually ships.  Built PRE-edit so the viewer's box
+    # indices line up with what `box_edits.json` records.
+    hit = _cached(object_key)
+    if hit is not None:
+        # The cache holds PRE-edit boxes in original build order, so the
+        # viewer's indices line up with box_edits.json exactly.
+        boxes = [
+            L.ProxyBox(center=np.asarray(b["center"]), half_size=np.asarray(b["half_size"]))
+            for b in hit["boxes"]
+        ]
+        return {
+            "mesh": mesh,
+            "boxes": boxes,
+            "parts": hit.get("parts") or [f"v{i:02d}" for i in range(len(boxes))],
+            "kind": hit.get("proxy_kind", "voxel"),
+            "row": row,
+            "mesh_path": mesh_path,
+            "from_cache": True,
+        }
+    if object_key in S.SEMANTIC_SPEC:
+        boxes, meta = S.build_semantic_boxes(object_key)
+        kind, parts = "semantic", list(meta.get("parts", []))
+    else:
+        boxes, _pitch = L._boxes_at(mesh_path, int(row["target_cells"]), n_max)
+        kind, parts = "voxel", [f"v{i:02d}" for i in range(len(boxes))]
     return {
         "mesh": mesh,
         "boxes": boxes,
-        "pitch": pitch,
+        "parts": parts,
+        "kind": kind,
         "row": row,
         "mesh_path": mesh_path,
     }
@@ -194,7 +229,8 @@ def main() -> int:
         if removed:
             edits[key] = {
                 "n_max": args.n_max,
-                "target_cells": int(p["row"]["target_cells"]),
+                "proxy_kind": p["kind"],
+                "target_cells": -1 if p["kind"] == "semantic" else int(p["row"]["target_cells"]),
                 "n_boxes_original": len(p["boxes"]),
                 "removed": sorted(removed),
                 "editor": args.reviewer,
@@ -270,9 +306,10 @@ def main() -> int:
             for i, b in enumerate(p["boxes"]):
                 dims = 2.0 * np.asarray(b.half_size)
                 ctr = np.asarray(b.center)
+                part = p["parts"][i] if i < len(p["parts"]) else f"{i:02d}"
                 label = (
-                    f"{i:02d}  {dims[0]:.2f}x{dims[1]:.2f}x{dims[2]:.2f}"
-                    f"  @z={ctr[2]:+.2f}"
+                    f"{i:02d} {part:8s} {dims[0]:.2f}x{dims[1]:.2f}x{dims[2]:.2f}"
+                    f" @y={ctr[1]:+.2f}"
                 )
                 cb = server.gui.add_checkbox(label, i not in removed)
                 cb.on_update(lambda _, idx=i: toggle_box(state["key"], idx))
@@ -288,9 +325,12 @@ def main() -> int:
             "机器人腿无法从中摆过。抬预算对它无效。"
             if r["G6_needs_waiver"] == "true" else ""
         )
+        pl = payloads[key]
         info.content = (
             f"### {key}  ({C.object_category(key)})\n\n"
-            f"| | |\n|---|---|\n"
+            f"**代理类型: `{pl['kind']}`**"
+            + (f"  部件: {', '.join(pl['parts'])}\n\n" if pl["kind"] == "semantic" else "\n\n")
+            + f"| | |\n|---|---|\n"
             f"| box 数 | **{r['object_geom_count']}** (草稿 {r['draft_geom_count']}) |\n"
             f"| target_cells | {r['target_cells']} |\n"
             f"| mesh→proxy p90 | {float(r['mesh_to_proxy_p90_m']):.3f} m |\n"

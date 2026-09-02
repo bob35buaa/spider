@@ -96,8 +96,62 @@ def _merge_at(mesh: trimesh.Trimesh, target_cells: int, n_max: int):
     return raw_boxes, int(left_unmerged), pitch, int(voxels.matrix.sum())
 
 
+VOXEL_CACHE_PATH = C.S2_PROXY_DIR / "voxel_box_cache.json"
+_VOXEL_CACHE: dict[str, Any] | None = None
+
+
+def _voxel_cache() -> dict[str, Any]:
+    """Disk memo for `_boxes_at`.
+
+    `trimesh.voxelized` subdivides the mesh to the voxel size, which for some of
+    these meshes (desk020 at pitch 0.055) takes minutes.  The result is a pure
+    function of (mesh, target_cells, n_max), so memoising it keeps the
+    edit -> re-measure -> review loop interactive.
+    """
+    global _VOXEL_CACHE
+    if _VOXEL_CACHE is None:
+        import json
+
+        _VOXEL_CACHE = (
+            json.loads(VOXEL_CACHE_PATH.read_text(encoding="utf-8"))
+            if VOXEL_CACHE_PATH.exists()
+            else {}
+        )
+    return _VOXEL_CACHE
+
+
 def _boxes_at(mesh_path: Path, target_cells: int, n_max: int) -> tuple[list[ProxyBox], np.ndarray]:
     """Shrunk proxy boxes at one target_cells (shared by scoring and building)."""
+    import json
+
+    key = f"{Path(mesh_path).stem}|tc{target_cells}|n{n_max}"
+    cache = _voxel_cache()
+    hit = cache.get(key)
+    if hit is not None:
+        return (
+            [
+                ProxyBox(
+                    center=np.asarray(b["center"], dtype=np.float64),
+                    half_size=np.asarray(b["half_size"], dtype=np.float64),
+                )
+                for b in hit["boxes"]
+            ],
+            np.asarray(hit["pitch"], dtype=np.float64),
+        )
+    boxes, pitch = _boxes_at_uncached(mesh_path, target_cells, n_max)
+    cache[key] = {
+        "pitch": [float(v) for v in np.atleast_1d(pitch)],
+        "boxes": [
+            {"center": list(map(float, b.center)), "half_size": list(map(float, b.half_size))}
+            for b in boxes
+        ],
+    }
+    VOXEL_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    VOXEL_CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+    return boxes, pitch
+
+
+def _boxes_at_uncached(mesh_path: Path, target_cells: int, n_max: int) -> tuple[list[ProxyBox], np.ndarray]:
     mesh = load_mesh(Path(mesh_path))
     raw_boxes, left_unmerged, pitch, _ = _merge_at(mesh, target_cells, n_max)
     if left_unmerged:
@@ -437,6 +491,7 @@ def apply_box_edits(
     n_max: int,
     target_cells: int,
     edits: dict[str, dict[str, Any]] | None = None,
+    kind: str = "voxel",
 ) -> tuple[list[ProxyBox], dict[str, Any]]:
     """Drop the boxes a reviewer deleted. Refuses to apply a stale edit."""
     edits = load_box_edits() if edits is None else edits
@@ -456,7 +511,9 @@ def apply_box_edits(
     stale: list[str] = []
     if int(record.get("n_max", n_max)) != n_max:
         stale.append(f"n_max {record.get('n_max')} != {n_max}")
-    if int(record.get("target_cells", target_cells)) != target_cells:
+    if str(record.get("proxy_kind", kind)) != kind:
+        stale.append(f"proxy_kind {record.get('proxy_kind')} != {kind}")
+    if kind == "voxel" and int(record.get("target_cells", target_cells)) != target_cells:
         stale.append(f"target_cells {record.get('target_cells')} != {target_cells}")
     if int(record.get("n_boxes_original", len(boxes))) != len(boxes):
         stale.append(f"n_boxes_original {record.get('n_boxes_original')} != {len(boxes)}")

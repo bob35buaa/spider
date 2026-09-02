@@ -23,6 +23,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import e206_common as C  # noqa: E402
 import lowgeom_proxy_v2 as L  # noqa: E402
+import semantic_proxy as S  # noqa: E402
 
 # ---- pre-declared numeric bars (plan236 P2.2) ---------------------------
 BARS = {
@@ -60,9 +61,7 @@ def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[
     mesh_path = C.object_mesh_path(object_key)
     row: dict[str, Any] = {"object_key": object_key, "n_max": n_max}
     try:
-        boxes, meta = L.build_lowgeom_boxes(
-            mesh_path, object_key, n_max=n_max, target_cells=frozen_tc
-        )
+        boxes, meta = S.build_effective_proxy(object_key, n_max, frozen_tc)
     except Exception as exc:  # noqa: BLE001 - an infeasible object is a datum
         row.update({"build_ok": False, "error": f"{type(exc).__name__}: {exc}"})
         return row
@@ -76,6 +75,8 @@ def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[
         str(s["target_cells"]) for s in sweep if s.get("feasible")
     )
     row["selection_rule"] = meta.get("selection_rule", "")
+    row["proxy_kind"] = meta.get("proxy_kind", "")
+    row["parts"] = ",".join(meta.get("parts", []))
     row["edited"] = str(bool(meta.get("edited"))).lower()
     row["removed_indices"] = ",".join(str(i) for i in meta.get("removed_indices", []))
     row["n_boxes_before_edit"] = str(meta.get("n_boxes_before_edit", ""))
@@ -91,8 +92,17 @@ def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[
         "G3_mesh_to_proxy_p90": row["mesh_to_proxy_p90_m"] <= BARS["G3_mesh_to_proxy_p90_max"],
         "G4_mesh_to_proxy_max": row["mesh_to_proxy_max_m"] <= BARS["G4_mesh_to_proxy_max_max"],
         "G5_proxy_to_mesh_p90": row["proxy_to_mesh_p90_m"] <= BARS["G5_proxy_to_mesh_p90_max"],
-        "G7_overfill_pitch": row["interior_overfill_frac_pitch"] <= BARS["G7_overfill_pitch_max"],
     }
+    # G7 asks "is any interior point further than ONE VOXEL from the mesh" — a
+    # sanity check on the voxel merge, meaningless for a semantic part proxy,
+    # which is a deliberately part-spanning AABB with no voxel notion at all.
+    # Applying it there is a category error, not a finding.
+    if row.get("proxy_kind") == "semantic":
+        row["G7_overfill_pitch"] = "n/a"
+    else:
+        checks["G7_overfill_pitch"] = (
+            row["interior_overfill_frac_pitch"] <= BARS["G7_overfill_pitch_max"]
+        )
     row.update({k: str(v).lower() for k, v in checks.items()})
     row["G6_overfill_5cm"] = row["interior_overfill_frac_5cm"]
     row["G6_needs_waiver"] = str(
@@ -101,6 +111,8 @@ def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[
     row["geom_reduction"] = (
         f"{row['draft_geom_count']}->{n}" if row["draft_geom_count"] else f"?->{n}"
     )
+    if row.get("proxy_kind") == "semantic":
+        row["target_cells"] = "n/a"
     row["hard_gates_pass"] = str(all(checks.values())).lower()
     row["failed_gates"] = ",".join(k for k, v in checks.items() if not v)
     row["_sweep"] = {"feasibility": sweep, "scored": scored}
@@ -167,8 +179,46 @@ def main() -> int:
             "hard_gates_pass", "failed_gates", "feasible_target_cells",
             "bar_passing_target_cells", "selection_rule",
             "edited", "removed_indices", "n_boxes_before_edit", "editor",
+            "proxy_kind", "parts",
         ]
         C.write_tsv(args.out_dir / f"lowgeom_contract_n{n_max}.tsv", rows, fields)
+
+    # Cache the actual box geometry so the 3D viewer opens instantly instead of
+    # re-running the 80k-point semantic decomposition for every object.
+    # IMPORTANT: cache the PRE-edit boxes.  Reviewer deletions are recorded as
+    # original build-order indices, so a viewer that renders post-edit boxes
+    # would map "delete index 3" onto the wrong box.
+    cache: dict[str, Any] = {}
+    edits_now = L.load_box_edits()
+    for k in keys:
+        try:
+            if k in S.SEMANTIC_SPEC:
+                boxes, meta = S.build_semantic_boxes(k)
+                kind = "semantic"
+                parts = list(meta.get("parts", []))
+                tc = -1
+            else:
+                tc = int(frozen.get(args.n_max, {}).get(k) or 0)
+                if tc <= 0:
+                    continue
+                boxes, _pitch = L._boxes_at(C.object_mesh_path(k), tc, args.n_max)
+                kind = "voxel"
+                parts = [f"v{i:02d}" for i in range(len(boxes))]
+        except Exception:  # noqa: BLE001
+            continue
+        cache[k] = {
+            "proxy_kind": kind,
+            "parts": parts,
+            "target_cells": tc,
+            "removed": sorted(int(i) for i in edits_now.get(k, {}).get("removed", [])),
+            "boxes": [
+                {"center": list(map(float, b.center)), "half_size": list(map(float, b.half_size))}
+                for b in boxes
+            ],
+        }
+    (args.out_dir / "effective_boxes.json").write_text(
+        json.dumps(cache, indent=1), encoding="utf-8"
+    )
 
     primary = all_rows[args.n_max]
     ok = [r for r in primary if r.get("hard_gates_pass") == "true"]
@@ -184,22 +234,21 @@ def main() -> int:
         "",
         f"## 契约表 (N_MAX={args.n_max})",
         "",
-        "| 物体 | tc | boxes | 草稿→现在 | mesh→proxy p90 | max | proxy→mesh p90 | 过填>5cm | 过填>pitch | 硬门 |",
-        "|---|---:|---:|---|---:|---:|---:|---:|---:|---|",
+        "| 物体 | 类型 | tc | boxes | 草稿→现在 | mesh→proxy p90 | max | proxy→mesh p90 | 过填>5cm | 过填>pitch | 硬门 |",
+        "|---|---|---:|---:|---|---:|---:|---:|---:|---:|---|",
     ]
     for r in primary:
         if not r.get("build_ok"):
-            md.append(f"| {r['object_key']} | — | — | — | — | — | — | — | — | ❌ {r['error'][:60]} |")
+            md.append(f"| {r['object_key']} | — | — | — | — | — | — | — | — | — | ❌ {r['error'][:60]} |")
             continue
         flag = "✅" if r["hard_gates_pass"] == "true" else f"❌ {r['failed_gates']}"
         warn = " ⚠️" if r["G6_needs_waiver"] == "true" else ""
         edit_tag = f" ✎-{len(r['removed_indices'].split(','))}" if r.get("edited") == "true" else ""
         md.append(
-            f"| {r['object_key']}{edit_tag} | {r['target_cells']} | {r['object_geom_count']} | "
+            f"| {r['object_key']}{edit_tag} | {r.get('proxy_kind','')[:4]} | {r['target_cells']} | {r['object_geom_count']} | "
             f"{r['geom_reduction']} | {r['mesh_to_proxy_p90_m']:.3f} | "
             f"{r['mesh_to_proxy_max_m']:.3f} | {r['proxy_to_mesh_p90_m']:.3f} | "
-            f"{r['interior_overfill_frac_5cm']:.2f}{warn} | "
-            f"{r['interior_overfill_frac_pitch']:.4f} | {flag} |"
+            f"{r['interior_overfill_frac_5cm']:.2f}{warn} | {flag} | {r.get('parts','')} |"
         )
 
     if args.compare_n_max:
@@ -235,7 +284,9 @@ def main() -> int:
         f"- G6 `过填>5cm` — **报告+豁免**，>{BARS['G6_overfill_warn']:.0%} 告警。"
         "粗预算下椅子填掉座下空间是有物理后果的近似（腿无法从椅下摆过），"
         "必须显式声明并复审，不能静默通过",
-        f"- G7 `过填>pitch ≤ {BARS['G7_overfill_pitch_max']}` — 体素级过填几乎为零",
+        f"- G7 `过填>pitch ≤ {BARS['G7_overfill_pitch_max']}` — **仅对体素代理适用**"
+        "（检查体素合并逻辑：box 来自表面体素，内部不该有点离 mesh 超过一个体素）。"
+        "语义代理是按部件切的 AABB，没有体素概念，故标 `n/a`。",
         "- G2（全 box）在场景装配后由 `union_geoms_are_boxes()` 断言（P4/P7）",
         "- G8（接触目标→代理表面 p90 ≤ 0.08）需轨迹，P6 执行",
         f"- G9（相对草稿 p90 退化 ≤ {BARS['G9_p90_regression_max']}）需草稿代理的同尺度量，P4 执行",

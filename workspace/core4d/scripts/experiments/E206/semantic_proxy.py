@@ -79,13 +79,11 @@ def footprint_profile(pts: np.ndarray, nbins: int = 40, grid: int = 20) -> tuple
         sel = pts[(pts[:, UP] >= edges[i]) & (pts[:, UP] < edges[i + 1])]
         if len(sel) < 20:
             continue
-        cells = set()
-        for ax, g in zip(HORIZ, (grid, grid)):
-            pass
         gx = np.clip(((sel[:, 0] - lo[0]) / max(hi[0] - lo[0], 1e-9) * grid).astype(int), 0, grid - 1)
         gz = np.clip(((sel[:, 2] - lo[2]) / max(hi[2] - lo[2], 1e-9) * grid).astype(int), 0, grid - 1)
-        cells.update(zip(gx.tolist(), gz.tolist()))
-        area[i] = len(cells) / (grid * grid)
+        occupied = np.zeros(grid * grid, dtype=bool)
+        occupied[gx * grid + gz] = True
+        area[i] = occupied.sum() / (grid * grid)
     return area, edges
 
 
@@ -175,15 +173,18 @@ def back_axis_and_side(above: np.ndarray, pts: np.ndarray) -> tuple[int, int]:
 
 def _edited_voxel_boxes_below(object_key: str, y_split: float) -> list[ProxyBox]:
     """The reviewer's surviving voxel boxes that sit below the plate."""
-    contract = C.S2_PROXY_DIR / f"lowgeom_contract_n{C.N_MAX_TARGET}.tsv"
-    row = next(
-        (r for r in C.read_tsv(contract) if r["object_key"] == object_key), None
-    )
-    if row is None:
-        raise SystemExit(f"{object_key}: no contract row for keep_edited_below")
-    tc = int(row["target_cells"])
-    boxes, _pitch = L._boxes_at(C.object_mesh_path(object_key), tc, C.N_MAX_TARGET)
+    # target_cells must come from the EDIT RECORD, not the contract: once this
+    # object switched to a semantic proxy the contract reports target_cells=n/a,
+    # and feeding that back into the voxeliser yields a negative pitch (hang).
+    # The edit record stores the exact voxel build its indices refer to.
     edits = L.load_box_edits().get(object_key, {})
+    tc = int(edits.get("target_cells", 0))
+    if tc <= 0:
+        raise SystemExit(
+            f"{object_key}: keep_edited_below needs a box_edits.json record with "
+            "target_cells (re-do the 3D review for this object)"
+        )
+    boxes, _pitch = L._boxes_at(C.object_mesh_path(object_key), tc, C.N_MAX_TARGET)
     removed = {int(i) for i in edits.get("removed", [])}
     if edits and int(edits.get("n_boxes_original", len(boxes))) != len(boxes):
         raise SystemExit(
@@ -346,3 +347,37 @@ if __name__ == "__main__":
             f"m2p_p90={m['mesh_to_proxy_p90_m']:.3f} p2m_p90={m['proxy_to_mesh_p90_m']:.3f} "
             f"of5={m['interior_overfill_frac_5cm']:.2f}{flag}"
         )
+
+
+# --------------------------------------------------------------------------
+# Dispatcher — the single entry point every downstream stage must use
+# --------------------------------------------------------------------------
+# Frozen 2026-09-03 after the 3D review.  Objects listed in SEMANTIC_SPEC get a
+# hand-specified part decomposition; the rest keep the auto voxel proxy plus
+# whatever boxes the reviewer deleted in the 3D viewer.
+def build_effective_proxy(
+    object_key: str, n_max: int = C.N_MAX_TARGET, target_cells: int | None = None
+) -> tuple[list[ProxyBox], dict[str, Any]]:
+    """The proxy that actually ships for this object."""
+    if object_key in SEMANTIC_SPEC:
+        boxes, meta = build_semantic_boxes(object_key)
+        all_parts = list(meta.get("parts", []))
+        boxes, edit_info = L.apply_box_edits(
+            boxes, object_key, n_max=n_max, target_cells=-1, kind="semantic"
+        )
+        if edit_info.get("edited"):
+            drop = set(edit_info["removed_indices"])
+            meta["parts"] = [p for i, p in enumerate(all_parts) if i not in drop]
+        meta.update(edit_info)
+        meta["proxy_kind"] = "semantic"
+        meta["n_max"] = n_max
+        meta.setdefault("target_cells", -1)
+        meta.update(measure(object_key, boxes))
+        meta["collision_policy"] = meta["policy"]
+        return boxes, meta
+    boxes, meta = L.build_lowgeom_boxes(
+        C.object_mesh_path(object_key), object_key, n_max=n_max, target_cells=target_cells
+    )
+    meta["proxy_kind"] = "voxel_edited" if meta.get("edited") else "voxel"
+    meta["parts"] = []
+    return boxes, meta

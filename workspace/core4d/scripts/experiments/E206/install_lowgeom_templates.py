@@ -32,6 +32,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import e206_common as C  # noqa: E402
 import lowgeom_proxy_v2 as L  # noqa: E402
+import semantic_proxy as S  # noqa: E402
 
 from build_nonbox_multigeom_production import (  # noqa: E402  E175 authority
     object_collision_elements,
@@ -93,9 +94,7 @@ def install_one(
     before_sig = stripped_signature(root)
     before_names = [str(g.get("name")) for g in object_collision_elements(body)]
 
-    boxes, meta = L.build_lowgeom_boxes(
-        C.object_mesh_path(object_key), object_key, n_max=n_max, target_cells=target_cells
-    )
+    boxes, meta = S.build_effective_proxy(object_key, n_max, target_cells)
     proxy_xml, names = L.proxy_geom_xml(boxes)
     replace_bucket_proxy(body, proxy_xml)
 
@@ -114,6 +113,7 @@ def install_one(
         "geoms_after": len(names),
         "signature_stable": True,
         "applied": False,
+        "proxy_kind": meta.get("proxy_kind", ""),
         "edited": str(bool(meta.get("edited"))).lower(),
         "removed_indices": ",".join(str(i) for i in meta.get("removed_indices", [])),
     }
@@ -185,7 +185,7 @@ def main() -> int:
     assets: list[dict[str, Any]] = []
     for object_key, row in sorted(rows.items()):
         assets.append(ensure_asset_mesh(object_key, apply=args.apply))
-        target_cells = int(row["target_cells"])
+        target_cells = int(row["target_cells"]) if int(row["target_cells"]) > 0 else None
         for person in ("person1", "person2"):
             scene = C.PROCESSED_ROOT / f"{object_key}_{person}" / "scene.xml"
             if not scene.exists():
@@ -219,7 +219,7 @@ def main() -> int:
         args.out_dir / "lowgeom_install.tsv",
         results,
         ["scene", "object_key", "status", "target_cells", "geoms_before", "geoms_after",
-         "signature_stable", "all_box", "nq", "nv", "nu", "edited", "removed_indices",
+         "signature_stable", "all_box", "nq", "nv", "nu", "proxy_kind", "edited", "removed_indices",
          "applied", "error"],
     )
 
