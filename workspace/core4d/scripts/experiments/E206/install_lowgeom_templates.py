@@ -42,6 +42,35 @@ from build_nonbox_multigeom_production import (  # noqa: E402  E175 authority
 EXPECTED_NQ, EXPECTED_NV, EXPECTED_NU = 43, 41, 29
 
 
+ASSET_ROOT = C.REPO / "example_datasets/processed/core4d/assets/objects"
+
+
+def ensure_asset_mesh(object_key: str, *, apply: bool) -> dict[str, Any]:
+    """Materialise `assets/objects/<key>/<key>_m.obj` from `object_models/`.
+
+    `build_or_audit_templates.py` does this (`shutil.copy2(raw_mesh, asset_mesh)`)
+    only when it CREATES a template.  Four in-scope objects (desk020, desk023,
+    chair005, chair021) already have templates from an earlier era but their
+    asset mesh was never materialised, so their `scene.xml` does not even
+    compile.  Same copy, same source, done here so the installer can proceed.
+
+    Verified equivalent: for the three objects that do have assets, the asset
+    and `object_models` meshes have identical vertex/face counts, extents and
+    centroid (desk021's bytes differ only in file formatting).
+    """
+    dest = ASSET_ROOT / object_key / f"{object_key}_m.obj"
+    src = C.object_mesh_path(object_key)
+    if dest.exists():
+        return {"object_key": object_key, "asset_action": "present"}
+    if not src.exists():
+        return {"object_key": object_key, "asset_action": "source_missing", "asset_src": str(src)}
+    if apply:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        return {"object_key": object_key, "asset_action": "materialised", "asset_src": str(src)}
+    return {"object_key": object_key, "asset_action": "would_materialise", "asset_src": str(src)}
+
+
 def find_object_body(root: ET.Element) -> ET.Element:
     for body in root.iter("body"):
         if body.get("name") == "object":
@@ -151,7 +180,9 @@ def main() -> int:
 
     results: list[dict[str, Any]] = []
     errors: list[str] = []
+    assets: list[dict[str, Any]] = []
     for object_key, row in sorted(rows.items()):
+        assets.append(ensure_asset_mesh(object_key, apply=args.apply))
         target_cells = int(row["target_cells"])
         for person in ("person1", "person2"):
             scene = C.PROCESSED_ROOT / f"{object_key}_{person}" / "scene.xml"
@@ -192,8 +223,12 @@ def main() -> int:
     by_status: dict[str, int] = {}
     for r in results:
         by_status[r["status"]] = by_status.get(r["status"], 0) + 1
+    C.write_tsv(args.out_dir / "lowgeom_assets.tsv", assets,
+                ["object_key", "asset_action", "asset_src"])
     summary = {
         "contract": str(contract),
+        "assets": {a["asset_action"]: sum(1 for x in assets if x["asset_action"] == a["asset_action"])
+                   for a in assets},
         "n_max": args.n_max,
         "apply": args.apply,
         "by_status": by_status,
