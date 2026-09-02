@@ -1,0 +1,37 @@
+{
+  "asset_path": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/assets/objects/desk023/desk023_m.obj",
+  "base_scene": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "build_mode": "e144_apply_draft_proxy_review",
+  "clean_robot_inertial_source": "/home/ubuntu/Workspace/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
+  "collision_policy": "desk_surface_voxel_multibox_proxy_draft",
+  "created_at": "2026-06-05T17:06:59+08:00",
+  "data_construction_v3_built": true,
+  "diaginertia": [
+    0.36152050821881315,
+    0.38256944422255373,
+    0.1985666431162927
+  ],
+  "extents_m": [
+    0.5133601999999999,
+    0.46154225000000004,
+    0.80909083
+  ],
+  "half_extents_m": [
+    0.25668009999999997,
+    0.23077112500000002,
+    0.404545415
+  ],
+  "inertia_formula": "box: Ixx=m/12*(y^2+z^2), Iyy=m/12*(x^2+z^2), Izz=m/12*(x^2+y^2)",
+  "manual_review_required": true,
+  "mass_kg": 5.0,
+  "mesh_sha256": "34f8e1d866a51976ce6ffd13f4873244ef1f85e141783d12bc68ed6cbe590bca",
+  "object_category": "desk",
+  "object_key": "desk023",
+  "object_mass_policy": "assumed_uniform_5kg_v3_no_real_mass_source",
+  "person": "person1",
+  "proxy_template": true,
+  "raw_object_mesh": "/mnt/a0ccc676-9496-49f8-a861-f8a1797dec52/mocap_data/CORE4D/CORE4D_Real/object_models/desk/desk023_m.obj",
+  "schema_version": "core4d_data_construction_v3.0",
+  "source_template_pose_policy": "neutral placeholder from clean base; target scene must patch object pose from trimmed qpos first frame",
+  "task": "desk023_person1"
+}
