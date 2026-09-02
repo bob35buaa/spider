@@ -51,13 +51,17 @@ from build_or_audit_templates import (  # noqa: E402  dcv3 authority
 )
 
 __all__ = [
+    "BOX_EDITS_PATH",
     "ProxyBox",
+    "apply_box_edits",
     "build_lowgeom_boxes",
     "cavity_metrics",
     "fidelity_metrics",
+    "load_box_edits",
     "load_mesh",
     "point_to_proxy_surface_distance",
     "proxy_xml",
+    "save_box_edits",
     "sweep_target_cells",
     "union_geoms_are_boxes",
 ]
@@ -297,11 +301,17 @@ def build_lowgeom_boxes(
     target_cells: int | None = None,
     sweep_lo: int = SWEEP_LO,
     sweep_hi: int = SWEEP_HI,
+    apply_edits: bool = True,
 ) -> tuple[list[ProxyBox], dict[str, Any]]:
     """Deterministic <= n_max axis-aligned box proxy for one object mesh.
 
-    If `target_cells` is None the sweep picks it (largest feasible). Passing an
+    If `target_cells` is None the sweep picks it by measured fidelity. Passing an
     explicit value reproduces a frozen configuration exactly.
+
+    When `apply_edits` is set (default) any reviewer box deletions recorded in
+    `box_edits.json` are applied AND all fidelity/cavity metrics are recomputed
+    on the edited set — the reported numbers always describe the proxy that will
+    actually be installed, never the pre-edit one.
     """
     mesh_path = Path(mesh_path)
     mesh = load_mesh(mesh_path)
@@ -339,6 +349,12 @@ def build_lowgeom_boxes(
     if not 1 <= len(boxes) <= n_max:
         raise AssertionError(f"{object_key}: invalid box count {len(boxes)} (n_max={n_max})")
 
+    edit_info: dict[str, Any] = {"edited": False, "removed_indices": []}
+    if apply_edits:
+        boxes, edit_info = apply_box_edits(
+            boxes, object_key, n_max=n_max, target_cells=int(target_cells)
+        )
+
     meta: dict[str, Any] = {
         "object_key": object_key,
         "object_category": C.object_category(object_key),
@@ -356,6 +372,9 @@ def build_lowgeom_boxes(
         "scored": scored,
         "selection_rule": "min_overfill_among_bar_passing" if scored else "explicit",
     }
+    meta.update(edit_info)
+    # Recomputed on the POST-edit box set, so the contract always describes what
+    # actually gets installed.
     meta.update(fidelity_metrics(mesh_path, boxes))
     meta.update(cavity_metrics(mesh_path, boxes, pitch))
     return boxes, meta
@@ -376,6 +395,94 @@ def proxy_geom_xml(boxes: list[ProxyBox], *, rgba: str = E206_RGBA) -> tuple[str
         names.append(name)
         geoms.append(geom_box_xml(name, box.center, box.half_size, rgba=rgba))
     return "\n".join(geoms), names
+
+
+# --------------------------------------------------------------------------
+# Manual box edits (human deletions from the 3D reviewer)
+# --------------------------------------------------------------------------
+# The auto proxy is a starting point, not an oracle.  A reviewer looking at the
+# overlay can see things the metrics cannot — e.g. a single block bridging the
+# under-seat gap of chair022, where no budget setting helps.  Deleting that one
+# box is the cheapest correct fix, and is exactly the "hand-authored shell"
+# rung of plan236's fallback ladder, done surgically instead of wholesale.
+#
+# Edits are stored as ORIGINAL build-order indices and are only valid for the
+# exact (n_max, target_cells, n_boxes) they were made against; `load_box_edits`
+# refuses stale records rather than silently deleting the wrong box.
+BOX_EDITS_PATH = C.S2_PROXY_DIR / "box_edits.json"
+
+
+def load_box_edits(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    path = Path(path or BOX_EDITS_PATH)
+    if not path.exists():
+        return {}
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_box_edits(edits: dict[str, dict[str, Any]], path: Path | None = None) -> Path:
+    import json
+
+    path = Path(path or BOX_EDITS_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(edits, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def apply_box_edits(
+    boxes: list[ProxyBox],
+    object_key: str,
+    *,
+    n_max: int,
+    target_cells: int,
+    edits: dict[str, dict[str, Any]] | None = None,
+) -> tuple[list[ProxyBox], dict[str, Any]]:
+    """Drop the boxes a reviewer deleted. Refuses to apply a stale edit."""
+    edits = load_box_edits() if edits is None else edits
+    record = edits.get(object_key)
+    info: dict[str, Any] = {
+        "edited": False,
+        "removed_indices": [],
+        "n_boxes_before_edit": len(boxes),
+    }
+    if not record:
+        return boxes, info
+
+    removed = sorted({int(i) for i in record.get("removed", [])})
+    if not removed:
+        return boxes, info
+
+    stale: list[str] = []
+    if int(record.get("n_max", n_max)) != n_max:
+        stale.append(f"n_max {record.get('n_max')} != {n_max}")
+    if int(record.get("target_cells", target_cells)) != target_cells:
+        stale.append(f"target_cells {record.get('target_cells')} != {target_cells}")
+    if int(record.get("n_boxes_original", len(boxes))) != len(boxes):
+        stale.append(f"n_boxes_original {record.get('n_boxes_original')} != {len(boxes)}")
+    if stale:
+        raise ValueError(
+            f"{object_key}: box edit is stale ({'; '.join(stale)}). The stored indices "
+            "refer to a different build and would delete the wrong boxes. Re-do the "
+            "3D review for this object."
+        )
+    if any(i < 0 or i >= len(boxes) for i in removed):
+        raise ValueError(f"{object_key}: removed index out of range: {removed}")
+    kept = [b for i, b in enumerate(boxes) if i not in set(removed)]
+    if not kept:
+        raise ValueError(f"{object_key}: edit removes every box")
+
+    info.update(
+        {
+            "edited": True,
+            "removed_indices": removed,
+            "n_boxes_after_edit": len(kept),
+            "editor": record.get("editor", ""),
+            "edited_at": record.get("edited_at", ""),
+            "edit_notes": record.get("notes", ""),
+        }
+    )
+    return kept, info
 
 
 # --------------------------------------------------------------------------

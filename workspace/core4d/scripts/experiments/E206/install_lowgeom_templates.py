@@ -114,6 +114,8 @@ def install_one(
         "geoms_after": len(names),
         "signature_stable": True,
         "applied": False,
+        "edited": str(bool(meta.get("edited"))).lower(),
+        "removed_indices": ",".join(str(i) for i in meta.get("removed_indices", [])),
     }
 
     # Validate by compiling a temp copy before touching the real file.
@@ -217,7 +219,8 @@ def main() -> int:
         args.out_dir / "lowgeom_install.tsv",
         results,
         ["scene", "object_key", "status", "target_cells", "geoms_before", "geoms_after",
-         "signature_stable", "all_box", "nq", "nv", "nu", "applied", "error"],
+         "signature_stable", "all_box", "nq", "nv", "nu", "edited", "removed_indices",
+         "applied", "error"],
     )
 
     by_status: dict[str, int] = {}

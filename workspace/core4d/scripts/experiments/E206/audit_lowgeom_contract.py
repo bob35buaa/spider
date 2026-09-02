@@ -47,11 +47,22 @@ def draft_geom_stats(object_key: str) -> dict[str, Any]:
     return {"draft_scene": "", "draft_geom_count": 0}
 
 
-def evaluate(object_key: str, n_max: int) -> dict[str, Any]:
+def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[str, Any]:
+    """Score one object's proxy.
+
+    `frozen_tc` skips the target_cells sweep and re-measures only the selected
+    configuration.  The sweep costs ~10 fidelity+cavity evaluations per object
+    per budget (~35 min for the full 9x2 matrix), which is fine for the initial
+    freeze but far too slow for the edit->re-measure loop the 3D reviewer needs.
+    Once target_cells is frozen, re-scoring after a box deletion only requires
+    the one configuration.
+    """
     mesh_path = C.object_mesh_path(object_key)
     row: dict[str, Any] = {"object_key": object_key, "n_max": n_max}
     try:
-        boxes, meta = L.build_lowgeom_boxes(mesh_path, object_key, n_max=n_max)
+        boxes, meta = L.build_lowgeom_boxes(
+            mesh_path, object_key, n_max=n_max, target_cells=frozen_tc
+        )
     except Exception as exc:  # noqa: BLE001 - an infeasible object is a datum
         row.update({"build_ok": False, "error": f"{type(exc).__name__}: {exc}"})
         return row
@@ -65,6 +76,10 @@ def evaluate(object_key: str, n_max: int) -> dict[str, Any]:
         str(s["target_cells"]) for s in sweep if s.get("feasible")
     )
     row["selection_rule"] = meta.get("selection_rule", "")
+    row["edited"] = str(bool(meta.get("edited"))).lower()
+    row["removed_indices"] = ",".join(str(i) for i in meta.get("removed_indices", []))
+    row["n_boxes_before_edit"] = str(meta.get("n_boxes_before_edit", ""))
+    row["editor"] = meta.get("editor", "")
     row["bar_passing_target_cells"] = ",".join(
         str(s["target_cells"]) for s in scored if s.get("bars_pass")
     )
@@ -100,6 +115,11 @@ def main() -> int:
     ap.add_argument("--object-keys", default="",
                     help="comma-separated; default = the S1-landed keys")
     ap.add_argument("--out-dir", type=Path, default=C.S2_PROXY_DIR)
+    ap.add_argument(
+        "--frozen-target-cells", action="store_true",
+        help="reuse target_cells from the existing contract instead of re-sweeping "
+             "(fast path for the edit->re-measure loop)",
+    )
     args = ap.parse_args()
 
     if args.object_keys:
@@ -110,14 +130,29 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     budgets = [args.n_max] + ([args.compare_n_max] if args.compare_n_max else [])
 
+    frozen: dict[int, dict[str, int]] = {}
+    if args.frozen_target_cells:
+        for n_max in budgets:
+            prev = args.out_dir / f"lowgeom_contract_n{n_max}.tsv"
+            if not prev.exists():
+                raise SystemExit(
+                    f"--frozen-target-cells needs an existing {prev}; run a full audit once first"
+                )
+            frozen[n_max] = {
+                r["object_key"]: int(r["target_cells"])
+                for r in C.read_tsv(prev)
+                if r.get("target_cells")
+            }
+
     all_rows: dict[int, list[dict[str, Any]]] = {}
     for n_max in budgets:
-        rows = [evaluate(k, n_max) for k in keys]
+        rows = [evaluate(k, n_max, frozen.get(n_max, {}).get(k)) for k in keys]
         all_rows[n_max] = rows
         sweeps = {r["object_key"]: r.pop("_sweep", []) for r in rows}
-        (args.out_dir / f"lowgeom_sweep_n{n_max}.json").write_text(
-            json.dumps(sweeps, indent=2), encoding="utf-8"
-        )
+        if not args.frozen_target_cells:
+            (args.out_dir / f"lowgeom_sweep_n{n_max}.json").write_text(
+                json.dumps(sweeps, indent=2), encoding="utf-8"
+            )
         fields = [
             "object_key", "object_category", "n_max", "build_ok", "error",
             "target_cells", "object_geom_count", "draft_geom_count", "geom_reduction",
@@ -131,6 +166,7 @@ def main() -> int:
             "G6_overfill_5cm", "G6_needs_waiver",
             "hard_gates_pass", "failed_gates", "feasible_target_cells",
             "bar_passing_target_cells", "selection_rule",
+            "edited", "removed_indices", "n_boxes_before_edit", "editor",
         ]
         C.write_tsv(args.out_dir / f"lowgeom_contract_n{n_max}.tsv", rows, fields)
 
@@ -157,8 +193,9 @@ def main() -> int:
             continue
         flag = "✅" if r["hard_gates_pass"] == "true" else f"❌ {r['failed_gates']}"
         warn = " ⚠️" if r["G6_needs_waiver"] == "true" else ""
+        edit_tag = f" ✎-{len(r['removed_indices'].split(','))}" if r.get("edited") == "true" else ""
         md.append(
-            f"| {r['object_key']} | {r['target_cells']} | {r['object_geom_count']} | "
+            f"| {r['object_key']}{edit_tag} | {r['target_cells']} | {r['object_geom_count']} | "
             f"{r['geom_reduction']} | {r['mesh_to_proxy_p90_m']:.3f} | "
             f"{r['mesh_to_proxy_max_m']:.3f} | {r['proxy_to_mesh_p90_m']:.3f} | "
             f"{r['interior_overfill_frac_5cm']:.2f}{warn} | "

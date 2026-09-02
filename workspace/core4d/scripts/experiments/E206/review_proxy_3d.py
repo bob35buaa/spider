@@ -38,6 +38,7 @@ import e206_common as C  # noqa: E402
 import lowgeom_proxy_v2 as L  # noqa: E402
 
 MESH_COLOR = (170, 170, 178)
+DELETED_COLOR = (120, 120, 120)
 BOX_COLORS = [
     (233, 78, 60), (52, 168, 226), (95, 200, 120), (245, 176, 55),
     (176, 116, 222), (238, 130, 178), (86, 205, 199), (200, 200, 90),
@@ -47,7 +48,7 @@ REVIEW_FIELDS = [
     "recommended_action", "proxy_variant", "proxy_policy", "mesh_path",
     "scene_xml", "object_geom_count", "target_cells",
     "mesh_to_proxy_p90_m", "proxy_to_mesh_p90_m", "interior_overfill_frac_5cm",
-    "contract_status", "waived_checks",
+    "contract_status", "waived_checks", "boxes_removed", "object_geom_count_final",
     "review_decision", "reviewer", "reviewed_at", "notes",
 ]
 
@@ -77,14 +78,17 @@ def build_payload(object_key: str, row: dict[str, str], n_max: int) -> dict[str,
         mesh = mesh.dump(concatenate=True)
     # `_boxes_at` is the same voxelise+merge+shrink used by `build_lowgeom_boxes`;
     # we skip the latter only to avoid recomputing the fidelity/cavity metrics,
-    # which are already frozen in the contract TSV we display.
-    boxes, _pitch = L._boxes_at(mesh_path, int(row["target_cells"]), n_max)
-    if len(boxes) != int(row["object_geom_count"]):
-        raise AssertionError(
-            f"{object_key}: viewer rebuilt {len(boxes)} boxes but the contract "
-            f"froze {row['object_geom_count']} — proxy drift"
-        )
-    return {"mesh": mesh, "boxes": boxes, "row": row, "mesh_path": mesh_path}
+    # which are already frozen in the contract TSV we display.  These are the
+    # PRE-edit boxes — the viewer works in original build-order indices, which is
+    # what `box_edits.json` records.
+    boxes, pitch = L._boxes_at(mesh_path, int(row["target_cells"]), n_max)
+    return {
+        "mesh": mesh,
+        "boxes": boxes,
+        "pitch": pitch,
+        "row": row,
+        "mesh_path": mesh_path,
+    }
 
 
 def main() -> int:
@@ -118,6 +122,7 @@ def main() -> int:
 
     state = {"key": keys[0]}
     handles: list[Any] = []
+    edits: dict[str, Any] = L.load_box_edits()
 
     def flush_reviews() -> None:
         rows = []
@@ -145,6 +150,10 @@ def main() -> int:
                     "interior_overfill_frac_5cm": r["interior_overfill_frac_5cm"],
                     "contract_status": "pass" if r["hard_gates_pass"] == "true" else r["failed_gates"],
                     "waived_checks": "G6_overfill" if r["G6_needs_waiver"] == "true" else "",
+                    "boxes_removed": ",".join(str(i) for i in sorted(removed_set(k))),
+                    "object_geom_count_final": str(
+                        int(r["object_geom_count"]) - len(removed_set(k))
+                    ),
                     "review_decision": v.get("review_decision", ""),
                     "reviewer": v.get("reviewer", ""),
                     "reviewed_at": v.get("reviewed_at", ""),
@@ -163,12 +172,48 @@ def main() -> int:
         show_boxes = server.gui.add_checkbox("碰撞 box", True)
         box_opacity = server.gui.add_slider("box 透明度", 0.05, 1.0, 0.05, 0.55)
         wireframe = server.gui.add_checkbox("box 线框", False)
+        show_deleted = server.gui.add_checkbox("显示已删 box(灰线框)", True)
         show_floor = server.gui.add_checkbox("地面网格", True)
+    with server.gui.add_folder("编辑碰撞体（点 3D 里的 box 即可删/恢复）"):
+        edit_status = server.gui.add_markdown("")
+        btn_reset = server.gui.add_button("↩ 恢复本物体全部 box")
+        box_list_folder = server.gui.add_folder("逐 box 开关")
     with server.gui.add_folder("判定"):
         notes = server.gui.add_text("notes", "")
         btn_ok = server.gui.add_button("✅ approve_clean")
         btn_no = server.gui.add_button("❌ needs_manual_edit")
         progress = server.gui.add_markdown("")
+
+    box_checkboxes: list[Any] = []
+
+    def removed_set(key: str) -> set[int]:
+        return set(int(i) for i in edits.get(key, {}).get("removed", []))
+
+    def set_removed(key: str, removed: set[int]) -> None:
+        p = payloads[key]
+        if removed:
+            edits[key] = {
+                "n_max": args.n_max,
+                "target_cells": int(p["row"]["target_cells"]),
+                "n_boxes_original": len(p["boxes"]),
+                "removed": sorted(removed),
+                "editor": args.reviewer,
+                "edited_at": now(),
+                "notes": notes.value,
+            }
+        else:
+            edits.pop(key, None)
+        L.save_box_edits(edits)
+
+    def toggle_box(key: str, index: int) -> None:
+        removed = removed_set(key)
+        if len(removed) + 1 >= len(payloads[key]["boxes"]) and index not in removed:
+            print(f"[E206] refusing to delete the last remaining box of {key}", flush=True)
+            return
+        removed.symmetric_difference_update({index})
+        set_removed(key, removed)
+        render()
+        refresh_info()
 
     def render() -> None:
         for h in handles:
@@ -176,6 +221,7 @@ def main() -> int:
         handles.clear()
         key = state["key"]
         p = payloads[key]
+        removed = removed_set(key)
         if show_mesh.value:
             handles.append(
                 server.scene.add_mesh_simple(
@@ -189,16 +235,19 @@ def main() -> int:
             )
         if show_boxes.value:
             for i, b in enumerate(p["boxes"]):
-                handles.append(
-                    server.scene.add_box(
-                        f"/box/{i:03d}",
-                        color=BOX_COLORS[i % len(BOX_COLORS)],
-                        dimensions=tuple(2.0 * np.asarray(b.half_size)),
-                        position=tuple(np.asarray(b.center)),
-                        opacity=float(box_opacity.value),
-                        wireframe=bool(wireframe.value),
-                    )
+                is_removed = i in removed
+                if is_removed and not show_deleted.value:
+                    continue
+                handle = server.scene.add_box(
+                    f"/box/{i:03d}",
+                    color=DELETED_COLOR if is_removed else BOX_COLORS[i % len(BOX_COLORS)],
+                    dimensions=tuple(2.0 * np.asarray(b.half_size)),
+                    position=tuple(np.asarray(b.center)),
+                    opacity=0.12 if is_removed else float(box_opacity.value),
+                    wireframe=True if is_removed else bool(wireframe.value),
                 )
+                handle.on_click(lambda _, idx=i: toggle_box(state["key"], idx))
+                handles.append(handle)
         if show_floor.value:
             ext = float(np.max(p["mesh"].extents))
             handles.append(
@@ -209,6 +258,25 @@ def main() -> int:
                     position=(0.0, 0.0, float(p["mesh"].bounds[0][2])),
                 )
             )
+
+    def rebuild_box_list() -> None:
+        for cb in box_checkboxes:
+            cb.remove()
+        box_checkboxes.clear()
+        key = state["key"]
+        p = payloads[key]
+        removed = removed_set(key)
+        with box_list_folder:
+            for i, b in enumerate(p["boxes"]):
+                dims = 2.0 * np.asarray(b.half_size)
+                ctr = np.asarray(b.center)
+                label = (
+                    f"{i:02d}  {dims[0]:.2f}x{dims[1]:.2f}x{dims[2]:.2f}"
+                    f"  @z={ctr[2]:+.2f}"
+                )
+                cb = server.gui.add_checkbox(label, i not in removed)
+                cb.on_update(lambda _, idx=i: toggle_box(state["key"], idx))
+                box_checkboxes.append(cb)
 
     def refresh_info() -> None:
         key = state["key"]
@@ -233,6 +301,14 @@ def main() -> int:
             f"| 当前判定 | **{v.get('review_decision') or '（未判）'}** |"
             + waiver
         )
+        rm = sorted(removed_set(key))
+        kept = len(payloads[key]["boxes"]) - len(rm)
+        edit_status.content = (
+            f"**{key}**: 保留 **{kept}** / {len(payloads[key]['boxes'])} box"
+            + (f"\n\n已删索引: `{rm}`" if rm else "\n\n（未删任何 box）")
+            + "\n\n点 3D 里的 box 或下面的勾选框即可删/恢复。删除会在下一步"
+              "**按编辑后的 box 集重算全部保真指标并重装模板**。"
+        )
         done = sum(1 for k in keys if verdicts.get(k, {}).get("review_decision"))
         approved = sum(1 for k in keys if verdicts.get(k, {}).get("review_decision") == "approve_clean")
         pending = [k for k in keys if not verdicts.get(k, {}).get("review_decision")]
@@ -250,18 +326,31 @@ def main() -> int:
             "reviewed_at": now(),
             "notes": notes.value,
         }
+        if key in edits:
+            edits[key]["notes"] = notes.value
+            L.save_box_edits(edits)
         flush_reviews()
         refresh_info()
-        print(f"[E206] {key} -> {decision}  ({notes.value})", flush=True)
+        rm = sorted(removed_set(key))
+        print(f"[E206] {key} -> {decision}  removed={rm}  ({notes.value})", flush=True)
         remaining = [k for k in keys if not verdicts.get(k, {}).get("review_decision")]
         if remaining:
             picker.value = remaining[0]
+
+    def reset_boxes(_) -> None:
+        set_removed(state["key"], set())
+        render()
+        rebuild_box_list()
+        refresh_info()
+
+    btn_reset.on_click(reset_boxes)
 
     @picker.on_update
     def _(_) -> None:
         state["key"] = picker.value
         notes.value = verdicts.get(picker.value, {}).get("notes", "")
         render()
+        rebuild_box_list()
         refresh_info()
 
     for ctl in (show_mesh, mesh_opacity, show_boxes, box_opacity, wireframe, show_floor):
@@ -271,6 +360,7 @@ def main() -> int:
     btn_no.on_click(lambda _: record("needs_manual_edit"))
 
     render()
+    rebuild_box_list()
     refresh_info()
     flush_reviews()
 
