@@ -24,13 +24,26 @@ CORE4D v1 的 6 大类里，真正被重定向 + 物理筛选落地的只有 **b
 | 数据版本 | **core4d v1**（`SPIDER_DATASET=core4d`），不用 core4d_v2 |
 | 动作 | **move2_\*（obs0+obs1+obs3）全要**，与 bucket 线（E174→E178→E202→E204/E205）一致 |
 | arm | **恰好两个：noPRG 与 PRG**。无 G1（gravcomp）、无 A2（hand-gate retune） |
-| **接触掩码** | **5cm 主口径** + **3cm 桥接层**（仅 desk007，供 C5a 与 E174 同尺对比） |
+| **接触掩码** | **3cm 单一口径**，与 box/bucket 全线一致，无桥接层。<br>_（口径先定 5cm，P1 实测后改回：见下「P1 实测修正」）_ |
 | **N_MAX** | **16**（用户授权从 E176 冻结的 9 抬上来）；P3 实测不可负担则按 A3 阶梯回落到 9 |
 | **noPRG 定义** | **≡ E167A**（reward arm）：`leg_object_penalty_scale=0` / `geom_names=[]` / `cem_leg_gate_enabled=false`，base reward `E167A_zOnlyBody`，无 G1 无 A2。**场景仍用共享 rubber-hull** |
 
-**规模**：move2_* ∩ desk/chair ∩ 过尺寸门 = **desk 88 + chair 76 = 164 case-person**（实测）。按 E144 实测 5cm 通过率（desk ~59% / chair ~53%）估，预计落地 **85–95 case** → ×2 arm ≈ **170–190 条 CEM**，加 3cm 桥接层 ~18 条。真实数字由 P1 产出，不预设。
+## P1 实测修正（2026-09-02，S1 跑完后）
 
-> **口径断裂声明（必须进 log 的「结论边界」）**：box/bucket 全线（E173/E178/E199/E202/E203/E204/E205）与 E174 desk007 都用 **3cm** 掩码。E206 主口径是 5cm，**`contact` / `release` / `hand_pen` 三门的绝对值不可与那些历史结果直接比较**。跨实验比较只允许在 3cm 桥接层上做。arm 内部 noPRG-vs-PRG 配对对比不受影响（两 arm 同掩码）。
+计划期锁的是「5cm 主口径 + 3cm 桥接层」，理由是担心 3cm 样本不够。**S1 实测把这个前提证伪了**：
+
+| 口径 | 落地 case | 覆盖物体 | 说明 |
+|---|---:|---:|---|
+| 3cm | **74** | 9/10 | 与 box/bucket 全线 + E174 同尺 |
+| 5cm | 76 | 9/10 | 只多 2 个（desk007 +1、desk020 +1） |
+
+放宽接触阈值**只救回 2 个 case**，却要付出与整条历史线口径断裂 + 维护桥接层（独立 S3、独立 task dir、C5a 特殊处理）的代价。用户据此改回 **3cm 单一口径**。收益：R1b 口径断裂风险消失、C5a 可直接与 E174 desk007 同尺对比、S3 少跑一轮、CEM 少 18 条。
+
+**衰减真因（本实验第一个 finding）**：瓶颈不是接触阈值，是 **`object_rotation >= 45°` 运动硬门，卡掉 56/164（34%）**；`object_lift <= 0.30m` 只卡掉 8 个（5%），接触质量不足 25 个（15%）。双人搬桌/椅本来就常要转向（绕门、调头），而 45° 门是为 box 搬运设的。**E206 不动此门**（保持与 bucket 线 E174/E178/E202/E204/E205 同一 S1 口径，结论可横向比），作为后续实验方向记入 log。
+
+**最终规模**：**74 case × 2 arm = 148 条 CEM**。`desk005` 落地 0 case（6 个候选全被旋转门/接触质量拒），**退出 E206**，实际物体数 **9**。逐物体：desk007 9 / desk020 2 / desk021 17 / desk023 14 / chair005 2 / chair006 13 / chair020 1 / chair021 9 / chair022 7。
+
+> **样本量诚实声明**：chair020 只有 1 例、chair005/desk020 各 2 例 —— 这三个物体**不做 per-object arm 推荐**，只并入总体统计并在 log 中标注 n。
 
 ## Plan 阶段已实测的关键事实（非假设）
 
@@ -81,16 +94,11 @@ CORE4D v1 的 6 大类里，真正被重定向 + 物理筛选落地的只有 **b
 grep 43 个 `dcv3_*_{desk,chair}*` 目录的下游消费者 → `$E/preflight/task_dir_consumers.txt`；`snapshot_scenes.sh E206_pre <43 目标目录 + 16 源模板>` + `git add -f`。
 **退出检查**：`results/E206_pre/scene_snapshot/manifest.txt` 含 git HEAD + 每个 `scene*.xml` 的 sha256；消费者冲突清空或 log 显式豁免。
 
-### P1 · S0 + S1：案例集推导（5cm 主口径 + 3cm 桥接子集）
-三层过滤逐层单独计数：inventory（desk/chair 700 行）→ `action ∈ {move2_obs0, move2_obs1, move2_obs3}` 且无 `hard_reject_reason`（**164**，已实测）→ `run_raw_contact.py --queue object-key --object-keys <10 keys> --thresholds-m 0.03,0.05`。
-一次运行同时产出两个标签：
-- **主口径** `raw_contact_pass_5cm_move2only.tsv` —— 驱动 P4–P9 全部主流程。
-- **桥接子集** `raw_contact_pass_3cm_bridge.tsv`（= 3cm-pass ∩ move2_* ∩ `desk007`）—— 仅供 C5a 与 E174 同尺对比。
-
-> 为什么必须桥接：`hand_object_physics_contact_in_mask_frac` 的分母是**激活掩码内帧数**。掩码 3cm→5cm 会把"人其实没真碰到"的帧算进分母，该比例**机械性下降**。不做桥接就无法区分 C5a 的变化来自 F7 配对修复还是掩码变松。
-
-新建 `$ED/report_s1_funnel.py` → `$E/s1_raw_contact/e206_s1_funnel.{tsv,md}`：逐物体 `inventory / move2 / 过尺寸门 / raw_contact_{pass,review,fail,reject_motion}@3cm / 同@5cm / 最终`，逐 case 记录 `motion_quality_fail_reasons` 原文，**3cm 与 5cm 两列并排**。
-**退出检查**：漏斗总数 == 主口径 TSV 行数；164 候选每个在两个阈值下各有唯一终态；桥接子集非空且 ⊆ 主口径；**数字先写进 log 再跑下游**。**5cm 后仍 < 12 case → 停下升级**（说明瓶颈是硬运动门 `object_lift > 0.30m`，桌椅大量是"推"不是"抬"，放宽接触阈值救不了）。
+### P1 · S0 + S1：案例集推导  ✅ 已完成
+三层过滤逐层单独计数：inventory（desk/chair 652 行）→ `action ∈ move2_{obs0,obs1,obs3}` 且无 `hard_reject_reason`（**164**）→ `run_raw_contact.py --queue object-key --object-keys <10 keys> --thresholds-m 0.03,0.05`。
+两个阈值都打分（一次运行），**3cm 为唯一口径**，5cm 列仅作为口径选择的依据保留。
+`$ED/report_s1_funnel.py` → `$E/s1_raw_contact/e206_s1_funnel.{tsv,md,json}` + `e206_s1_case_terminal.tsv`（逐 case 两阈值终态 + 原文拒因）+ 案例权威 `raw_contact/raw_contact_pass_3cm_move2only.tsv`。
+**退出检查（已过）**：164 候选每个在两阈值下各有唯一终态；落地 **74 case / 9 物体**；停机线 12 → PASS。
 
 ### P2 · 碰撞代理（方法核心）
 **P2.1 `$ED/lowgeom_proxy_v2.py`** — import `E176/lowgeom_proxy.py`（`load_mesh`/`ProxyBox`/`proxy_xml`/`point_to_proxy_surface_distance`/`fidelity_metrics`）与 `build_or_audit_templates.py` 的 `merge_occupied_voxels`/`geom_box_xml`，**不 fork**。新增：
@@ -127,8 +135,8 @@ G6 的诚实表述：N_MAX=16 下椅子过填预期从 42–45% 明显下降（M
 
 **预注册准入判据**：
 - **A1（单任务）** N=16 + compile 开，中位总墙钟 **≤ 120 min/task**。依据：E203 确立 N=1 时 ~46min 为接受常态；N=16 是 16× geom / 288× pair，120min ≈ 2.6× 容差。
-- **A2（队列）** `n_cases × 2 arm × 中位墙钟 ÷ 8 GPU ≤ 48 h`。从 24h 上调，因 5cm 把 case 数抬到 85–95。合理性：driver 是 slot 池 + rollout-npz 为键的 skip-already-done，**全程可中断可续跑**，不需连续独占。
-- **A2b（优先级排队）** 队列按 **① 3cm 桥接层（desk007，C5a 命脉）→ ② 每物体 round-robin 前 K 个 → ③ 余量** 排序。**腰斩时也保证每物体有样本、C5a 一定有数据**。
+- **A2（队列）** `74 case × 2 arm = 148 条 ÷ 8 GPU ≤ 48 h` → 中位墙钟须 ≤ **155 min/task**；A1 的 120min 门比它更紧，故 A1 成立即 A2 成立。driver 是 slot 池 + rollout-npz 为键的 skip-already-done，**全程可中断可续跑**。
+- **A2b（优先级排队）** 队列按 **① desk007 全部 9 例（C5a 命脉，与 E174 同 case）→ ② 每物体 round-robin → ③ 余量** 排序。**腰斩时也保证每物体有样本、C5a 一定有数据**。
 - **A3（回落）** A1/A2 在 16 不成立时：开 `object_collision_sdf_batch_groups=true`（E176 实测 −2~4%，C10 已验证数值等价）→ 回落 **N_MAX=9**（M1 已验证 10/10 可行，椅子过填按 G6 走豁免）→ 缩物体范围 → 最后才对**两 arm 对称**降 `num_samples`。**每步记录，绝不静默超预算。**
 
 **退出检查**：`e206_throughput_curve.md` ≥16 行实测；`admission_decision.json` 冻结 `N_MAX / use_torch_compile / num_samples / max_num_iterations / 队列优先级序` 与 A1/A2/A2b/A3 各自裁决；**先贴进 log 再发 CEM 队列**。
@@ -144,8 +152,7 @@ G6 的诚实表述：N_MAX=16 下椅子过填预期从 42–45% 明显下降（M
 **重建，不复用现有 43 个目录**。理由：① 它们带超预算草稿代理，`scene.xml`/`scene_act.xml` 至少要重生；② 上游 `converted/retargeted/trimmed` npz 在 **E145 的 RESULT_ROOT** 下，新 run root 命不中 `pipeline.sh` 的存在性守卫（311/346/398/454 行），无论如何会重解；③ 要求"全流程"。
 **代价缓解**：19 个重叠 case 变成**可复现性交叉校验** —— 比对 E206 `trimmed_npz["qpos"]` 与既有 `0/trajectory_kinematic.npz` 最大绝对偏差 → `$E/s3_retarget/reproducibility_vs_e145.tsv`。相同输入 + 相同 omnirt_v1 参数应当复现；**不符即为值得单独上报的发现**（管线有隐藏非确定性）。
 - `KEEP_GOING=1` + `run_stage2b.py --raw-contact-tsv .../raw_contact_pass_5cm_move2only.tsv --retarget-variant-id omnirt_v1 --target-variant-id ref_fk --execute --allow-legacy-stage2b-wrapper`（经 `E174/run_stage2b_queue.py` 并行）；v2 rescue **只对本轮 v1 的 `omniretarget_infeasible` 集**（docs 08 §rescue），不用历史标签、不靠文件名猜。
-- **3cm 桥接层单独跑一遍**（`--raw-contact-tsv .../raw_contact_pass_3cm_bridge.tsv`，输出 `$E/s3_retarget_bridge3cm/`）。两个掩码标签产出**不同的 trim 与 contact_mask**，桥接层必须是**独立 task dir**（任务名加 `_m3cm` 后缀），**不能与主口径共用**——否则后跑的覆盖先跑的。
-**退出检查**：manifest 每行有终态（`stage2b_ok` 或 `06_failure_taxonomy.md` 编码）；rescue 集精确等于本轮 v1 infeasible 集；每个产出目录 `scene.xml`+`scene_act.xml` 的 `n(object_collision*) ≤ N_MAX`；主口径与桥接层 task dir 名无碰撞（脚本断言）。
+**退出检查**：manifest 每行有终态（`stage2b_ok` 或 `06_failure_taxonomy.md` 编码）；rescue 集精确等于本轮 v1 infeasible 集；每个产出目录 `scene.xml`+`scene_act.xml` 的 `n(object_collision*) ≤ N_MAX`。
 
 ### P6 · S4 目标门 + 视觉 QC + 接触保真 G8
 `run_target_gate.py` → `make_visual_qc.py` → `render_visual_qc_package.py`（osmesa）。
@@ -198,7 +205,8 @@ cem_leg_gate_geom_names: [<同上 16>]
 `scripts/eval/runners/eval_E206_arm_ablation.py`（仿 `eval_E204E205_arm_ablation.py`）—— **关键改进：两 arm 都从新鲜 rollout 同尺打分**（E204 的 PRG 行是读 TSV，存在基线不对称）。
 - **E201 14-gate 漏斗**（`E201/funnel_config.py`，先 `assert_monotonic()`）+ 冻结 **6-gate**（`docs/EVAL_METRICS_12GATE.md`）双口径。全部 `variant=orig`、单 arm family → narrow-pass ⇒ `L3_auto`。
 - **配对统计**：同一 case 集；逐门 **mean / std / worst**（rule 5）+ 配对 delta `PRG − noPRG` 带符号 + 逐物体拆分（5 desk + 5 chair）。
-- **基线列**：3cm 桥接层的 desk007 与 E174 同尺并列，让 F7 配对 bug 的修复直接可见。
+- **基线列**：desk007 的 9 例与 E174 同尺（同 3cm 掩码、同 case）并列，让 F7 配对 bug 的修复直接可见。
+- **样本量诚实标注**：逐物体表必须带 n；chair020(n=1)、chair005/desk020(n=2) **不出 per-object arm 推荐**。
 - 报表 `gen_E206_two_arm_workbook.py` → `e206_two_arm.xlsx`（`funnel_summary / per_gate / per_object / paired_delta / vs_E174_desk007`）。
 - **视觉复核（rule 5 §Visual Evaluation 强制）**：viser 并排 `review_player.sh E206ARM` + `$ED/render_qc.py` 关键帧。覆盖 = **每物体 × 两 arm**，外加**全部 L3 case**（防 reward hacking）与**全部单门 L1 case**（防指标假象）；逐 case `USE/DO_NOT_USE` + 失败模式 → `user_manual_review_filled.tsv`；**数值与视觉矛盾必须逐条显式列出**。
 - **顺带做掉 log234 §9 的廉价根因项**：**D1** 接触目标落在无代理区域的比例（= G8 产物，§9 item 1）；**D2** 逐物体局部漏检图（按 object-local Z 分桶：台面 vs 桌腿 / 椅面 vs 靠背，§9 item 4）；**D3** 参考轨迹自身的腿-物距离（复用 `E175/build_nonbox_multigeom_production.py:441` 的 `reference_first5_diagnostic`，§9 item 3）—— 判断 `leg_pen` 是数据属性还是控制失败。
@@ -210,12 +218,12 @@ cem_leg_gate_geom_names: [<同上 16>]
 
 | ID | Claim | 数值门 |
 |---|---|---|
-| **C0** | dcv3 S0→S6 在 desk+chair move2_* 上闭合 | S1 漏斗对 **164** 个过尺寸门候选、**3cm 与 5cm 各 100%** 给出终态原因；Stage2b 成功 ≥ **90%** of `clean_reviewed`；S4 机器门 pass ≥ **90%** of Stage2b 成功；**0** 条无法解释的丢失；3cm 桥接层非空且 task dir 与主口径无碰撞 |
+| **C0** | dcv3 S0→S6 在 desk+chair move2_* 上闭合 | ✅ S1 部分已达成：164 候选在两阈值下各 100% 有终态，落地 74 case / 9 物体。余下：Stage2b 成功 ≥ **90%** of `clean_reviewed`；S4 机器门 pass ≥ **90%** of Stage2b 成功；**0** 条无法解释的丢失 |
 | **C1** | 每个在范围物体得到满足契约的 ≤N_MAX box 代理 | **10/10** 物体 G1,G2,G3,G4,G5,G7 pass；G8 逐物体 `p90 ≤ 0.08 m` |
 | **C2** | lowgeom 相对现有草稿是严格改进 | geom 数 `37–127 → ≤N_MAX` 覆盖 100% 物体，**且** `mesh→proxy p90` 相对 26-cell 草稿退化 ≤ **0.04 m** |
 | **C3** | 吞吐被重新实测并给出准入 | `admission_decision.json` ≥16 行实测；N_MAX=16 下中位全预算墙钟 ≤ **120 min/task**；按 P1 实际 case 数投影的双 arm 队列 ≤ **48 h**；队列优先级序已冻结。E176 的 3.0s 门显式作废并记录理由 |
 | **C4** | 两 arm 严格单变量 | **100%，零容忍**：语义 diff 恰为 16N 腿对；pair 2N/18N；两 arm 均 rubber-hull mesh 手且 `gravcomp=0`；composed config 恰差 5 键；两 arm hand-gate 均 == `E163_HAND_GATE` |
-| **C5a** | **F7 配对修复带来实质接触改善**（核心科学看点） | **在 3cm 桥接层上评**（与 E174 同掩码同 case，desk007）：`hand_object_physics_contact_in_mask_frac` 均值相对 E174 desk007 基线 **提升 ≥ +0.15 绝对值**（E174 非 box 总体均值 0.379，desk007 分组值以 `results/E174` 实际 TSV 为准）。**不得用 5cm 主口径的数字与 E174 比** |
+| **C5a** | **F7 配对修复带来实质接触改善**（核心科学看点） | 在 **desk007 的 9 例**上（与 E174 同掩码 3cm、同 case）：`hand_object_physics_contact_in_mask_frac` 均值相对 E174 desk007 基线 **提升 ≥ +0.15 绝对值**（E174 非 box 总体均值 0.379，desk007 分组值以 `results/E174` 实际 TSV 为准） |
 | **C5b** | arm 对比 | 仅当 `leg_pen` narrow 通过率 delta ≥ **+10 pp** 且 L3 数 delta ≥ 0 才宣称 "PRG 胜"；否则按实测符号宣称 "无分离" 或 "noPRG 胜"。**14 门全部带 mean/std/worst** |
 | **C5c** | **物理通过率只报告，不设门** | 逐 arm 逐物体公布 L1/L2/L3 与 6-gate 计数 + mean/std/**worst**。**无 pass/fail 门** |
 | **C6** | 强制视觉复核 | 覆盖集 100% 有 `USE/DO_NOT_USE` + 失败模式；数值↔视觉矛盾逐条列出 |
@@ -231,9 +239,10 @@ cem_leg_gate_geom_names: [<同上 16>]
 
 | # | 风险 | 缓解 | 触发点 |
 |---|---|---|---|
-| R1 | ~~S1 落地 case 太少~~ 已由主口径改 5cm 缓解。残余：真瓶颈可能是硬运动门 `object_lift>0.30m`（桌椅大量是"推"不是"抬"），那样放宽接触阈值救不回来 | P1 漏斗 3cm/5cm 两列并排直接看救回多少。**5cm 后仍 <12 case 停下升级**，回退到单物体深挖（首选 desk021，唯一 0% 过填）。**绝不静默再放松然后当作原计划报** | P1 末 |
-| **R1b** | **改 5cm 造成口径断裂**：`contact`/`release`/`hand_pen` 与 box/bucket 全线（3cm）及 E174 desk007（3cm）不可直接比 | ① log「结论边界」显式声明；② 3cm 桥接层（desk007，~9 case×2 arm=18 条）专供 C5a 同尺对比；③ **arm 内部配对对比不受影响**（两 arm 同掩码），C5b/C5c 照常 | P1 / P9 |
-| **R1c** | **5cm 把规模抬到 85–95 case（180+ 条 CEM），叠加 N_MAX=16（288 对/场景），队列可能跑不完** | A2 上调到 48h（slot 池 + skip-already-done，可中断续跑）；**A2b 优先级排队**保证腰斩时每物体有样本、C5a 一定有数据；再不够走 A3 回落 N_MAX=9 | P3 / P8 |
+| R1 | ~~S1 落地 case 太少~~ **已消解**：实测 74 case / 9 物体，远高于停机线 12 | — | P1 已过 |
+| **R1b** | ~~改 5cm 造成口径断裂~~ **已消解**：实测 5cm 只多 2 个 case，遂改回 3cm 单一口径，与全线同尺，桥接层取消 | — | P1 已过 |
+| **R1c** | 队列规模：**74×2 = 148 条**，叠加 N_MAX=16（288 对/场景）可能跑不完 | A2 = 48h 上限（slot 池 + skip-already-done，可中断续跑）；**A2b 优先级排队**保证腰斩时每物体有样本、C5a 一定有数据；再不够走 A3 回落 N_MAX=9 | P3 / P8 |
+| **R1d** | **chair020 n=1、chair005/desk020 n=2** —— 这三个物体没有 per-object 统计力 | 只并入总体，**不出 per-object arm 推荐**，log 中逐物体标 n；C5b 的 arm 结论以总体 74 例为准 | P9 |
 | R2 | E176 `center_inside_count` 卡死全部椅子（**已实测必然发生**） | P2.1 用 `cavity_metrics` 替换；**不是简单删断言**，保留腔体保证 | P2.1 |
 | R3 | ~~N=9 椅子腔体过填 42–45%~~ 已由 N_MAX=16 缓解（M2 实测分辨率 ~1.5×）。残余 = P3 实测下 16 不可负担被迫回落到 9 | 回落时逐物体 `waived_checks` + log 结论边界声明"chair006/021/022 座下空间被填实，leg_pen 与 contact 不可与 box/bucket 线比较" | P3 |
 | R4 | P5 覆盖 43 个既有任务目录（**已实测必然发生**） | P0 覆盖前快照 + `git add -f` + 消费者 grep | P0 |
