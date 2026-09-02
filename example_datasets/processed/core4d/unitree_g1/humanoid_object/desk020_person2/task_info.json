@@ -34,7 +34,7 @@
   "schema_version": "core4d_data_construction_v3.0",
   "source_template_pose_policy": "neutral placeholder from clean base; target scene must patch object pose from trimmed qpos first frame",
   "task": "desk020_person2",
-  "object_collision_geom_count": 16,
+  "object_collision_geom_count": 11,
   "lowgeom_target_cells": 9,
   "lowgeom_n_max": 16
 }
