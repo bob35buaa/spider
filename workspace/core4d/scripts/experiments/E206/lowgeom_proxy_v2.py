@@ -92,6 +92,25 @@ def _merge_at(mesh: trimesh.Trimesh, target_cells: int, n_max: int):
     return raw_boxes, int(left_unmerged), pitch, int(voxels.matrix.sum())
 
 
+def _boxes_at(mesh_path: Path, target_cells: int, n_max: int) -> tuple[list[ProxyBox], np.ndarray]:
+    """Shrunk proxy boxes at one target_cells (shared by scoring and building)."""
+    mesh = load_mesh(Path(mesh_path))
+    raw_boxes, left_unmerged, pitch, _ = _merge_at(mesh, target_cells, n_max)
+    if left_unmerged:
+        raise ValueError(f"target_cells={target_cells} leaves {left_unmerged} voxels unmerged")
+    boxes = []
+    for center, half_size in raw_boxes:
+        shrink = np.minimum(pitch * SHRINK_PITCH_FRAC, half_size * SHRINK_HALF_FRAC)
+        shrunk = np.maximum(half_size - shrink, pitch * MIN_HALF_PITCH_FRAC)
+        boxes.append(
+            ProxyBox(
+                center=np.asarray(center, dtype=np.float64),
+                half_size=np.asarray(shrunk, dtype=np.float64),
+            )
+        )
+    return boxes, pitch
+
+
 def sweep_target_cells(
     mesh_path: Path,
     n_max: int,
@@ -132,12 +151,80 @@ def sweep_target_cells(
     return table
 
 
-def select_target_cells(sweep: list[dict[str, Any]]) -> int:
-    """Largest feasible target_cells == finest voxel that still fits the budget."""
-    feasible = [row["target_cells"] for row in sweep if row.get("feasible")]
-    if not feasible:
-        raise ValueError("no feasible target_cells in sweep range")
-    return max(feasible)
+# Fidelity bars used to rank sweep candidates.  Kept in sync with
+# audit_lowgeom_contract.BARS (that module is the reporting authority; these are
+# the same numbers used as a *selection* filter).
+SELECT_BARS = {
+    "mesh_to_proxy_p90_m": 0.08,
+    "mesh_to_proxy_max_m": 0.16,
+    "proxy_to_mesh_p90_m": 0.14,
+    "interior_overfill_frac_pitch": 0.02,
+}
+
+
+def score_target_cells(
+    mesh_path: Path,
+    object_key: str,
+    sweep: list[dict[str, Any]],
+    n_max: int,
+) -> list[dict[str, Any]]:
+    """Measure fidelity for every feasible target_cells in the sweep.
+
+    Necessary because voxel resolution is NOT monotone in proxy quality once a
+    hard box cap is in play: the greedy merge has to cover more voxels with the
+    same budget, so at a finer pitch it can emit fewer, larger blocks that bridge
+    across cavities.  Measured on chair022 — tc=6 (finest feasible at n_max=16)
+    scores mesh->proxy p90 0.100 / over-fill 0.56, while tc=4 scores 0.064 / 0.43.
+    Picking "finest feasible" would therefore pick the worse proxy.
+    """
+    scored: list[dict[str, Any]] = []
+    for row in sweep:
+        if not row.get("feasible"):
+            continue
+        tc = int(row["target_cells"])
+        try:
+            boxes, pitch = _boxes_at(mesh_path, tc, n_max)
+        except Exception as exc:  # noqa: BLE001
+            scored.append({"target_cells": tc, "scorable": False, "error": str(exc)})
+            continue
+        entry: dict[str, Any] = {
+            "target_cells": tc,
+            "scorable": True,
+            "n_boxes": len(boxes),
+            "error": "",
+        }
+        entry.update(fidelity_metrics(mesh_path, boxes))
+        entry.update(cavity_metrics(mesh_path, boxes, pitch))
+        entry["bars_pass"] = all(
+            entry[key] <= bar for key, bar in SELECT_BARS.items()
+        )
+        scored.append(entry)
+    return scored
+
+
+def select_target_cells(scored: list[dict[str, Any]]) -> int:
+    """Pick by measurement, not by a resolution heuristic.
+
+    Rule (declared, deterministic): among candidates that clear every fidelity
+    bar, take the lowest cavity over-fill; break ties on lower mesh->proxy p90,
+    then on fewer boxes.  If nothing clears the bars, fall back to the same
+    ordering over all scorable candidates so the caller still gets the best
+    available proxy and the contract audit reports the failure honestly.
+    """
+    usable = [s for s in scored if s.get("scorable")]
+    if not usable:
+        raise ValueError("no scorable target_cells in sweep")
+    passing = [s for s in usable if s.get("bars_pass")]
+    pool = passing or usable
+    best = min(
+        pool,
+        key=lambda s: (
+            round(s["interior_overfill_frac_5cm"], 4),
+            round(s["mesh_to_proxy_p90_m"], 5),
+            s["n_boxes"],
+        ),
+    )
+    return int(best["target_cells"])
 
 
 # --------------------------------------------------------------------------
@@ -220,10 +307,12 @@ def build_lowgeom_boxes(
     mesh = load_mesh(mesh_path)
 
     sweep: list[dict[str, Any]] = []
+    scored: list[dict[str, Any]] = []
     if target_cells is None:
         sweep = sweep_target_cells(mesh_path, n_max, lo=sweep_lo, hi=sweep_hi)
+        scored = score_target_cells(mesh_path, object_key, sweep, n_max)
         try:
-            target_cells = select_target_cells(sweep)
+            target_cells = select_target_cells(scored)
         except ValueError as exc:
             raise ValueError(
                 f"{object_key}: no feasible target_cells in [{sweep_lo},{sweep_hi}] "
@@ -264,6 +353,8 @@ def build_lowgeom_boxes(
         "mesh_extent_z_m": float(mesh.extents[2]),
         "collision_policy": f"{C.object_category(object_key)}_lowgeom{n_max}_proxy",
         "sweep": sweep,
+        "scored": scored,
+        "selection_rule": "min_overfill_among_bar_passing" if scored else "explicit",
     }
     meta.update(fidelity_metrics(mesh_path, boxes))
     meta.update(cavity_metrics(mesh_path, boxes, pitch))
