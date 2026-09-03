@@ -340,19 +340,11 @@
       <freejoint name="object_joint" />
       <inertial pos="0 0 0" mass="5.000" diaginertia="0.19360062 0.21443383 0.19495142" />
       <geom name="object_visual" type="mesh" mesh="desk021" material="desk021_material" group="2" contype="0" conaffinity="0" />
-      <geom name="object_collision" type="box" pos="0.016962 0.237469 0" size="0.233398 0.012891 0.216436" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_001" type="box" pos="0 0.169621 0" size="0.250361 0.012891 0.182512" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_002" type="box" pos="-0.220507 -0.033924 -0.220507" size="0.029853 0.216436 0.029853" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_003" type="box" pos="-0.220507 -0.033924 0.220507" size="0.029853 0.216436 0.029853" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_004" type="box" pos="0.220507 -0.050886 -0.220507" size="0.029853 0.199474 0.029853" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_005" type="box" pos="0.220507 -0.050886 0.220507" size="0.029853 0.199474 0.029853" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_006" type="box" pos="0 0.220507 -0.237469" size="0.250361 0.029853 0.012891" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_007" type="box" pos="-0.237469 0.220507 0" size="0.012891 0.029853 0.216436" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_008" type="box" pos="0.033924 0.169621 -0.220507" size="0.216436 0.012891 0.029853" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_009" type="box" pos="0.033924 0.169621 0.220507" size="0.216436 0.012891 0.029853" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_010" type="box" pos="-0.016962 0.237469 0.237469" size="0.267323 0.012891 0.012891" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_011" type="box" pos="0 0.203545 0.237469" size="0.250361 0.012891 0.012891" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
-      <geom name="object_collision_coarse_012" type="box" pos="0.237469 0.203545 0" size="0.012891 0.012891 0.216436" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" /><site name="trace_object" size="0.02" rgba="0 0 1 1" />
+      <geom name="object_collision" type="box" pos="-0.224636 -0.028625 -0.221848" size="0.026261 0.200015 0.027741" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_coarse_001" type="box" pos="-0.22552 -0.028625 0.222171" size="0.023995 0.200015 0.024368" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_coarse_002" type="box" pos="0.226848 -0.028625 -0.219538" size="0.02373 0.200015 0.023558" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_coarse_003" type="box" pos="0.217723 -0.028625 0.22783" size="0.025292 0.200015 0.022768" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" />
+      <geom name="object_collision_coarse_004" type="box" pos="0.000543 0.198469 0.000159" size="0.253637 0.024 0.252646" rgba="0.10 0.75 0.35 0.40" group="3" contype="1" conaffinity="1" friction="1 0.005 0.0001" condim="3" /><site name="trace_object" size="0.02" rgba="0 0 1 1" />
     </body>
   </worldbody>
   <actuator>

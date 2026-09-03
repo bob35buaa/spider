@@ -3,7 +3,7 @@
   "base_scene": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
   "build_mode": "apply_proxy_review",
   "clean_robot_inertial_source": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/box023_person1/scene.xml",
-  "collision_policy": "chair_lowgeom16_proxy",
+  "collision_policy": "chair_manual_boxes",
   "created_at": "2026-09-03T00:22:25+08:00",
   "data_construction_v3_built": true,
   "diaginertia": [
@@ -34,7 +34,7 @@
   "schema_version": "core4d_data_construction_v3.0",
   "source_template_pose_policy": "neutral placeholder from clean base; target scene must patch object pose from trimmed qpos first frame",
   "task": "chair005_person1",
-  "object_collision_geom_count": 15,
-  "lowgeom_target_cells": 9,
+  "object_collision_geom_count": 2,
+  "lowgeom_target_cells": null,
   "lowgeom_n_max": 16
 }

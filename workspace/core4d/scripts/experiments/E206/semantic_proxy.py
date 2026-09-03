@@ -32,6 +32,7 @@ import trimesh
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import e206_common as C  # noqa: E402
 import lowgeom_proxy_v2 as L  # noqa: E402
+import manual_boxes as MB  # noqa: E402
 from lowgeom_proxy import ProxyBox  # noqa: E402
 
 UP = 1  # object-local +Y
@@ -352,19 +353,68 @@ if __name__ == "__main__":
 # --------------------------------------------------------------------------
 # Dispatcher — the single entry point every downstream stage must use
 # --------------------------------------------------------------------------
-# Frozen 2026-09-03 after the 3D review.  Objects listed in SEMANTIC_SPEC get a
-# hand-specified part decomposition; the rest keep the auto voxel proxy plus
-# whatever boxes the reviewer deleted in the 3D viewer.
+# Precedence, highest first:
+#   1. manual   — boxes hand-placed in `edit_proxy_3d.py`, stored as absolute
+#                 geometry in `manual_boxes.json`.  A human who has looked at the
+#                 overlay outranks both automatic heuristics, so this wins
+#                 outright and the auto paths become mere seeds.
+#   2. semantic — hand-specified part decomposition (SEMANTIC_SPEC).
+#   3. voxel    — auto merge, plus whatever boxes the reviewer deleted.
 def build_effective_proxy(
-    object_key: str, n_max: int = C.N_MAX_TARGET, target_cells: int | None = None
+    object_key: str,
+    n_max: int = C.N_MAX_TARGET,
+    target_cells: int | None = None,
+    *,
+    measure_metrics: bool = True,
 ) -> tuple[list[ProxyBox], dict[str, Any]]:
-    """The proxy that actually ships for this object."""
+    """The proxy that actually ships for this object.
+
+    `measure_metrics=False` returns the boxes without the fidelity/cavity pass.
+    The 3D editor needs the box set as a starting point, not the numbers, and
+    the exact metrics cost seconds per object — but it must go through THIS
+    function so its starting point is genuinely what ships, precedence and
+    recorded deletions included.
+    """
+    hit = MB.manual_boxes_for(object_key)
+    if hit is not None:
+        boxes, labels = hit
+        MB.validate(boxes, object_key, n_max=n_max)
+        record = MB.load_manual().get(object_key, {})
+        meta: dict[str, Any] = {
+            "object_key": object_key,
+            "object_category": C.object_category(object_key),
+            "mesh_path": str(C.object_mesh_path(object_key)),
+            "proxy_kind": "manual",
+            "n_max": n_max,
+            "target_cells": -1,
+            "object_geom_count": len(boxes),
+            "parts": labels,
+            "policy": f"{C.object_category(object_key)}_manual_boxes",
+            "collision_policy": f"{C.object_category(object_key)}_manual_boxes",
+            "editor": record.get("editor", ""),
+            "edited_at": record.get("edited_at", ""),
+            "manual_seed": record.get("seed", {}),
+            "edited": True,
+            "removed_indices": [],
+        }
+        if measure_metrics:
+            meta.update(measure(object_key, boxes))
+        return boxes, meta
     if object_key in SEMANTIC_SPEC:
         boxes, meta = build_semantic_boxes(object_key)
         all_parts = list(meta.get("parts", []))
-        boxes, edit_info = L.apply_box_edits(
-            boxes, object_key, n_max=n_max, target_cells=-1, kind="semantic"
-        )
+        # Only replay a deletion record that was authored against the SEMANTIC
+        # build.  A voxel-era record indexes a completely different box list:
+        # for chair006 it is simply obsolete, and for desk020 it has already
+        # been consumed — correctly — by `_edited_voxel_boxes_below`, so
+        # replaying it here would apply the same edit twice.  Both objects were
+        # failing `apply_box_edits`' staleness guard because of this.
+        edit_record = L.load_box_edits().get(object_key, {})
+        edit_info: dict[str, Any] = {"edited": False, "removed_indices": []}
+        if edit_record.get("proxy_kind") == "semantic":
+            boxes, edit_info = L.apply_box_edits(
+                boxes, object_key, n_max=n_max, target_cells=-1, kind="semantic"
+            )
         if edit_info.get("edited"):
             drop = set(edit_info["removed_indices"])
             meta["parts"] = [p for i, p in enumerate(all_parts) if i not in drop]
@@ -372,11 +422,16 @@ def build_effective_proxy(
         meta["proxy_kind"] = "semantic"
         meta["n_max"] = n_max
         meta.setdefault("target_cells", -1)
-        meta.update(measure(object_key, boxes))
+        if measure_metrics:
+            meta.update(measure(object_key, boxes))
         meta["collision_policy"] = meta["policy"]
         return boxes, meta
     boxes, meta = L.build_lowgeom_boxes(
-        C.object_mesh_path(object_key), object_key, n_max=n_max, target_cells=target_cells
+        C.object_mesh_path(object_key),
+        object_key,
+        n_max=n_max,
+        target_cells=target_cells,
+        measure_metrics=measure_metrics,
     )
     meta["proxy_kind"] = "voxel_edited" if meta.get("edited") else "voxel"
     meta["parts"] = []

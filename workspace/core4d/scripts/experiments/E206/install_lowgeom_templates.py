@@ -83,7 +83,7 @@ def install_one(
     scene_path: Path,
     object_key: str,
     n_max: int,
-    target_cells: int,
+    target_cells: int | None,
     *,
     apply: bool,
 ) -> dict[str, Any]:
@@ -185,7 +185,10 @@ def main() -> int:
     assets: list[dict[str, Any]] = []
     for object_key, row in sorted(rows.items()):
         assets.append(ensure_asset_mesh(object_key, apply=args.apply))
-        target_cells = int(row["target_cells"]) if int(row["target_cells"]) > 0 else None
+        # Semantic/manual rows report target_cells="n/a"; there is no voxel grid
+        # to reproduce, and `build_effective_proxy` ignores the argument for them.
+        raw_tc = (row.get("target_cells") or "").lstrip("-")
+        target_cells = int(row["target_cells"]) if raw_tc.isdigit() and int(row["target_cells"]) > 0 else None
         for person in ("person1", "person2"):
             scene = C.PROCESSED_ROOT / f"{object_key}_{person}" / "scene.xml"
             if not scene.exists():

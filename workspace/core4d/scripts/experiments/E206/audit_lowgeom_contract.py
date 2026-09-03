@@ -23,6 +23,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import e206_common as C  # noqa: E402
 import lowgeom_proxy_v2 as L  # noqa: E402
+import manual_boxes as MB  # noqa: E402
 import semantic_proxy as S  # noqa: E402
 
 # ---- pre-declared numeric bars (plan236 P2.2) ---------------------------
@@ -33,7 +34,17 @@ BARS = {
     "G6_overfill_warn": 0.30,           # report + waive, NOT a hard gate
     "G7_overfill_pitch_max": 0.02,
     "G9_p90_regression_max": 0.04,      # vs the live 26-cell draft
+    # G10 (added 2026-09-03 at the user's request): every load-bearing box
+    # bottom within 5 mm of the true mesh floor.  Catches "one leg lower than
+    # the others" (the object rocks on one leg, a tilt the proxy invented) and
+    # "box reaches below the mesh" (the object floats).  No aggregate distance
+    # gate sees either: measured spreads of 5-16 mm moved G3's p90 by nothing.
+    "G10_support_offset_max": 0.005,
 }
+
+# Proxy kinds with no voxel grid behind them: `target_cells` and the
+# one-voxel-based G7 are undefined for these, and reported as "n/a".
+NON_VOXEL_KINDS = ("semantic", "manual")
 
 GEOM_RE = re.compile(r'name="(object_collision[^"]*)"')
 
@@ -94,15 +105,31 @@ def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[
         "G5_proxy_to_mesh_p90": row["proxy_to_mesh_p90_m"] <= BARS["G5_proxy_to_mesh_p90_max"],
     }
     # G7 asks "is any interior point further than ONE VOXEL from the mesh" — a
-    # sanity check on the voxel merge, meaningless for a semantic part proxy,
-    # which is a deliberately part-spanning AABB with no voxel notion at all.
-    # Applying it there is a category error, not a finding.
-    if row.get("proxy_kind") == "semantic":
+    # sanity check on the voxel merge, meaningless for a semantic part proxy or a
+    # hand-placed one, both of which are deliberately part-spanning AABBs with no
+    # voxel notion at all.  Applying it there is a category error, not a finding.
+    if row.get("proxy_kind") in NON_VOXEL_KINDS:
         row["G7_overfill_pitch"] = "n/a"
     else:
         checks["G7_overfill_pitch"] = (
             row["interior_overfill_frac_pitch"] <= BARS["G7_overfill_pitch_max"]
         )
+    support = L.support_contact_metrics(mesh_path, boxes, list(meta.get("parts") or []))
+    row.update(
+        {
+            "support_box_count": support["support_box_count"],
+            "support_bottom_spread_m": support["support_bottom_spread_m"],
+            "support_bottom_offset_min_m": support["support_bottom_offset_min_m"],
+            "support_bottom_offset_max_m": support["support_bottom_offset_max_m"],
+            "support_bottom_worst_abs_m": support["support_bottom_worst_abs_m"],
+            "floating_leg_labels": ",".join(support["floating_leg_labels"]),
+        }
+    )
+    checks["G10_support_coplanar"] = (
+        support["support_box_count"] >= 1
+        and support["support_bottom_worst_abs_m"] <= BARS["G10_support_offset_max"]
+    )
+
     row.update({k: str(v).lower() for k, v in checks.items()})
     row["G6_overfill_5cm"] = row["interior_overfill_frac_5cm"]
     row["G6_needs_waiver"] = str(
@@ -111,7 +138,7 @@ def evaluate(object_key: str, n_max: int, frozen_tc: int | None = None) -> dict[
     row["geom_reduction"] = (
         f"{row['draft_geom_count']}->{n}" if row["draft_geom_count"] else f"?->{n}"
     )
-    if row.get("proxy_kind") == "semantic":
+    if row.get("proxy_kind") in NON_VOXEL_KINDS:
         row["target_cells"] = "n/a"
     row["hard_gates_pass"] = str(all(checks.values())).lower()
     row["failed_gates"] = ",".join(k for k, v in checks.items() if not v)
@@ -150,10 +177,12 @@ def main() -> int:
                 raise SystemExit(
                     f"--frozen-target-cells needs an existing {prev}; run a full audit once first"
                 )
+            # Semantic/manual rows carry target_cells="n/a" — there is nothing to
+            # freeze for them, and int() would abort the whole run.
             frozen[n_max] = {
                 r["object_key"]: int(r["target_cells"])
                 for r in C.read_tsv(prev)
-                if r.get("target_cells")
+                if (r.get("target_cells") or "").lstrip("-").isdigit()
             }
 
     all_rows: dict[int, list[dict[str, Any]]] = {}
@@ -176,6 +205,9 @@ def main() -> int:
             "G1_box_budget", "G3_mesh_to_proxy_p90", "G4_mesh_to_proxy_max",
             "G5_proxy_to_mesh_p90", "G7_overfill_pitch",
             "G6_overfill_5cm", "G6_needs_waiver",
+            "G10_support_coplanar", "support_box_count", "support_bottom_spread_m",
+            "support_bottom_offset_min_m", "support_bottom_offset_max_m",
+            "support_bottom_worst_abs_m", "floating_leg_labels",
             "hard_gates_pass", "failed_gates", "feasible_target_cells",
             "bar_passing_target_cells", "selection_rule",
             "edited", "removed_indices", "n_boxes_before_edit", "editor",
@@ -190,15 +222,25 @@ def main() -> int:
     # would map "delete index 3" onto the wrong box.
     cache: dict[str, Any] = {}
     edits_now = L.load_box_edits()
+    tc_by_key = {
+        r["object_key"]: r.get("target_cells")
+        for r in all_rows[args.n_max]
+        if r.get("build_ok")
+    }
     for k in keys:
         try:
-            if k in S.SEMANTIC_SPEC:
+            manual = MB.manual_boxes_for(k)
+            if manual is not None:
+                boxes, parts = manual
+                kind, tc = "manual", -1
+            elif k in S.SEMANTIC_SPEC:
                 boxes, meta = S.build_semantic_boxes(k)
                 kind = "semantic"
                 parts = list(meta.get("parts", []))
                 tc = -1
             else:
-                tc = int(frozen.get(args.n_max, {}).get(k) or 0)
+                raw = tc_by_key.get(k) or frozen.get(args.n_max, {}).get(k)
+                tc = int(raw) if str(raw).lstrip("-").isdigit() else 0
                 if tc <= 0:
                     continue
                 boxes, _pitch = L._boxes_at(C.object_mesh_path(k), tc, args.n_max)
@@ -310,14 +352,18 @@ def main() -> int:
 
 
 def landed_object_keys() -> tuple[str, ...]:
-    """Object keys that actually landed cases in S1 (desk005 dropped out)."""
+    """Object keys still in play: landed cases in S1 and not user-dropped.
+
+    desk005 fell out at S1 (0 cases); chair021 was dropped by hand review.
+    """
+    in_play = tuple(k for k in C.OBJECT_KEYS if k not in C.DROPPED_OBJECT_KEYS)
     authority = (
         C.S1_DIR / "raw_contact" / f"raw_contact_pass_{C.PRIMARY_CONTACT_LABEL}_move2only.tsv"
     )
     if not authority.exists():
-        return C.OBJECT_KEYS
+        return in_play
     keys = {row["object_key"] for row in C.read_tsv(authority)}
-    return tuple(k for k in C.OBJECT_KEYS if k in keys)
+    return tuple(k for k in in_play if k in keys)
 
 
 if __name__ == "__main__":

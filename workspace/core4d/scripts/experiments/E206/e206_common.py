@@ -47,6 +47,14 @@ DESK_KEYS = ("desk005", "desk007", "desk020", "desk021", "desk023")
 CHAIR_KEYS = ("chair005", "chair006", "chair020", "chair021", "chair022")
 OBJECT_KEYS = DESK_KEYS + CHAIR_KEYS
 
+# Dropped by the user after the 2026-09-03 hand review: chair021's geometry does
+# not admit a proxy worth running.  It was the only object still carrying a
+# hand-deleted voxel draft rather than a re-placed box set, and had already been
+# queued last for CEM on that basis.  Its 9 S1 cases leave E206 with it
+# (74 -> 65 cases, 9 -> 8 objects).  Kept inside OBJECT_KEYS so the exclusion is
+# auditable rather than silent, exactly like SIZE_GATE_EXCLUDED_KEYS below.
+DROPPED_OBJECT_KEYS = ("chair021",)
+
 # desk001 is hard-rejected by the S1 AABB size gate
 # (reject_too_large_box025_or_larger); kept here only so the exclusion is
 # auditable rather than silent.
@@ -290,6 +298,7 @@ def is_in_scope(row: dict[str, str]) -> bool:
     """Inventory/raw-contact row is an E206 candidate."""
     return (
         row.get("object_key") in OBJECT_KEYS
+        and row.get("object_key") not in DROPPED_OBJECT_KEYS
         and row.get("action") in MOVE2_ACTIONS
         and not row.get("hard_reject_reason")
     )

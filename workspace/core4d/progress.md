@@ -1,6 +1,21 @@
 # CORE4D 当前进度
 
-## 当前：E204(noPRG) / E205(G1A2) — 复用 E178 的 27 bucket case 做两 arm 重定向 + 三 arm 对比（plan234，脚本已实现+验证，待用户 8 卡机跑 CEM）
+## 当前：E206 — desk+chair 走 dcv3 全流程（S0–S2 已闭合，等 P3 吞吐冻结后开 CEM）
+
+### 2026-09-03 · P2.3b 人工重摆碰撞体 + G10 支撑面门 + chair021 退出
+
+- **规模定稿：65 case / 8 物体 / 130 条双 arm CEM**。S1 落地 74/9；`desk005` 在 S1 归零退出；`chair021` 因几何不支持值得跑的 ≤16-box 代理，由用户直接弃用（`e206_common.DROPPED_OBJECT_KEYS`，保留在 OBJECT_KEYS 内使排除可审计）。
+- **碰撞代理路线改变**：原计划「自动体素 + 人工只能删 box」。实测删 box 救不了最差的椅子（chair005/chair022 腔体过填 0.41，**不存在正确的 box 子集**），故新建 `edit_proxy_3d.py` 让用户自由重摆 —— 中心 gizmo 平移 + box 两角 gizmo 拉伸（viser 无 scale gizmo）、`⇲贴合`/`⇔镜像`、未覆盖 mesh 红点云、**逐 box 腔体过填**（union 级单一数字无法定位是哪个 box 坏）。
+- **存储从索引改成绝对几何**：`manual_boxes.json`（center/half_size/label）取代 `box_edits.json` 的「原始 build 序索引 + 指纹」。索引方案已实际损坏过 3 个物体的记录（chair020 直接崩、desk020/chair006 被判 stale 而 build 失败）。新方案与种子代理彻底解耦，该类 bug 在设计上不可能再发生。
+- **手编收益（实测）**：chair022 过填 0.41→0.12、chair006 0.26→0.06、chair005 0.41→0.23、desk021 mesh→proxy p90 0.042→0.005。契约从 4/9 变 **8/8 `all_pass=true`，G6 豁免需求归零** —— 原先「椅子座下被填实、机器人腿无法从椅下摆过」的结论边界声明可撤销。
+- **新增 G10 支撑面共面门**（用户提出）：桌椅 3/4 条腿必须同时着地。现有 G3/G4/G5 都是聚合距离，一条腿差 12mm 对 p90 影响为零，**没有任何门看得见**。实测手编后 8/8 不合格：chair020 高低差 11.7mm（只站一条腿）、chair022 16.0mm、desk020 三块底座穿地 2–3cm（桌子浮空）、desk023 四腿整体穿地 5mm。`align_supports.py` 顶面固定、底面落到地面（腿连在座面上，短腿要往下长），逐 box 打印位移 → 8/8 归零。
+- **5 个真 bug**：① dcv3 材质替换正则 miss 后静默 no-op；② 6 个物体的 mesh 资产从未物化，源模板连 MuJoCo 都加载不了（影响 41/74 case）；③ E176 `center_inside_count` 断言卡死全部 5 把椅子；④ 语义分支无条件重放 voxel 时代索引记录（desk020 的记录还被 `_edited_voxel_boxes_below` 正当消费过一次，等于同一条编辑应用两遍）；⑤ **复审 TSV 只写 person1** —— 而 `run_stage2b.py:168` 的闸按 task 判，34/65 个 case（全部 person2）会被静默 hold，同时 `desk020_person1` 拿到 approve 却一个 case 都没有。
+- **落盘状态**：15/15 模板 applied（签名稳定 / 全 box / nq,nv,nu=43,41,29 / 与代理逐位一致）；复审 15 行全签 `approve_clean`，65/65 case `clean_reviewed`；`results/E206/scene_snapshot/` 43 文件 + sha256；30 个 scene XML `git add -f`。
+- **下一步**：P3 吞吐冻结（压力比计划期小：130 条、实装最大 12 box 而非 16，A2 中位墙钟上限 155→177 min/task）→ P5 起 S3–S6。P6 之前必须先把 `eval_E176_contact_fidelity.py` 的硬编码 `>9` 参数化，否则 G8 一跑就断言失败。
+
+---
+
+## 上一阶段：E204(noPRG) / E205(G1A2) — 复用 E178 的 27 bucket case 做两 arm 重定向 + 三 arm 对比（plan234，脚本已实现+验证，待用户 8 卡机跑 CEM）
 
 ### 2026-08-23 · plan234 + 全套脚本实现 + 端到端验证
 

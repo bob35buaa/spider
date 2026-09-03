@@ -40,6 +40,7 @@ import e206_common as C  # noqa: E402  (sets up sys.path for the imports below)
 
 from lowgeom_proxy import (  # noqa: E402  E176 authority
     ProxyBox,
+    _sample_proxy_surface,
     fidelity_metrics,
     load_mesh,
     point_to_proxy_surface_distance,
@@ -53,12 +54,16 @@ from build_or_audit_templates import (  # noqa: E402  dcv3 authority
 __all__ = [
     "BOX_EDITS_PATH",
     "ProxyBox",
+    "align_support_boxes",
     "apply_box_edits",
+    "support_contact_metrics",
     "build_lowgeom_boxes",
     "cavity_metrics",
     "fidelity_metrics",
+    "fidelity_metrics_fast",
     "load_box_edits",
     "load_mesh",
+    "mesh_surface_distance",
     "point_to_proxy_surface_distance",
     "proxy_xml",
     "save_box_edits",
@@ -286,6 +291,61 @@ def select_target_cells(scored: list[dict[str, Any]]) -> int:
 
 
 # --------------------------------------------------------------------------
+# Point-to-mesh distance: exact bar-scoring path vs. interactive fast path
+# --------------------------------------------------------------------------
+# `closest_point_naive` is O(points x triangles) brute force.  E176 used it and
+# every contract number to date was produced with it, so it stays the default:
+# switching it under the frozen numbers would silently break逐位 reproducibility
+# against log235.  `closest_point` is the same query through trimesh's R-tree —
+# measured on chair022 / 4000 points: 5.90 s -> 0.50 s (12x), max |delta| 3.9e-7,
+# i.e. numerically the same answer.  The 3D box editor recomputes fidelity after
+# every drag, where 6 s per frame is unusable and 4e-7 is irrelevant.
+def mesh_surface_distance(
+    mesh: trimesh.Trimesh, points: np.ndarray, *, fast: bool = False
+) -> np.ndarray:
+    """Unsigned distance from each point to the mesh surface."""
+    query = trimesh.proximity.closest_point if fast else trimesh.proximity.closest_point_naive
+    _, distance, _ = query(mesh, points)
+    return np.asarray(distance, dtype=np.float64)
+
+
+def fidelity_metrics_fast(
+    mesh_path: Path,
+    boxes: list[ProxyBox],
+    *,
+    mesh_sample_count: int = 2_000,
+    proxy_samples_per_face: int = 16,
+) -> dict[str, float]:
+    """Same metrics as E176's `fidelity_metrics`, R-tree query + fewer samples.
+
+    For interactive use only.  The contract is always written from the exact
+    function; this one exists so the editor can show a live number.
+    """
+    mesh = load_mesh(Path(mesh_path))
+    state = np.random.get_state()
+    try:
+        np.random.seed(0)
+        mesh_points, _ = trimesh.sample.sample_surface(mesh, mesh_sample_count)
+    finally:
+        np.random.set_state(state)
+    mesh_to_proxy = point_to_proxy_surface_distance(mesh_points, boxes)
+    proxy_points = _sample_proxy_surface(
+        boxes, samples_per_face=proxy_samples_per_face, rng=np.random.default_rng(0)
+    )
+    proxy_to_mesh = mesh_surface_distance(mesh, proxy_points, fast=True)
+    return {
+        "mesh_to_proxy_p50_m": float(np.quantile(mesh_to_proxy, 0.50)),
+        "mesh_to_proxy_p90_m": float(np.quantile(mesh_to_proxy, 0.90)),
+        "mesh_to_proxy_p95_m": float(np.quantile(mesh_to_proxy, 0.95)),
+        "mesh_to_proxy_max_m": float(mesh_to_proxy.max()),
+        "proxy_to_mesh_p50_m": float(np.quantile(proxy_to_mesh, 0.50)),
+        "proxy_to_mesh_p90_m": float(np.quantile(proxy_to_mesh, 0.90)),
+        "proxy_to_mesh_p95_m": float(np.quantile(proxy_to_mesh, 0.95)),
+        "proxy_to_mesh_max_m": float(proxy_to_mesh.max()),
+    }
+
+
+# --------------------------------------------------------------------------
 # Cavity measurement (replaces E176 center_inside_count)
 # --------------------------------------------------------------------------
 def _sample_inside_boxes(boxes: list[ProxyBox], count: int, seed: int = 0) -> np.ndarray:
@@ -311,6 +371,7 @@ def cavity_metrics(
     *,
     sample_count: int = 6000,
     seed: int = 0,
+    fast: bool = False,
 ) -> dict[str, float]:
     """How much of the proxy volume is nowhere near the real mesh.
 
@@ -329,8 +390,7 @@ def cavity_metrics(
             "proxy_volume_over_mesh_aabb": 0.0,
             "interior_dist_p90_m": 0.0,
         }
-    _, distance, _ = trimesh.proximity.closest_point_naive(mesh, points)
-    distance = np.asarray(distance, dtype=np.float64)
+    distance = mesh_surface_distance(mesh, points, fast=fast)
     pitch_max = float(np.max(pitch))
     proxy_volume = float(sum(np.prod(2.0 * b.half_size) for b in boxes))
     aabb_volume = float(np.prod(mesh.extents))
@@ -345,6 +405,108 @@ def cavity_metrics(
 
 
 # --------------------------------------------------------------------------
+# Support-plane check: do the legs all reach the floor, and only the floor?
+# --------------------------------------------------------------------------
+# A desk/chair rests on 3-4 legs.  If the proxy's leg boxes end at different
+# heights the object stands on whichever one is lowest and rocks on the rest:
+# the physics sees a one-legged contact where the real object has four, and the
+# tilt is fabricated by the proxy.  The mirror failure is a box that reaches
+# BELOW the mesh, which floats the whole object off the ground.
+#
+# Neither shows up in any existing gate: G3/G4/G5 are aggregate distances, and a
+# 12 mm leg-length error moves a p90 by nothing.  Hence G10.
+UP_AXIS = 1  # object-local +Y is up for every CORE4D desk/chair (semantic_proxy.py:37)
+SUPPORT_BAND_M = 0.02   # bottom within 2 cm of the mesh floor => load-bearing
+SUPPORT_TOL_M = 0.005   # G10 bar: every load-bearing bottom within 5 mm of the floor
+
+
+def support_contact_metrics(
+    mesh_path: Path,
+    boxes: list[ProxyBox],
+    labels: list[str] | None = None,
+    *,
+    band: float = SUPPORT_BAND_M,
+) -> dict[str, Any]:
+    """How level the load-bearing box bottoms are against the true floor."""
+    mesh = load_mesh(Path(mesh_path))
+    floor = float(mesh.bounds[0][UP_AXIS])
+    bottoms = np.array(
+        [float(b.center[UP_AXIS] - b.half_size[UP_AXIS]) for b in boxes], dtype=np.float64
+    )
+    offsets = bottoms - floor
+    support = offsets <= band
+    labels = labels or [""] * len(boxes)
+    # A box the reviewer named "leg" that does not reach the floor is either a
+    # mislabelled strut or a leg that got left short — worth surfacing either way.
+    floating = [
+        labels[i]
+        for i in range(len(boxes))
+        if i < len(labels) and str(labels[i]).startswith("leg") and not support[i]
+    ]
+    if not support.any():
+        return {
+            "support_box_count": 0,
+            "support_bottom_spread_m": 0.0,
+            "support_bottom_offset_min_m": 0.0,
+            "support_bottom_offset_max_m": 0.0,
+            "support_bottom_worst_abs_m": float("inf"),
+            "support_floor_y_m": floor,
+            "support_indices": [],
+            "floating_leg_labels": floating,
+        }
+    picked = offsets[support]
+    return {
+        "support_box_count": int(support.sum()),
+        "support_bottom_spread_m": float(picked.max() - picked.min()),
+        "support_bottom_offset_min_m": float(picked.min()),
+        "support_bottom_offset_max_m": float(picked.max()),
+        "support_bottom_worst_abs_m": float(np.abs(picked).max()),
+        "support_floor_y_m": floor,
+        "support_indices": [int(i) for i in np.flatnonzero(support)],
+        "floating_leg_labels": floating,
+    }
+
+
+def align_support_boxes(
+    mesh_path: Path,
+    boxes: list[ProxyBox],
+    *,
+    band: float = SUPPORT_BAND_M,
+    min_half: float = 0.004,
+) -> tuple[list[ProxyBox], list[dict[str, Any]]]:
+    """Drop every load-bearing box's bottom face onto the floor plane.
+
+    The TOP face is held fixed — a leg is attached to the seat, so a short leg
+    must grow downwards, not slide down and detach.  Returns new boxes plus a
+    per-box record of what moved, so the change is never silent.
+    """
+    mesh = load_mesh(Path(mesh_path))
+    floor = float(mesh.bounds[0][UP_AXIS])
+    out: list[ProxyBox] = []
+    changes: list[dict[str, Any]] = []
+    for index, box in enumerate(boxes):
+        bottom = float(box.center[UP_AXIS] - box.half_size[UP_AXIS])
+        top = float(box.center[UP_AXIS] + box.half_size[UP_AXIS])
+        if bottom - floor > band or top - floor < 2.0 * min_half:
+            out.append(ProxyBox(center=box.center.copy(), half_size=box.half_size.copy()))
+            continue
+        center = box.center.copy()
+        half = box.half_size.copy()
+        half[UP_AXIS] = max((top - floor) / 2.0, min_half)
+        center[UP_AXIS] = top - half[UP_AXIS]
+        out.append(ProxyBox(center=center, half_size=half))
+        changes.append(
+            {
+                "index": index,
+                "bottom_before_m": bottom,
+                "bottom_after_m": float(center[UP_AXIS] - half[UP_AXIS]),
+                "delta_mm": (floor - bottom) * 1000.0,
+            }
+        )
+    return out, changes
+
+
+# --------------------------------------------------------------------------
 # Build
 # --------------------------------------------------------------------------
 def build_lowgeom_boxes(
@@ -356,6 +518,7 @@ def build_lowgeom_boxes(
     sweep_lo: int = SWEEP_LO,
     sweep_hi: int = SWEEP_HI,
     apply_edits: bool = True,
+    measure_metrics: bool = True,
 ) -> tuple[list[ProxyBox], dict[str, Any]]:
     """Deterministic <= n_max axis-aligned box proxy for one object mesh.
 
@@ -428,9 +591,11 @@ def build_lowgeom_boxes(
     }
     meta.update(edit_info)
     # Recomputed on the POST-edit box set, so the contract always describes what
-    # actually gets installed.
-    meta.update(fidelity_metrics(mesh_path, boxes))
-    meta.update(cavity_metrics(mesh_path, boxes, pitch))
+    # actually gets installed.  `measure_metrics=False` is for callers that only
+    # want the geometry (the 3D editor seeding itself).
+    if measure_metrics:
+        meta.update(fidelity_metrics(mesh_path, boxes))
+        meta.update(cavity_metrics(mesh_path, boxes, pitch))
     return boxes, meta
 
 

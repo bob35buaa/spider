@@ -41,7 +41,21 @@ CORE4D v1 的 6 大类里，真正被重定向 + 物理筛选落地的只有 **b
 
 **衰减真因（本实验第一个 finding）**：瓶颈不是接触阈值，是 **`object_rotation >= 45°` 运动硬门，卡掉 56/164（34%）**；`object_lift <= 0.30m` 只卡掉 8 个（5%），接触质量不足 25 个（15%）。双人搬桌/椅本来就常要转向（绕门、调头），而 45° 门是为 box 搬运设的。**E206 不动此门**（保持与 bucket 线 E174/E178/E202/E204/E205 同一 S1 口径，结论可横向比），作为后续实验方向记入 log。
 
-**最终规模**：**74 case × 2 arm = 148 条 CEM**。`desk005` 落地 0 case（6 个候选全被旋转门/接触质量拒），**退出 E206**，实际物体数 **9**。逐物体：desk007 9 / desk020 2 / desk021 17 / desk023 14 / chair005 2 / chair006 13 / chair020 1 / chair021 9 / chair022 7。
+**S1 规模**：74 case / 9 物体。`desk005` 落地 0 case（6 个候选全被旋转门/接触质量拒），**退出 E206**。
+
+## P2.3b 修正（2026-09-03，人工重摆碰撞体后）
+
+计划期的碰撞代理是「自动体素 ≤N_MAX box + 人工 overlay 复审（只能删）」。实测下来删 box 救不了最差的椅子（chair005/chair022 腔体过填 0.41，不存在正确的 box 子集），故追加**自由编辑界面**（`edit_proxy_3d.py`），由用户逐物体重摆 box，存绝对几何于 `manual_boxes.json`，优先级高于 voxel/semantic。详见 [log295 F9–F12](../log/295_E206_desk_chair_move2_dcv3_noprg_prg.md)。
+
+三项口径变更：
+
+| 项 | 变更 |
+|---|---|
+| **物体** | **chair021 弃用**（几何不支持值得跑的 ≤16-box 代理）→ 实际物体数 **8** |
+| **规模** | **65 case × 2 arm = 130 条 CEM**。逐物体：desk007 9 / desk020 2 / desk021 17 / desk023 14 / chair005 2 / chair006 13 / chair020 1 / chair022 7 |
+| **新门 G10** | **支撑面共面**：承重 box（底面距 mesh 地面 ≤2cm）的 `|bottom − floor_y| ≤ 5mm`。见下 P2.2 门表 |
+
+**G6 豁免需求归零**：手编后最高过填是 chair020 的 0.25（< 0.30 告警线）。R3 与 C1 里关于「椅子座下被填实、腿无法摆过」的结论边界声明**全部撤销**。
 
 > **样本量诚实声明**：chair020 只有 1 例、chair005/desk020 各 2 例 —— 这三个物体**不做 per-object arm 推荐**，只并入总体统计并在 log 中标注 n。
 
@@ -120,6 +134,7 @@ grep 43 个 `dcv3_*_{desk,chair}*` 目录的下游消费者 → `$E/preflight/ta
 | G7 | `interior_overfill_frac_pitch ≤ 0.02` | 硬 | 实测最差 0.004 |
 | G8 | ref-FK 接触目标→代理表面 `p90 ≤ 0.08 m`（逐物体） | 硬，P6 执行 | E176 C6 原门，那里 6/6 达成 |
 | G9 | 相对现有 26-cell 草稿，`mesh→proxy p90` 退化 ≤ 0.04 m | 硬 | 证明减 geom 不是保真崩塌 |
+| **G10** | **承重 box 的 `\|bottom − floor_y\| ≤ 5 mm`**（承重 = 底面距 mesh 地面 ≤2cm） | **硬** | **P2.3b 新增。桌椅的 3/4 条腿必须同时着地；一高一低 → 物体只站最低那条腿，倾斜由代理捏造；穿地 → 物体浮空。G3/G4/G5 是聚合距离，一条腿差 12mm 对 p90 影响为零，此前无门可见。实测手编后 8/8 全部不合格（高低差 0.4–16.0 mm），`align_supports.py` 对齐后 8/8 归零** |
 
 G6 的诚实表述：N_MAX=16 下椅子过填预期从 42–45% 明显下降（M2），但**必须逐物体实测重报，不能拿 N=9 数字外推**。若 P3 被迫回落到 9，粗椅子会填掉座下空间（腿无法从椅下摆过）—— 有物理后果的近似，**必须显式声明+复审+豁免**，不能静默通过。
 
@@ -135,7 +150,7 @@ G6 的诚实表述：N_MAX=16 下椅子过填预期从 42–45% 明显下降（M
 
 **预注册准入判据**：
 - **A1（单任务）** N=16 + compile 开，中位总墙钟 **≤ 120 min/task**。依据：E203 确立 N=1 时 ~46min 为接受常态；N=16 是 16× geom / 288× pair，120min ≈ 2.6× 容差。
-- **A2（队列）** `74 case × 2 arm = 148 条 ÷ 8 GPU ≤ 48 h` → 中位墙钟须 ≤ **155 min/task**；A1 的 120min 门比它更紧，故 A1 成立即 A2 成立。driver 是 slot 池 + rollout-npz 为键的 skip-already-done，**全程可中断可续跑**。
+- **A2（队列）** `65 case × 2 arm = 130 条 ÷ 8 GPU ≤ 48 h`（P2.3b 后：chair021 弃用，148→130）→ 中位墙钟须 ≤ **177 min/task**；A1 的 120min 门比它更紧，故 A1 成立即 A2 成立。driver 是 slot 池 + rollout-npz 为键的 skip-already-done，**全程可中断可续跑**。
 - **A2b（优先级排队）** 队列按 **① desk007 全部 9 例（C5a 命脉，与 E174 同 case）→ ② 每物体 round-robin → ③ 余量** 排序。**腰斩时也保证每物体有样本、C5a 一定有数据**。
 - **A3（回落）** A1/A2 在 16 不成立时：开 `object_collision_sdf_batch_groups=true`（E176 实测 −2~4%，C10 已验证数值等价）→ 回落 **N_MAX=9**（M1 已验证 10/10 可行，椅子过填按 G6 走豁免）→ 缩物体范围 → 最后才对**两 arm 对称**降 `num_samples`。**每步记录，绝不静默超预算。**
 
@@ -218,8 +233,8 @@ cem_leg_gate_geom_names: [<同上 16>]
 
 | ID | Claim | 数值门 |
 |---|---|---|
-| **C0** | dcv3 S0→S6 在 desk+chair move2_* 上闭合 | ✅ S1 部分已达成：164 候选在两阈值下各 100% 有终态，落地 74 case / 9 物体。余下：Stage2b 成功 ≥ **90%** of `clean_reviewed`；S4 机器门 pass ≥ **90%** of Stage2b 成功；**0** 条无法解释的丢失 |
-| **C1** | 每个在范围物体得到满足契约的 ≤N_MAX box 代理 | **10/10** 物体 G1,G2,G3,G4,G5,G7 pass；G8 逐物体 `p90 ≤ 0.08 m` |
+| **C0** | dcv3 S0→S6 在 desk+chair move2_* 上闭合 | ✅ S1 部分已达成：164 候选在两阈值下各 100% 有终态，落地 74 case / 9 物体（P2.3b 人工弃用 chair021 后 **65 case / 8 物体**）。余下：Stage2b 成功 ≥ **90%** of `clean_reviewed`；S4 机器门 pass ≥ **90%** of Stage2b 成功；**0** 条无法解释的丢失 |
+| **C1** | 每个在范围物体得到满足契约的 ≤N_MAX box 代理 | ✅ **已达成（8/8，`all_pass=true`）**：G1,G2,G3,G4,G5,G7,**G10** 全过，G6 零豁免。余下 G8 逐物体 `p90 ≤ 0.08 m`（P6 执行） |
 | **C2** | lowgeom 相对现有草稿是严格改进 | geom 数 `37–127 → ≤N_MAX` 覆盖 100% 物体，**且** `mesh→proxy p90` 相对 26-cell 草稿退化 ≤ **0.04 m** |
 | **C3** | 吞吐被重新实测并给出准入 | `admission_decision.json` ≥16 行实测；N_MAX=16 下中位全预算墙钟 ≤ **120 min/task**；按 P1 实际 case 数投影的双 arm 队列 ≤ **48 h**；队列优先级序已冻结。E176 的 3.0s 门显式作废并记录理由 |
 | **C4** | 两 arm 严格单变量 | **100%，零容忍**：语义 diff 恰为 16N 腿对；pair 2N/18N；两 arm 均 rubber-hull mesh 手且 `gravcomp=0`；composed config 恰差 5 键；两 arm hand-gate 均 == `E163_HAND_GATE` |
@@ -241,10 +256,10 @@ cem_leg_gate_geom_names: [<同上 16>]
 |---|---|---|---|
 | R1 | ~~S1 落地 case 太少~~ **已消解**：实测 74 case / 9 物体，远高于停机线 12 | — | P1 已过 |
 | **R1b** | ~~改 5cm 造成口径断裂~~ **已消解**：实测 5cm 只多 2 个 case，遂改回 3cm 单一口径，与全线同尺，桥接层取消 | — | P1 已过 |
-| **R1c** | 队列规模：**74×2 = 148 条**，叠加 N_MAX=16（288 对/场景）可能跑不完 | A2 = 48h 上限（slot 池 + skip-already-done，可中断续跑）；**A2b 优先级排队**保证腰斩时每物体有样本、C5a 一定有数据；再不够走 A3 回落 N_MAX=9 | P3 / P8 |
+| **R1c** | 队列规模：P2.3b 后 **65×2 = 130 条**（原 148），最大 box 数 12（原 16）→ 压力已降 | A2 = 48h 上限（slot 池 + skip-already-done，可中断续跑）；**A2b 优先级排队**保证腰斩时每物体有样本、C5a 一定有数据；再不够走 A3 | P3 / P8 |
 | **R1d** | **chair020 n=1、chair005/desk020 n=2** —— 这三个物体没有 per-object 统计力 | 只并入总体，**不出 per-object arm 推荐**，log 中逐物体标 n；C5b 的 arm 结论以总体 74 例为准 | P9 |
 | R2 | E176 `center_inside_count` 卡死全部椅子（**已实测必然发生**） | P2.1 用 `cavity_metrics` 替换；**不是简单删断言**，保留腔体保证 | P2.1 |
-| R3 | ~~N=9 椅子腔体过填 42–45%~~ 已由 N_MAX=16 缓解（M2 实测分辨率 ~1.5×）。残余 = P3 实测下 16 不可负担被迫回落到 9 | 回落时逐物体 `waived_checks` + log 结论边界声明"chair006/021/022 座下空间被填实，leg_pen 与 contact 不可与 box/bucket 线比较" | P3 |
+| R3 | ~~N=9 椅子腔体过填 42–45%~~ **已消解**：P2.3b 人工重摆 box 后最高过填 0.25（chair020），**G6 零豁免**，无需任何结论边界声明。实装最大 box 数 12 | — | P2.3b 已过 |
 | R4 | P5 覆盖 43 个既有任务目录（**已实测必然发生**） | P0 覆盖前快照 + `git add -f` + 消费者 grep | P0 |
 | R5 | OmniRetarget 全量重解耗时 + CVXPY infeasible | `KEEP_GOING=1` 逐 case 隔离（`pipeline.sh:19-22`）；`run_stage2b_queue.py` 并行；v2 Phase-4 rescue；重定向墙钟单独上报 | P5 |
 | R6 | N=16 吞吐超预算 | A3 阶梯：`batch_groups` → 回落 N_MAX=9 → 缩物体 → **两 arm 对称**降预算，每步记录 | P3 |

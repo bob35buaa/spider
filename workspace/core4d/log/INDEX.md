@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 294 个日志文件。
+> 自动生成，共 295 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 64 (E201-E201)
@@ -611,3 +611,4 @@
 | 54 | - |  | Collision box bug fix | [54_collision_box_bug_fix.md](54_collision_box_bug_fix.md) |
 | 82 | - |  | Pre contact body tracking diagnosis | [82_pre_contact_body_tracking_diagnosis.m...](82_pre_contact_body_tracking_diagnosis.md) |
 | 87 | - |  | R4 HDMI diagnosis init pose bug | [87_R4_HDMI_diagnosis_init_pose_bug.md](87_R4_HDMI_diagnosis_init_pose_bug.md) |
+| 295 | E206, e2 |  | Desk chair move2 dcv3 noprg prg | [295_E206_desk_chair_move2_dcv3_noprg_prg...](295_E206_desk_chair_move2_dcv3_noprg_prg.md) |
