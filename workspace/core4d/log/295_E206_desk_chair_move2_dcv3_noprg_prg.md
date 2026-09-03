@@ -1,16 +1,16 @@
 # log295 · E206：desk+chair 走 dcv3 全流程 + 非凸碰撞代理 + noPRG/PRG 双 arm
 
-_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：S0–S2 全部闭合（P0/P1/P2/P2.3b/P4 完成，复审已签）；P3 及 P5–P10 未开始**_
+_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：S0–S5 全部闭合（P0–P2/P4–P7 完成）；P3 吞吐实测进行中；P8–P10 未开始**_
 
 > 本 log 是**中途快照**，不是结论。写它的目的是把已确认的事实、已修的坑、和**还没解决的问题**固定下来，避免后续重复踩。最终结论待实验跑完后补。
 
 ## 一句话进展
 
-desk+chair 的 dcv3 上游（S0/S1/S2）**已全部闭合**：**65 case / 8 物体**（desk005 在 S1 落地 0 case、chair021 因代理质量被人工弃用），8 个物体的碰撞代理全部由**人工在 3D 界面里逐个重摆 box** 完成，契约 **8/8 hard gates pass（含新增 G10 支撑面共面）、`all_pass=true`、G6 豁免需求归零**，15/15 源模板已装上并通过 MuJoCo 加载 / 签名稳定 / 与代理逐位比对，复审 **15 行全签、65/65 case 模板 `clean_reviewed`**。
+desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 物体（desk005 落地 0 case、chair021 因代理质量被人工弃用），8 个物体的碰撞代理全部由**人工在 3D 界面里逐个重摆 box** 完成，契约 **8/8 hard gates pass（含新增 G10 支撑面共面）、`all_pass=true`、G6 豁免需求归零**；S3 重定向 **54/65 pass**（11 例 CVXPY infeasible），S4 目标门 **54/54 = 100% pass**，S5 handoff 54 行；P7 的双 arm 场景与 override **54/54 全部构建并通过 C4 单变量审计**。**最终队列 = 54 case × 2 arm = 108 条 CEM**（不是计划期的 130）。
 
 手编相对自动代理是实质改进：chair022 腔体过填 **0.41→0.12**、chair006 **0.26→0.06**、chair005 **0.41→0.23**、desk021 的 mesh→proxy p90 **0.042→0.005**。
 
-过程中挖出 **5 个真 bug**（F4/F6/F7 在 E176/dcv3 上游；F10/F13 在 E206 自身，其中 F13 会让 34/65 个 case 在 Stage2b 被静默 hold）和 **8 个我自己引入的性能/口径问题**（第四节）。CEM 尚未开跑。
+过程中挖出 **7 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局）和 **10 个我自己引入的性能/口径问题**（第四节）。另有 **F15**：管线可复现性并非处处成立（19/22 逐位一致，3 例发散）。CEM 尚未开跑。
 
 ---
 
@@ -28,8 +28,15 @@ desk+chair 的 dcv3 上游（S0/S1/S2）**已全部闭合**：**65 case / 8 物�
 | P2.3b chair021 退出（F12） | ✅ 65 case / 8 物体 | — |
 | P4b 15/15 模板装手编代理 | ✅ | — |
 | P2.3 **人工 approve_clean 复审**（F13） | ✅ 15 行/8 物体，65/65 case | — |
-| P3 吞吐实测冻结 N_MAX | ⏳ 未开始 | — |
-| P5–P10 | ⏳ 未开始 | — |
+| U7/R10 `--max-object-geoms` 参数化 + 去 E174 列名硬编码 | ✅ 39/39 行向后兼容已证 | — |
+| U4 `measure()` memo 化 | ✅ audit 4m09s→**2m17s**，输出逐位不变 | — |
+| **P5 S3 重定向**（omnirt_v1，24 分片并行） | ✅ **54/65 pass**，11 infeasible（F14 救回 1） | — |
+| **P5b E145 可复现性交叉校验**（F15） | ✅ 22 例对照：19 逐位一致 / 3 发散 | — |
+| **P6a S4 目标门** | ✅ **54/54 = 100% pass** | — |
+| **P7a S5 handoff + 基座 override** | ✅ 54 行 / 54 个 | — |
+| **P7b 双 arm 场景 + override**（F16） | ✅ **54/54 建成，C4 审计全过** | — |
+| P3 吞吐实测冻结 N_MAX | 🔄 8 探针在 8 卡上跑（真实场景，N∈{2,5,7,9,10,12}） | — |
+| P6b 视觉 QC + G8 接触保真 / P8–P10 | ⏳ 未开始 | — |
 
 ---
 
@@ -262,6 +269,128 @@ box 删除记录进 `s2_proxy/box_edits.json`，带 `proxy_kind`/`target_cells`/
 
 ---
 
+## 三之二、S3–S5（P5/P6a/P7，2026-09-03）
+
+### 执行顺序相对 plan236 的调整（有据）
+
+计划序是 P3（吞吐）→ P5（S3）。实际开工时 **8 张 GPU 被无关负载 `redaccel/tuner` 全部占满（100% util、40–54 GB）** —— 这正是 R12 记录的风险，E203 已被它坑过一次（MPC step 从常态涨到 211s）。在争用下测吞吐得到的是废数。
+
+核实 **S3 全链路无 CUDA**（`run_stage2b.py` / `pipeline.sh` / `robot_retarget.py` 均无 cuda/torch 引用，OmniRetarget 是 CVXPY+IK 的 CPU 负载），且 **P3 只 gate P8（CEM 队列），不 gate P5**，故把 P5 提前到 P3 之前跑。GPU 空出后再补 P3。这个重排不改变任何结论的依据。
+
+### S3 结果（omnirt_v1，24 分片并行，192 核）
+
+| 终态 | 数量 |
+|---|---:|
+| `pass` | **54** |
+| `omniretarget_infeasible` | 11 |
+| 合计 | 65 |
+
+逐物体 pass：desk007 9 / desk021 13 / desk023 11 / chair006 10 / chair022 7 / chair005 2 / chair020 1 / desk020 1。
+
+**S4 目标门：54/54 = 100% pass**（11 个 not_run 就是 infeasible 那批）。C0 要求「S4 机器门 pass ≥ 90% of Stage2b 成功」→ 达成。
+S5 handoff 54 行、基座 override 54 个。
+
+> **规模变化**：队列从计划期的 130 条降到 **54 × 2 = 108 条**。desk020 从 2 例降到 **1 例**，与 chair020 一样落到 **n=1** —— F3 的样本量声明范围扩大：**chair020 与 desk020 都不出 per-object arm 推荐**。
+
+### F14 · `ensure_g1_object_xml` 大小写敏感，让 desk020 整个物体出局（已修，真 bug）
+
+desk020 的两个 case 都以 `preprocess_fail` 告终，日志只有一行：
+
+```
+missing g1 object XML and no template seed for Desk020
+```
+
+根因在 `pipeline.sh:201` 的 seed 查表：
+
+```bash
+case "$object_name" in
+  desk*) seed="desk005" ;;      # <- 小写模式
+```
+
+而 **CORE4D 源数据里 object_name 的大小写本身就不一致**：`Desk020` / `Desk021` / `Desk023` 是大写，`desk007` / `chair005/006/020/022` 是小写。bash `case` 大小写敏感，`Desk020` 一个模式都不匹配 → 落到 `*)` 报错。
+
+它只在**同时满足两个条件**时才发作：源数据大写 **且** `g1_29dof_w_<Name>.xml` 尚未生成过。Desk021/Desk023 同样是大写，但它们的 XML 早就在磁盘上，走了第 197 行的提前返回，所以从没暴露过。E206 里恰好只有 desk020 两个条件都占。
+
+修法：`case "${object_name,,}" in` —— 只对**小写副本**做类别匹配，一行。修后 desk020 的 2 个 case 重跑，**1 个 pass、1 个是真的 CVXPY infeasible**（不再是资产 bug）。
+
+> 这与 F6（6 个物体的 mesh 资产从未物化）是同一族问题：**这些物体从来没被完整 onboard 过**，只是各自卡在不同的一步上。
+
+### F15 · 管线不是处处可复现：22 例对照中 3 例发散（新发现，未解决）
+
+plan236 P5 要求「重建而非复用既有 43 个目录」，并把重叠 case 与 E145 的比对列为**副产品**：相同输入 + 相同 omnirt_v1 参数**应当**复现，不符即为独立发现。
+
+覆盖前先把 22 个在范围 case 的既有 `trajectory_kinematic.npz` 抢救到 `s3_retarget/e145_baseline/`（**P0 快照只存了 scene XML，不含轨迹 —— 不先抢救，这个校验就永久做不成了**），S3 跑完后逐数组比对：
+
+| 判定 | 数量 |
+|---|---:|
+| `identical`（逐位，max\|Δ\|=0） | **19** |
+| `diverged` | **3** |
+
+发散的 3 例，帧数完全一致（trim 相同），差在解本身：
+
+| case | qpos | qvel | ctrl | contact |
+|---|---:|---:|---:|---:|
+| chair005_20231030_043_p2 | 0.041 | **1.221** | 0.041 | 0.0 |
+| chair005_20231030_043_p1 | 0.055 | **1.096** | 0.055 | 0.0 |
+| desk023_20231030_019_p1 | 0.0033 | 0.097 | 0.0033 | 0.0 |
+
+读法：`contact` 三例全为 0 → **接触掩码与 trim 是确定性的**；`ctrl` 的偏差恒等于 `qpos`（ctrl 由目标位姿导出）；`qvel` 是有限差分，把 qpos 的偏差放大一到两个数量级。所以根源是 **IK/QP 收敛到了略微不同的解**（最大 0.055 rad ≈ 3.1°），不是数值噪声，也不是数据不同。
+
+**对 E206 的影响：无。** E206 全程用自己这一轮生成的轨迹，内部自洽。真正的意义在跨实验可比性 —— 而**恰恰关键的 desk007 9/9 全部逐位一致**，所以 **C5a（与 E174 desk007 同尺对比）的基线是可复现的**，这条核心科学看点站得住。chair005 是 2/2 全发散、desk023 是 1/5。
+
+**未解决**：没有定位到非确定性的具体来源（候选：QP 求解器的多线程调度、约束松弛路径）。记为后续方向；在此之前，**任何跨实验的逐 case 数值对比都必须先跑这个校验**，不能默认可复现。
+
+### F16 · C4 的「恰好 5 键」与实装不符（已修，真 bug）
+
+`build_overrides.py` 的 C4 审计第一次跑就全部失败：
+
+```
+unexpected cross-arm diff keys: ['cem_leg_gate_fallback', 'cem_leg_gate_hard_floor_m',
+ 'cem_leg_gate_max_violation_pct', 'cem_leg_gate_min_sdf_m', 'cem_leg_gate_min_valid_frac',
+ 'leg_object_penalty_gate_source', 'leg_object_penalty_margin_m']
+```
+
+plan236 C4 冻结的是「composed config 差异**恰为 5 键**」，但 `e206_common.PRG_OVERRIDES` 实际还设了 7 个腿约束**参数**。两种处理方式：放宽门让它过（**不可接受** —— 零容忍门为了通过而放宽就失去意义），或者证明这 7 个键不是第二个变量。
+
+逐个查 spider core 的读取点，**全部在显式 enable 守卫之内**：
+
+| 键 | 守卫 |
+|---|---|
+| `leg_object_penalty_{margin_m,gate_source}` | `mjwp.py:2008` `if leg_object_penalty_scale > 0.0 and leg_object_penalty_geom_ids:` |
+| `cem_leg_gate_{min_sdf_m,max_violation_pct,hard_floor_m}` | `sampling.py:369` `if config.cem_leg_gate_enabled:` |
+| `cem_leg_gate_min_valid_frac` | `sampling.py:50`，同一 enable 守卫 |
+| `cem_leg_gate_fallback` | `sampling.py:1110`，依赖 `sample_leg_gate_valid_mask` 键存在，该键只有腿门跑过才有 |
+
+noPRG 设 `leg_object_penalty_scale=0` / `geom_names=[]` / `cem_leg_gate_enabled=false`，所以这 7 个键在 noPRG 侧是**可证明的死代码**，不是「悄悄不同的设置」。它们是「腿约束」这个**既定变量本身的参数化**，不是混淆。
+
+修法：把 `ARM_DIFF_KEYS` 补全到 12 键，并在注释里逐条记下失效证明的 `file:line`。这样 C4 仍然守着它真正要守的东西 —— **任何非腿键在两 arm 间漂移，审计照样失败**。修后 **54/54 全过**。
+
+### P7 双 arm 场景：方向与 E204/E205 相反
+
+E204/E205 从已带 18N pair 的 E178 场景**减**掉腿 pair。E206 不行：dcv3 的 `scene_act.xml` **无论物体有多少 box，都只有 2 条 robot↔object pair** —— 这正是 F7（desk007 的 41 个草稿 box 里 40 个对机器人物理不可见）。所以 E206 必须**加**：
+
+```
+dcv3 scene_act.xml (球手 + 实装 lowgeom, 2 pair)
+  → rubber_hull 手                        → scene_act_E206_lowgeom_rubberHull.xml
+  → 2N 手 pair、0 腿 pair                 → scene_act_E206_lowgeom_noPRG.xml
+  → + 16N 腿 pair                         → scene_act_E206_lowgeom_PRG.xml
+```
+
+两 arm 共享第 2 步那**同一个文件**，手部几何因此不可能成为第二变量（R7）。逐 case 断言（**全部在花掉任何 GPU 时间之前**）：编译后 `object_collision*` 全 `mjGEOM_BOX`、box 数与实装一致、robot↔object pair 数恰为 2N / 18N、双手均 `mjGEOM_MESH`、object body `gravcomp==0`、**忽略 `<contact>` 后两 arm 逐字节相同**。**54/54 全过。**
+
+实装 box 数分布（决定 pair 规模）：
+
+| N | case 数 | PRG pair | 物体 |
+|---:|---:|---:|---|
+| 2 | 2 | 36 | chair005 |
+| 5 | 13 | 90 | desk021 |
+| 7 | 2 | 126 | chair020, desk020 |
+| 9 | 11 | 162 | desk023 |
+| 10 | 17 | 180 | chair006, chair022 |
+| 12 | 9 | 216 | desk007 |
+
+---
+
 ## 四、我自己引入的问题（全部已修，记录以免重犯）
 
 | # | 问题 | 后果 | 修法 |
@@ -274,6 +403,8 @@ box 删除记录进 `s2_proxy/box_edits.json`，带 `proxy_kind`/`target_cells`/
 | S6 | `trimesh.voxelized` 对某些 mesh 分钟级 | 复审器每次启动都重算 | `_boxes_at` 加磁盘 memo |
 | S7 | `edit_proxy_3d` 的 `flush_reviews` 按 `keys` 全量重写复审 TSV | 用 `--object chair020` 起编辑器，会把 9 行 TSV **截断成 1 行**（冒烟测试当场触发） | 保留不在本次编辑范围内的行（`foreign_rows`，按 task 键） |
 | S8 | 编辑器种子用 `voxel(tc=N)` = `_boxes_at()`，那是**编辑前**的 box | desk007 打开就从 12 box 退回 16 box，静默丢弃之前记录的 4 次删除 | 默认种子改成 `effective(当前生效)`，走 `build_effective_proxy` —— 起点必须就是实际会 ship 的那套 |
+| S9 | 监控用 `find ... -newermt '2 hours ago' 2>/dev/null` | 本机 `find` 其实是 **`bfs`**，只认 ISO 8601 时间戳；报错被 `2>/dev/null` 吞掉，**稳定返回 0**。据此误判 S3「零产出」约 15 分钟，实际当时已写出 39 条轨迹 | 改 ISO 时间戳；**监控/计数命令一律不吞 stderr** —— 命令坏掉返回的 0 与真实的 0 无法区分 |
+| S10 | `run_E206_stage2b_parallel.sh` 用 `for sd in shard*/` globbing 启动 runner | 重试 desk020 的 2 行时只新建了 2 个分片，但**旧的 24 个分片目录还在**，于是 desk020 在新 shard00 和旧 shard08 里被**两个进程并发跑同一 case、写同一输出路径** | 分片步骤把本次真正创建的清单写进 `active_shards.txt`，启动循环只读它，不再 glob。**事后已用确定性重跑验证：与竞态产物逐位相同，无损坏** |
 
 ---
 
@@ -327,17 +458,27 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 
 **14.8× 加速，数值等价。** 处理方式不是直接替换，而是**双路径**：`L.mesh_surface_distance(..., fast=)` + `L.fidelity_metrics_fast()`，**默认仍走 naive**。理由：契约数字必须与 log235 的 E176 数字逐位可比，而编辑器每次拖拽都要重算 —— 6 s/帧不可用，4e-7 无关紧要。写入合同的永远是精确路径，编辑器界面用快路径，界面上也明写了这一点。
 
-### U4 · audit 重复计算
+### ~~U4 · audit 重复计算~~ ✅ **已关闭（但真正的浪费不在原先记的地方）**
 
-`main()` 里 `evaluate()` 已经构建过一次代理，缓存循环又 `build_effective_proxy` 了一遍——语义物体的 80k 采样 + 保真度量算了两次。应改为复用 `evaluate` 的结果。
+原先记的是「`evaluate()` 与缓存循环重复构建代理」。**实测下来这条基本是空的**：8 个物体现在全是 `manual`，缓存循环走的是 `MB.manual_boxes_for()`（读 JSON），根本不重算度量。
+
+真正的重复是另一处：audit 默认跑 `budgets=[16, 9]` **两个预算**，而 **manual 代理的 box 与 `n_max` 完全无关**（`n_max` 只喂给 `MB.validate()`）—— 第二遍是在对**同一组 box** 重算一遍全部保真+腔体度量。
+
+修法：`semantic_proxy.measure()` 按 box 几何 memo 化。底层采样全部 `np.random.seed(0)` / `default_rng(0)`，是确定性纯函数，所以 memo 与重算**逐位等价**。实测 **4m09s → 2m17s（1.8×）**，`lowgeom_contract_n16.tsv` / `n9.tsv` / `effective_boxes.json` / `lowgeom_contract.json` 四个产物全部 `diff` 一致。
 
 ### ~~U5 · chair021 的 "CEM 排最后"~~ ✅ **已消解** —— chair021 直接退出 E206（F12），无需排序约束。
 
 ### U6 · P3 及之后未开始 —— 见第八节的阶段表
 
-### U7 · `eval_E176_contact_fidelity.py:172-176` 的硬编码 `>9` 未参数化
+### ~~U7 · `eval_E176_contact_fidelity.py` 硬编码 `>9`~~ ✅ **已关闭（并顺带修掉一处 R10 没记到的阻塞）**
 
-计划期就记为 R10，但当时假设代理是 9 box 量级。**现在实装的 desk007(12) / chair006(10) / chair022(10) 都 >9 → P6 的 G8 一跑就 `AssertionError`。** 必须在 P6 之前改成 `--max-object-geoms`（默认 9，向后兼容）。
+计划期记为 R10。已参数化为 `--max-object-geoms`（默认 9，向后兼容）。
+
+**同时发现 R10 只说了一半**：同文件的 `source_config()` 还硬编码了 `source_e174_config_act` / `source_e174_outdir_npz` 两个列名，而 E206 的 manifest 按 plan 是 `source_e206_*` —— 只改 `>9` 的话 P6 照样跑不起来。改为按后缀匹配 `source_<任意实验>_<suffix>`。
+
+**向后兼容已证，不是「应该没问题」**：E176 的 39 行 manifest 逐行比对新旧两套列解析逻辑，`config_path` 与 `rollout_path` **0/39 不一致**；且 E176 的 `object_geom_count` 取值只有 {6,7,9}，全部 ≤9，默认 `max_object_geoms=9` 与旧 assert 逐字等价。
+
+> 想直接重跑 E176 做端到端回归但**做不到**：39 个 `scene_act_E176_coarse9_multiGeom.xml` 在本 workspace 里一个都不存在（任务目录本身停在 Jul 23，E206 没碰过）。这与本次改动无关，但意味着 E176 的契约数字在本机无法复现，只能靠上述等价性论证。
 
 ---
 
@@ -348,6 +489,16 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 
 新增 **`align_supports.py`**（G10 支撑面批量对齐 CLI，默认 dry run）。
 
+**新增（2026-09-03 下半场，P5–P7）**：
+| 路径 | 作用 |
+|---|---|
+| `$ED/check_reproducibility_vs_e145.py` | S3 重建轨迹 vs 覆盖前基线的逐数组比对（F15），发散即非零退出 |
+| `$ED/build_arm_scenes.py` | rubber_hull → 2N/18N pair 的双 arm 场景构建 + 6 项编译期断言（C4） |
+| `$ED/build_overrides.py` | 双 arm override 生成 + Hydra compose 的 C4 跨 arm diff 审计 |
+| `$ED/measure_throughput.py` | P3 吞吐探针驱动（**真实场景，非合成**）+ A1/A2/A3 裁决 |
+| `scripts/launch/active/run_E206_data_pipeline.sh` | S0–S5 编排（前置校验 / 范围过滤 / 模板闸 / S3–S5） |
+| `scripts/launch/active/run_E206_stage2b_parallel.sh` | S3 分片并行执行 + 状态回merge |
+
 **E206 内部修改（2026-09-03，F9–F12 两轮）**：
 | 路径 | 改动 |
 |---|---|
@@ -355,12 +506,15 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 | `lowgeom_proxy_v2.py` | `mesh_surface_distance(fast=)` + `fidelity_metrics_fast()` 双路径（U3）；`build_lowgeom_boxes(measure_metrics=)`；**`support_contact_metrics()` + `align_support_boxes()`（G10，F11）** |
 | `audit_lowgeom_contract.py` | G7/`target_cells` 对 `manual` 与 `semantic` 一律记 `n/a`；`--frozen-target-cells` 跳过 `n/a` 行不再崩；`effective_boxes.json` 收录 manual 与实际 tc；**加 G10 门 + 6 个 support_* 列**；`landed_object_keys()` 过滤 `DROPPED_OBJECT_KEYS` |
 | `install_lowgeom_templates.py` | `target_cells="n/a"` 不再 `ValueError` |
-| `e206_common.py` | **`DROPPED_OBJECT_KEYS=("chair021",)` + `is_in_scope()` 同步过滤（F12）** |
+| `e206_common.py` | **`DROPPED_OBJECT_KEYS=("chair021",)` + `is_in_scope()` 同步过滤（F12）**；加 `N_CASES_IN_SCOPE=65` 断言；**`ARM_DIFF_KEYS` 5→12 键 + 逐条失效证明（F16）** |
+| `semantic_proxy.py`（二次） | `measure()` 按 box 几何 memo 化（U4，逐位等价，audit 1.8×） |
 
-**修改（dcv3 管线代码，隔离可逆，已 git 跟踪）**：
+**修改（dcv3 / eval 管线代码，隔离可逆，已 git 跟踪）**：
 | 路径 | 改动 |
 |---|---|
 | `data_construction_v3/stages/s2_templates/build_or_audit_templates.py` | 修材质替换静默 no-op（F7）；抽出 `substitute_object_material()` 并加替换次数断言 |
+| `data_preprocess/pipeline.sh` | **`ensure_g1_object_xml` 的 seed `case` 改为匹配小写副本（F14）** —— 一行，救回 desk020 |
+| `scripts/eval/runners/eval_E176_contact_fidelity.py` | `--max-object-geoms`（默认 9）替代硬编码 `>9`（R10/U7）；`source_config()` 去 E174 列名硬编码，改按后缀匹配 |
 
 **SPIDER core（`spider/`）零改动。** `union` 的 box-only 约束被当作必须绕开设计的硬约束，全程未放松。
 
@@ -381,24 +535,34 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 - 训练态快照：`results/E206/scene_snapshot/manifest.txt`（15 task / 43 文件 + git HEAD + sha256）
 - 覆盖前快照：`results/E206_pre/scene_snapshot/manifest.txt`
 - 预检：`results/E206/preflight/task_dir_consumers.txt` + `affected_overrides.txt`
+- **S3 输入权威（在范围 65 行）**：`results/E206/s1_raw_contact/raw_contact/raw_contact_pass_3cm_move2only_inscope.tsv`
+- **S3 manifest**：`results/E206/s3_retarget/omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv`（54 pass / 11 infeasible）
+- **覆盖前轨迹基线（F15 对照，不可再生）**：`results/E206/s3_retarget/e145_baseline/`（22 npz + sha256 manifest）
+- **可复现性校验**：`results/E206/s3_retarget/reproducibility_vs_e145.{tsv,json}`
+- 竞态验证：`results/E206/s3_retarget/race_check/`（S10，逐位相同）
+- **S4 目标门**：`results/E206/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv`（54/54 pass）
+- **S5 handoff + 基座 override**：`results/E206/s5_handoff/{handoff_manifest.tsv,cem_overrides/}`
+- **双 arm 场景**：`results/E206/s5_handoff/arm_scenes/arm_scene_build.{tsv,json}`（54/54）
+- **双 arm override**：`results/E206/s5_handoff/arm_overrides/arm_override_build.{tsv,json}`（54/54 C4 过）
+- **P3 吞吐**：`results/E206/s6_downstream/cem/throughput/{e206_throughput_curve.{tsv,md},admission_decision.json}`
 
 ## 八、下一步
 
-**S2 已全部闭合**（契约 8/8 all_pass、15/15 模板实装、15 行复审全签、65/65 case 模板 `clean_reviewed`）。剩下的按 plan236 的 P3→P10 走，两处口径因 P2.3b 而放宽：
+**S0–S5 已全部闭合**：契约 8/8 all_pass、15/15 模板实装、复审全签；S3 54/65 pass、S4 54/54 pass、S5 handoff 54 行；双 arm 场景与 override 54/54 建成且 C4 全过。
 
-| 阶段 | 内容 | 相对 plan236 的变化 |
+| 阶段 | 状态 | 相对 plan236 的变化 |
 |---|---|---|
-| **P3** | 吞吐实测 + 冻结 `N_MAX` / `use_torch_compile` / 队列优先级序 → `admission_decision.json` | **压力显著下降**：队列 148→**130 条**，实装最大 box 数 **12**（不是 16，pair 288→216）。A2 的中位墙钟上限 155→**177 min/task**。A2b 优先级序仍保留（desk007 9 例优先，C5a 命脉），但 U5 的「chair021 排最后」已随 F12 消失 |
-| **P5** | S3 重定向（omnirt_v1 主 + v2 rescue），`KEEP_GOING=1` | 65 case。顺带做 19 个重叠 case 与 E145 的**可复现性交叉校验** |
-| **P6** | S4 目标门 + 视觉 QC + **G8 接触保真**（ref-FK 接触目标→代理表面 p90 ≤ 0.08 m） | G8 是唯一还没验的代理门；`eval_E176_contact_fidelity.py:172-176` 的硬编码 `>9` 仍需参数化（R10，实装最大 12 box 会**直接触发**） |
-| **P7** | 双 arm 场景/override，单变量断言 | pair 数按实装 box 数逐 case 算（2N 手对 / 18N），不再是固定 16 |
-| **P8** | CEM 130 条，8 卡 | 先 2 case × 2 arm smoke + diff `config_act.yaml` |
-| **P9** | 配对 noPRG vs PRG + 强制视觉复核 | 逐物体表标 n；chair020(n=1)、chair005/desk020(n=2) 不出 per-object 推荐 |
-| **P10** | 收尾：本 log 补最终结论、tracker 加 R291/R292、`build_log_index.py` | |
+| **P3** | 🔄 8 探针在跑 | **改用真实场景而非合成探针**：S3+P7 已产出实装 N∈{2,5,7,9,10,12} 的 PRG 场景，12 就是永远的上限（chair021 已弃），所以不必外推到 16，也不必回答「探针像不像生产」。队列 **130→108 条**。⚠️ 各 case 轨迹长度 170–322 步不等，**墙钟同时被 N 和长度驱动** → N 依赖只能用与长度无关的每步 plan time 拟合 |
+| **P5** | ✅ 54/65 pass | 24 分片并行。可复现性校验对照 **22** 例（不是计划估的 19） |
+| **P6** | ⏳ 剩视觉 QC + G8 | S4 目标门已过（54/54）。R10/U7 已修，G8 不再会 `AssertionError` |
+| **P7** | ✅ 54/54 | 方向与 E204/E205 相反（**加** pair 而非减，因 F7）。pair 逐 case 算：2N / 18N |
+| **P8** | ⏳ | CEM **108 条**（不是 130），8 卡。先 2 case × 2 arm smoke + diff `config_act.yaml` |
+| **P9** | ⏳ | 逐物体表标 n；**chair020(n=1)、desk020(n=1)、chair005(n=2)** 不出 per-object 推荐（desk020 因 F14 只救回 1 例，从 n=2 降到 n=1） |
+| **P10** | ⏳ | 收尾：本 log 补最终结论、tracker 加 R291/R292、`build_log_index.py` |
 
-**立即要做的两件小事**（都在 P6 之前）：
-1. `eval_E176_contact_fidelity.py` 的 `--max-object-geoms` 参数化（R10）—— 现在实装 desk007/chair006/chair022 都 >9 box，不改 G8 一跑就 `AssertionError`。
-2. U4：audit 的 `evaluate()` 与缓存循环重复构建代理，语义/手编物体的采样+度量算了两遍。纯浪费，不影响正确性。
+**待 P3 出数后立即要做的**：把 `admission_decision.json` 的 A1/A2 裁决贴进本 log **再发 P8 队列**（plan236 P3 退出检查的硬要求）。
+
+**已知会影响 P8 排队的观察**：8 个探针里 compileOn 的两个（N=10 / N=12）全程**落后于**同 N 的 compileOff，说明 `torch.compile` 在本工作负载上未必划算 —— 最终以 `admission_decision.json` 的实测中位墙钟为准，不预判。
 
 **若后续再动任何一个物体的 box**，固定流程：
 ```

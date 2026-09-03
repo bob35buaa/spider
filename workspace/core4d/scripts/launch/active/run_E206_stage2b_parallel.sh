@@ -40,10 +40,11 @@ mkdir -p "$SHARD_ROOT" "logs/E206/stage2b/$VARIANT"
 
 # --- shard eligible rows round-robin into NSHARDS manifests -------------------
 echo "=== sharding $MANIFEST into $NSHARDS shards (eligible-only) ==="
-$PYTHON_BIN - "$MANIFEST" "$SHARD_ROOT" "$NSHARDS" <<'PYEOF'
+ACTIVE_LIST="$SHARD_ROOT/active_shards.txt"
+$PYTHON_BIN - "$MANIFEST" "$SHARD_ROOT" "$NSHARDS" "$ACTIVE_LIST" <<'PYEOF'
 import csv, sys
 from pathlib import Path
-manifest, shard_root, n = sys.argv[1], Path(sys.argv[2]), int(sys.argv[3])
+manifest, shard_root, n, active = sys.argv[1], Path(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 rows = list(csv.DictReader(open(manifest), delimiter="\t"))
 fields = list(rows[0].keys())
 elig = [r for r in rows if r.get("pipeline_enabled") == "1"
@@ -52,32 +53,37 @@ n = min(n, max(1, len(elig)))
 buckets = [[] for _ in range(n)]
 for i, r in enumerate(elig):
     buckets[i % n].append(r)
-made = 0
+made = []
 for i, b in enumerate(buckets):
     if not b:
         continue
     d = shard_root / f"shard{i:02d}"
     d.mkdir(parents=True, exist_ok=True)
-    with open(d / f"stage2b_manifest_shard{i:02d}.tsv", "w", newline="") as f:
+    out = d / f"stage2b_manifest_shard{i:02d}.tsv"
+    with open(out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields, delimiter="\t", lineterminator="\n")
         w.writeheader(); w.writerows(b)
-    made += 1
-print(f"eligible={len(elig)} shards_made={made}")
+    made.append(str(out))
+# Record exactly which shards THIS sharding produced. A re-run (e.g. retrying a
+# handful of preprocess_fail rows) creates fewer shards than the previous run
+# left behind, and globbing shard*/ would relaunch the stale ones -- which on
+# 2026-09-03 started a second concurrent runner for the same desk020 case.
+active.write_text("\n".join(made) + ("\n" if made else ""), encoding="utf-8")
+print(f"eligible={len(elig)} shards_made={len(made)}")
 PYEOF
 
-# --- launch one queue runner per shard ---------------------------------------
+# --- launch one queue runner per shard created by THIS run -------------------
 echo "=== launching parallel shard runners ==="
 pids=()
-for sd in "$SHARD_ROOT"/shard*/; do
-  sm=$(ls "$sd"stage2b_manifest_shard*.tsv 2>/dev/null | head -1)
+while IFS= read -r sm; do
   [ -f "$sm" ] || continue
-  sid=$(basename "$sd")
+  sid=$(basename "$(dirname "$sm")")
   nohup $PYTHON_BIN "$QUEUE" --manifest-tsv "$sm" \
     --holosoma-repo "$HOLOSOMA_REPO" --core4d-raw-root "$CORE4D_RAW_ROOT" \
     --smplx-model-dir "$SMPLX_MODEL_DIR" --retarget-python-bin "$RETARGET_PYTHON_BIN" \
     > "logs/E206/stage2b/$VARIANT/${sid}.log" 2>&1 &
   pids+=($!)
-done
+done < "$ACTIVE_LIST"
 echo "launched ${#pids[@]} shard runners: ${pids[*]}"
 
 # --- wait for all ------------------------------------------------------------
