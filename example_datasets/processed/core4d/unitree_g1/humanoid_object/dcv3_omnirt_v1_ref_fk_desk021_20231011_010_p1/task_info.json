@@ -1,6 +1,6 @@
 {
   "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/desk021_person1/scene.xml",
-  "source_qpos": "workspace/core4d/results/E145/full_nonbox_to_rl_ready/s3_retarget/omnirt_v1/ref_fk/results/omnirt_v1_ref_fk/holosoma_dcv3_omnirt_v1_ref_fk_desk021_20231011_010_p1/trimmed/20231011-010-person1-Desk021_with_obj_original.npz",
+  "source_qpos": "../../../../../../tidal-alsh01/dataset/zeus/xiayb/other-workdirs/spider_workdirs/core4d/results/results/E206/s3_retarget/omnirt_v1/ref_fk/results/omnirt_v1_ref_fk/holosoma_dcv3_omnirt_v1_ref_fk_desk021_20231011_010_p1/trimmed/20231011-010-person1-Desk021_with_obj_original.npz",
   "task": "dcv3_omnirt_v1_ref_fk_desk021_20231011_010_p1",
   "data_id": "0",
   "date": "20231011",

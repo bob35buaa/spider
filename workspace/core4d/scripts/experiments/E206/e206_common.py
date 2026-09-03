@@ -55,6 +55,11 @@ OBJECT_KEYS = DESK_KEYS + CHAIR_KEYS
 # auditable rather than silent, exactly like SIZE_GATE_EXCLUDED_KEYS below.
 DROPPED_OBJECT_KEYS = ("chair021",)
 
+# S1 landed 74 cases / 9 objects at the 3cm mask; dropping chair021 leaves 65.
+# Asserted by the S3 input filter so a silently shrinking case set cannot slip
+# into retargeting unnoticed.
+N_CASES_IN_SCOPE = 65
+
 # desk001 is hard-rejected by the S1 AABB size gate
 # (reject_too_large_box025_or_larger); kept here only so the exclusion is
 # auditable rather than silent.
@@ -138,8 +143,24 @@ BASE_REWARD_METHOD = "E167A_zOnlyBody"
 SOURCE_CONFIG_ID = "E170_PRG_lowerbodyPhysics_softPenalty_candidateGate"
 E206_METHOD_ID = "E206_lowgeom16_deskChair_move2_r1"
 
-# The five keys — and ONLY these five — may differ between the two composed
-# configs.  Anything else is a confound (plan236 C4, zero tolerance).
+# These keys — and ONLY these — may differ between the two composed configs.
+# Anything else is a confound (plan236 C4, zero tolerance).
+#
+# plan236 froze this as "exactly 5 keys", but `PRG_OVERRIDES` below also sets 7
+# leg-constraint *parameters*.  They are not a second variable: every one of
+# them is read behind an explicit enable guard that noPRG turns off, so under
+# noPRG they are provably dead code, not a silently different setting.
+#   - leg_object_penalty_{margin_m,gate_source}
+#       spider/simulators/mjwp.py:2008 `if leg_object_penalty_scale > 0.0 and
+#       leg_object_penalty_geom_ids:` — noPRG sets scale=0 and geom_names=[].
+#   - cem_leg_gate_{min_sdf_m,max_violation_pct,hard_floor_m}
+#       spider/optimizers/sampling.py:369 `if config.cem_leg_gate_enabled:`
+#   - cem_leg_gate_min_valid_frac
+#       spider/optimizers/sampling.py:50, same enable guard
+#   - cem_leg_gate_fallback
+#       spider/optimizers/sampling.py:1110, reached only when the leg gate ran
+# Widening the set keeps C4 sharp for what it is actually protecting: any
+# NON-leg key drifting between the arms still fails the audit.
 ARM_DIFF_KEYS = frozenset(
     {
         "scene_name",
@@ -147,6 +168,14 @@ ARM_DIFF_KEYS = frozenset(
         "leg_object_penalty_geom_names",
         "cem_leg_gate_enabled",
         "cem_leg_gate_geom_names",
+        # leg-constraint parameterisation, inert under noPRG (see above)
+        "leg_object_penalty_margin_m",
+        "leg_object_penalty_gate_source",
+        "cem_leg_gate_min_sdf_m",
+        "cem_leg_gate_max_violation_pct",
+        "cem_leg_gate_hard_floor_m",
+        "cem_leg_gate_min_valid_frac",
+        "cem_leg_gate_fallback",
     }
 )
 

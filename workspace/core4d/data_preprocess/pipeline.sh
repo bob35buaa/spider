@@ -198,7 +198,12 @@ ensure_g1_object_xml() {
     return 0
   fi
   local seed
-  case "$object_name" in
+  # CORE4D object names are not consistently cased (Desk020/Desk021/Desk023 vs
+  # desk007/chair005), so match the category on a lowercased copy. Without this
+  # a capitalized object whose g1 XML has not been generated yet falls through
+  # to the error branch: E206's desk020 lost both its cases that way, while
+  # Desk021/Desk023 survived only because their XML already existed.
+  case "${object_name,,}" in
     bucket*) seed="bucket001" ;;
     board*) seed="board007" ;;
     stick*) seed="stick003" ;;

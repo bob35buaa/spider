@@ -144,34 +144,50 @@ def summarize(
     }
 
 
+def source_column(row: dict[str, str], suffix: str) -> str:
+    """Read a ``source_<experiment>_<suffix>`` manifest column.
+
+    E176 manifests name these ``source_e174_*``; later experiments carry
+    their own producer id, so match on the suffix instead of hardcoding.
+    """
+    for key, value in row.items():
+        if key.startswith("source_") and key.endswith(f"_{suffix}"):
+            return value
+    return ""
+
+
 def source_config(row: dict[str, str]) -> Path:
-    explicit = row.get("source_e174_config_act", "")
+    explicit = source_column(row, "config_act")
     if explicit:
         path = repo_path(explicit)
         if path.is_file():
             return path
-    outdir = repo_path(row["source_e174_outdir_npz"])
-    fallback = outdir.parent / "config_act.yaml"
-    if fallback.is_file():
-        return fallback
-    raise FileNotFoundError(f"E174 source config missing for {row['case_id']}")
+    outdir = source_column(row, "outdir_npz")
+    if outdir:
+        fallback = repo_path(outdir).parent / "config_act.yaml"
+        if fallback.is_file():
+            return fallback
+    raise FileNotFoundError(f"source config missing for {row['case_id']}")
 
 
 def evaluate_case(
     row: dict[str, str],
+    *,
+    max_object_geoms: int = 9,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     scene = repo_path(row["scene_act"])
     trajectory = repo_path(row["trajectory"])
     mask_path = repo_path(row["contact_mask"])
     config_path = source_config(row)
-    rollout_path = repo_path(row["source_e174_outdir_npz"])
+    rollout_path = repo_path(source_column(row, "outdir_npz") or ".")
     model = mujoco.MjModel.from_xml_path(str(scene))
     data = mujoco.MjData(model)
     all_gids = object_collision_geoms(model)
     expected_geoms = int(row["object_geom_count"])
-    if len(all_gids) != expected_geoms or expected_geoms > 9:
+    if len(all_gids) != expected_geoms or expected_geoms > max_object_geoms:
         raise AssertionError(
-            f"object geom contract {len(all_gids)} != {expected_geoms} <= 9"
+            f"object geom contract {len(all_gids)} != {expected_geoms} "
+            f"<= {max_object_geoms}"
         )
 
     hand_gids = [
@@ -314,6 +330,7 @@ def run(
     experiment_id: str = "E176",
     expected_cases: int = 39,
     expected_objects: int = 6,
+    max_object_geoms: int = 9,
 ) -> dict[str, Any]:
     rows = read_tsv(manifest_path)
     case_ids = [row["case_id"] for row in rows]
@@ -328,7 +345,9 @@ def run(
     errors: list[dict[str, str]] = []
     for index, row in enumerate(rows, start=1):
         try:
-            contacts, case_summary = evaluate_case(row)
+            contacts, case_summary = evaluate_case(
+                row, max_object_geoms=max_object_geoms
+            )
             contact_rows.extend(contacts)
             case_rows.append(case_summary)
             print(
@@ -391,6 +410,7 @@ def run(
         },
         "expected_cases": expected_cases,
         "expected_objects": expected_objects,
+        "max_object_geoms": max_object_geoms,
         "evaluated_cases": len(case_rows),
         "error_cases": len(errors),
         "active_contact_rows": len(contact_rows),
@@ -416,6 +436,7 @@ def main() -> int:
     parser.add_argument("--experiment-id", default="E176")
     parser.add_argument("--expected-cases", type=int, default=39)
     parser.add_argument("--expected-objects", type=int, default=6)
+    parser.add_argument("--max-object-geoms", type=int, default=9)
     args = parser.parse_args()
     payload = run(
         repo_path(args.manifest),
@@ -423,6 +444,7 @@ def main() -> int:
         experiment_id=args.experiment_id,
         expected_cases=args.expected_cases,
         expected_objects=args.expected_objects,
+        max_object_geoms=args.max_object_geoms,
     )
     return 0 if payload["status"] == "pass" else 1
 

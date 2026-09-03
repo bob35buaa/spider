@@ -324,11 +324,34 @@ def build_semantic_boxes(object_key: str) -> tuple[list[ProxyBox], dict[str, Any
     return boxes, meta
 
 
+_MEASURE_MEMO: dict[tuple[str, bytes], dict[str, Any]] = {}
+
+
 def measure(object_key: str, boxes: list[ProxyBox]) -> dict[str, Any]:
+    """Fidelity + cavity metrics for one box set.
+
+    Memoised on the exact box geometry.  Every sampler underneath is seeded
+    (`np.random.seed(0)` / `default_rng(0)`), so this is bit-for-bit equivalent
+    to recomputing — it just stops the audit from measuring the same geometry
+    twice.  A manual proxy is independent of `n_max`, so auditing the N=16 and
+    N=9 budgets scores the identical box set both times.
+    """
+    key = (
+        object_key,
+        np.stack(
+            [np.concatenate([b.center, b.half_size]) for b in boxes]
+        ).astype(np.float64).tobytes()
+        if boxes
+        else b"",
+    )
+    hit = _MEASURE_MEMO.get(key)
+    if hit is not None:
+        return dict(hit)
     mesh_path = C.object_mesh_path(object_key)
     pitch = np.array([0.02, 0.02, 0.02])
     out = dict(L.fidelity_metrics(mesh_path, boxes))
     out.update(L.cavity_metrics(mesh_path, boxes, pitch))
+    _MEASURE_MEMO[key] = dict(out)
     return out
 
 
