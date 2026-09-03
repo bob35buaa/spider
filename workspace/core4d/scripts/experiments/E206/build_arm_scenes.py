@@ -66,8 +66,14 @@ def passing_cases() -> list[dict[str, str]]:
     return [by_case[k] for k in sorted(by_case)]
 
 
-def task_dir(case_id: str) -> Path:
-    return C.PROCESSED_ROOT / f"dcv3_omnirt_v1_ref_fk_{case_id}"
+def task_dir(row: dict[str, str]) -> Path:
+    """Task dir for a Stage2b row.
+
+    Rescued cases live under `dcv3_omnirt_v2_ref_fk_*`, not v1 -- so take the
+    name the manifest recorded instead of rebuilding it from the case_id.
+    """
+    task = row.get("target_task") or f"dcv3_omnirt_v1_ref_fk_{row['case_id']}"
+    return C.PROCESSED_ROOT / task
 
 
 def object_geom_names(root: ET.Element) -> list[str]:
@@ -174,7 +180,8 @@ def signature_without_pairs(scene: Path) -> Any:
 def build_one(row: dict[str, str], *, dry_run: bool) -> dict[str, Any]:
     case_id = row["case_id"]
     out: dict[str, Any] = {"case_id": case_id, "object_key": row.get("object_key", "")}
-    tdir = task_dir(case_id)
+    tdir = task_dir(row)
+    out["target_task"] = tdir.name
     base = tdir / "scene_act.xml"
     if not base.is_file():
         out["status"] = "skip_missing_scene_act"
@@ -266,8 +273,7 @@ def main() -> int:
     C.write_tsv(args.out_dir / "arm_scene_build.tsv", flat)
 
     if args.snapshot and not args.dry_run:
-        tasks = [f"dcv3_omnirt_v1_ref_fk_{r['case_id']}"
-                 for r in results if r["status"] == "built"]
+        tasks = [r["target_task"] for r in results if r["status"] == "built"]
         if tasks:
             subprocess.run(
                 ["bash", "workspace/core4d/scripts/convert/snapshot_scenes.sh",

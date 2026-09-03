@@ -1,16 +1,16 @@
 # log295 · E206：desk+chair 走 dcv3 全流程 + 非凸碰撞代理 + noPRG/PRG 双 arm
 
-_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：S0–S5 全部闭合（P0–P2/P4–P7 完成）；P3 吞吐实测进行中；P8–P10 未开始**_
+_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：S0–S5 全部闭合 + P3 准入已冻结（P0–P7 完成）；P8 CEM 待发；P9/P10 未开始**_
 
 > 本 log 是**中途快照**，不是结论。写它的目的是把已确认的事实、已修的坑、和**还没解决的问题**固定下来，避免后续重复踩。最终结论待实验跑完后补。
 
 ## 一句话进展
 
-desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 物体（desk005 落地 0 case、chair021 因代理质量被人工弃用），8 个物体的碰撞代理全部由**人工在 3D 界面里逐个重摆 box** 完成，契约 **8/8 hard gates pass（含新增 G10 支撑面共面）、`all_pass=true`、G6 豁免需求归零**；S3 重定向 **54/65 pass**（11 例 CVXPY infeasible），S4 目标门 **54/54 = 100% pass**，S5 handoff 54 行；P7 的双 arm 场景与 override **54/54 全部构建并通过 C4 单变量审计**。**最终队列 = 54 case × 2 arm = 108 条 CEM**（不是计划期的 130）。
+desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 物体（desk005 落地 0 case、chair021 因代理质量被人工弃用），8 个物体的碰撞代理全部由**人工在 3D 界面里逐个重摆 box** 完成，契约 **8/8 hard gates pass（含新增 G10 支撑面共面）、`all_pass=true`、G6 豁免需求归零**；S3 重定向 **65/65 = 100% pass**（v1 54 + v2 rescue 11，用户要求所有 infeasible 全送 rescue），S4 目标门 **65/65 = 100%**，S5 handoff 65 行；P7 双 arm 场景与 override **65/65 全部构建并通过 C4 单变量审计**；P3 准入 **A1/A2 双双通过**（中位墙钟 47.4 min ≤ 120，队列投影 12.8 h ≤ 48），冻结 `use_torch_compile=false`。**队列 = 65 case × 2 arm = 130 条 CEM。**
 
 手编相对自动代理是实质改进：chair022 腔体过填 **0.41→0.12**、chair006 **0.26→0.06**、chair005 **0.41→0.23**、desk021 的 mesh→proxy p90 **0.042→0.005**。
 
-过程中挖出 **7 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局）和 **10 个我自己引入的性能/口径问题**（第四节）。另有 **F15**：管线可复现性并非处处成立（19/22 逐位一致，3 例发散）。CEM 尚未开跑。
+过程中挖出 **7 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局）和 **10 个我自己引入的性能/口径问题**（第四节）。另有两条方法学发现：**F15** 管线可复现性并非处处成立（19/22 逐位一致，3 例发散），**F17** G8 的绝对门在惩罚代理保真度。CEM 尚未开跑。
 
 ---
 
@@ -30,13 +30,15 @@ desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 �
 | P2.3 **人工 approve_clean 复审**（F13） | ✅ 15 行/8 物体，65/65 case | — |
 | U7/R10 `--max-object-geoms` 参数化 + 去 E174 列名硬编码 | ✅ 39/39 行向后兼容已证 | — |
 | U4 `measure()` memo 化 | ✅ audit 4m09s→**2m17s**，输出逐位不变 | — |
-| **P5 S3 重定向**（omnirt_v1，24 分片并行） | ✅ **54/65 pass**，11 infeasible（F14 救回 1） | — |
+| **P5 S3 重定向**（omnirt_v1，24 分片并行） | ✅ 54/65 pass，11 infeasible（F14 救回 1 例） | — |
 | **P5b E145 可复现性交叉校验**（F15） | ✅ 22 例对照：19 逐位一致 / 3 发散 | — |
-| **P6a S4 目标门** | ✅ **54/54 = 100% pass** | — |
-| **P7a S5 handoff + 基座 override** | ✅ 54 行 / 54 个 | — |
-| **P7b 双 arm 场景 + override**（F16） | ✅ **54/54 建成，C4 审计全过** | — |
-| P3 吞吐实测冻结 N_MAX | 🔄 8 探针在 8 卡上跑（真实场景，N∈{2,5,7,9,10,12}） | — |
-| P6b 视觉 QC + G8 接触保真 / P8–P10 | ⏳ 未开始 | — |
+| **P6a S4 目标门** | ✅ **65/65 = 100% pass**（v1 54 + v2 11） | — |
+| **P7a S5 handoff + 基座 override** | ✅ **65 行 / 65 个** | — |
+| **P7b 双 arm 场景 + override**（F16） | ✅ **65/65 建成，C4 审计全过** | — |
+| **P5c omnirt_v2 rescue（11 例全送，用户要求）** | ✅ **11/11 pass → S3 合计 65/65 = 100%** | — |
+| **P3 吞吐实测 + 准入冻结** | ✅ **A1 47.4min / A2 12.8h 双双 pass，A3 不触发** | — |
+| **P6b G8 接触保真** | ✅ 已度量（F17：不按绝对门判决，留作 P9 输入） | — |
+| P6c 视觉 QC / P8–P10 | ⏳ 未开始 | — |
 
 ---
 
@@ -277,20 +279,22 @@ box 删除记录进 `s2_proxy/box_edits.json`，带 `proxy_kind`/`target_cells`/
 
 核实 **S3 全链路无 CUDA**（`run_stage2b.py` / `pipeline.sh` / `robot_retarget.py` 均无 cuda/torch 引用，OmniRetarget 是 CVXPY+IK 的 CPU 负载），且 **P3 只 gate P8（CEM 队列），不 gate P5**，故把 P5 提前到 P3 之前跑。GPU 空出后再补 P3。这个重排不改变任何结论的依据。
 
-### S3 结果（omnirt_v1，24 分片并行，192 核）
+### S3 结果：v1 主 + v2 rescue = **65/65 = 100%**
 
-| 终态 | 数量 |
-|---|---:|
-| `pass` | **54** |
-| `omniretarget_infeasible` | 11 |
-| 合计 | 65 |
+| 阶段 | pass | infeasible |
+|---|---:|---:|
+| omnirt_v1（24 分片并行，192 核） | 54 | 11 |
+| **omnirt_v2 rescue（11 例全送）** | **11** | 0 |
+| **合计** | **65** | **0** |
 
-逐物体 pass：desk007 9 / desk021 13 / desk023 11 / chair006 10 / chair022 7 / chair005 2 / chair020 1 / desk020 1。
+**11 例 CVXPY infeasible 被 omnirt_v2 全部救回**。逐物体最终 pass 与 S1 落地数完全一致：desk021 17 / desk023 14 / chair006 13 / desk007 9 / chair022 7 / chair005 2 / desk020 2 / chair020 1。
 
-**S4 目标门：54/54 = 100% pass**（11 个 not_run 就是 infeasible 那批）。C0 要求「S4 机器门 pass ≥ 90% of Stage2b 成功」→ 达成。
-S5 handoff 54 行、基座 override 54 个。
+> **用户 2026-09-03 决定**：「所有 v1 CVXPY infeasible 的 case 都要走 omnirt_v2」。原先我只把 rescue 当作 docs 08 的可选分支跑，结果是 54/65（81.5%）—— **低于 C0 的 90% 门**。全量 rescue 后到 100%，且 desk020 从 n=1 回到 **n=2**、样本量声明退回 F3 原状（只有 chair020 n=1、chair005/desk020 n=2）。
 
-> **规模变化**：队列从计划期的 130 条降到 **54 × 2 = 108 条**。desk020 从 2 例降到 **1 例**，与 chair020 一样落到 **n=1** —— F3 的样本量声明范围扩大：**chair020 与 desk020 都不出 per-object arm 推荐**。
+**S4 目标门：v1 54/54 + v2 11/11 = 65/65 = 100% pass**。C0 的「S4 机器门 pass ≥ 90% of Stage2b 成功」达成。
+S5 handoff **65 行**、基座 override **65 个**。**队列回到 65 × 2 = 130 条**（与 plan236 P2.3b 口径一致）。
+
+> **注意 rescue case 的目录名是 `dcv3_omnirt_v2_ref_fk_*`，不是 v1。** 我第一版 `build_arm_scenes.py` / `build_overrides.py` 把 v1 前缀写死在字符串里，rescue 之后就会指向不存在的目录。改为一律从 manifest 的 `target_task` 列取。
 
 ### F14 · `ensure_g1_object_xml` 大小写敏感，让 desk020 整个物体出局（已修，真 bug）
 
@@ -363,7 +367,7 @@ plan236 C4 冻结的是「composed config 差异**恰为 5 键**」，但 `e206_
 
 noPRG 设 `leg_object_penalty_scale=0` / `geom_names=[]` / `cem_leg_gate_enabled=false`，所以这 7 个键在 noPRG 侧是**可证明的死代码**，不是「悄悄不同的设置」。它们是「腿约束」这个**既定变量本身的参数化**，不是混淆。
 
-修法：把 `ARM_DIFF_KEYS` 补全到 12 键，并在注释里逐条记下失效证明的 `file:line`。这样 C4 仍然守着它真正要守的东西 —— **任何非腿键在两 arm 间漂移，审计照样失败**。修后 **54/54 全过**。
+修法：把 `ARM_DIFF_KEYS` 补全到 12 键，并在注释里逐条记下失效证明的 `file:line`。这样 C4 仍然守着它真正要守的东西 —— **任何非腿键在两 arm 间漂移，审计照样失败**。修后 **65/65 全过**。
 
 ### P7 双 arm 场景：方向与 E204/E205 相反
 
@@ -376,18 +380,81 @@ dcv3 scene_act.xml (球手 + 实装 lowgeom, 2 pair)
   → + 16N 腿 pair                         → scene_act_E206_lowgeom_PRG.xml
 ```
 
-两 arm 共享第 2 步那**同一个文件**，手部几何因此不可能成为第二变量（R7）。逐 case 断言（**全部在花掉任何 GPU 时间之前**）：编译后 `object_collision*` 全 `mjGEOM_BOX`、box 数与实装一致、robot↔object pair 数恰为 2N / 18N、双手均 `mjGEOM_MESH`、object body `gravcomp==0`、**忽略 `<contact>` 后两 arm 逐字节相同**。**54/54 全过。**
+两 arm 共享第 2 步那**同一个文件**，手部几何因此不可能成为第二变量（R7）。逐 case 断言（**全部在花掉任何 GPU 时间之前**）：编译后 `object_collision*` 全 `mjGEOM_BOX`、box 数与实装一致、robot↔object pair 数恰为 2N / 18N、双手均 `mjGEOM_MESH`、object body `gravcomp==0`、**忽略 `<contact>` 后两 arm 逐字节相同**。**65/65 全过。**
 
 实装 box 数分布（决定 pair 规模）：
 
-| N | case 数 | PRG pair | 物体 |
-|---:|---:|---:|---|
-| 2 | 2 | 36 | chair005 |
-| 5 | 13 | 90 | desk021 |
-| 7 | 2 | 126 | chair020, desk020 |
-| 9 | 11 | 162 | desk023 |
-| 10 | 17 | 180 | chair006, chair022 |
-| 12 | 9 | 216 | desk007 |
+| N | PRG pair | 物体 |
+|---:|---:|---|
+| 2 | 36 | chair005 |
+| 5 | 90 | desk021 |
+| 7 | 126 | chair020, desk020 |
+| 9 | 162 | desk023 |
+| 10 | 180 | chair006, chair022 |
+| 12 | 216 | desk007 |
+
+**最终 65/65 场景建成、65/65 override 通过 C4 审计。**
+
+### P3 吞吐与准入（8 探针 / 8 卡，全预算 1024×32）
+
+**改用真实场景而非 plan236 的合成探针**：S3+P7 已产出实装 N∈{2,5,7,9,10,12} 的 PRG 场景，而 12 就是永远的上限（chair021 已弃），所以既不必外推到 16，也不必回答「合成探针像不像生产」。用 PRG arm（18N pair，两 arm 中更贵的那个）→ 界是保守的。
+
+| N | PRG pair | compile | 墙钟 (min) | plan median (s) |
+|---:|---:|---|---:|---:|
+| 2 | 36 | off | 52.5 | 19.97 |
+| 5 | 90 | off | 42.5 | 20.76 |
+| 7 | 126 | off | **29.0** | 21.38 |
+| 9 | 162 | off | 51.0 | 22.13 |
+| 10 | 180 | off | 53.3 | 21.87 |
+| 10 | 180 | **on** | **55.3** | 21.93 |
+| 12 | 216 | off | 43.8 | 22.41 |
+| 12 | 216 | **on** | **46.5** | 22.77 |
+
+**裁决**：
+
+| 判据 | 门 | 实测 | 结果 |
+|---|---|---|---|
+| **A1** 单任务中位墙钟 | ≤ 120 min | **47.4** | **pass** |
+| **A2** 130 条 / 8 卡 | ≤ 48 h | **12.8 h** | **pass** |
+| **A3** 回落阶梯 | — | 不触发 | — |
+
+冻结：`N_MAX_shipped=12` / **`use_torch_compile=false`** / `num_samples=1024` / `max_num_iterations=32` / 优先级序（desk007 全部优先 → 逐物体 round-robin → 余量）。
+
+**两个方法学要点**：
+
+1. **墙钟不能直接对 N 拟合。** 各 case 轨迹长度 170–322 步不等，墙钟同时被 N 和长度驱动 —— 直接拟合会得到 `wall_min ≈ 45.69 − 0.046·N` 这种**负斜率**的无意义结果（第一版就是这么输出的）。改用与长度无关的**每步 plan time**：**`plan_time_s ≈ 19.55 + 0.249·N`**。每多一个 box 只加 0.25 s/步，**N=12 相对 N=2 仅贵 14%**。计划期「16 个 box 可能跑不动」的担忧被证伪 —— 瓶颈根本不在 box 数，在轨迹长度和固定开销。
+2. **`torch.compile` 不划算。** 两个开启探针（N=10 / N=12）都比同 N 的关闭版**慢** 2.0 / 2.7 min，plan time 也略高。M4 里「本机 `Python.h` 存在 → compile 可用」的推断成立，但**可用不等于更快**。故冻结为 `false`，与 E204/E205 的硬编码取值一致 —— 只是这次是实测出来的，不是沿用。
+
+### F17 · G8 的绝对门在惩罚代理保真度（**未按门判决，用户决定留作 P9 分析输入**）
+
+G8（ref-FK 接触目标 → 代理表面 `p90 ≤ 0.08 m`）在 54 个 case 上跑通（0 error），判 **6/8 物体不过**。但与 E176 基线并排看，这个判决**不能按字面接受**：
+
+| | E176 基线（**6/6 全过**） | E206（手编代理） |
+|---|---|---|
+| `proxy_p90` | 0.042–0.077 | 0.059–0.139 |
+| `mesh_p90`（目标离**真实 mesh**） | 0.078–**0.135** | 0.077–**0.147** |
+| `\|proxy−mesh\|_p90`（代理**边际**误差） | 0.042–**0.086** | 0.008–**0.051** |
+
+**机制**：E176 的粗体素代理向外鼓（腔体过填 0.26–0.45），鼓的方向正对着手，于是 `proxy_p90` 被拉到 `mesh_p90` **以下**（bucket009：0.063 vs 0.135 —— 代理比真实 mesh 离目标更近）。E206 的手编代理贴着 mesh（过填 0.41→0.12 就是这个目的），于是 `proxy_p90 ≈ mesh_p90`。
+
+**即：用 0.08 绝对门卡 `proxy_p90`，实际是在奖励一个鼓胀失真的代理。** 按边际指标，E206 **每一个**物体都优于 E176 最差的过门物体（0.051 < 0.086）。
+
+逐物体（`blind3cm` = 目标本来离 mesh <3cm、却被代理漏到 >3cm 的比例，这才是「代理遮住了真实接触」的直接度量）：
+
+| 物体 | proxy_p90 | mesh_p90 | \|p−m\| | blind3cm | 判读 |
+|---|---:|---:|---:|---:|---|
+| desk007 | 0.0589 | 0.0769 | 0.036 | 0.000 | 过 |
+| chair005 | 0.0605 | 0.0801 | 0.028 | 0.000 | 过 |
+| desk021 | 0.0810 | 0.0855 | **0.0075** | 0.012 | 超门 **1 mm**，边际误差全场最小 |
+| chair022 | 0.0821 | 0.1043 | 0.045 | 0.000 | 漏检为 0，超门源于目标本身偏离 |
+| desk023 | 0.0830 | 0.0872 | 0.010 | 0.126 | 同上 |
+| **chair006** | 0.0847 | 0.0961 | 0.051 | **0.429** | **唯一真问题**：近表面漏检率比 E176 里任何一个都差 |
+| desk020 | 0.1105 | 0.1132 | 0.024 | n/a | **代理比真实 mesh 离目标更近**，门在此无意义 |
+| chair020 | 0.1393 | 0.1471 | 0.020 | n/a | 同上 |
+
+**用户决定（2026-09-03）：不阻塞 P8，G8 数字留作 P9 分析输入**，用于判断 `leg_pen` / 接触失败到底是代理问题还是数据问题 —— 这正是 plan236 C5a 要检验的「代理保真是瓶颈」假设。**G8 因此在本实验不作为放行门**，C1 的最后一项改为「已度量并公布，未按绝对门判决」，log 与报表必须同时给出 `proxy_p90` / `mesh_p90` / `|p−m|` / `blind3cm` 四列，不得只报一个数。
+
+**遗留**：`chair006` 的 `blind3cm=0.429` 是真实的代理缺陷（近半数贴着 mesh 的接触目标落在代理 3cm 之外），P9 若发现 chair006 接触指标异常，**优先怀疑代理而非控制**。
 
 ---
 
@@ -495,7 +562,8 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 | `$ED/check_reproducibility_vs_e145.py` | S3 重建轨迹 vs 覆盖前基线的逐数组比对（F15），发散即非零退出 |
 | `$ED/build_arm_scenes.py` | rubber_hull → 2N/18N pair 的双 arm 场景构建 + 6 项编译期断言（C4） |
 | `$ED/build_overrides.py` | 双 arm override 生成 + Hydra compose 的 C4 跨 arm diff 审计 |
-| `$ED/measure_throughput.py` | P3 吞吐探针驱动（**真实场景，非合成**）+ A1/A2/A3 裁决 |
+| `$ED/measure_throughput.py` | P3 吞吐探针驱动（**真实场景，非合成**）+ A1/A2/A3 裁决 + `--analyze-only` 重算 |
+| `$ED/build_proxy_manifest.py` | G8 输入 manifest；**Hydra compose 出已解析 `config_act.yaml`**（G8 读的是解析后配置，不是 arm override —— 直接指 override 会全部报 `expected contact_hdmi_dynamic_target=true`） |
 | `scripts/launch/active/run_E206_data_pipeline.sh` | S0–S5 编排（前置校验 / 范围过滤 / 模板闸 / S3–S5） |
 | `scripts/launch/active/run_E206_stage2b_parallel.sh` | S3 分片并行执行 + 状态回merge |
 
@@ -540,24 +608,27 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 - **覆盖前轨迹基线（F15 对照，不可再生）**：`results/E206/s3_retarget/e145_baseline/`（22 npz + sha256 manifest）
 - **可复现性校验**：`results/E206/s3_retarget/reproducibility_vs_e145.{tsv,json}`
 - 竞态验证：`results/E206/s3_retarget/race_check/`（S10，逐位相同）
-- **S4 目标门**：`results/E206/s4_gate_visual_qc/omnirt_v1/ref_fk/target_gate_manifest.tsv`（54/54 pass）
+- **S4 目标门**：`results/E206/s4_gate_visual_qc/{omnirt_v1,omnirt_v2}/ref_fk/target_gate_manifest.tsv`（54/54 + 11/11 = 65/65 pass）
 - **S5 handoff + 基座 override**：`results/E206/s5_handoff/{handoff_manifest.tsv,cem_overrides/}`
-- **双 arm 场景**：`results/E206/s5_handoff/arm_scenes/arm_scene_build.{tsv,json}`（54/54）
-- **双 arm override**：`results/E206/s5_handoff/arm_overrides/arm_override_build.{tsv,json}`（54/54 C4 过）
-- **P3 吞吐**：`results/E206/s6_downstream/cem/throughput/{e206_throughput_curve.{tsv,md},admission_decision.json}`
+- **双 arm 场景**：`results/E206/s5_handoff/arm_scenes/arm_scene_build.{tsv,json}`（65/65）
+- **双 arm override**：`results/E206/s5_handoff/arm_overrides/arm_override_build.{tsv,json}`（65/65 C4 过）
+- **P3 吞吐与准入**：`results/E206/s6_downstream/cem/throughput/{e206_throughput_curve.{tsv,md},admission_decision.json}`（8 探针全 ok）
+- **v2 rescue**：`results/E206/s3_retarget/omnirt_v2/ref_fk/stage2b_manifest_omnirt_v2_ref_fk.tsv`（11/11 pass）
+- **G8 接触保真（F17）**：`results/E206/s2_proxy/contact_fidelity/{summary.md,object_summary.tsv,case_summary.tsv}`
+- **G8 输入 manifest + 已解析 config**：`results/E206/s6_downstream/manifests/lowgeom_full_manifest_noprg.tsv` + `resolved_configs/`
 
 ## 八、下一步
 
-**S0–S5 已全部闭合**：契约 8/8 all_pass、15/15 模板实装、复审全签；S3 54/65 pass、S4 54/54 pass、S5 handoff 54 行；双 arm 场景与 override 54/54 建成且 C4 全过。
+**S0–S5 已全部闭合，P3 准入已冻结**：契约 8/8 all_pass、15/15 模板实装、复审全签；S3 **65/65 pass**（v1 54 + v2 rescue 11）、S4 **65/65 pass**、S5 handoff 65 行；双 arm 场景与 override **65/65** 建成且 C4 全过；A1 47.4min / A2 12.8h 双双通过。**P8 可发。**
 
 | 阶段 | 状态 | 相对 plan236 的变化 |
 |---|---|---|
-| **P3** | 🔄 8 探针在跑 | **改用真实场景而非合成探针**：S3+P7 已产出实装 N∈{2,5,7,9,10,12} 的 PRG 场景，12 就是永远的上限（chair021 已弃），所以不必外推到 16，也不必回答「探针像不像生产」。队列 **130→108 条**。⚠️ 各 case 轨迹长度 170–322 步不等，**墙钟同时被 N 和长度驱动** → N 依赖只能用与长度无关的每步 plan time 拟合 |
-| **P5** | ✅ 54/65 pass | 24 分片并行。可复现性校验对照 **22** 例（不是计划估的 19） |
-| **P6** | ⏳ 剩视觉 QC + G8 | S4 目标门已过（54/54）。R10/U7 已修，G8 不再会 `AssertionError` |
-| **P7** | ✅ 54/54 | 方向与 E204/E205 相反（**加** pair 而非减，因 F7）。pair 逐 case 算：2N / 18N |
-| **P8** | ⏳ | CEM **108 条**（不是 130），8 卡。先 2 case × 2 arm smoke + diff `config_act.yaml` |
-| **P9** | ⏳ | 逐物体表标 n；**chair020(n=1)、desk020(n=1)、chair005(n=2)** 不出 per-object 推荐（desk020 因 F14 只救回 1 例，从 n=2 降到 n=1） |
+| **P3** | ✅ A1/A2 pass | **改用真实场景而非合成探针**。冻结 `use_torch_compile=false`（实测更慢）。`plan_time_s ≈ 19.55 + 0.249·N` —— box 数几乎不是成本因素 |
+| **P5** | ✅ **65/65 pass** | 24 分片并行 + v2 rescue 全送。可复现性校验对照 **22** 例（不是计划估的 19） |
+| **P6** | ⏳ 剩视觉 QC | S4 目标门 65/65 已过；G8 已度量但**不按绝对门判决**（F17），四列数字进 P9 分析 |
+| **P7** | ✅ 65/65 | 方向与 E204/E205 相反（**加** pair 而非减，因 F7）。pair 逐 case 算：2N / 18N |
+| **P8** | ⏳ 可发 | CEM **130 条**，8 卡，`use_torch_compile=false`（P3 实测）。先 2 case × 2 arm smoke + diff `config_act.yaml` |
+| **P9** | ⏳ | 逐物体表标 n；**chair020(n=1)、chair005/desk020(n=2)** 不出 per-object 推荐（rescue 后 desk020 回到 n=2，退回 F3 原状）。**必须并列 G8 的四列（F17）** |
 | **P10** | ⏳ | 收尾：本 log 补最终结论、tracker 加 R291/R292、`build_log_index.py` |
 
 **待 P3 出数后立即要做的**：把 `admission_decision.json` 的 A1/A2 裁决贴进本 log **再发 P8 队列**（plan236 P3 退出检查的硬要求）。
