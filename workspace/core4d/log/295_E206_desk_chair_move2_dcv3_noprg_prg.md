@@ -38,7 +38,9 @@ desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 �
 | **P5c omnirt_v2 rescue（11 例全送，用户要求）** | ✅ **11/11 pass → S3 合计 65/65 = 100%** | — |
 | **P3 吞吐实测 + 准入冻结** | ✅ **A1 47.4min / A2 12.8h 双双 pass，A3 不触发** | — |
 | **P6b G8 接触保真** | ✅ 已度量（F17：不按绝对门判决，留作 P9 输入） | — |
-| P6c 视觉 QC / P8–P10 | ⏳ 未开始 | — |
+| **P8 CEM 130 条发队列** | 🔄 8 卡运行中（投影 ~12.8 h） | — |
+| **P8 运行时 arm 契约抽检** | ✅ 4/4 pass，`npair` 差值 = 16×N | — |
+| P6c 视觉 QC / P9 / P10 | ⏳ 未开始 | — |
 
 ---
 
@@ -455,6 +457,20 @@ G8（ref-FK 接触目标 → 代理表面 `p90 ≤ 0.08 m`）在 54 个 case 上
 **用户决定（2026-09-03）：不阻塞 P8，G8 数字留作 P9 分析输入**，用于判断 `leg_pen` / 接触失败到底是代理问题还是数据问题 —— 这正是 plan236 C5a 要检验的「代理保真是瓶颈」假设。**G8 因此在本实验不作为放行门**，C1 的最后一项改为「已度量并公布，未按绝对门判决」，log 与报表必须同时给出 `proxy_p90` / `mesh_p90` / `|p−m|` / `blind3cm` 四列，不得只报一个数。
 
 **遗留**：`chair006` 的 `blind3cm=0.429` 是真实的代理缺陷（近半数贴着 mesh 的接触目标落在代理 3cm 之外），P9 若发现 chair006 接触指标异常，**优先怀疑代理而非控制**。
+
+### P8 运行时 arm 契约（plan236 P8 退出检查）
+
+`build_overrides.py` 审的是**发射前的 composed Hydra 配置**；这里审的是 `run_mjwp.py` 在**每次真实运行开头 dump 的 `config_act.yaml`**，它额外带着运行时解析出来的字段。新建 `audit_runtime_arm_contract.py`，逐 case 断言并把「合法的额外差异」显式分类，而不是放宽门：
+
+| 类别 | 键 | 为什么不是混淆 |
+|---|---|---|
+| DERIVED | `model_path` / `leg_object_penalty_geom_ids` / `cem_leg_gate_geom_ids` | 由已允许差异的键（`scene_name` / `*_geom_names`）解析而来 |
+| BY_DESIGN | `output_dir` | **必须**不同，否则两 arm 互相覆盖 rollout |
+| THE VARIABLE | `npair` | 差值本身就是实验变量，断言 `= 16×N` |
+
+**一个假阳性值得记**：`cem_safety_gate_hard_floor_m` 两 arm 都是 `nan`（`config.py:387` 的默认值），但 `nan != nan`，朴素比较会把它报成差异。审计里用 NaN 安全的比较。
+
+实测 desk007 的 4 对：**4/4 pass**，`npair` 48→240，差值 **192 = 16×12** 精确吻合。
 
 ---
 
