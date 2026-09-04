@@ -550,12 +550,15 @@ plan236 的核心科学看点。E174 跑 desk007 时代理有 41 个 box，但�
 
 所以这不是漏检，是**报表口径问题**：只报均值会让人以为整体跟踪很差。工作簿的 `per_gate` 页因此对每个门同时给 **mean / median / std / worst** 四个数 —— 既不能用均值掩盖离群，也不能删掉离群（那是选择性报告，rule 5 明令禁止）。
 
+> **`contact_in_mask == 0` 的 5/130 行全部是 `L1_reject`**，只涉及 3 个 case（`desk023_20231011_005_p2` 摔倒滑 15m、`desk021_20231011_012_p2` root 误差 348cm、`chair022_20231020_087_p1`）。与 E174 那 5/9 个 0 接触**性质相反**：E174 的是正常 rollout 里的 F7 配对 bug，E206 的是真跑崩且门已拦下。
+
 ### 交付物
 
 - 逐行结果：`eval/two_arm/e206_two_arm_rollout.tsv`（130 行，14 门漏斗 + 12 门双口径）
 - 逐门 / 逐物体 / 配对 delta：`e206_per_gate.tsv` / `e206_per_object.tsv`
 - C5a：`c5a_vs_e174_desk007.{tsv,json}`
-- 工作簿：**`e206_two_arm.xlsx`**（funnel_summary / per_gate / per_object / paired_delta / vs_E174_desk007 / rollout 六页）
+- 工作簿：**`e206_two_arm.xlsx`**（说明 / funnel_summary / per_gate / per_object / paired_delta / vs_E174_desk007 / rollout **七页**）。格式沿用本目录既有约定（`build_E194_three_arm_workbook.py`）：NAVY 标题条 + BLUE 表头 + Excel Table/autofilter/冻结窗格 + 零中心色阶。汇总计数写成对 rollout 页的 **COUNTIFS 公式**而非 Python 算好写死，改源数据会自动重算。
+  > 本机无 LibreOffice，skill 要求的 `recalc.py` 跑不了。改为写校验器逐个解析公式引用区间、回源数据独立求值：**28/28 公式解析并求值成功，且结果与 `e206_two_arm_summary.json` 逐项吻合**。这是没有 LibreOffice 时能做到的最强验证，但**公式的缓存值仍为空**，首次在 Excel 打开时才会算出来。
 - 视频：`render/full/*.mp4`（130 个）
 - viser 复核：`review_player.sh E206ARM`（130 行全 playable，审计 0 mismatch）
 - 强制复核覆盖集：`review/user_manual_review.tsv`（**64 行 = 全部 33 个 L3 + 20 个单门 L1 + 16 个 object×arm**，待人工填 USE/DO_NOT_USE）
