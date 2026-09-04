@@ -31,7 +31,10 @@ E178_MANIFEST = (
 )
 
 FIELDS = [
+    # `variant` and `preferred_pool` are consumed by E168/render_a100_cem_videos.py;
+    # the scheduler ignores them.
     "case_id", "object_key", "person", "experiment", "arm", "tier", "aug_variant",
+    "variant", "preferred_pool",
     "target_task", "target_scene", "scene_act", "scene_name", "effective_scene_sha256",
     "trajectory", "trajectory_sha256", "contact_mask", "contact_mask_sha256",
     "override_id", "override_path", "override_sha256",
@@ -78,6 +81,8 @@ def build(stage: str, limit: int, samples: int, opt_steps: int) -> list[dict[str
             "arm": C.ARM_TAG,
             "tier": "P0",
             "aug_variant": "orig",
+            "variant": f"{C.EXP}_{case_id}_{C.ARM_TAG}",
+            "preferred_pool": "local",
             "target_task": C.task_of(case_id),
             "target_scene": rel(target_scene),
             "scene_act": rel(scene),
