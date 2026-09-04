@@ -1,0 +1,23 @@
+{
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/chair006_person2/scene.xml",
+  "source_qpos": "../../../../../../tidal-alsh01/dataset/zeus/xiayb/other-workdirs/spider_workdirs/core4d/results/results/E206/s3_retarget/omnirt_v1/ref_fk/results/omnirt_v1_ref_fk/holosoma_dcv3_omnirt_v1_ref_fk_chair006_20231003_2_011_p2/trimmed/20231003_2-011-person2-chair006_with_obj_original.npz",
+  "task": "dcv3_omnirt_v1_ref_fk_chair006_20231003_2_011_p2",
+  "data_id": "0",
+  "date": "20231003_2",
+  "seq": "011",
+  "person": "person2",
+  "object_name": "chair006",
+  "object_model_rel": "chair/chair006_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    0.4825293719768524,
+    0.42280712723731995,
+    0.38534605503082275
+  ],
+  "object_initial_quat": [
+    0.3651455342769623,
+    0.3685309886932373,
+    0.6018664240837097,
+    0.6071329712867737
+  ]
+}

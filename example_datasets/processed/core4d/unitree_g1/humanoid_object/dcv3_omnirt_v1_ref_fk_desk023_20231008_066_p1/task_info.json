@@ -1,0 +1,23 @@
+{
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/desk023_person1/scene.xml",
+  "source_qpos": "../../../../../../tidal-alsh01/dataset/zeus/xiayb/other-workdirs/spider_workdirs/core4d/results/results/E206/s3_retarget/omnirt_v1/ref_fk/results/omnirt_v1_ref_fk/holosoma_dcv3_omnirt_v1_ref_fk_desk023_20231008_066_p1/trimmed/20231008-066-person1-Desk023_with_obj_original.npz",
+  "task": "dcv3_omnirt_v1_ref_fk_desk023_20231008_066_p1",
+  "data_id": "0",
+  "date": "20231008",
+  "seq": "066",
+  "person": "person1",
+  "object_name": "Desk023",
+  "object_model_rel": "desk/desk023_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    -0.011844904161989689,
+    0.3192846179008484,
+    0.2278887927532196
+  ],
+  "object_initial_quat": [
+    0.4869228005409241,
+    0.49018216133117676,
+    0.5055151581764221,
+    0.516799807548523
+  ]
+}
