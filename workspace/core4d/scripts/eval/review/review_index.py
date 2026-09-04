@@ -170,6 +170,21 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E209ARM = two-arm compare on the 22 delivered desk/chair cases (plan239/log298):
+    # E206 PRG vs the same thing + object gravcomp (G1). Single variable: the
+    # object body's gravcomp 0 -> 1; the scenes are otherwise byte-identical.
+    # BOTH arms carry an mp4 (PRG reuses E206's renders), so this is a real
+    # side-by-side A/B -- which matters because gravcomp's characteristic failure
+    # is a weightless "floating / ghost-carried" object that no numeric gate sees.
+    # TSV built (no re-scoring) by E209/build_e209_arm_review_tsv.py.
+    # Opt-in via --exps E209ARM.
+    "E209ARM": {
+        "result_exp": "E209",
+        "eval_subdir": "two_arm",
+        "case_metrics": "e209_arm_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -993,10 +1008,14 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E205"):
-            # arm sweeps (E204ARM 3-arm, E206ARM 2-arm) and the single-arm E205 view
-            # have no `evaluated`-style summary.json; cross-check against the index
-            # itself like E199/E200.
+        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E209ARM", "E205"):
+            # arm sweeps (E204ARM 3-arm, E206ARM/E209ARM 2-arm, E207ARM 4-arm) and the
+            # single-arm E205 view have no `evaluated`-style summary.json; cross-check
+            # against the index itself like E199/E200.
+            # NB: deliberately an explicit tuple, not `SOURCE_OVERRIDES[exp]["arm_sweep"]`.
+            # That flag is also set on E194_FULL/E198/E199/E199P/E200G/E200N, which do
+            # not belong in this branch -- deriving the condition from it silently
+            # changes their behaviour whenever their summary.json is absent.
             evaluated = len(recs)
             npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E197":
