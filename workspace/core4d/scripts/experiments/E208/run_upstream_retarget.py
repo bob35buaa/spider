@@ -52,6 +52,55 @@ import e208_common as C  # noqa: E402
 
 PASSES = ("pass1", "pass2-rescue")
 
+
+class SingleInstance:
+    """Refuse to start if another instance of this driver is already running.
+
+    Two instances racing is not hypothetical -- it happened twice on 2026-09-05.
+    ``pipeline.sh`` rewrites per-object files (``sync_generated_object_model``'s
+    ``cp -a`` and ``ensure_g1_object_xml``'s first-write), so two drivers on the
+    same object corrupt each other.  That is the very reason this script groups
+    cases by object; but grouping only protects against the *intra*-process race,
+    not the inter-process one.
+
+    Both incidents came from misjudging whether the previous run had finished --
+    once a fixed-count sleep loop gave up early, once ``pgrep | head -1`` returned
+    a shell wrapper instead of the runner (and ``kill -0`` also succeeds on a
+    zombie).  A lock removes the need to judge correctly at all.  ``flock`` rather
+    than a pidfile, so the lock dies with the process even on SIGKILL.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._handle = None
+
+    def __enter__(self) -> "SingleInstance":
+        import fcntl
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._handle = self.path.open("a+")
+        try:
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            self._handle.seek(0)
+            holder = self._handle.read().strip() or "<unknown>"
+            self._handle.close()
+            raise SystemExit(
+                f"another {Path(sys.argv[0]).name} is already running ({holder}).\n"
+                f"lock: {self.path}\n"
+                "Wait for it or stop it first -- never run two: they race on the shared "
+                "per-object and per-task files these drivers rewrite."
+            ) from None
+        self._handle.seek(0)
+        self._handle.truncate()
+        self._handle.write(f"pid={os.getpid()} started={C.now()} argv={' '.join(sys.argv[1:])}\n")
+        self._handle.flush()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self._handle is not None:
+            self._handle.close()
+
+
 # 12 tab-separated columns, header line starts with "# enabled".
 # `source_scene_task` must be non-empty even under --skip-spider: pipeline.sh
 # reads the row with IFS=$'\t' and an empty field shifts `target_task`.
@@ -328,6 +377,12 @@ def main() -> int:
     ap.add_argument("--force-rerun", action="store_true", help="ignore sentinels (never --force upstream)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    if not args.dry_run:
+        # one driver at a time, no matter which pass -- both passes call
+        # pipeline.sh, and the per-object race does not care which pass you are in
+        _lock = SingleInstance(C.DP / "run_upstream_retarget.lock")
+        _lock.__enter__()
 
     cases = C.load_e208_cases()
     if args.probes:

@@ -41,6 +41,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import e208_common as C  # noqa: E402
 
+# same single-instance discipline as run_upstream_retarget: two builders on one
+# case would race inside the shared task dir (scene -> trajectory -> scene_act ->
+# arm scenes all write there). Bitten twice on 2026-09-05; use a lock, not care.
+RUN = C.load_e208_module("run_upstream_retarget")
+
 CREATE_SCENE = "workspace/core4d/data_preprocess/create_spider_scene_from_template.py"
 CORE4D = "spider/process_datasets/core4d.py"
 
@@ -305,6 +310,9 @@ def main() -> int:
     ap.add_argument("--trim-only", action="store_true", help="stop after the fixed-window trim")
     ap.add_argument("--artifacts", type=Path, default=C.ARTIFACTS_TSV)
     args = ap.parse_args()
+
+    _lock = RUN.SingleInstance(C.DP / "build_augmented_tasks.lock")
+    _lock.__enter__()
 
     cases = C.load_e208_cases()
     if args.probes:
