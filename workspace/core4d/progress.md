@@ -13,7 +13,14 @@
 - **A3 佐证**：`e199_common.aug_task_name` 对 v1 base 确实产出 v2 名（与 v1-aware 版本在 `omnirt_v1` 下不同），provenance 谎言风险确认存在。
 - **A8 队列算术**：66 条 / 8 卡 = 9 轮 → 乐观 7.1 h（中位 47.4 min）、上界 26.6 h（E206 的 `per_task_bound_min=177.2`），均 < 48 h 门。预算继承 E206 `admission_decision.json` 的 frozen 块（1024×32×seed0，compile=false），不新做探针。
 - **A10**：源模板确认仍带 E206 手编代理且**全为 box**（desk007=12 / chair006=10 / desk023=9 / desk021=5 / chair005=2），与 log295 C2 一致 → aug 任务目录自动继承代理成立。
-- **下一步**：P1 从 E206 逐字节播种 `_original`（构造性规避 F15；两个已知发散例 chair005_20231030_043_p1 与 desk023_20231030_019_p1 都在这 22 例内）。
+### 2026-09-05 · P1 播种 orig · **C1 通过 22/22**
+
+- `seed_from_e206.py` 把每例的 `converted/`（3 npz）+ `retargeted/_original.npz` + `trimmed/_original.npz` + `trim_window.json` 播进 `DP/omnirt_v{1,2}/holosoma_{base}/`。**43 个 case-variant**（21 例 v1 × 2 root + 1 例源 v2 × 1 root），215 硬链接 + 43 拷贝，增量仅 7 MB。
+- **两个已知 F15 发散例（chair005_20231030_043_p1 worst |Δ|=1.096、desk023_20231030_019_p1 0.097）都在这 22 例内**，且 chair005 是唯一的 chair005（n=1）。播种是**构造性免疫**：`_original` 根本不重算，所以 F15 的 IK 噪声进不了 aug-vs-orig 的 delta。
+- **F3（新，简化了计划）**：查 `pipeline.sh` 的三个跳过闸后确认——`converted/{task}.npz` 存在跳 convert（:319）、`trimmed/{task}_original.npz` 存在跳 holosoma trim（:403）、`parallel_robot_retarget.py:266-267` 按输出文件短路。所以播种后 **convert 与 trim 都不会跑**，`_original` 只作为 trans_k 的 warm-start 被读取。**推论**：`trim_start` 必然与 E206 相同 → E206 的 3cm mask 逐帧有效 → 驱动改用 `--skip-contact --skip-spider`，**mask 完全不重算**，override 继续指向 E206 那一份（单一权威，无第二份可漂移）。计划里原写的「播种 mask 副本」不需要了。
+- **F4（新，R4 因此加强）**：E206 的 3cm mask npz 是**自描述三时间轴**结构 —— `raw_*`(=untrimmed_frames)、`spider_*`(=trimmed_frames，与 `trajectory_kinematic.npz` 的 qpos 逐帧对齐)、`eval_*`(=trimmed×50/30)，且内嵌 `trim_start / ref_fps / eval_fps / threshold_m`。最初只取了 `list(keys)[0]`= raw 轴，帧数对不上 trimmed 让人误以为不对齐。R4 改为断言**内嵌 `trim_start` == 播种窗口**（这才是「mask 可复用」的真正充要条件）+ 三轴分别对齐 + `threshold_m==0.03`，22/22 全过。
+- **绝不能传 `--force`**：它会重算 `_original`，构造性免疫立刻失效。已写进 `seed_from_e206.py` 与 `run_upstream_retarget.py` 的注释。
+- **下一步**：P2 五例探针（chair005_20231030_043_p1 / desk023_20231030_019_p1 / desk007_20231030_028_p1 / chair006_20231003_1_003_p1 / desk021_20231011_014_p2）+ G1–G4 闸门定 L 档。
 
 ---
 
