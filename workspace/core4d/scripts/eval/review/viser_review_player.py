@@ -1035,8 +1035,11 @@ def main() -> int:
         print(f"[review] arm filter {sorted(arms)} -> {len(records)} cases")
     print(f"[review] indexed {len(records)} cases across {exps}")
     if not records:
-        extra = [e for e in ("E194", "E199", "E199P", "E200N", "E200G", "E203") if e not in idx.DEFAULT_EXPS]
-        avail = ", ".join(list(idx.DEFAULT_EXPS) + extra)
+        # Derive from the registry: a hardcoded list silently omits opt-in sets
+        # (E198/E203F/E204ARM/E205/E206ARM were all missing), which reads as
+        # "not supported" for sets that do in fact work.
+        extra = [e for e in idx.SOURCE_OVERRIDES if e not in idx.DEFAULT_EXPS]
+        avail = ", ".join(list(idx.DEFAULT_EXPS) + sorted(extra))
         print(
             f"[review] no reviewable records for {exps} — this experiment has no "
             f"*_case_metrics.tsv under results/<exp>/s6_downstream/eval/, so it was "

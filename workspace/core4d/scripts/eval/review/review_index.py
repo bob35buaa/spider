@@ -129,6 +129,20 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E205 = just the G1A2 arm of the E204ARM sweep, for looking at E205 on its own
+    # instead of A/B/C against noPRG/PRG. Same TSV, filtered by `arm`.
+    # E205 never wrote its own s6_downstream/eval/*_case_metrics.tsv -- its metrics
+    # live in E204's three_arm set -- which is why plain `E205` used to report
+    # "never wired into the review player".
+    #   review_player.sh E205      # G1A2 only (27 cases)
+    #   review_player.sh E204ARM   # all three arms (81 rows)
+    "E205": {
+        "result_exp": "E204",
+        "eval_subdir": "three_arm",
+        "case_metrics": "e204e205_arm_case_metrics.tsv",
+        "arm": "G1A2",
+        "threshold_exp": "E178",
+    },
     # E206ARM = two-arm ablation on the 65 desk/chair move2 cases (plan236/log295):
     # noPRG / PRG as a 2-arm sweep per case, same hand-placed lowgeom proxy and
     # same rubber-hull hands -- the only difference is the 16N leg<->object pairs.
@@ -966,9 +980,10 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM"):
-            # arm sweeps (E204ARM 3-arm, E206ARM 2-arm) have no `evaluated`-style
-            # summary.json; cross-check against the index itself like E199/E200.
+        elif exp in ("E204ARM", "E206ARM", "E205"):
+            # arm sweeps (E204ARM 3-arm, E206ARM 2-arm) and the single-arm E205 view
+            # have no `evaluated`-style summary.json; cross-check against the index
+            # itself like E199/E200.
             evaluated = len(recs)
             npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E197":
