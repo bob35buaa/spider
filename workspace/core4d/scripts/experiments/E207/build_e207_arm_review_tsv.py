@@ -52,7 +52,15 @@ def paths_for(arm: str, case_id: str, source: dict) -> tuple[str, str, str, str,
                 rel(cfg) if cfg.is_file() else "", rel(trajectory),
                 rel(video) if video.is_file() else "")
     npz, scene, cfg, trajectory = B205.paths_for(arm, case_id, source)
-    return npz, scene, cfg, trajectory, ""
+    # E178 rendered all 27 of its bucket cases, so the PRG rows can carry an mp4;
+    # E204/E205 ran save_video=false and have none, so those stay live-qpos only.
+    video = ""
+    if arm == "PRG":
+        hits = sorted((REPO / "workspace/core4d/results/E178/s6_downstream/render/full")
+                      .glob(f"*{case_id}*.mp4"))
+        if hits:
+            video = str(hits[0].relative_to(REPO))
+    return npz, scene, cfg, trajectory, video
 
 
 def main() -> int:
