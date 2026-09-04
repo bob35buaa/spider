@@ -544,6 +544,7 @@ class ReviewApp:
         objs = ["全部"] + idx.objects_for(self.records)
         modes = ["全部"] + idx.failure_modes_for(self.records)
         variants = ["全部"] + idx.variants_for(self.records)
+        arms = idx.arms_for(self.records)
 
         with s.gui.add_folder("数值指标"):
             self.metrics_md = s.gui.add_markdown("")
@@ -563,6 +564,14 @@ class ReviewApp:
             self.f_var = s.gui.add_dropdown(
                 "变体", options=variants, initial_value="全部"
             )
+            # Arm sweeps interleave every case once per arm (E206ARM: 65 cases x
+            # noPRG/PRG = 130 rows). Without this you scroll past the other arm on
+            # every step. Only shown when the loaded set actually has arms.
+            self.f_arm = (
+                s.gui.add_dropdown("Arm", options=["全部"] + arms, initial_value="全部")
+                if arms
+                else None
+            )
             for w in (
                 self.f_case,
                 self.f_exp,
@@ -570,8 +579,10 @@ class ReviewApp:
                 self.f_num,
                 self.f_mode,
                 self.f_var,
+                self.f_arm,
             ):
-                w.on_update(lambda _=None: self._refresh_case_list())
+                if w is not None:
+                    w.on_update(lambda _=None: self._refresh_case_list())
 
         with s.gui.add_folder("样本"):
             self.case_dd = s.gui.add_dropdown(
@@ -641,6 +652,12 @@ class ReviewApp:
             ):
                 continue
             if self.f_var.value != "全部" and r.retarget_variant_id != self.f_var.value:
+                continue
+            if (
+                self.f_arm is not None
+                and self.f_arm.value != "全部"
+                and r.arm != self.f_arm.value
+            ):
                 continue
             out.append(r)
         return out

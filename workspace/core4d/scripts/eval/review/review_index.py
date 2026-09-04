@@ -934,6 +934,11 @@ def variants_for(records: list[CaseRecord]) -> list[str]:
     return sorted({r.retarget_variant_id for r in records if r.retarget_variant_id})
 
 
+def arms_for(records: list[CaseRecord]) -> list[str]:
+    """Distinct arm labels; empty for single-arm experiments (no filter needed)."""
+    return sorted({r.arm for r in records if r.arm})
+
+
 def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
     """Print per-exp counts and cross-check against summary.json; exit non-zero on mismatch."""
     import json
