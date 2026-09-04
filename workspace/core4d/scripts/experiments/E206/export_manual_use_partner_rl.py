@@ -14,13 +14,22 @@ deliberately identical:
     noPRG control would be a category error.
   * Partners come from E206's own Stage2b (omnirt_v1 preferred, v2 rescue
     fallback), not E174's.
-  * One USE case has no partner at all: `chair006_20231003_2_015_p2` failed S1
-    raw contact (`weak_two_hand_overlap`, `unbalanced_left_right_contact`) and
-    was rejected at template audit, so it was never retargeted. That row is
-    emitted with `pair_status=PAIR_INCOMPLETE` and
-    `paired_rl_export_decision=RL_EXPORT_BLOCKED_NO_PARTNER` rather than
-    crashing the run or being dropped -- downstream consumes only
-    `RL_EXPORT_READY`, so a visible blocked row is safer than a short table.
+  * One USE case had no Stage2b partner at all: `chair006_20231003_2_015_p2`
+    failed S1 raw contact (`weak_two_hand_overlap`,
+    `unbalanced_left_right_contact`) and was rejected at template audit, so it
+    was never retargeted. A partner only needs a MOTION, not a contact mask, so
+    it was generated directly with `export_rl_partner_omnirt.py`
+    (`pipeline.sh --skip-contact --skip-spider`), bypassing S1. omnirt_v1 went
+    CVXPY-infeasible at frame 115/150; the omnirt_v2 rescue succeeded. Those
+    rows are marked `generation_mode=direct_omnirt_partner_temp` and
+    `stage2b_status=not_run` -- they are NOT Stage2b evidence and must not be
+    read as such.
+
+If a partner cannot be resolved by either route the row is still emitted, with
+`pair_status=PAIR_INCOMPLETE` and
+`paired_rl_export_decision=RL_EXPORT_BLOCKED_NO_PARTNER`, rather than crashing
+the run or being dropped -- downstream consumes only `RL_EXPORT_READY`, so a
+visible blocked row is safer than a silently short table.
 
 Usage:
     .venv/bin/python .../export_manual_use_partner_rl.py
@@ -72,6 +81,16 @@ HAND_COLLISION_ID = "rubber_hull"
 STAGE2B_MANIFESTS = [
     C.S3_DIR / "omnirt_v1/ref_fk/stage2b_manifest_omnirt_v1_ref_fk.tsv",
     C.S3_DIR / "omnirt_v2/ref_fk/stage2b_manifest_omnirt_v2_ref_fk.tsv",
+]
+
+# Fallback for partners that never entered S1 and so have no Stage2b row.
+# Produced by `export_rl_partner_omnirt.py --execute`, which runs
+# `pipeline.sh --skip-contact --skip-spider`: convert -> retarget -> trim only.
+# Searched in order; the first `partner_status == pass` hit wins.  These are
+# motion-only artifacts, NOT Stage2b evidence.
+DIRECT_PARTNER_MANIFESTS = [
+    C.S6_DIR / "partner_omnirt_direct/rl_partner_omnirt_manifest.tsv",
+    C.S6_DIR / "partner_omnirt_direct_v2/rl_partner_omnirt_manifest.tsv",
 ]
 
 # E201 narrow band for the leg gate; E206's metrics TSV has no precomputed
@@ -382,6 +401,106 @@ def make_source_row(
     return row
 
 
+def load_direct_partners() -> dict[str, dict[str, str]]:
+    """`partner_case_id` -> passing direct-OmniRetarget row."""
+    out: dict[str, dict[str, str]] = {}
+    for manifest in DIRECT_PARTNER_MANIFESTS:
+        if not manifest.is_file():
+            continue
+        for row in C.read_tsv(manifest):
+            if row.get("partner_status") != "pass":
+                continue
+            row["_manifest"] = str(manifest)
+            out.setdefault(row.get("partner_case_id", ""), row)
+    out.pop("", None)
+    return out
+
+
+def direct_partner_row(
+    source: dict[str, Any], evidence: dict[str, str], *,
+    partner_case: str, partner_person: str, partner_person_idx: str, source_rl: Path,
+) -> dict[str, Any]:
+    """Partner row from a direct OmniRetarget run that bypassed S1.
+
+    Deliberately NOT routed through `PARTNER.build_partner_row`: that helper
+    asserts `stage2b_status == "pass"` and copies it through, which would
+    misreport a motion-only artifact as Stage2b evidence. Identity is validated
+    the same way; provenance is recorded honestly as `not_run`.
+    """
+    for key, expected in (
+        ("partner_case_id", partner_case),
+        ("object_key", source["object_key"]),
+        ("date", source["date"]),
+        ("seq", source["seq"]),
+        ("partner_person", partner_person),
+        ("partner_person_idx", partner_person_idx),
+    ):
+        if evidence.get(key, "") != expected:
+            raise SystemExit(
+                f"direct partner identity mismatch for {partner_case}: "
+                f"{key}={evidence.get(key, '')!r}, expected={expected!r}"
+            )
+
+    artifacts = {
+        field: required(evidence.get(field, ""), f"{partner_case} {field}")
+        for field in ("converted_npz", "omniretarget_output_npz", "retargeted_npz",
+                      "trimmed_npz")
+    }
+    trim_path = PARTNER.trim_window_path(evidence, partner_case, REPO)
+    trim = json.loads(trim_path.read_text(encoding="utf-8"))
+    variant = evidence["retarget_variant_id"]
+    provenance = Path(evidence["_manifest"])
+
+    row: dict[str, Any] = {
+        "source_case_id": source["case_id"],
+        "source_person": source["person"],
+        "source_person_idx": source["person_idx"],
+        "source_rl_export_decision": source["rl_export_decision"],
+        "partner_case_id": partner_case,
+        "partner_person": partner_person,
+        "partner_person_idx": partner_person_idx,
+        "object_key": source["object_key"],
+        "object_name": source["object_name"],
+        "date": source["date"],
+        "seq": source["seq"],
+        "pair_status": "PAIR_COMPLETE",
+        "partner_status": "pass",
+        "paired_rl_export_decision": "RL_EXPORT_READY",
+        "partner_retarget_variant_id": variant,
+        "partner_target_variant_id": evidence.get("target_variant_id", ""),
+        "generation_mode": evidence.get("generation_mode", "direct_omnirt_partner_temp"),
+        # motion-only: convert -> retarget -> trim, no contact mask, no scene
+        "stage2b_status": "not_run",
+        "failure_mode": "",
+        "decision_notes": (
+            f"partner generated directly with OmniRetarget ({variant}), bypassing S1: "
+            "the opposite person failed raw-contact/template audit and has no Stage2b "
+            "row, but a partner needs only a motion. Motion-only artifact; not "
+            "Stage2b evidence and not a v3 handoff fact."
+        ),
+        "partner_target_task": evidence.get("partner_target_task", ""),
+        "partner_provenance_ref": rel(provenance),
+        "partner_provenance_sha256": sha256(provenance),
+        "partner_params_json": evidence.get("retarget_params_json", ""),
+        "holosoma_case_root": rel(evidence["holosoma_case_root"]),
+        "trim_window_json": rel(trim_path),
+        "trim_window_json_sha256": sha256(trim_path),
+        "trim_start": trim.get("trim_start", ""),
+        "trim_end": trim.get("trim_end", ""),
+        "trim_frames": trim.get("trim_frames", ""),
+        "untrimmed_frames": trim.get("untrimmed_frames", ""),
+        "trimmed_frames": trim.get("trimmed_frames", ""),
+        "source_rl_export_input": rel(source_rl),
+        "source_rl_export_input_sha256": sha256(source_rl),
+        "schema_version": PARTNER.SCHEMA_VERSION,
+        "updated_at": now(),
+    }
+    for field, path in artifacts.items():
+        row[field] = rel(path)
+        row[f"{field}_sha256"] = sha256(path)
+    return row
+
+
 def blocked_partner_row(
     source: dict[str, Any], partner_case: str, partner_person: str,
     partner_person_idx: str, source_rl: Path, reason: str,
@@ -522,6 +641,7 @@ def main() -> int:
     rejected = {c for c, r in review.items() if r["manual_use_decision"] == "DO_NOT_USE"}
 
     stage2b_index = PARTNER.load_stage2b_index(STAGE2B_MANIFESTS)
+    direct_partners = load_direct_partners()
     source_rows: list[dict[str, Any]] = []
     source_stage: dict[str, tuple[Path, dict[str, str]]] = {}
     for case_id in approved:
@@ -547,6 +667,7 @@ def main() -> int:
     for source in source_rows:
         partner_case, partner_person, partner_person_idx = PARTNER.infer_partner(source)
         candidates = stage2b_index.get(partner_case, [])
+        direct = direct_partners.get(partner_case)
         source_provenance, source_evidence = source_stage[source["case_id"]]
         if candidates:
             partner_provenance, partner_evidence = PARTNER.choose_partner(
@@ -563,12 +684,22 @@ def main() -> int:
                 repo=REPO,
                 generation_mode="reuse_e206_stage2b_partner",
             )
+        elif direct:
+            partner_evidence = direct
+            partner_provenance = Path(direct["_manifest"])
+            partner = direct_partner_row(
+                source, direct,
+                partner_case=partner_case,
+                partner_person=partner_person,
+                partner_person_idx=partner_person_idx,
+                source_rl=source_path,
+            )
         else:
             partner_provenance, partner_evidence = None, None
             partner = blocked_partner_row(
                 source, partner_case, partner_person, partner_person_idx, source_path,
                 "partner never entered E206: rejected at S1 raw contact / template "
-                "audit, so no Stage2b row exists to reuse",
+                "audit, and no direct OmniRetarget run exists to fall back on",
             )
         partner_rows.append(partner)
         alignment_rows.append(alignment_audit(
@@ -640,6 +771,18 @@ def main() -> int:
         "partner_variant_counts": dict(Counter(
             r["partner_retarget_variant_id"] for r in partner_rows
             if r["partner_retarget_variant_id"])),
+        "partner_generation_mode_counts": dict(Counter(
+            r["generation_mode"] for r in partner_rows if r["generation_mode"])),
+        "partner_stage2b_status_counts": dict(Counter(
+            r["stage2b_status"] for r in partner_rows if r["stage2b_status"])),
+        "direct_omnirt_partners": [
+            {"source_case_id": r["source_case_id"],
+             "partner_case_id": r["partner_case_id"],
+             "retarget_variant_id": r["partner_retarget_variant_id"],
+             "provenance": r["partner_provenance_ref"]}
+            for r in partner_rows
+            if r["generation_mode"] == "direct_omnirt_partner_temp"
+        ],
         "hand_collision_variant_id": HAND_COLLISION_ID,
         "all_partner_artifacts_nonempty": True,
         "all_source_partner_hashes_recomputed": True,
