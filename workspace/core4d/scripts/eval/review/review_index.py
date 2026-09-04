@@ -129,6 +129,19 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E207ARM = four-arm compare on the 9 E207 bucket cases (plan237/log296):
+    # PRG(E178) / noPRG(E204) / G1A2(E205) / G1only(E207). Read along the two
+    # single-variable contrasts: PRG->G1only isolates object gravcomp, and
+    # G1only->G1A2 isolates the A2 hand-gate. Only the G1only arm has an mp4.
+    # TSV built (no re-scoring) by E207/build_e207_arm_review_tsv.py.
+    #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E207ARM
+    "E207ARM": {
+        "result_exp": "E207",
+        "eval_subdir": "four_arm",
+        "case_metrics": "e207_arm_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
     # E205 = just the G1A2 arm of the E204ARM sweep, for looking at E205 on its own
     # instead of A/B/C against noPRG/PRG. Same TSV, filtered by `arm`.
     # E205 never wrote its own s6_downstream/eval/*_case_metrics.tsv -- its metrics
@@ -980,7 +993,7 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM", "E205"):
+        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E205"):
             # arm sweeps (E204ARM 3-arm, E206ARM 2-arm) and the single-arm E205 view
             # have no `evaluated`-style summary.json; cross-check against the index
             # itself like E199/E200.
