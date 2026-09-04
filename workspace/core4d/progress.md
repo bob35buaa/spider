@@ -1,5 +1,62 @@
 # CORE4D 当前进度
 
+## 进行中：E209 — desk/chair PRG + G1 object gravcomp（plan239 / R295 / Phase 68）
+
+> 与 E207/E208 **共用分支** `feat/E207-bucket-g1only-gravcomp`。与 E208 共用同一批 22 case
+> 但零文件冲突（E208 写 `__aug_*` 任务目录，E209 只往 orig 目录写 `scene_act_E209_*`）；
+> 唯一共享文件是 `review_index.py` 与 `EXPERIMENT_TRACKER.md`。
+> **编号裁定**：E208 已占 E208/plan238/R294；`log/296` 已被 E207 落盘占用 →
+> **E208 用 log297，E209 用 log298**。
+
+### 2026-09-05 · P0–P5 契约就绪（C0/C1/C1b/C1c 全过），P6 full CEM 进行中
+
+- **口径（用户 4 项决策）**：编号 E209；**只跑 G1only 一格**（E206 PRG + 仅 object gravcomp，
+  A0 hand-gate），基线复用 E206 的 22 条 PRG rollout 零重跑；收尾 = 14-gate + z 诊断 +
+  渲染 + 22 例全量人审；**本实验先跑**（8 卡当时全空闲）；**不做 RL 重导出**。
+- **动机不是「把 E207 再做一遍」**。计划期实测：desk/chair 的 z 下沉比 bucket **更重**
+  （宏 bias **−2.517 cm**、18/22 为负、r(ref_lift,bias)=−0.738；对照 E178 bucket −1.820、
+  E207 子集 −1.379）。更关键的是 E207 的「gravcomp = +1.945 cm 常量」有**两重共线**：
+  按质量分层后 mass=2→+1.691(n=7)、mass=5→**+2.836**(n=2)、r(mass,delta)=+0.710；
+  且 E207 里 mass=5 的 pre-bias 均值 −2.08 vs mass=2 的 −1.18，**「收缩型」与「加性型」
+  在 E207 数据上结构性不可分**。E209 的 22 例 mass **全部 5.000 kg（零方差）**而 pre-bias
+  跨 **−5.646…+2.668** → 切断共线。三模型系数 P0 冻结进 `e209_common.PREREG_MODELS`，
+  7 例判别 case 分离 **5.6–9.0σ**（E207 OLS 残差 sd 仅 0.377 cm）。
+- **S⁺/S⁻ 分层由基线机械决定并随代码提交**（防事后辩护）：S⁻ n=18 宏 −3.519；
+  S⁺ n=4 宏 +1.994，恰为 chair006 的 4 例。`chair006_20231003_2_015_p1`(−0.726) **留在 S⁻**
+  —— 不按物体名切。C4b 是**可失败的预注册硬门**，C4c 强制报告全 22 例。
+- **P0**：8/8 退出检查复现（z −2.517 / neg 18/22 / narrow 13/22 / USE 22/22）。补
+  **rules §7 保障 1 的历史欠账**：22 个 dcv3 task dir **在 git 里原本一个文件都没有**，
+  已 `git add -f` 132 文件。
+- **P1**：22/22 sidecar 单变量。除 XML 签名断言外加了**编译层证明** —— MuJoCo 编出的
+  `ngeom/npair/nq/nv/nu/nbody` 逐 case 相等（npair 恰为 18N+24：chair005 60 / desk021 114 /
+  desk023 186 / chair006 204 / desk007 240，与 E206 实装 box 数吻合）。
+- **P2**：22/22 Hydra compose 对称差 **== {scene_name}**。注意**不能沿用 E206 的
+  `ARM_DIFF_KEYS`(12 键)**（那是 noPRG↔PRG 的集合；E209↔E206-PRG 两侧 leg 三件套相同）。
+  额外断言两臂 `contact_hdmi_mask_path` 逐字符相同（eval 从各自 config_act 读掩码）。
+- **P3/P4**：22 行 manifest，trajectory/contact_mask/baseline scene sha256 == E206 交付表。
+  快照**照 E207 拍 dcv3 task dir**（**E206 的快照拍的是源模板，不含真正跑 CEM 的
+  `scene_act_E206_lowgeom_PRG.xml`** —— 已存在的缺口），一份快照覆盖双臂。
+- **P5**：smoke 回读 `config_act.yaml` 证明跑的是 G1：`scene_name` 后缀 `_gravcomp`、
+  hand-gate 是 **A0(0.10/−0.020)** 而非 A2(0.05/−0.015)、leg 2.0/on、actuator gain 500/50，
+  且 model_path 载入的 XML 里 object `gravcomp="1"`。
+- **P6 进行中**：22 条 × 8 卡，预计 ~2.1 h（E206 PRG 同 22 例 wall median 44.0 min）。
+  已挂 20 分钟 watcher（cron，session-only）。P7 工具链已提前写好并 import 自检通过。
+
+**四个实现坑（已避开，均写进代码注释）**
+
+| # | 坑 | 处置 |
+|---|---|---|
+| F1 | `e200_common.build_gravcomp_sidecar` 把输出名**硬编码**成 `scene_act_E199_rubberHull_PRG_gravcomp`（:161），直接套用会往 desk/chair 目录写出名字撒谎的文件 | 自写 12 行 writer；`assert_gravcomp_diff` 逐字复用 |
+| F2 | `e200_common.TIER_RANK` 只有 `{"P1":1}`，E209 manifest 是 `tier=P0` → 派发即 KeyError | 队列必须用 **E199 版**（含 P0/P1/P2） |
+| F3 | 给 `e206_common.ARMS` 加第三 arm 会**静默污染在跑的 E208**（`e208_common:53` import 它）与 E206 自身重跑 | 新写 `eval_E209_g1_gravcomp.py`，`e206_common` 只读 |
+| F4 | 想把 `review_index.py:1011` 的 arm-sweep 元组改成派生式 `SOURCE_OVERRIDES[exp]["arm_sweep"]` —— **写回归测试后发现该 flag 还挂在 E194_FULL/E198/E199/E199P/E200G/E200N 上**，而该 elif 的触发条件是 summary.json *不存在*，派生式会静默改掉这 6 个实验的行为 | **放弃派生式**，保持显式元组只加 `E209ARM`，注释写明原因 |
+
+**一个协作观察**：本分支有并发提交者。我 `git add -f` 的 132 个 scene 文件 + 22 个 sidecar
+被并发的 `95d0000`（E207 RL 导出提交）一并扫走，落进了一个语义不相干的 commit。
+后续提交一律显式列路径，不用 `-a`/`-A`。
+
+---
+
 ## 进行中：E208 — desk/chair 平移增强（plan238 / R294）
 
 > 与 E207（bucket G1-only gravcomp）**共用分支** `feat/E207-bucket-g1only-gravcomp`（用户指定不新建分支）。E208 全部改动都在新路径下，与 E207 零文件冲突；P6 的 8 卡 CEM 需给 E207 队列让路。
