@@ -1,16 +1,16 @@
 # log295 · E206：desk+chair 走 dcv3 全流程 + 非凸碰撞代理 + noPRG/PRG 双 arm
 
-_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：S0–S5 全部闭合 + P3 准入已冻结（P0–P7 完成）；P8 CEM 待发；P9/P10 未开始**_
+_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：P0–P9 全部完成（S0–S5 闭合、130 条 CEM 全成、双口径评测出数）；剩人工视觉复核 + P10 收尾**_
 
 > 本 log 是**中途快照**，不是结论。写它的目的是把已确认的事实、已修的坑、和**还没解决的问题**固定下来，避免后续重复踩。最终结论待实验跑完后补。
 
 ## 一句话进展
 
-desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 物体（desk005 落地 0 case、chair021 因代理质量被人工弃用），8 个物体的碰撞代理全部由**人工在 3D 界面里逐个重摆 box** 完成，契约 **8/8 hard gates pass（含新增 G10 支撑面共面）、`all_pass=true`、G6 豁免需求归零**；S3 重定向 **65/65 = 100% pass**（v1 54 + v2 rescue 11，用户要求所有 infeasible 全送 rescue），S4 目标门 **65/65 = 100%**，S5 handoff 65 行；P7 双 arm 场景与 override **65/65 全部构建并通过 C4 单变量审计**；P3 准入 **A1/A2 双双通过**（中位墙钟 47.4 min ≤ 120，队列投影 12.8 h ≤ 48），冻结 `use_torch_compile=false`。**队列 = 65 case × 2 arm = 130 条 CEM。**
+desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 物体（desk005 落地 0 case、chair021 因代理质量被人工弃用），8 个物体的碰撞代理全部由**人工在 3D 界面里逐个重摆 box** 完成，契约 **8/8 hard gates pass（含新增 G10 支撑面共面）、`all_pass=true`、G6 豁免需求归零**；S3 重定向 **65/65 = 100% pass**（v1 54 + v2 rescue 11，用户要求所有 infeasible 全送 rescue），S4 目标门 **65/65 = 100%**，S5 handoff 65 行；P7 双 arm 场景与 override **65/65 全部构建并通过 C4 单变量审计**；P3 准入 **A1/A2 双双通过**，冻结 `use_torch_compile=false`；**P8 的 130 条 CEM 全部成功（11.4 h）**，P9 双口径评测出数：**C5a 通过（接触 0.350→0.870，超门 3.5 倍）**，**C5b 判定 PRG 胜**（`leg_pen` narrow +10.8 pp、L3 +3），但 `hand_pen` 反向 −9.2 pp 必须并列报告。
 
 手编相对自动代理是实质改进：chair022 腔体过填 **0.41→0.12**、chair006 **0.26→0.06**、chair005 **0.41→0.23**、desk021 的 mesh→proxy p90 **0.042→0.005**。
 
-过程中挖出 **7 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局）和 **10 个我自己引入的性能/口径问题**（第四节）。另有两条方法学发现：**F15** 管线可复现性并非处处成立（19/22 逐位一致，3 例发散），**F17** G8 的绝对门在惩罚代理保真度。CEM 尚未开跑。
+过程中挖出 **7 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局）和 **10 个我自己引入的性能/口径问题**（第四节）。另有两条方法学发现：**F15** 管线可复现性并非处处成立（19/22 逐位一致，3 例发散），**F17** G8 的绝对门在惩罚代理保真度。CEM 已跑完（130/130）。
 
 ---
 
@@ -38,9 +38,14 @@ desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 �
 | **P5c omnirt_v2 rescue（11 例全送，用户要求）** | ✅ **11/11 pass → S3 合计 65/65 = 100%** | — |
 | **P3 吞吐实测 + 准入冻结** | ✅ **A1 47.4min / A2 12.8h 双双 pass，A3 不触发** | — |
 | **P6b G8 接触保真** | ✅ 已度量（F17：不按绝对门判决，留作 P9 输入） | — |
-| **P8 CEM 130 条发队列** | 🔄 8 卡运行中（投影 ~12.8 h） | — |
+| **P8 CEM 130 条** | ✅ **130/130 `cem_ok`，零失败**，11.4 h 墙钟 | — |
 | **P8 运行时 arm 契约抽检** | ✅ 4/4 pass，`npair` 差值 = 16×N | — |
-| P6c 视觉 QC / P9 / P10 | ⏳ 未开始 | — |
+| **P8b 渲染 130 条 MP4** | ✅ 130/130（osmesa，12 分片） | — |
+| **P9 双口径评测**（14 门漏斗 + 12 门） | ✅ 130 行打分，0 错误，65 对配对 | — |
+| **P9 C5a vs E174 desk007** | ✅ **通过**：+0.520 vs 门 +0.15 | — |
+| **P9 C5b arm 对比** | ✅ **PRG 胜**（leg_pen +10.8 pp，L3 +3） | — |
+| **P9 viser E206ARM + 覆盖集** | ✅ 130 行 playable；64 行待人工判定 | — |
+| P9b 人工视觉复核 / P10 收尾 | ⏳ 待人工 | — |
 
 ---
 
@@ -472,6 +477,89 @@ G8（ref-FK 接触目标 → 代理表面 `p90 ≤ 0.08 m`）在 54 个 case 上
 
 实测 desk007 的 4 对：**4/4 pass**，`npair` 48→240，差值 **192 = 16×12** 精确吻合。
 
+## 三之三、P8 CEM + P9 评测（2026-09-04）
+
+### CEM 队列
+
+**130/130 `cem_ok`，零失败。** 总 90.9 slot-小时 / 8 卡 = **11.4 h 墙钟**（P3 投影 12.8 h，实际快 11%）。单条墙钟 min 15.8 / 中位 42.1 / max 113.1 min，全部低于 A1 的 120 min。
+
+渲染 **130/130** MP4（osmesa CPU，12 分片并行）。
+
+### C5a · F7 配对修复带来的接触改善 —— **通过，且远超门**
+
+plan236 的核心科学看点。E174 跑 desk007 时代理有 41 个 box，但只有 **2 条** robot↔object pair（F7），40/41 个碰撞盒对机器人不可见。E206 同样 9 个 case、同样 3cm 掩码，12 box 手编代理 + 2N/18N pair：
+
+| | E174 PRG（基线） | **E206 PRG** | E206 noPRG |
+|---|---:|---:|---:|
+| `contact_in_mask` 均值 | 0.350 | **0.870** | 0.871 |
+| std | 0.401 | **0.092** | 0.054 |
+| worst | **0.000** | 0.651 | 0.779 |
+
+**均值提升 +0.520，门是 +0.15 —— 超出 3.5 倍。9 例中 8 例改善、1 例退步 0.094。**
+
+最硬的证据是分布形状而非均值：**E174 有 5/9 个 case 的 `contact_in_mask` 恰好是 0.0000** —— 手完全没碰到物体。这正是 F7 的指纹。E206 一个 0 都没有，std 从 0.401 塌到 0.092。
+
+> 自洽性检验：noPRG 0.8705 ≈ PRG 0.8704。两 arm 手部 pair 完全相同，接触本就**不该**受腿约束影响 —— 这个几乎相等的结果反过来证明 arm 隔离是干净的。
+
+### C5b · noPRG vs PRG —— **PRG 胜（达标）**，但有代价
+
+65 对配对，两 arm **都从新鲜 rollout 经同一条代码路径打分**（E204 的 PRG 行是读 E178 的 TSV，两 arm 不同尺 —— 那个不对称在这里修掉了）。
+
+| 指标 | noPRG | PRG | delta |
+|---|---:|---:|---:|
+| L3_auto | 15 | 18 | **+3** |
+| L2_review | 14 | 15 | +1 |
+| L1_reject | 36 | 32 | **−4** |
+| 12 门通过 | 13 | 17 | +4 |
+| 物理 6 门 | 22 | 28 | **+6** |
+| tracking 6 门 | 28 | 32 | +4 |
+
+**C5b 判据**：`leg_pen` narrow 通过率 **80.0% → 90.8% = +10.8 pp**（门 ≥ +10 pp）✓，L3 delta **+3** ≥ 0 ✓ → **可以宣称 PRG 胜**。
+
+**代价必须同时报告**（逐门 narrow 通过率 delta，pp）：
+
+| 改善 | | 恶化 | |
+|---|---:|---|---:|
+| `leg_pen` | **+10.8** | `hand_pen` | **−9.2** |
+| `eef_ori` | +4.6 | `root_pos` | −4.6 |
+| `release` | +4.6 | `obj_pos` | −4.6 |
+| `contact` | +1.5 | `obj_ori` | −1.5 |
+
+腿穿透均值 **0.112 → 0.053（减半）**，但手穿透 0.212 → 0.222 略升，物体位置误差 11.8 → 12.4 cm。**PRG 是把穿透从腿转移了一部分到手，不是纯粹的免费改善。**
+
+### 逐物体（标 n；n<3 不出 per-object 推荐）
+
+| 物体 | n | 可推荐 | noPRG L3/L1 | PRG L3/L1 | legpen noPRG→PRG | contact noPRG→PRG |
+|---|---:|---|---|---|---|---|
+| desk021 | 17 | ✓ | 4/7 | 6/8 | 0.123 → 0.075 | 0.727 → 0.728 |
+| desk023 | 14 | ✓ | 5/7 | 5/4 | 0.108 → **0.014** | 0.743 → 0.773 |
+| chair006 | 13 | ✓ | 3/7 | 3/7 | 0.053 → 0.022 | 0.738 → 0.714 |
+| desk007 | 9 | ✓ | 1/6 | **2/3** | 0.140 → **0.036** | 0.871 → 0.870 |
+| chair022 | 7 | ✓ | 2/4 | 2/5 | 0.062 → 0.034 | 0.570 → 0.645 |
+| chair005 | 2 | ✗ | 0/2 | 0/2 | 0.044 → 0.006 | 0.805 → 0.804 |
+| desk020 | 2 | ✗ | 0/2 | 0/2 | **0.607 → 0.556** | 0.387 → 0.530 |
+| chair020 | 1 | ✗ | 0/1 | 0/1 | 0.000 → 0.000 | 0.761 → 0.648 |
+
+**PRG 的收益集中在桌子上**：desk007 腿穿透降 4×（L1 6→3）、desk023 降 7.7×（L1 7→4）。椅子上的腿穿透本来就低，改善空间小。
+
+> **⚠️ desk020 的 `leg_penetration_frac` = 0.61 / 0.56**，比其他任何物体高一个数量级，两 arm 都是。n=2 不做结论，但这个数字必须显式记录 —— desk020 是 F14 才救回来的物体，其源模板与资产的完整性本就最差（F6 也点过它）。**建议下一步优先查它的代理与场景，而不是当作统计噪声。**
+
+### F18 · root_pos 的均值被 2 个摔倒 case 主导（报表口径，非漏检）
+
+`track_root_pos_err_cm_mean` 全体均值 46.9 cm、std 184、**worst 1477 cm（14.8 m）**。查下来是 `desk023_20231011_005_p2` 两 arm 都 `fall_flag=True` —— 机器人摔倒后滑出 15 米，**门已正确判 L1_reject**。
+
+所以这不是漏检，是**报表口径问题**：只报均值会让人以为整体跟踪很差。工作簿的 `per_gate` 页因此对每个门同时给 **mean / median / std / worst** 四个数 —— 既不能用均值掩盖离群，也不能删掉离群（那是选择性报告，rule 5 明令禁止）。
+
+### 交付物
+
+- 逐行结果：`eval/two_arm/e206_two_arm_rollout.tsv`（130 行，14 门漏斗 + 12 门双口径）
+- 逐门 / 逐物体 / 配对 delta：`e206_per_gate.tsv` / `e206_per_object.tsv`
+- C5a：`c5a_vs_e174_desk007.{tsv,json}`
+- 工作簿：**`e206_two_arm.xlsx`**（funnel_summary / per_gate / per_object / paired_delta / vs_E174_desk007 / rollout 六页）
+- 视频：`render/full/*.mp4`（130 个）
+- viser 复核：`review_player.sh E206ARM`（130 行全 playable，审计 0 mismatch）
+- 强制复核覆盖集：`review/user_manual_review.tsv`（**64 行 = 全部 33 个 L3 + 20 个单门 L1 + 16 个 object×arm**，待人工填 USE/DO_NOT_USE）
+
 ---
 
 ## 四、我自己引入的问题（全部已修，记录以免重犯）
@@ -578,6 +666,14 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 | `$ED/check_reproducibility_vs_e145.py` | S3 重建轨迹 vs 覆盖前基线的逐数组比对（F15），发散即非零退出 |
 | `$ED/build_arm_scenes.py` | rubber_hull → 2N/18N pair 的双 arm 场景构建 + 6 项编译期断言（C4） |
 | `$ED/build_overrides.py` | 双 arm override 生成 + Hydra compose 的 C4 跨 arm diff 审计 |
+| `$ED/run_e206_cem.py` | 130 条 CEM 驱动（A2b 优先级，预算读 admission_decision.json） |
+| `$ED/audit_runtime_arm_contract.py` | 运行时 arm 契约审计（DERIVED/BY_DESIGN/THE_VARIABLE 三分类） |
+| `$ED/render_cem_results.py` | 边跑边渲染，按输出目录重建 render_row 所需的 row |
+| `$ED/build_arm_review_tsv.py` | viser `E206ARM` 的 case_metrics（不重打分） |
+| `$ED/build_review_coverage.py` | C6 强制复核覆盖集（全 L3 + 全单门 L1 + object×arm） |
+| `$ED/compare_c5a_vs_e174.py` | C5a 与 E174 desk007 的同尺配对对比 |
+| `scripts/eval/runners/eval_E206_arm_ablation.py` | **两 arm 都从新鲜 rollout 同路径打分**；14 门漏斗 + 12 门双口径 |
+| `scripts/eval/reports/gen_E206_two_arm_workbook.py` | 6 页工作簿；每门同时给 mean/median/std/worst |
 | `$ED/measure_throughput.py` | P3 吞吐探针驱动（**真实场景，非合成**）+ A1/A2/A3 裁决 + `--analyze-only` 重算 |
 | `$ED/build_proxy_manifest.py` | G8 输入 manifest；**Hydra compose 出已解析 `config_act.yaml`**（G8 读的是解析后配置，不是 arm override —— 直接指 override 会全部报 `expected contact_hdmi_dynamic_target=true`） |
 | `scripts/launch/active/run_E206_data_pipeline.sh` | S0–S5 编排（前置校验 / 范围过滤 / 模板闸 / S3–S5） |
@@ -598,6 +694,8 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 |---|---|
 | `data_construction_v3/stages/s2_templates/build_or_audit_templates.py` | 修材质替换静默 no-op（F7）；抽出 `substitute_object_material()` 并加替换次数断言 |
 | `data_preprocess/pipeline.sh` | **`ensure_g1_object_xml` 的 seed `case` 改为匹配小写副本（F14）** —— 一行，救回 desk020 |
+| `scripts/eval/review/review_index.py` | 注册 `E206ARM`（arm_sweep）；`--check` 分支与 E204ARM 合并 |
+| `scripts/eval/wrappers/review_player.sh` | 头部注册 `E206ARM` 用法 |
 | `scripts/eval/runners/eval_E176_contact_fidelity.py` | `--max-object-geoms`（默认 9）替代硬编码 `>9`（R10/U7）；`source_config()` 去 E174 列名硬编码，改按后缀匹配 |
 
 **SPIDER core（`spider/`）零改动。** `union` 的 box-only 约束被当作必须绕开设计的硬约束，全程未放松。
@@ -628,6 +726,13 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 - **S5 handoff + 基座 override**：`results/E206/s5_handoff/{handoff_manifest.tsv,cem_overrides/}`
 - **双 arm 场景**：`results/E206/s5_handoff/arm_scenes/arm_scene_build.{tsv,json}`（65/65）
 - **双 arm override**：`results/E206/s5_handoff/arm_overrides/arm_override_build.{tsv,json}`（65/65 C4 过）
+- **P8 CEM（130 条）**：`results/E206/s6_downstream/cem/full/{e206_cem_summary.json,runtime_arm_contract.tsv}`
+- **P8b 视频**：`results/E206/s6_downstream/render/full/*.mp4`（130 个）
+- **P9 评测**：`results/E206/s6_downstream/eval/two_arm/{e206_two_arm_rollout.tsv,e206_per_gate.tsv,e206_per_object.tsv,e206_two_arm_summary.json}`
+- **P9 C5a**：`.../two_arm/c5a_vs_e174_desk007.{tsv,json}`
+- **P9 工作簿**：`.../two_arm/e206_two_arm.xlsx`（6 页）
+- **P9 viser**：`.../two_arm/e206_arm_case_metrics.tsv`（`review_player.sh E206ARM`）
+- **P9 强制复核覆盖集**：`results/E206/s6_downstream/review/user_manual_review.tsv`（64 行待人工）
 - **P3 吞吐与准入**：`results/E206/s6_downstream/cem/throughput/{e206_throughput_curve.{tsv,md},admission_decision.json}`（8 探针全 ok）
 - **v2 rescue**：`results/E206/s3_retarget/omnirt_v2/ref_fk/stage2b_manifest_omnirt_v2_ref_fk.tsv`（11/11 pass）
 - **G8 接触保真（F17）**：`results/E206/s2_proxy/contact_fidelity/{summary.md,object_summary.tsv,case_summary.tsv}`

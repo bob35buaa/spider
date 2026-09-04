@@ -129,6 +129,20 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E206ARM = two-arm ablation on the 65 desk/chair move2 cases (plan236/log295):
+    # noPRG / PRG as a 2-arm sweep per case, same hand-placed lowgeom proxy and
+    # same rubber-hull hands -- the only difference is the 16N leg<->object pairs.
+    # BOTH arms are fresh E206 rollouts scored through one code path (E204ARM
+    # reused E178's TSV for its PRG row; that asymmetry is fixed here).
+    # TSV built (no re-scoring) by E206/build_arm_review_tsv.py.
+    # Opt-in via --exps E206ARM.
+    "E206ARM": {
+        "result_exp": "E206",
+        "eval_subdir": "two_arm",
+        "case_metrics": "e206_arm_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -947,9 +961,9 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp == "E204ARM":
-            # 3-arm sweep (noPRG/PRG/G1A2), no `evaluated`-style summary.json;
-            # cross-check against the index itself like the E199/E200 arm sweeps.
+        elif exp in ("E204ARM", "E206ARM"):
+            # arm sweeps (E204ARM 3-arm, E206ARM 2-arm) have no `evaluated`-style
+            # summary.json; cross-check against the index itself like E199/E200.
             evaluated = len(recs)
             npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E197":
