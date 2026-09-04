@@ -4,6 +4,8 @@
 Sheets:
   说明             what each sheet is + the C5a / C5b verdicts up front
   funnel_summary   per-arm L1/L2/L3 and 12-gate counts (COUNTIFS over `rollout`)
+  人审汇总          C6: the 14-gate funnel scored against the human verdict
+  人审明细          all 65 reviewed PRG rows, gate result beside human verdict
   per_gate         per gate: mean/median/std/worst per arm + paired delta
   per_object       per object x arm, with n and whether n permits a recommendation
   paired_delta     per case: PRG - noPRG on the decision-relevant metrics
@@ -22,6 +24,12 @@ Reporting choices that are deliberate, not cosmetic:
     selective reporting. Both are shown, and the outlier rows are flagged red.
   * per_object rows with n < 3 are greyed and marked -- they must not be read as
     per-object recommendations.
+  * the human review covers the PRG arm only (65/65 rows). noPRG manual cells are
+    left blank rather than inferred; every count that mixes the two filters on
+    arm="prg" explicitly.
+  * gate/human disagreements are listed case by case, not summarised away. An
+    L3_auto row the human calls UNUSABLE is an auto-accept escape and is the most
+    expensive error the funnel can make (plan236 C6).
 
 Usage:
     .venv/bin/python .../gen_E206_two_arm_workbook.py
@@ -51,6 +59,10 @@ import funnel_config as FC  # noqa: E402
 
 EVAL = C.S6_DIR / "eval/two_arm"
 OUT = EVAL / "e206_two_arm.xlsx"
+REVIEW = EVAL / "user_manual_review_filled.tsv"
+
+# The human reviewed one arm; `case_id` there carries a `<case>#<ARM>` suffix.
+REVIEW_ARM = "prg"
 
 NAVY = "17365D"
 BLUE = "4472C4"
@@ -59,15 +71,56 @@ LIGHT_GREEN = "E2F0D9"
 LIGHT_RED = "FCE4D6"
 LIGHT_AMBER = "FFF2CC"
 LIGHT_GRAY = "E7E6E6"
+LIGHT_PURPLE = "E4DFEC"   # gate/human disagreement
 WHITE = "FFFFFF"
 GREEN_TXT = "1E7145"
 RED_TXT = "9C0006"
+PURPLE_TXT = "5F497A"
+
+USE_FILL = {"USE": LIGHT_GREEN, "DO_NOT_USE": LIGHT_RED}
+QUALITY_FILL = {"CLEAN": LIGHT_GREEN, "MINOR_ACCEPTABLE": LIGHT_AMBER,
+                "UNUSABLE": LIGHT_RED}
+LAYER_FILL = {"L3_auto": LIGHT_GREEN, "L2_review": LIGHT_AMBER,
+              "L1_reject": LIGHT_RED}
 THIN = Side(style="thin", color="B7B7B7")
 ARIAL = "Arial"
 
 # metric -> True when a LOWER value is better
 LOWER_BETTER = {g[1]: (g[2] == "<=") for g in FC.BANDED_GATES}
 LOWER_BETTER["body_z_err_p95_m"] = True
+
+def load_review() -> dict[str, dict[str, str]]:
+    """`case_id` -> filled review row, for the one arm the human scored.
+
+    Rows are keyed `<case_id>#<ARM>`; anything for another arm is ignored so a
+    later second-arm pass cannot silently overwrite this one.
+    """
+    if not REVIEW.is_file():
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for r in C.read_tsv(REVIEW):
+        raw = r.get("case_id", "")
+        if "#" not in raw:
+            continue
+        case_id, arm = raw.rsplit("#", 1)
+        if arm.lower() != REVIEW_ARM:
+            continue
+        out[case_id] = r
+    return out
+
+
+def conflict_kind(layer: str, decision: str) -> str:
+    """Classify a gate/human disagreement, or "" when they agree.
+
+    L3 is auto-accept, so an UNUSABLE L3 row ships unreviewed -- the expensive
+    direction. An L1 row the human keeps is only a lost sample.
+    """
+    if layer == "L3_auto" and decision == "DO_NOT_USE":
+        return "漏网 · L3自动接受但人审否决"
+    if layer == "L1_reject" and decision == "USE":
+        return "误杀 · L1拒绝但人审可用"
+    return ""
+
 
 DECISION_FIELDS = [
     "leg_penetration_frac",
@@ -154,6 +207,15 @@ def main() -> int:
     by = {(r["arm"], r["case_id"]): r for r in rows}
     cases = sorted({r["case_id"] for r in rows})
     paired = [c for c in cases if all((a, c) in by for a in C.ARMS)]
+    review = load_review()
+    # Carry the verdict onto the scored rows so every count below is a formula
+    # over one sheet rather than a second, silently diverging source of truth.
+    for r in rows:
+        rv = review.get(r["case_id"], {}) if r["arm"] == REVIEW_ARM else {}
+        r["manual_use_decision"] = rv.get("manual_use_decision", "")
+        r["manual_quality_label"] = rv.get("manual_quality_label", "")
+        r["manual_conflict"] = conflict_kind(r["layer"], r["manual_use_decision"])
+    reviewed = sorted(c for c in cases if c in review)
     c5a = json.loads((EVAL / "c5a_vs_e174_desk007.json").read_text(encoding="utf-8")) \
         if (EVAL / "c5a_vs_e174_desk007.json").is_file() else {}
 
@@ -162,13 +224,15 @@ def main() -> int:
 
     # ------------------------------------------------------------ rollout ---
     cols = (["object_key", "case_id", "arm", "layer", "gate12_pass",
+             "manual_use_decision", "manual_quality_label",
              "physics6_pass", "tracking6_pass", "narrow_pass"]
             + [g[1] for g in FC.BANDED_GATES]
             + ["body_z_err_p95_m", "fall_flag", "narrow_failed", "wide_failed"])
     ws = wb.create_sheet("rollout")
     title(ws, "E206 · 130 条 rollout 逐行结果",
           "两 arm 均由新鲜 rollout 经同一代码路径打分。P/F = 该门通过与否；"
-          "layer 为 E201 14 门漏斗判定；本页是其余各页公式的数据源。", len(cols))
+          "layer 为 E201 14 门漏斗判定；本页是其余各页公式的数据源。"
+          "人审两列仅 PRG 行有值（人只审了 PRG arm），noPRG 留空而非推断。", len(cols))
     ws.append([])
     ws.append(cols)
     header(ws, 4, len(cols))
@@ -191,10 +255,17 @@ def main() -> int:
                                  color=GREEN_TXT if ok else RED_TXT)
                 cell.alignment = Alignment(horizontal="center")
             elif name == "layer":
-                v = str(cell.value)
-                fill = {"L3_auto": LIGHT_GREEN, "L2_review": LIGHT_AMBER,
-                        "L1_reject": LIGHT_RED}.get(v, WHITE)
-                cell.fill = PatternFill("solid", fgColor=fill)
+                cell.fill = PatternFill(
+                    "solid", fgColor=LAYER_FILL.get(str(cell.value), WHITE))
+                cell.alignment = Alignment(horizontal="center")
+            elif name in ("manual_use_decision", "manual_quality_label"):
+                v = str(cell.value or "")
+                table = USE_FILL if name == "manual_use_decision" else QUALITY_FILL
+                if v:
+                    cell.fill = PatternFill("solid", fgColor=table.get(v, WHITE))
+                    cell.font = Font(name=ARIAL, size=9, bold=True,
+                                     color=RED_TXT if "UN" in v or v == "DO_NOT_USE"
+                                     else GREEN_TXT)
                 cell.alignment = Alignment(horizontal="center")
             elif name in LOWER_BETTER:
                 cell.value = f(cell.value) if math.isfinite(f(cell.value)) else None
@@ -204,7 +275,8 @@ def main() -> int:
                     cell.fill = PatternFill("solid", fgColor=LIGHT_RED)
                     cell.font = Font(name=ARIAL, size=9, bold=True, color=RED_TXT)
     finish_table(ws, 4, last, len(cols), "rollout_tbl")
-    set_widths(ws, {1: 11, 2: 30, 3: 8, 4: 11, len(cols) - 1: 26, len(cols): 26}, 11)
+    set_widths(ws, {1: 11, 2: 30, 3: 8, 4: 11, 6: 15, 7: 18,
+                    len(cols) - 1: 26, len(cols): 26}, 11)
     R = "rollout"          # sheet name used by every COUNTIFS below
     col_of = {n: get_column_letter(i + 1) for i, n in enumerate(cols)}
     rng = lambda n: f"{R}!${col_of[n]}${first}:${col_of[n]}${last}"  # noqa: E731
@@ -278,6 +350,188 @@ def main() -> int:
         ws.row_dimensions[row].height = 30
         row += 1
     set_widths(ws, {1: 22, 2: 16}, 13)
+
+    # ------------------------------------------------------------ 人审汇总 ---
+    conflicts: list[dict[str, str]] = []
+    if reviewed:
+        arm_q = f'"{REVIEW_ARM}"'
+        counts = {L: {d: sum(1 for c in reviewed
+                             if by[(REVIEW_ARM, c)]["layer"] == L
+                             and review[c]["manual_use_decision"] == d)
+                      for d in ("USE", "DO_NOT_USE")}
+                  for L in ("L3_auto", "L2_review", "L1_reject")}
+        conflicts = [
+            {"case_id": c, "kind": conflict_kind(by[(REVIEW_ARM, c)]["layer"],
+                                                 review[c]["manual_use_decision"])}
+            for c in reviewed
+            if conflict_kind(by[(REVIEW_ARM, c)]["layer"],
+                             review[c]["manual_use_decision"])
+        ]
+
+        ws = wb.create_sheet("人审汇总", 1)
+        mcols = ["漏斗层", "n", "人审 USE", "人审 DO_NOT_USE", "USE 率", "判读"]
+        title(ws, "C6 · 14 门漏斗 vs 人工目视判定（PRG arm，65/65 全审）",
+              "计数为对 rollout 页的 COUNTIFS 公式（已按 arm=\"prg\" 过滤）。"
+              "人审是选片权威，门是排序信号 —— 两者不一致的每一例都在下方逐条列出，"
+              "不做汇总掩盖（plan236 C6 / rule 5）。", len(mcols))
+        ws.append([])
+        ws.append(mcols)
+        header(ws, 4, len(mcols))
+        verdicts = {
+            "L3_auto": "自动接受层：此处的 DO_NOT_USE 是漏网，代价最高",
+            "L2_review": "待人工层：本就要人看，USE 率居中属预期",
+            "L1_reject": "拒绝层：此处的 USE 是误杀，代价是样本损失",
+        }
+        for i, L in enumerate(("L3_auto", "L2_review", "L1_reject")):
+            r = 5 + i
+            ws.cell(r, 1, L).fill = PatternFill("solid", fgColor=LAYER_FILL[L])
+            ws.cell(r, 2, f'=COUNTIFS({rng("arm")},{arm_q},{rng("layer")},"{L}")')
+            for j, d in enumerate(("USE", "DO_NOT_USE")):
+                ws.cell(r, 3 + j, f'=COUNTIFS({rng("arm")},{arm_q},'
+                                  f'{rng("layer")},"{L}",'
+                                  f'{rng("manual_use_decision")},"{d}")')
+            ws.cell(r, 5, f"=IF(B{r}=0,\"\",C{r}/B{r})").number_format = "0.0%"
+            ws.cell(r, 6, verdicts[L])
+        total = 8
+        ws.cell(total, 1, "合计")
+        for c in (2, 3, 4):
+            L_ = get_column_letter(c)
+            ws.cell(total, c, f"=SUM({L_}5:{L_}7)")
+        ws.cell(total, 5, f'=IF(B{total}=0,"",C{total}/B{total})').number_format = "0.0%"
+        ws.cell(total, 6, "人审只覆盖 PRG arm；noPRG 未审，不得据此推断")
+        body_font(ws, 5, total)
+        for c in range(1, len(mcols) + 1):
+            ws.cell(total, c).fill = PatternFill("solid", fgColor=LIGHT_BLUE)
+            ws.cell(total, c).font = Font(name=ARIAL, size=9, bold=True)
+        for r in range(5, total + 1):
+            ws.cell(r, 3).font = Font(name=ARIAL, size=9, bold=True, color=GREEN_TXT)
+            ws.cell(r, 4).font = Font(name=ARIAL, size=9, bold=True, color=RED_TXT)
+            ws.cell(r, 6).alignment = Alignment(horizontal="left", vertical="center")
+
+        use_rate = {L: counts[L]["USE"] / max(1, sum(counts[L].values()))
+                    for L in counts}
+        monotone = use_rate["L3_auto"] > use_rate["L2_review"] > use_rate["L1_reject"]
+        escapes = counts["L3_auto"]["DO_NOT_USE"]
+        overkill = counts["L1_reject"]["USE"]
+        banner = [
+            ("单调性", f"USE 率 L3 {use_rate['L3_auto']:.1%} > L2 "
+                      f"{use_rate['L2_review']:.1%} > L1 {use_rate['L1_reject']:.1%}"
+                      f"  ⇒  {'单调，门作为排序信号有效' if monotone else '非单调，门与人审不同向'}",
+             LIGHT_GREEN if monotone else LIGHT_RED),
+            ("漏网（最贵）", f"{escapes} 例 L3_auto 被人审判为 DO_NOT_USE —— 这些在自动流程里"
+                          f"会直接放行。L3 自动接受不能单独作为出片依据。",
+             LIGHT_RED if escapes else LIGHT_GREEN),
+            ("误杀", f"{overkill} 例 L1_reject 被人审判为 USE —— 门偏严，损失的是样本量而非质量。",
+             LIGHT_AMBER if overkill else LIGHT_GREEN),
+            ("出片口径", f"人审 USE {sum(c['USE'] for c in counts.values())} 例进入 RL 导出；"
+                       f"数值 12 门在 USE 例上多为 False，二者按 E187 惯例不做 AND —— "
+                       f"人审是权威，数值门留作 provenance。", LIGHT_BLUE),
+        ]
+        r = total + 2
+        for label, text, fill in banner:
+            ws.cell(r, 1, label).font = Font(name=ARIAL, size=10, bold=True)
+            ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=len(mcols))
+            cell = ws.cell(r, 2, text)
+            cell.font = Font(name=ARIAL, size=9)
+            cell.alignment = Alignment(wrap_text=True, vertical="center")
+            for c in range(1, len(mcols) + 1):
+                ws.cell(r, c).fill = PatternFill("solid", fgColor=fill)
+                ws.cell(r, c).border = Border(bottom=THIN)
+            ws.row_dimensions[r].height = 32
+            r += 1
+
+        r += 1
+        ws.cell(r, 1, f"逐例冲突清单（{len(conflicts)} 例）").font = Font(
+            name=ARIAL, size=11, bold=True, color=PURPLE_TXT)
+        r += 1
+        ccols2 = ["case_id", "layer", "人审", "质量标签", "冲突类型", "关键指标"]
+        for i, name in enumerate(ccols2):
+            cell = ws.cell(r, i + 1, name)
+            cell.font = Font(name=ARIAL, bold=True, color=WHITE, size=9)
+            cell.fill = PatternFill("solid", fgColor=BLUE)
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        head_r = r
+        for item in sorted(conflicts, key=lambda x: (x["kind"], x["case_id"])):
+            r += 1
+            c = item["case_id"]
+            src, rv = by[(REVIEW_ARM, c)], review[c]
+            detail = (f"legpen {f(src['leg_penetration_frac']):.3f} · "
+                      f"contact {f(src['hand_object_physics_contact_in_mask_frac']):.3f} · "
+                      f"未过窄门 {src.get('narrow_failed') or '无'}")
+            for i, v in enumerate([c, src["layer"], rv["manual_use_decision"],
+                                   rv["manual_quality_label"], item["kind"], detail]):
+                cell = ws.cell(r, i + 1, v)
+                cell.font = Font(name=ARIAL, size=9)
+                cell.fill = PatternFill("solid", fgColor=LIGHT_PURPLE)
+                cell.border = Border(bottom=THIN)
+            ws.cell(r, 2).fill = PatternFill("solid", fgColor=LAYER_FILL[src["layer"]])
+            ws.cell(r, 3).fill = PatternFill(
+                "solid", fgColor=USE_FILL[rv["manual_use_decision"]])
+            ws.cell(r, 4).fill = PatternFill(
+                "solid", fgColor=QUALITY_FILL[rv["manual_quality_label"]])
+            ws.cell(r, 5).font = Font(name=ARIAL, size=9, bold=True, color=PURPLE_TXT)
+        ws.freeze_panes = f"A{head_r + 1}"
+        set_widths(ws, {1: 34, 2: 12, 3: 14, 4: 19, 5: 30, 6: 56})
+
+        # ------------------------------------------------------- 人审明细 ---
+        ws = wb.create_sheet("人审明细", 2)
+        dcols = ["object_key", "case_id", "layer", "gate12_pass", "人审", "质量标签",
+                 "一致性", "leg_penetration_frac",
+                 "hand_object_physics_contact_in_mask_frac",
+                 "hand_object_physics_penetration_3mm_frame_frac",
+                 "track_root_pos_err_cm_mean", "track_obj_pos_err_cm_mean",
+                 "narrow_failed", "reviewer", "reviewed_at"]
+        title(ws, f"E206 · 人工目视复审明细（PRG arm，{len(reviewed)} 例）",
+              "选片权威表。紫底 = 门与人审判定相反；绿/红 = 人审 USE / DO_NOT_USE。"
+              "指标列保留在旁，便于核对人眼看到的问题是否有对应数值证据。", len(dcols))
+        ws.append([])
+        ws.append(dcols)
+        header(ws, 4, len(dcols))
+        for c in sorted(reviewed, key=lambda x: (x.split("_")[0], x)):
+            src, rv = by[(REVIEW_ARM, c)], review[c]
+            ws.append([
+                src["object_key"], c, src["layer"],
+                "P" if truthy(src["gate12_pass"]) else "F",
+                rv["manual_use_decision"], rv["manual_quality_label"],
+                conflict_kind(src["layer"], rv["manual_use_decision"]) or "一致",
+                f(src["leg_penetration_frac"]),
+                f(src["hand_object_physics_contact_in_mask_frac"]),
+                f(src["hand_object_physics_penetration_3mm_frame_frac"]),
+                f(src["track_root_pos_err_cm_mean"]),
+                f(src["track_obj_pos_err_cm_mean"]),
+                src.get("narrow_failed", ""),
+                rv.get("manual_reviewer", ""), rv.get("manual_reviewed_at", ""),
+            ])
+        last = ws.max_row
+        for r in range(5, last + 1):
+            for c in range(1, len(dcols) + 1):
+                ws.cell(r, c).font = Font(name=ARIAL, size=9)
+                ws.cell(r, c).alignment = Alignment(
+                    vertical="center", horizontal="left" if c <= 3 else "right")
+            for c in range(8, 13):
+                ws.cell(r, c).number_format = "0.000"
+            gate_ok = ws.cell(r, 4).value == "P"
+            ws.cell(r, 4).fill = PatternFill(
+                "solid", fgColor=LIGHT_GREEN if gate_ok else LIGHT_RED)
+            ws.cell(r, 4).font = Font(name=ARIAL, size=9, bold=True,
+                                      color=GREEN_TXT if gate_ok else RED_TXT)
+            ws.cell(r, 3).fill = PatternFill(
+                "solid", fgColor=LAYER_FILL.get(str(ws.cell(r, 3).value), WHITE))
+            ws.cell(r, 5).fill = PatternFill(
+                "solid", fgColor=USE_FILL.get(str(ws.cell(r, 5).value), WHITE))
+            ws.cell(r, 6).fill = PatternFill(
+                "solid", fgColor=QUALITY_FILL.get(str(ws.cell(r, 6).value), WHITE))
+            for c in (3, 4, 5, 6):
+                ws.cell(r, c).alignment = Alignment(horizontal="center")
+            if ws.cell(r, 7).value != "一致":
+                ws.cell(r, 7).fill = PatternFill("solid", fgColor=LIGHT_PURPLE)
+                ws.cell(r, 7).font = Font(name=ARIAL, size=9, bold=True,
+                                          color=PURPLE_TXT)
+                ws.cell(r, 2).font = Font(name=ARIAL, size=9, bold=True,
+                                          color=PURPLE_TXT)
+        finish_table(ws, 4, last, len(dcols), "review_tbl")
+        set_widths(ws, {1: 11, 2: 32, 3: 11, 4: 7, 5: 13, 6: 19, 7: 28,
+                        13: 24, 14: 11, 15: 22}, 14)
 
     # ------------------------------------------------------------ per_gate ---
     ws = wb.create_sheet("per_gate")
@@ -396,10 +650,8 @@ def main() -> int:
         delta_scale(ws, f"{L}5:{L}{last}", lower_is_better=LOWER_BETTER.get(field, True))
     for r in range(5, last + 1):
         for c in (3, 4):
-            v = str(ws.cell(r, c).value)
-            ws.cell(r, c).fill = PatternFill("solid", fgColor={
-                "L3_auto": LIGHT_GREEN, "L2_review": LIGHT_AMBER,
-                "L1_reject": LIGHT_RED}.get(v, WHITE))
+            ws.cell(r, c).fill = PatternFill(
+                "solid", fgColor=LAYER_FILL.get(str(ws.cell(r, c).value), WHITE))
             ws.cell(r, c).alignment = Alignment(horizontal="center")
     finish_table(ws, 4, last, len(pcols), "paired_tbl")
     set_widths(ws, {1: 30, 2: 11, 3: 12, 4: 12}, 15)
@@ -443,11 +695,17 @@ def main() -> int:
     # -------------------------------------------------------------- 说明 ---
     ws = wb.create_sheet("说明", 0)
     title(ws, "E206 · desk+chair noPRG vs PRG 双 arm 评测",
-          "65 case × 2 arm = 130 条 CEM，两 arm 均由新鲜 rollout 经同一代码路径打分。", 3)
+          "65 case × 2 arm = 130 条 CEM，两 arm 均由新鲜 rollout 经同一代码路径打分。"
+          f"人工目视复审已完成 {len(reviewed)}/65（PRG arm），"
+          "出片名单以人审为权威。", 3)
     guide = [
         ("页", "内容", "读法"),
         ("funnel_summary", "两 arm 的 L1/L2/L3 与 12 门计数，含 C5a/C5b 判决",
          "计数是对 rollout 页的 COUNTIFS 公式；Δ 行蓝底"),
+        ("人审汇总", "C6：14 门漏斗判定 vs 人工目视判定（仅 PRG arm）",
+         "看「漏网」一行 —— L3 自动接受里被人否决的例数；紫底为逐例冲突清单"),
+        ("人审明细", "65 条 PRG 人审逐行结果，指标列并排",
+         "紫底行 = 门与人相反；出片名单以「人审」列为准，不与数值门取交集"),
         ("per_gate", "逐门 mean/median/std/worst + narrow 通过率",
          "只看 mean 会被离群主导 —— root_pos 的 mean 46.9cm 是两个摔倒 case 拉的"),
         ("per_object", "逐物体 × arm", "n<3 整行置灰，不得当作 per-object 推荐"),
@@ -474,12 +732,26 @@ def main() -> int:
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     wb.save(OUT)
-    print(json.dumps({"workbook": str(OUT.relative_to(REPO)),
-                      "sheets": wb.sheetnames, "paired_cases": len(paired),
-                      "C5b": {"leg_pen_narrow_pct": {k: round(v, 1) for k, v in legpen.items()},
-                              "delta_pp": round(dpp, 1), "L3_delta": l3d,
-                              "verdict": verdict}},
-                     ensure_ascii=False, indent=2))
+    payload: dict[str, Any] = {
+        "workbook": str(OUT.relative_to(REPO)),
+        "sheets": wb.sheetnames, "paired_cases": len(paired),
+        "C5b": {"leg_pen_narrow_pct": {k: round(v, 1) for k, v in legpen.items()},
+                "delta_pp": round(dpp, 1), "L3_delta": l3d, "verdict": verdict},
+    }
+    if reviewed:
+        payload["C6"] = {
+            "reviewed_arm": REVIEW_ARM, "reviewed": len(reviewed),
+            "use": sum(1 for c in reviewed
+                       if review[c]["manual_use_decision"] == "USE"),
+            "layer_x_manual": {L: counts[L] for L in counts},
+            "use_rate": {L: round(v, 3) for L, v in use_rate.items()},
+            "monotone": monotone,
+            "conflicts": {"n": len(conflicts),
+                          "l3_auto_rejected_by_human": escapes,
+                          "l1_reject_kept_by_human": overkill,
+                          "cases": [x["case_id"] for x in conflicts]},
+        }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
