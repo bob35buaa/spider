@@ -1,8 +1,8 @@
 # log295 · E206：desk+chair 走 dcv3 全流程 + 非凸碰撞代理 + noPRG/PRG 双 arm
 
-_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-03 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：P0–P9 全部完成（S0–S5 闭合、130 条 CEM 全成、双口径评测出数）；剩人工视觉复核 + P10 收尾**_
+_Core4D · Phase 66 · Run **R291**(noPRG) + **R292**(PRG) · 承接 [plan236](../plan/236_E206_desk_chair_move2_dcv3_noprg_prg_plan.md) · 2026-09-02～09-04 · 分支 `feat/E206-desk-chair-move2-dcv3-arms` · **状态：P0–P10 全部完成 · 总判定 PARTIAL SUCCESS（偏强）**_
 
-> 本 log 是**中途快照**，不是结论。写它的目的是把已确认的事实、已修的坑、和**还没解决的问题**固定下来，避免后续重复踩。最终结论待实验跑完后补。
+> **最终判定见第八节。** 硬门 C0/C1/C4/C7 与科学判据 C5a/C5b 全过，C2 补测后通过；C3（探针 8 < 16）与 C6（失败模式列 0/65）各缺一项**证据完整性**子条，故不宣称字面 SUCCESS。前七节保留推进过程中的事实、坑与方法学发现，不是结论本身。
 
 ## 一句话进展
 
@@ -10,7 +10,9 @@ desk+chair 的 dcv3 上游 **S0→S5 已全部闭合**：S1 落地 65 case / 8 �
 
 手编相对自动代理是实质改进：chair022 腔体过填 **0.41→0.12**、chair006 **0.26→0.06**、chair005 **0.41→0.23**、desk021 的 mesh→proxy p90 **0.042→0.005**。
 
-过程中挖出 **7 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局）和 **10 个我自己引入的性能/口径问题**（第四节）。另有两条方法学发现：**F15** 管线可复现性并非处处成立（19/22 逐位一致，3 例发散），**F17** G8 的绝对门在惩罚代理保真度。CEM 已跑完（130/130）。
+**C6 人工复审**（用户对 PRG 全 65 例逐条目视）：**USE 22 / DO_NOT_USE 43**。USE 率沿漏斗**单调递减 72.2% → 40.0% → 9.4%**，门作为排序信号得到人眼验证；但 **5 例 L3_auto 被人否决（漏网）**、3 例 L1_reject 被人判可用（误杀），故 **L3 自动接受不足以单独作为出片依据**。**P10 RL 交付** `paired_rl_export_input.tsv`：**22/22 `RL_EXPORT_READY`**，schema 与 E187/E178 逐列一致；其中 1 对的 partner 系绕过 S1 直接 OmniRetarget 生成（v1 infeasible → v2 rescue），已标 `stage2b_status=not_run`。
+
+过程中挖出 **8 个真 bug**（F4/F6/F7/**F14** 在 dcv3/E176 上游；F10/F13/**F16** 在 E206 自身 —— F13 会让 34/65 个 case 在 Stage2b 被静默 hold，F14 让 desk020 整个物体出局；**F19** 契约表 `draft_geom_count` 读到被覆盖后的文件，导致「geom 缩减」列显示为零，真实缩减是 41→12 / 69→7 / 73→5）和 **10 个我自己引入的性能/口径问题**（第四节）。另有两条方法学发现：**F15** 管线可复现性并非处处成立（19/22 逐位一致，3 例发散），**F17** G8 的绝对门在惩罚代理保真度。
 
 ---
 
@@ -565,6 +567,84 @@ plan236 的核心科学看点。E174 跑 desk007 时代理有 41 个 box，但�
 
 ---
 
+## 三之四、C6 人工复审 + P10 RL 导出（2026-09-04）
+
+### C6 · 14 门漏斗 vs 人眼
+
+用户对 **PRG arm 全部 65 例**逐条目视判定（超出计划的 64 行覆盖集，做成了全覆盖），`user_manual_review_filled.tsv`：**USE 22 / DO_NOT_USE 43**；质量标签 CLEAN 11 / MINOR_ACCEPTABLE 11 / UNUSABLE 43。
+
+| 漏斗层 | n | 人审 USE | 人审 DO_NOT_USE | USE 率 |
+|---|---:|---:|---:|---:|
+| L3_auto | 18 | 13 | **5** | 72.2% |
+| L2_review | 15 | 6 | 9 | 40.0% |
+| L1_reject | 32 | **3** | 29 | 9.4% |
+| 合计 | 65 | 22 | 43 | 33.8% |
+
+**USE 率单调递减（72.2% > 40.0% > 9.4%）—— 门作为排序信号是有效的。** 这是本实验对 E201 14 门漏斗的第一次外部人眼验证。
+
+但**两类不一致共 8 例**，逐条列在工作簿「人审汇总」页紫底清单里：
+
+- **漏网 5 例**（L3_auto 被人否决）：`chair005_20231030_043_p1`、`chair022_20231018_081_p2`、`chair022_20231020_087_p2`、`desk007_20231030_028_p2`、`desk023_20231020_120_p1`。L3 是自动接受层，这 5 例在无人流程里会直接放行。**结论：L3_auto 不足以单独作为出片依据**，这正是 plan236 R11 担心的 reward hacking 面。
+- **误杀 3 例**（L1_reject 被人判可用）：`desk021_20231008_005_p1`、`desk021_20231011_014_p1`、`desk021_20231020_127_p2`。代价是样本量而非质量。
+
+**C6 的缺口（诚实记录）**：`manual_failure_taxonomy` 与 `manual_review_note` 两列 **0/65 全空**。43 例 DO_NOT_USE 只有 `UNUSABLE` 这个三级严重度标签，**没有失败模式细分**（穿透 / 漂浮 / 抖动 / 姿态崩）。plan236 C6 的字面要求是「100% 有 `USE/DO_NOT_USE` **+ 失败模式**」，故 C6 只达成 2/3：判定 100%、矛盾逐条列出，失败模式缺失。
+
+### 工作簿（在既有 7 页上加 2 页）
+
+`e206_two_arm.xlsx` → **9 页**，新增：
+
+- **人审汇总**：上表 + 逐例冲突清单（紫底）+ 单调性/漏网/误杀三条判读横幅。计数是对 `rollout` 页的 COUNTIFS 公式，且**显式带 `arm="prg"` 过滤**（人只审了 PRG arm，noPRG 行的人审列留空而非推断）。
+- **人审明细**：65 行判定与关键指标并排，紫底标不一致行。
+
+`rollout` 页补 `manual_use_decision` / `manual_quality_label` 两列作为公式数据源。
+验证同前：本机无 LibreOffice，自写校验器解析全部 **44 条公式零错误**，`人审汇总` 的 18/13/5、15/6/9、32/3/29 与 Python 独立算出的完全一致。
+
+### P10 · partner-complete RL 导出
+
+`export_manual_use_partner_rl.py`（新增，对齐 E187/E178 口径）。**人审 USE 为选片权威，数值门作 provenance，二者不取交集** —— 22 例 USE 里有 **9 例 `numeric_release_pass=False`**，取交集会静默丢掉它们（E187 先例）。
+
+产出 `s6_downstream/rl_export/`：
+
+| 表 | 列 × 行 | 用途 |
+|---|---|---|
+| `rl_export_input.tsv` | 74 × 22 | source 单人，dcv3 契约表 / provenance 根 |
+| **`paired_rl_export_input.tsv`** | **95 × 22** | **交付下游的表**（前 74 列同上 + 21 列 partner） |
+| `partner_omnirt/rl_partner_omnirt_manifest.tsv` | 44 × 22 | partner 溯源 |
+| `partner_resolution_audit.tsv` | 28 × 22 | 帧对齐审计 |
+
+**下游按 `paired_rl_export_decision == RL_EXPORT_READY` 过滤（22/22），不是 `rl_export_decision`** —— 后者是 source 侧的，不反映配对状态（补 partner 前两者分别是 22 和 21）。
+
+三张表的表头与 E187 **逐字段逐顺序完全一致**（含继承下来的重复列位置），E178→E187→E206 是同一套 95 列 paired schema。
+
+### F19 · 契约表的 `draft_geom_count` 列在报「无缩减」（新发现，未修）
+
+补测 C2 时发现：`audit_lowgeom_contract.py:52-59` 的 `draft_geom_stats()` 读的是**实时** `PROCESSED_ROOT/<obj>_<person>/scene.xml`，而 audit 运行时该文件早已被最终代理覆盖。于是两张契约 TSV 里的 `draft_geom_count` 列读出 12/7/5/9/2/10/7/10 —— **与 `object_geom_count` 完全相同，即「geom 缩减」列显示缩减为零**。
+
+真实缩减（本次从 `E206_pre/scene_snapshot` 补测）：**41→12、69→7、73→5、37→9、64→2**。
+
+同时发现 G9 在该脚本里**只做了 box 数比较，p90 那一半从来没有代码**——这正是 C2 的 p90 基线一直缺失的原因。不影响任何已发布的判决（C1 的 8 个 hard gate 不含 G9），但契约表的这一列不可信，后续实验须修。
+
+### C2 补测 · mesh→proxy p90 相对 26-cell 草稿的退化
+
+plan236 C2 的第二半（「p90 相对 26-cell 草稿退化 ≤ 0.04 m」）此前**从未度量**。本次用草稿自己的生成器补齐：
+
+| 物体 | 草稿 box | 草稿 p90 | 终稿 box | 终稿 p90 | Δ(终−草) | ≤0.04 | 草稿来源 |
+|---|---:|---:|---:|---:|---:|:--:|---|
+| desk007 | 41 | 0.0227 | 12 | 0.0343 | +0.0116 | ✅ | 快照 |
+| desk020 | 69 | 0.0049 | 7 | 0.0102 | +0.0053 | ✅ | 快照 |
+| desk021 | 73 | 0.0069 | 5 | 0.0046 | **−0.0023** | ✅ 更优 | 快照 |
+| desk023 | 37 | 0.0092 | 9 | 0.0108 | +0.0016 | ✅ | 快照 |
+| chair005 | 64 | 0.0156 | 2 | 0.0397 | +0.0241 | ✅ | 快照 |
+| chair006 | 166 | 0.0146 | 10 | 0.0419 | **+0.0273** | ✅ | 重建 |
+| chair020 | 72 | 0.0093 | 7 | 0.0207 | +0.0114 | ✅ | 重建 |
+| chair022 | 116 | 0.0145 | 10 | 0.0405 | +0.0260 | ✅ | 重建 |
+
+**8/8 通过，最差 chair006 +0.027 < 0.04。** 用 2–12 个 box 换掉 37–166 个，p90 只退化 1.2–2.7 cm。
+
+口径声明：估计量是 `semantic_proxy.measure()` → E176 `fidelity_metrics`（8000 mesh 采样 `seed=0` + 每面 64 代理采样 `default_rng(0)`、解析 box SDF），**与终稿数字同一条代码路径同一批种子**。chair006/chair020/chair022 在盘上和 git 里都**没有 26-cell 草稿**（它们的 mesh 资产直到 P4a 才物化，dcv3 草稿阶段从未在它们身上跑过），故用草稿自己的生成器 `surface_voxel_collision_geoms(target_cells=26)` 重建；该生成器先在 5 个真实草稿上验证过**逐位复现（box 数、中心、半长全部 5e-6 内一致）**，所以这三个数是「草稿本该是什么」而不是估计。
+
+---
+
 ## 四、我自己引入的问题（全部已修，记录以免重犯）
 
 | # | 问题 | 后果 | 修法 |
@@ -642,7 +722,15 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 
 ### ~~U5 · chair021 的 "CEM 排最后"~~ ✅ **已消解** —— chair021 直接退出 E206（F12），无需排序约束。
 
-### U6 · P3 及之后未开始 —— 见第八节的阶段表
+### ~~U6 · P3 及之后未开始~~ ✅ **已关闭** —— P3–P10 全部完成，判据裁决见第八节。
+
+### U8 · C6 失败模式列 0/65（**新遗留，需人工**）
+
+43 例 `DO_NOT_USE` 只有 `UNUSABLE` 三级严重度标签，`manual_failure_taxonomy` / `manual_review_note` 两列全空。出片名单（22 USE）不受影响且已导出；缺的是**失败归因**——没有它就回答不了「下一个实验该修什么」。补法：`review_player.sh E206ARM` 重开，只补这 43 行。
+
+### U9 · desk020 的 `leg_penetration` 高出一个量级（**新遗留，未解释**）
+
+noPRG 0.61 / PRG 0.56，其余七个物体都在 0.02–0.20 区间，**两 arm 皆然**说明不是 arm 的问题。n=2 无统计力（F3/R1d），但量级差异本身值得查：怀疑方向是 desk020 的代理形态（G8 里它 `proxy_p90=0.1105` 且 `blind3cm=n/a`，属于「代理比真实 mesh 离目标更近」那一类），或 G10 对齐前它三块底座穿地 2–3cm 所反映的源模板问题。
 
 ### ~~U7 · `eval_E176_contact_fidelity.py` 硬编码 `>9`~~ ✅ **已关闭（并顺带修掉一处 R10 没记到的阻塞）**
 
@@ -700,6 +788,13 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 | `scripts/eval/review/review_index.py` | 注册 `E206ARM`（arm_sweep）；`--check` 分支与 E204ARM 合并 |
 | `scripts/eval/wrappers/review_player.sh` | 头部注册 `E206ARM` 用法 |
 | `scripts/eval/runners/eval_E176_contact_fidelity.py` | `--max-object-geoms`（默认 9）替代硬编码 `>9`（R10/U7）；`source_config()` 去 E174 列名硬编码，改按后缀匹配 |
+| `scripts/eval/review/viser_review_player.py` | 条件式 Arm 下拉筛选（仅 `arm_sweep` 实验出现），配 `arms_for()` |
+| `scripts/eval/reports/gen_E206_two_arm_workbook.py` | **P10：加 `人审汇总` / `人审明细` 两页 + `rollout` 补两列人审**；冲突分类 `conflict_kind()`；`LAYER_FILL`/`USE_FILL`/`QUALITY_FILL` 统一配色 |
+
+**新增（P10）**：
+| 路径 | 作用 |
+|---|---|
+| `scripts/experiments/E206/export_manual_use_partner_rl.py` | 人审 USE 为权威的 partner-complete RL 导出；Stage2b → direct-OmniRetarget → blocked 三级 partner 解析；`direct_partner_row()` 如实记 `stage2b_status=not_run` 而不复用会断言 `pass` 的 `build_partner_row()` |
 
 **SPIDER core（`spider/`）零改动。** `union` 的 box-only 约束被当作必须绕开设计的硬约束，全程未放松。
 
@@ -733,31 +828,64 @@ trimesh 的 `closest_point_naive` 是 **O(点数 × 三角形数)** 暴力版。
 - **P8b 视频**：`results/E206/s6_downstream/render/full/*.mp4`（130 个）
 - **P9 评测**：`results/E206/s6_downstream/eval/two_arm/{e206_two_arm_rollout.tsv,e206_per_gate.tsv,e206_per_object.tsv,e206_two_arm_summary.json}`
 - **P9 C5a**：`.../two_arm/c5a_vs_e174_desk007.{tsv,json}`
-- **P9 工作簿**：`.../two_arm/e206_two_arm.xlsx`（6 页）
+- **P9 工作簿**：`.../two_arm/e206_two_arm.xlsx`（**9 页**，含 `人审汇总` / `人审明细`）
 - **P9 viser**：`.../two_arm/e206_arm_case_metrics.tsv`（`review_player.sh E206ARM`）
-- **P9 强制复核覆盖集**：`results/E206/s6_downstream/review/user_manual_review.tsv`（64 行待人工）
+- **P9 强制复核覆盖集**：`results/E206/s6_downstream/review/user_manual_review.tsv`（64 行）
+- **C6 人审结果（权威）**：`.../two_arm/user_manual_review_filled.tsv`（**65 行全填**，sha256 `7e95901c…f249`，已被导出脚本 pin 住防漂移）
+- **P10 RL 导出**：`results/E206/s6_downstream/rl_export/{paired_rl_export_input.tsv,rl_export_input.tsv,partner_resolution_audit.tsv,rl_export_summary.json,validation_report.json,manual_review_snapshot.tsv}` + `partner_omnirt/rl_partner_omnirt_manifest.tsv`
+- **P10 直生 partner（绕过 S1）**：`results/E206/s6_downstream/partner_omnirt_direct_v2/`（omnirt_v2，成功）；`partner_omnirt_direct/`（omnirt_v1，CVXPY infeasible，**保留作失败证据**，published 导出对其零引用）
 - **P3 吞吐与准入**：`results/E206/s6_downstream/cem/throughput/{e206_throughput_curve.{tsv,md},admission_decision.json}`（8 探针全 ok）
 - **v2 rescue**：`results/E206/s3_retarget/omnirt_v2/ref_fk/stage2b_manifest_omnirt_v2_ref_fk.tsv`（11/11 pass）
 - **G8 接触保真（F17）**：`results/E206/s2_proxy/contact_fidelity/{summary.md,object_summary.tsv,case_summary.tsv}`
 - **G8 输入 manifest + 已解析 config**：`results/E206/s6_downstream/manifests/lowgeom_full_manifest_noprg.tsv` + `resolved_configs/`
 
-## 八、下一步
+## 八、最终判定（C0–C7）
 
-**S0–S5 已全部闭合，P3 准入已冻结**：契约 8/8 all_pass、15/15 模板实装、复审全签；S3 **65/65 pass**（v1 54 + v2 rescue 11）、S4 **65/65 pass**、S5 handoff 65 行；双 arm 场景与 override **65/65** 建成且 C4 全过；A1 47.4min / A2 12.8h 双双通过。**P8 可发。**
+**总判定：PARTIAL SUCCESS（偏强）。** 全部硬门（C0/C1/C4/C7）与全部科学判据（C5a/C5b）通过，C2 补测后通过；**缺的两项都是证据完整性，不是结果失败**：C3 的探针数（8 < 16）和 C6 的失败模式列（0/65）。
 
-| 阶段 | 状态 | 相对 plan236 的变化 |
-|---|---|---|
-| **P3** | ✅ A1/A2 pass | **改用真实场景而非合成探针**。冻结 `use_torch_compile=false`（实测更慢）。`plan_time_s ≈ 19.55 + 0.249·N` —— box 数几乎不是成本因素 |
-| **P5** | ✅ **65/65 pass** | 24 分片并行 + v2 rescue 全送。可复现性校验对照 **22** 例（不是计划估的 19） |
-| **P6** | ⏳ 剩视觉 QC | S4 目标门 65/65 已过；G8 已度量但**不按绝对门判决**（F17），四列数字进 P9 分析 |
-| **P7** | ✅ 65/65 | 方向与 E204/E205 相反（**加** pair 而非减，因 F7）。pair 逐 case 算：2N / 18N |
-| **P8** | ⏳ 可发 | CEM **130 条**，8 卡，`use_torch_compile=false`（P3 实测）。先 2 case × 2 arm smoke + diff `config_act.yaml` |
-| **P9** | ⏳ | 逐物体表标 n；**chair020(n=1)、chair005/desk020(n=2)** 不出 per-object 推荐（rescue 后 desk020 回到 n=2，退回 F3 原状）。**必须并列 G8 的四列（F17）** |
-| **P10** | ⏳ | 收尾：本 log 补最终结论、tracker 加 R291/R292、`build_log_index.py` |
+| Claim | 门 | 实测 | 判定 |
+|---|---|---|:--:|
+| **C0** dcv3 闭合 | S3 ≥90% of `clean_reviewed`；S4 ≥90% of S3；**0** 条无法解释的丢失 | S3 **65/65 = 100%**（v1 54 + v2 rescue 11）；S4 **65/65 = 100%**；丢失 0 —— chair021 是用户决定（F12）、`chair006_20231003_2_015_p2` 在 S1 有终态记录（`raw_contact_fail`），两者皆可审计 | ✅ |
+| **C1** ≤N_MAX 代理满足契约 | 8 hard gates + G8 逐物体 p90 ≤ 0.08 | 契约 **8/8 `all_pass`**、含新增 G10、**G6 豁免归零**；G8 6/8 超门，**经用户裁定降级为「已度量、不作放行门」**（F17：0.08 绝对门实际在奖励鼓胀失真的代理，E206 每个物体的边际误差都优于 E176 最差过门物体） | ✅ * |
+| **C2** 严格改进 | geom 37–127 → ≤16 覆盖 100%；p90 相对草稿退化 ≤ 0.04 m | 8/8 物体 **41–166 → 2–12 box**；p90 退化 **8/8 通过，最差 +0.027**（本次补测，见三之四） | ✅ |
+| **C3** 吞吐重测 + 准入 | **≥16 行实测**；中位墙钟 ≤120 min；队列 ≤48 h；优先级冻结；E176 3.0s 门作废 | **8 探针（< 16）**；中位 **47.4 min** ✅；队列 **12.8 h** ✅；优先级已冻结 ✅；旧门已显式作废并记录理由 ✅ | ⚠️ |
+| **C4** 严格单变量 | 100% 零容忍；composed config 恰差 5 键 | 语义 diff = 16N 腿对 ✅；pair 2N/18N ✅；两 arm 均 rubber-hull mesh 手 + `gravcomp=0` ✅；hand-gate 相同 ✅；**config 差 12 键而非 5**（F16）—— 多出的 7 键全部在 noPRG 的 enable guard 之后，逐条给出 spider core 行号证明其惰性 | ✅ ** |
+| **C5a** F7 修复带来接触改善 | desk007 9 例 `contact_in_mask` 相对 E174 **≥ +0.15** | **0.350 → 0.870（+0.520）**，超门 3.5 倍；E174 侧有 5/9 例接触恰为 0.0000（F7 指纹）；std 0.401 → 0.092 | ✅ |
+| **C5b** arm 对比 | `leg_pen` narrow Δ ≥ +10 pp **且** L3 Δ ≥ 0 → 宣称 PRG 胜 | **+10.8 pp**（80.0% → 90.8%）、**L3 +3** → **PRG 胜**。代价并列报告：`hand_pen` −9.2 pp、`root_pos`/`obj_pos` 各 −4.6 pp | ✅ |
+| **C6** 强制视觉复核 | 覆盖集 100% `USE/DO_NOT_USE` **+ 失败模式**；数值↔视觉矛盾逐条列出 | 判定 **65/65 = 100%**（超出 64 行覆盖集）；矛盾 **8 例逐条列出**；**但 `manual_failure_taxonomy` 0/65 全空** —— 只有三级严重度标签，无失败模式细分 | ⚠️ |
+| **C7** 可复现 | snapshot manifest（HEAD + sha256）在首条 CEM 前；活跃 scene XML `git add -f`；`E206_pre` 保留覆盖前状态 | manifest 43 行含 HEAD `a784a6f` + 逐文件 sha256，写于 **09-03 16:43 < 首条 CEM 21:14** ✅；**15/15 活跃 `scene.xml` 已在 HEAD 且与磁盘一致** ✅；`E206_pre/scene_snapshot` 60 目录 ✅（并在本次 C2 补测中被真正用上） | ✅ |
 
-**待 P3 出数后立即要做的**：把 `admission_decision.json` 的 A1/A2 裁决贴进本 log **再发 P8 队列**（plan236 P3 退出检查的硬要求）。
+\* C1 的 G8 项是**用户显式裁定**降级，理由与四列证据在 F17；不是悄悄放宽。
+\** C4 的判据本身被证据修订（5 键 → 12 键）。修订方向是**收紧后的诚实**而非放水：任何**非腿**键漂移仍会让审计失败。
 
-**已知会影响 P8 排队的观察**：8 个探针里 compileOn 的两个（N=10 / N=12）全程**落后于**同 N 的 compileOff，说明 `torch.compile` 在本工作负载上未必划算 —— 最终以 `admission_decision.json` 的实测中位墙钟为准，不预判。
+### 为什么不是 SUCCESS，也不是 FAIL
+
+- plan236 定义 **SUCCESS = C0,C1,C2,C3,C4,C6,C7 全过 且 C5a 过**。C3 与 C6 各缺一个子条 → 不满足字面 SUCCESS。
+- plan236 定义 **FAIL = C0/C1/C4/C7 任一不过；或 C3 不过却未记录缩范围就发了全量队列**。四个硬门全过；C3 的两个**决策门**（A1/A2）都过且已贴进 log 才发 P8，队列也没缩范围（全量 130 条跑完）→ 不触发 FAIL。
+- plan236 预设的 PARTIAL 是「C0–C7 过但 **C5a 不过**」。**本实验恰好相反**：C5a/C5b 都过得很干脆，缺的是两项证据完整性。三分法没有覆盖这种情形，故如实记为 **PARTIAL SUCCESS（偏强）**，并把两个缺口写在下面而不是四舍五入成 SUCCESS。
+
+### 两个缺口的具体形态与补法
+
+| 缺口 | 现状 | 补法 | 是否阻塞下游 |
+|---|---|---|---|
+| **C3 探针数 8 < 16** | 8 个探针覆盖 N ∈ {2,5,7,9,10,12} —— 即**实际出现过的全部 6 个 N 取值**（`N_MAX_shipped=12`，没有物体需要 16 个 box）。两个决策门都以宽裕幅度通过（47.4 vs 120、12.8 vs 48） | 补测同 N 的重复样本以给出方差；或在下一个实验里把「≥16 行」改写成「覆盖全部实际 N 取值 + 每个 N ≥2 次重复」这种与规模无关的判据 | 否 —— 准入决策已作出且余量很大 |
+| **C6 失败模式 0/65** | 43 例 DO_NOT_USE 只有 `UNUSABLE` 严重度，无模式细分 | 重开 `review_player.sh E206ARM`，对 43 例 DO_NOT_USE 补 `manual_failure_taxonomy`；**这是唯一需要人来做的一步** | 否 —— 出片名单（22 USE）已定且已导出；缺的是失败归因，影响的是「下一个实验该修什么」 |
+
+### 交付状态
+
+- **RL 交付表**：`s6_downstream/rl_export/paired_rl_export_input.tsv`，**22/22 `RL_EXPORT_READY`**，schema 与 E187/E178 逐列一致。
+- 其中 1 对（`chair006_20231003_2_015`）的 partner 是绕过 S1 直接 OmniRetarget 生成的纯动作（v1 CVXPY infeasible → v2 rescue 成功），标 `generation_mode=direct_omnirt_partner_temp` / `stage2b_status=not_run`，**不得当 Stage2b evidence 用**。
+- 双 arm 数据集、≤16 box 代理方法、重新议定的吞吐政策、G10 支撑面门、手编 3D 代理界面，均已落地并可复现。
+
+---
+
+## 九、下一步
+
+**收口后仍开着的三件事**（按优先级）：
+
+1. **补 C6 失败模式**（U8）—— 唯一需要人做的一步，`review_player.sh E206ARM` 补 43 行；补完 C6 转全过。
+2. **修 F19** —— `audit_lowgeom_contract.py` 的 `draft_geom_count` 必须在覆盖前采样（或改读 `E206_pre/scene_snapshot`），并给 G9 的 p90 那一半补上代码。
+3. **查 desk020 的 leg_pen**（U9）。
 
 **若后续再动任何一个物体的 box**，固定流程：
 ```

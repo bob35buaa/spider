@@ -1,6 +1,17 @@
 # CORE4D 当前进度
 
-## 当前：E206 — desk+chair 走 dcv3 全流程（S0–S2 已闭合，等 P3 吞吐冻结后开 CEM）
+## 当前：E206 — desk+chair 走 dcv3 全流程 · **已收口，PARTIAL SUCCESS（偏强）**
+
+### 2026-09-04 · P8–P10 收口：CEM 全成 / C5a+C5b 双过 / 人审 / RL 交付
+
+- **总判定 PARTIAL SUCCESS（偏强）**。硬门 **C0/C1/C4/C7** 与科学判据 **C5a/C5b** 全过，C2 补测后通过；缺的两项都是**证据完整性**而非结果失败 —— **C3** 探针 8 < 16（但已覆盖实际出现的全部 6 个 N 取值，两个决策门余量很大：47.4 vs 120 min、12.8 vs 48 h），**C6** 失败模式列 0/65（只有三级严重度标签，无模式细分）。判据详表见 [log295 第八节](log/295_E206_desk_chair_move2_dcv3_noprg_prg.md)。
+- **P8：130/130 CEM 全成，零失败**，11.4 h 墙钟 / 90.9 slot-hour。
+- **C5a 通过且超门 3.5 倍**：desk007 九例接触 `0.350 → 0.870`（门 +0.15），std `0.401 → 0.092`。E174 侧有 **5/9 例接触恰为 0.0000** —— F7 配对 bug 的指纹。**这条证实了 log234 §9「代理保真是瓶颈」的假设方向，但真正的病灶是 pair 数而非 box 数**：dcv3 的 `scene_act.xml` 无论物体多少 box 都只有 2 条 robot↔object pair，desk007 的 41 个草稿 box 有 40 个对机器人物理不可见。
+- **C5b 判 PRG 胜**：`leg_pen` narrow **+10.8 pp**（80.0 → 90.8）、L3 **+3**。**代价必须并列报告**：`hand_pen` −9.2 pp、`root_pos`/`obj_pos` 各 −4.6 pp —— PRG 把穿透从腿部分转移到手，不是免费改善。
+- **C6 人审（PRG 全 65 例，用户逐条目视）USE 22 / DO_NOT_USE 43**。USE 率沿漏斗**单调递减 72.2% > 40.0% > 9.4%** —— E201 14 门漏斗第一次拿到人眼外部验证，作为排序信号有效。**但 5 例 `L3_auto` 被人否决**（自动接受层漏网）、3 例 `L1_reject` 被人判可用（误杀）。**结论：L3 自动接受不足以单独作为出片依据。**
+- **P10 RL 交付**：`s6_downstream/rl_export/paired_rl_export_input.tsv`，**22/22 `RL_EXPORT_READY`**，95 列 schema 与 E187/E178 逐列逐顺序一致。下游按 `paired_rl_export_decision` 过滤（不是 `rl_export_decision`）。其中 1 对的 partner 因对侧在 S1 raw contact 即被拒、从未 retarget，改用 `pipeline.sh --skip-contact --skip-spider` **绕过 S1 直接 OmniRetarget** 生成（v1 CVXPY infeasible → v2 rescue 成功，共同原始窗口 116 帧），标 `stage2b_status=not_run`，**不可当 Stage2b evidence 用**。
+- **C2 补测**：41–166 box → 2–12 box，mesh→proxy p90 最差只退化 **+0.027**（8/8 过门）。顺带查出 **F19**：`audit_lowgeom_contract.py` 的 `draft_geom_count` 读的是**已被覆盖后的** scene.xml，导致契约表「geom 缩减」列显示为零（真实是 41→12 / 69→7 / 73→5）；G9 的 p90 那一半从来没有代码 —— 这就是 C2 基线一直缺失的原因。
+- **下一步**：① 补 43 例 DO_NOT_USE 的 `manual_failure_taxonomy`（唯一需要人做的一步，关 C6）；② 修 F19；③ desk020 的 `leg_penetration` 0.61/0.56 比其余物体高一个量级、两 arm 皆然（n=2），未解释。
 
 ### 2026-09-03 · P2.3b 人工重摆碰撞体 + G10 支撑面门 + chair021 退出
 
