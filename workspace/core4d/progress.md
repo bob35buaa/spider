@@ -1,6 +1,23 @@
 # CORE4D 当前进度
 
-## 当前：E206 — desk+chair 走 dcv3 全流程 · **已收口，PARTIAL SUCCESS（偏强）**
+## 进行中：E208 — desk/chair 平移增强（plan238 / R294）
+
+> 与 E207（bucket G1-only gravcomp）**共用分支** `feat/E207-bucket-g1only-gravcomp`（用户指定不新建分支）。E208 全部改动都在新路径下，与 E207 零文件冲突；P6 的 8 卡 CEM 需给 E207 队列让路。
+
+### 2026-09-05 · P0 契约闭合 · **C0 通过 10/10**
+
+- 范围：E206 交付的 **22 例 USE**（desk021×7 / chair006×5 / desk007×5 / desk023×4 / chair005×1）× trans_0/1/2 = **66 aug 上限**。retarget **v1 优先 + v2 rescue**；**仅 PRG arm**；orig 基线复用 E206 的 22 条 PRG rollout 不重跑；验收 = 数值门 + orig delta + 全量人审。
+- 落地 `E208/e208_common.py`（registry / `OMNIRT_V{1,2}_ENV` / v1-aware `aug_task_name` / rescue 状态机 / PRG-only 命名 / `load_e208_module` / 48 列 FIELDS）+ `test_e208_contract.py`（A1–A10）。
+- **F1（新，R6 实锤）**：`e199_common.OMNIRT_V2_ENV` 只有 **5 个键，缺 `REPLACE_WRIST_WITH_FINGERTIP`**；`pipeline.sh:28` 该键默认 **1**，而 E206 实录是 **0**。照抄 E199 会静默换成「指尖替代腕部」的 IK 目标、不报错、aug 与 orig 系统性错位。A7 改为对着 `run_stage2b_omnirt_v{1,2}_ref_fk.sh` 的 `env` 字面量逐键 diff，六键全显式。
+- **F2（新，比计划预估更宽）**：`object_name` 大小写陷阱不只 desk021。实测 **`desk021 → "Desk021"`、`desk023 → "Desk023"` 都是大写**（合计 11/22 例），而 `parallel_robot_retarget.find_files` 用 `f"*{object_name}*.npz"` **大小写敏感**。任何 lowercase 归一化会静默匹配 0 文件。A4 强制逐字透传 `task_info.json`。
+- **A3 佐证**：`e199_common.aug_task_name` 对 v1 base 确实产出 v2 名（与 v1-aware 版本在 `omnirt_v1` 下不同），provenance 谎言风险确认存在。
+- **A8 队列算术**：66 条 / 8 卡 = 9 轮 → 乐观 7.1 h（中位 47.4 min）、上界 26.6 h（E206 的 `per_task_bound_min=177.2`），均 < 48 h 门。预算继承 E206 `admission_decision.json` 的 frozen 块（1024×32×seed0，compile=false），不新做探针。
+- **A10**：源模板确认仍带 E206 手编代理且**全为 box**（desk007=12 / chair006=10 / desk023=9 / desk021=5 / chair005=2），与 log295 C2 一致 → aug 任务目录自动继承代理成立。
+- **下一步**：P1 从 E206 逐字节播种 `_original`（构造性规避 F15；两个已知发散例 chair005_20231030_043_p1 与 desk023_20231030_019_p1 都在这 22 例内）。
+
+---
+
+## 已收口：E206 — desk+chair 走 dcv3 全流程 · **PARTIAL SUCCESS（偏强）**
 
 ### 2026-09-04 · P8–P10 收口：CEM 全成 / C5a+C5b 双过 / 人审 / RL 交付
 
