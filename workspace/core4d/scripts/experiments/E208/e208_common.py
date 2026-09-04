@@ -211,10 +211,22 @@ STAGE2B_SCRIPT = {
 # --------------------------------------------------------------------------
 TRANS_VARIANTS = list(E199.TRANS_VARIANTS)   # [(trans0, trans_0), ...]
 ROT_VARIANTS = [("rot0", "rot_0"), ("rot1", "rot_1")]
-# Upstream `parallel_robot_retarget.py --augmentation` always computes all six
-# configs; E208 *builds* only the translations and reports rot feasibility as a
-# free by-product (C3b).
 ALL_AUG_VARIANTS = TRANS_VARIANTS + ROT_VARIANTS
+
+# Scope amendment (user, 2026-09-05): E208 builds ALL FIVE augmentation variants.
+#
+# The plan was locked to translation-only because E199 reported rotation as
+# "systematically infeasible" and E202 inherited that. P2 found the real cause:
+# `augment_object_poses` crashed on a scipy shape requirement *before any IK*
+# (holosoma src/utils.py:346, fixed in holosoma 9e544b1). Rotation had never been
+# evaluated -- E199 attempted rot_0 97 times, rot_1 zero times, produced zero rot
+# npz against 582 trans npz, and logged exactly one true infeasibility.
+#
+# Note rot_* is NOT a pure rotation: `generate_augmentation_configs` pairs each
+# +/-45 deg yaw with a 0.2 m lateral translation, and the yaw decays on
+# rotation_tau=25 while the translation decays on translation_tau=50.
+BUILD_VARIANTS = TRANS_VARIANTS + ROT_VARIANTS
+ROTATION_FIX_COMMIT = "9e544b1"  # holosoma; before this, rot_* could not run at all
 
 aug_translation = E199.aug_translation
 aug_rotation_rad = E199.aug_rotation_rad
@@ -249,9 +261,19 @@ def aug_task_name(base_target_task: str, variant: str, effective_retarget_varian
 #                       both the C2 yield and the L-ladder decision
 # source_v2_ok          source side was already v2; it produced the npz
 # source_v2_infeasible  ditto but infeasible -- terminal, nothing to escalate to
+# upstream_rotation_bug  rot_* only: upstream crashed in augment_object_poses
+#                       BEFORE any IK (holosoma src/utils.py:346 calls
+#                       R.from_euler("z", (N,)) but scipy 1.17.1 needs (N,1)).
+#                       Measured, 2026-09-05: E199 attempted rot_0 97 times,
+#                       rot_1 0 times, produced 0 rot npz vs 582 trans npz, and
+#                       logged exactly ONE genuine infeasibility -- so E199's
+#                       "rotation is systematically infeasible" was this crash,
+#                       not an IK result. Kept distinct from *_infeasible so
+#                       E208 does not repeat that misattribution, and from
+#                       needs_triage so it does not pollute the trans signal.
 RESCUE_STATES = (
     "v1_ok", "v1_infeasible", "rescued_v2", "rescue_failed", "needs_triage",
-    "source_v2_ok", "source_v2_infeasible",
+    "source_v2_ok", "source_v2_infeasible", "upstream_rotation_bug",
 )
 BUILT_STATES = frozenset({"v1_ok", "rescued_v2", "source_v2_ok"})
 
@@ -260,24 +282,59 @@ INFEASIBLE_LOG_PATTERNS = (
     "SolverError", "infeasible", "DCPError", "cvxpy", "SolverFailure",
 )
 
+# Potential aug tasks = 22 cases x 5 variants.  The L ladder below is expressed
+# as a FRACTION of this so the 3-variant thresholds from plan238 keep their
+# meaning after the 5-variant amendment (L0 was 55/66 = 83%, L1 44/66 = 67%,
+# L2 25/66 = 38%).
+POTENTIAL_AUG_TASKS = EXPECTED_CASES * len(BUILD_VARIANTS)   # 110
+
 # C2 escalation floor: average of >=1 surviving variant per case.  Mirrors the
-# spirit of E206's MIN_CASES_ESCALATE=12.
+# spirit of E206's MIN_CASES_ESCALATE=12.  Unchanged by the amendment: the bar is
+# "did every case keep at least one variant", not "how many variants exist".
 MIN_AUG_TASKS_ESCALATE = 22
 
 # R10 fallback ladder, keyed on `c` = number of aug tasks actually built.
 L_LADDER = (
-    ("L0", 55, "run as planned; full stratified C3/C4"),
-    ("L1", 44, "run; per-(object,variant) yield promoted to a first-class claim"),
-    ("L2", 25, "run CEM but C4 degrades to pooled-only; escalate before spending review budget"),
-    ("L3", 0, "stop before CEM; triage bug-vs-infeasible, amplitude change needs user sign-off"),
+    ("L0", 0.83, "run as planned; full stratified C3/C4"),
+    ("L1", 0.67, "run; per-(object,variant) yield promoted to a first-class claim"),
+    ("L2", 0.38, "run CEM but C4 degrades to pooled-only; escalate before spending review budget"),
+    ("L3", 0.0, "stop before CEM; triage bug-vs-infeasible, amplitude change needs user sign-off"),
 )
 
 
-def l_tier(n_built: int) -> tuple[str, str]:
+def l_tier(n_built: int, potential: int | None = None) -> tuple[str, str]:
+    frac = n_built / float(potential or POTENTIAL_AUG_TASKS)
     for name, floor, action in L_LADDER:
-        if n_built >= floor:
+        if frac >= floor:
             return name, action
     return L_LADDER[-1][0], L_LADDER[-1][2]
+
+
+# --------------------------------------------------------------------------
+# Effective augmentation floor (P2 finding, not in plan238)
+# --------------------------------------------------------------------------
+# The augmentation perturbs the APPROACH segment and decays back to the original
+# from `object_moving_frame_idx` onwards (translation_tau=50 frames).  SPIDER only
+# ever sees the contact-trimmed window, so when `trim_start` lands well after the
+# object starts moving, most of the decay has already happened and the variant
+# reaches SPIDER with only a fraction of the nominal 0.2 m.
+#
+# Measured 2026-09-05 -- this is NOT desk/chair-specific and no prior experiment
+# gated on it:
+#     E199 fullscale  n=249  min 0.083 m   21 below 0.18 m  (8.4%)
+#     E202 bucket     n= 73  min 0.074 m   24 below 0.18 m  (33%)
+#     E208 probes     n= 15  min 0.023 m    6 below 0.18 m
+# So plan238's `approach_trans_offset_m_max in [0.18, 0.22]` is the WRONG gate --
+# as an absolute pass/fail it would reject a third of what E202 shipped.
+#
+# What is worth gating is "this is not augmentation at all".  E208's chair005
+# arrives at 0.023 m, an order of magnitude below anything E199/E202 shipped and
+# far under E206's own ~12 cm object-tracking error, so it is a near-duplicate of
+# orig: it would inflate the dataset without adding diversity AND flatter the C4
+# delta (aug ~= orig by construction).  The floor is set below every value prior
+# experiments shipped, so it does not retroactively invalidate them.
+EFFECTIVE_AUG_FLOOR_M = 0.05
+NOMINAL_AUG_OFFSET_M = 0.20
 
 
 # --------------------------------------------------------------------------

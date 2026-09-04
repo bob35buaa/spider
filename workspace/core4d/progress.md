@@ -20,7 +20,35 @@
 - **F3（新，简化了计划）**：查 `pipeline.sh` 的三个跳过闸后确认——`converted/{task}.npz` 存在跳 convert（:319）、`trimmed/{task}_original.npz` 存在跳 holosoma trim（:403）、`parallel_robot_retarget.py:266-267` 按输出文件短路。所以播种后 **convert 与 trim 都不会跑**，`_original` 只作为 trans_k 的 warm-start 被读取。**推论**：`trim_start` 必然与 E206 相同 → E206 的 3cm mask 逐帧有效 → 驱动改用 `--skip-contact --skip-spider`，**mask 完全不重算**，override 继续指向 E206 那一份（单一权威，无第二份可漂移）。计划里原写的「播种 mask 副本」不需要了。
 - **F4（新，R4 因此加强）**：E206 的 3cm mask npz 是**自描述三时间轴**结构 —— `raw_*`(=untrimmed_frames)、`spider_*`(=trimmed_frames，与 `trajectory_kinematic.npz` 的 qpos 逐帧对齐)、`eval_*`(=trimmed×50/30)，且内嵌 `trim_start / ref_fps / eval_fps / threshold_m`。最初只取了 `list(keys)[0]`= raw 轴，帧数对不上 trimmed 让人误以为不对齐。R4 改为断言**内嵌 `trim_start` == 播种窗口**（这才是「mask 可复用」的真正充要条件）+ 三轴分别对齐 + `threshold_m==0.03`，22/22 全过。
 - **绝不能传 `--force`**：它会重算 `_original`，构造性免疫立刻失效。已写进 `seed_from_e206.py` 与 `run_upstream_retarget.py` 的注释。
-- **下一步**：P2 五例探针（chair005_20231030_043_p1 / desk023_20231030_019_p1 / desk007_20231030_028_p1 / chair006_20231003_1_003_p1 / desk021_20231011_014_p2）+ G1–G4 闸门定 L 档。
+### 2026-09-05 · P2 探针 + P3 放量 · **G1/G2/G3 通过，两个重要发现，一次操作事故**
+
+- **G1 成本**：每例 6 变体全跑完 **279–384 s**（中位 322 s），远低于 25 min 阈值 → rot 变体的开销可忽略，**不需要给 holosoma 打 opt-in 补丁**。
+- **G2 产率**：探针 15/15 trans 全可行；放量后 **trans 63/66**（60 `v1_ok` + 3 `source_v2_ok` + **3 真 CVXPY infeasible**：chair006_20231003_1_005_p1/trans1、chair006_20231003_2_011_p2/trans0、desk021_20231011_010_p2/trans0）→ P4 rescue 对象。v1 下 desk/chair 的平移增强产率 **95.5%**，与 E199 box pilot 的悲观预期相反。
+- **G3 构建**：探针 15/15 aug 任务建成，`yaw=0.00deg`、PRG pair 数 = 18×N 逐例正确。`build_arm_scenes.build_one` 靠 `target_task` 列落到 aug 目录，**E206 脚本零改动**复用成立。
+
+#### F6（重大，推翻既有结论）：旋转增强从来没跑起来过，E199「系统性不可达」是误判
+
+- 根因：holosoma `src/utils.py:346` 的 `R.from_euler("z", rotation_list)`，`rotation_list` 是 `(N,)`，而 **scipy 1.17.1 要求 `(N,1)`**，抛 `ValueError: Expected last dimension of 'angles'...`，**发生在任何 IK 求解之前**，且会终止整个文件的处理（所以 `rot_1` 连尝试都没有过）。
+- 证据（E199 全量日志实测）：`rot_0` 尝试 **97** 次、`rot_1` **0** 次、产出 rot npz **0** 个（对照 trans npz **582** 个）、全实验只有 **1** 条真正的 `[skip] ... infeasible`。
+- 影响面：E199 log286 的「旋转档位系统性不可达」、E202 继承的 trans-only 理由、跟踪器对应行、记忆文件 `omniretarget-object-augmentation` 全部需修正。`trans_*` 不受影响，因为 `rotation_initial=0` 直接短路该分支。
+- 已修：holosoma `9e544b1`（`rotation_list[:, None]`）。语义验证 `E208/test_rotation_fix.py` **9/9**：起动帧前保持满角、之后按 `rotation_tau=25` 指数衰减、位置不受影响、四元数保持单位模、`rotation_initial=0` 严格 no-op、rot_1 与 rot_0 镜像。顺带确认 **rot_* 不是纯旋转**（每档还带 0.2 m 侧移，且 yaw 用 tau=25 而位移用 tau=50）。
+- **用户裁定：E208 扩到 5 变体**（trans_0/1/2 + rot_0/1）。`BUILD_VARIANTS` 与 `POTENTIAL_AUG_TASKS=110` 已入契约，L 阶梯改为按比例（L0≥83% / L1≥67% / L2≥38%）以保持 plan238 三变体阈值的语义。
+
+#### F7（新，E199/E202 也踩了但没发现）：增强位移在裁剪窗口开启前就衰减掉了
+
+- 增强扰动的是**接近段**，从 `object_moving_frame_idx` 起按 `translation_tau=50` 帧指数衰减；SPIDER 只拿到接触裁剪后的窗口，所以 **`trim_start` 越晚，SPIDER 看到的残余位移越小**。实测 chair005（trim_start=113）只剩 **0.023 m**，对得上 `0.2×exp(-109/50)`。
+- 横向实测（**不是 desk/chair 独有，且此前无任何实验对此设门**）：E199 fullscale n=249 min 0.083 m、21 个 <0.18 m（8.4%）；E202 bucket n=73 min 0.074 m、24 个 <0.18 m（**33%**）；E208 探针 n=15 min 0.023 m。
+- 结论：plan238 写的 `approach_trans_offset_m_max ∈ [0.18,0.22]` **作为硬门是错的**（会判掉 E202 已交付的 1/3）。改为：① 把有效位移分布作为 C3 的一等输出；② 只对「根本不算增强」设下限 `EFFECTIVE_AUG_FLOOR_M = 0.05`（低于 E199/E202 交付过的任何值，不追溯否定它们），低于它标 `built_degenerate_offset`。chair005 的 3 个变体全部落在门下 —— 它们是 orig 的近重复，会虚增数据集并让 C4 的 delta 假性变好。**chair005 是 n=1 物体，这条待 P5 拿到全量数据后需要用户裁定。**
+
+#### 事故：并发跑了两个 retarget 实例（已处置，无数据损失）
+
+- 原因：等待循环写成固定次数 sleep（最多 9 min）而非等进程真正退出，误判 P3 已结束就启动了第二个实例；**且 `kill -0` 对僵尸进程也返回成功**（P3 结束后因 nohup 父 shell 已退出而变成 `Z` 态，导致后续等待循环同样卡住）。
+- 后果：两实例在同物体的 `sync_generated_object_model`（`cp -a`）与 `ensure_g1_object_xml`（首写）上竞争 —— 正是 `run_upstream_retarget.py` 按物体分组要规避的那个 hazard。
+- 损害范围（按 mtime 实证，非假设）：`_original` **未受影响**（上游按文件短路，从不重写）→ C1 成立；`*_trans_*` **未受影响**（4 个探针 case 的 trans mtime 全在 00:51–01:21，早于第二实例的 01:40）→ 63/66 trans 成立；只有 `*_rot_*`（01:31–01:56，跨越重叠窗口）来源不确定。
+- 处置：`quarantine_rot_npz.py` 把 24 个 rot npz **隔离而非删除**（留证，且日后若测出 aug IK 不确定性可与干净重跑做 diff），单实例重算 rot。
+- **待改**：等待逻辑必须检查进程**状态**（排除 `Z`）而不只是存在性。
+
+- **下一步**：rot 重算完 → P4 v2 rescue（3 个真 infeasible trans + rot 侧的 infeasible）→ P5 建任务/场景/override + 快照 + 冻结 manifest。
 
 ---
 
