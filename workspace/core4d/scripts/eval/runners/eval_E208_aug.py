@@ -253,6 +253,16 @@ def orig_from_published(case_ids: set[str]) -> list[dict[str, Any]]:
             "object_key": row.get("object_key", cid.split("_")[0]),
             "offset_band": "orig",
         }
+        # Copy every published numeric column, not just KEY_METRICS. The review
+        # feed's 12-gate view needs metrics C4 does not use (e.g.
+        # hand_object_release_false_contact_3mm_frac); dropping them here made
+        # orig rows fail gates they actually pass, biasing the side-by-side the
+        # human reviewer sees against orig.
+        for col, val in row.items():
+            if col in {"case_id", "arm", "object_key", "variant"} or col.endswith("_gate_pass"):
+                continue
+            num = finite(val)
+            item.setdefault(col, num if math.isfinite(num) else val)
         for metric in KEY_METRICS:
             item[metric] = finite(row.get(metric))
         gates = gate_set({**item, "fall_flag": str(row.get("fall_flag", "")).strip().lower()
@@ -494,7 +504,7 @@ def main() -> int:
                 seen.setdefault(key, None)
         return list(seen)
 
-    C.write_tsv(out_dir / "e208_aug_case_metrics.tsv", all_items, union_fields(all_items))
+    C.write_tsv(out_dir / "e208_aug_rollout.tsv", all_items, union_fields(all_items))
     C.write_tsv(out_dir / "e208_aug_deltas.tsv", deltas, union_fields(deltas))
 
     summary = {

@@ -170,6 +170,23 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E208AUG = desk/chair object augmentation (plan238/log297): orig + trans0/1/2
+    # + rot0/1 as a 6-arm sweep over the 21 delivered cases (chair005 excluded --
+    # its trim window opens so late that every variant decays to 2.3 cm). The
+    # rot arms are the first rotation-augmented rollouts this repo has ever
+    # produced; E199/E202 reported rotation as infeasible, which turned out to be
+    # an upstream scipy shape crash before any IK (log297 F6, holosoma 9e544b1).
+    # orig rows reuse E206's PRG rollouts and carry their E206 human verdict as a
+    # prefill, so the reviewer sees what the same demonstration was judged before
+    # augmenting. TSV built (no re-scoring) by E208/build_aug_review_tsv.py.
+    # Opt-in via --exps E208AUG.
+    "E208AUG": {
+        "result_exp": "E208",
+        "eval_subdir": "aug",
+        "case_metrics": "e208_aug_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E206",
+    },
     # E209ARM = two-arm compare on the 22 delivered desk/chair cases (plan239/log298):
     # E206 PRG vs the same thing + object gravcomp (G1). Single variable: the
     # object body's gravcomp 0 -> 1; the scenes are otherwise byte-identical.
@@ -1008,8 +1025,9 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E209ARM", "E205"):
-            # arm sweeps (E204ARM 3-arm, E206ARM/E209ARM 2-arm, E207ARM 4-arm) and the
+        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E208AUG", "E209ARM", "E205"):
+            # arm sweeps (E204ARM 3-arm, E206ARM/E209ARM 2-arm, E207ARM 4-arm,
+            # E208AUG 6-arm) and the
             # single-arm E205 view have no `evaluated`-style summary.json; cross-check
             # against the index itself like E199/E200.
             # NB: deliberately an explicit tuple, not `SOURCE_OVERRIDES[exp]["arm_sweep"]`.
