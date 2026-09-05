@@ -336,6 +336,46 @@ def l_tier(n_built: int, potential: int | None = None) -> tuple[str, str]:
 EFFECTIVE_AUG_FLOOR_M = 0.05
 NOMINAL_AUG_OFFSET_M = 0.20
 
+# Measured over all 110 built variants (2026-09-05):
+#   chair005  n= 5  every variant 0.0226 m   <- the whole object is degenerate
+#   chair006  n=25  min 0.2000
+#   desk007   n=25  min 0.1213
+#   desk021   n=35  min 0.0935
+#   desk023   n=20  min 0.1452
+# chair005's trim_start is 113 frames, by far the latest, so both the translation
+# (tau=50) and the rotation (tau=25, hence yaw 0.58 deg instead of 45) have almost
+# fully decayed before SPIDER's window opens.  All five of its variants are
+# near-duplicates of orig.
+#
+# User decision 2026-09-05: EXCLUDE chair005 from E208 entirely rather than ship
+# near-duplicates.  Cost: the per-object stratification drops from 5 objects to 4
+# (chair005 was the only n=1 object).  Benefit: no padded dataset, and C4's pooled
+# delta is not flattered by five rows where aug == orig by construction.
+EXCLUDED_OBJECT_KEYS = ("chair005",)
+EXCLUDED_REASON = "decay_degenerate_all_variants_below_effective_floor"
+
+
+def is_excluded(object_key: str) -> bool:
+    return object_key in EXCLUDED_OBJECT_KEYS
+
+
+# C4 stratification band on the effective offset (user decision 2026-09-05:
+# promote it from a reported number to a first-class stratification variable).
+# The question it answers -- and that no prior experiment could -- is at what
+# augmentation amplitude the tracking cost actually starts being paid.
+OFFSET_BANDS = (
+    ("full", 0.18, 1e9),      # ~nominal
+    ("partial", 0.10, 0.18),
+    ("weak", 0.0, 0.10),
+)
+
+
+def offset_band(offset_m: float) -> str:
+    for name, lo, hi in OFFSET_BANDS:
+        if lo <= offset_m < hi:
+            return name
+    return "weak"
+
 
 # --------------------------------------------------------------------------
 # Arm: PRG only (plan238 lock 2)
