@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -621,6 +622,54 @@ PROBE_CASES = (
 # --------------------------------------------------------------------------
 # IO helpers -- single authority, re-exported from E199
 # --------------------------------------------------------------------------
+class SingleInstance:
+    """Refuse to start if another instance of this driver is already running.
+
+    Two instances racing is not hypothetical -- it happened twice on 2026-09-05.
+    The retarget driver races on the per-object files ``pipeline.sh`` rewrites
+    (``sync_generated_object_model``'s ``cp -a``, ``ensure_g1_object_xml``'s
+    first-write); the CEM runner races on the manifest, which it rewrites whole on
+    every status change, so a second instance silently reverts the first's rows.
+    Grouping or ordering only protects against the *intra*-process race.
+
+    Both incidents came from misjudging whether the previous run had finished --
+    once a fixed-count sleep loop gave up early, once ``pgrep | head -1`` returned
+    a shell wrapper instead of the runner (and ``kill -0`` also succeeds on a
+    zombie).  A lock removes the need to judge correctly at all.  ``flock`` rather
+    than a pidfile, so the lock dies with the process even on SIGKILL.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._handle = None
+
+    def __enter__(self) -> "SingleInstance":
+        import fcntl
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._handle = self.path.open("a+")
+        try:
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            self._handle.seek(0)
+            holder = self._handle.read().strip() or "<unknown>"
+            self._handle.close()
+            raise SystemExit(
+                f"another {Path(sys.argv[0]).name} is already running ({holder}).\n"
+                f"lock: {self.path}\n"
+                "Wait for it or stop it first -- never run two: they race on the shared "
+                "per-object and per-task files these drivers rewrite."
+            ) from None
+        self._handle.seek(0)
+        self._handle.truncate()
+        self._handle.write(f"pid={os.getpid()} started={now()} argv={' '.join(sys.argv[1:])}\n")
+        self._handle.flush()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self._handle is not None:
+            self._handle.close()
+
+
 def sha256_text(text: str) -> str:
     """Hash a derived string (e.g. the frozen (case, variant) set) -- not a file."""
     import hashlib
