@@ -133,7 +133,46 @@ runner = E206 的准入硬门 + E199 的队列模型 + 两次并发事故换来�
 
 刻意**不在命令行传 `task=`**：V5e 审的是 composed override 并已证明 `task` 是唯一差异键，命令行再传一次就多出一个 V5e 管不到的权威；改为在 preflight 断言 override 自己的 `task:` 行与 manifest 行一致。
 
-启动实测：8 卡各 ~50% 利用率、~2.5 GB 显存，`plan time ≈ 22 s/step`、`opt_steps=32`，日志确认加载了 E206 的 3cm mask（chair006 active L/R = 42.9%/48.3%，与已知 `blind3cm=0.429` 吻合）。按此速率约 **55 min/run × 14 轮 ≈ 12.8 h**，与 admission 的乐观 11.06 h 同量级。
+启动实测：8 卡各 ~50% 利用率、~2.5 GB 显存，`plan time ≈ 22 s/step`、`opt_steps=32`，日志确认加载了 E206 的 3cm mask（chair006 active L/R = 42.9%/48.3%，与已知 `blind3cm=0.429` 吻合）。
+
+**首轮（8 条）结果：8/8 `cem_ok`，零失败**，输出校验（qpos 有限 + `config_act.scene_name` 相符）全过。wall 按物体分层明显：
+
+| 物体 | wall_min |
+|---|---|
+| desk007 | ~29 |
+| desk021 | ~43 |
+| chair006 / desk023 | ~51–55 |
+
+12 条完成时中位 **44.9 min**（优于 E206 的 47.4），4 物体 × 5 变体均已有代表 —— 轮转排序按设计生效。ETA 修正为 **≈ 04:00（约 11.7 h）**。
+
+### P7 渲染 — 链路已验证
+
+`render_aug_results.py` 首次实跑 2 条成功。
+
+**视觉复核（规则 9）**，对象是 `desk007_20231030_028_p1__aug_rot1` —— 按 F6，**旋转增强在本仓库历史上从未产出过产物，因此也从未被人看过**：
+
+- ref/sim 在 t = 0 / 1.2 / 1.8 / 3.1 s 四个时刻**全程贴合**，无漂浮、无穿模、无抖动。
+- 接触点（橙色）显示手-桌接触在维持；桌-地、脚-地接触位置合理。
+- 末帧双手抬到面部的姿态**在 ref 里同样存在** → 属源动作/重定向性质，不是 CEM 控制产物。留给人审记录，不在此下判断。
+
+### P8 评估 — 脚本就位，已有早期信号
+
+`eval/runners/eval_E208_aug.py` + wrapper。三把尺、预注册配对统计（HL / Wilcoxon / n<10 时精确符号检验 / McNemar）、五级分层（pooled / variant / object / object×variant / **offset band**）。
+
+早期信号（n=9，**不作结论**，仅用于尽早发现系统性问题）：
+
+| 指标 | 值 |
+|---|---|
+| `obj_pos` HL | **+0.061 cm**（门 +5.0） |
+| band=full | **−0.348 cm**（aug 反而更好） |
+| band=partial | +0.355 cm |
+| 通过率 | orig 0.444 → aug 0.333（门 0.15） |
+
+### P9 人审 feed — 就位
+
+`build_aug_review_tsv.py`（**21 case × 6 臂** = orig + trans0/1/2 + rot0/1）、`build_review_coverage.py`（按分层查覆盖 + C5/C6）、`review_index.py` 加性注册 `E208AUG`。实测播放器索引加载 31 条 / 6 臂 / 4 物体 / 全部可播。
+
+feed 形状**不按 plan238**：plan238 想让 `case_id = {orig}__aug_{variant}`，那样播放器里是 105 个互不相关的 case；改成 `case_id` 用 orig、`arm` 用变体，评审时 orig 与它自己的 5 个增强并排 —— 这才是人真正被要求做的判断，也是评审者读 E199/E200 的既有习惯。
 
 ---
 
@@ -258,6 +297,30 @@ V5c 首次运行时 **11 条 rot** 的 `scene_act*.xml` 在 line ~340 处失配�
 - **反方向不成立**，脚本与 JSON 里都写明了：若两者不同，无法区分「IK 不确定性」与「当时那次竞争」，只能给出确定性的**上界**。
 - **附带结论**：那次并发事故**实际造成零数据损坏**，隔离的 24 个文件本身就是好的。当初「不追查是谁写的、改为证明产物可用」的收口方式（124/124 V1–V5）是对的，而「隔离而非删除」让这个证据在两天后还能用。
 
+### F11 · 「同一批 22 例，三个互不相等的通过率」—— 已变成被测量的数字
+
+三把尺给出三个数，都对，但放在一起会让人以为有矛盾：
+
+| 口径 | 结果 |
+|---|---|
+| E206 人审 | **22/22 USE** |
+| E206 发布的 **12 门** `numeric_release_pass` | **18/65** PRG 行 |
+| 增强线的 **6 门**（E199/E202/E208） | **29/65**；本 registry 的 21 例中 **15/21** |
+
+根因不是打分不一致，而是**阈值不同**：E206 的 `lower_body` 门在 `leg_penetration_frac ≈ 0.20` 处放行，增强线用 **0.10**（更严）。实测 21 例里恰好 **1 例**（`desk007_20231030_028_p2`，0.1017）因此判定不同。
+
+C4 本身干净 —— 同一套 6 门阈值同时施加于 orig 与 aug。但差异必须显式记录：已加 `gate_criterion_vs_e206` 交叉核对，**自动列出**每一处判定分歧，而不是留给读者去猜为什么数字对不上。播放器 feed 里同时带两个数（`numeric_release_pass` = 12 门、`c4_all_gates_pass` = 6 门）。
+
+### F12 · 三个不会报错的 join/序列化坑（都在 P9 抓到）
+
+这三个共同点是：**不抛异常、不留日志，只让结论悄悄变错**。
+
+1. **E206 人审表的主键是复合键 `{case_id}#PRG`**，不是裸 `case_id`。直接 join 得到**全空 prefill** —— 评审表看起来完全正常，只是每一行都少了「这条 demo 增强前被判成什么」。修后 orig USE 率 21/21 = 1.00，C5 门线落在 0.85（与计划一致）；修之前它是 0.00，会把 C5 判成必然失败。
+2. **`--no-rescore-orig` 路径下 orig 行只拷了 `KEY_METRICS`**，缺 12 门视图需要的 `hand_object_release_false_contact_3mm_frac` 等列 → orig 被判了本不该有的 `release` 失败，人审的 side-by-side 对 orig 不公平。改为拷贝全部已发布数值列。
+3. **`write_tsv` 把布尔序列化成小写 `true`/`false`**，而 `gate_pass()` 输出 `str(bool)` 的 `True`/`False`。按字面量 `"True"` 统计恒为 0 —— 一度报「12 门与 6 门都 0 通过」。改用 `C.truth`。
+
+另有一个同类问题在命名层：评估器与评审 feed 原本都写 `e208_aug_case_metrics.tsv`，后跑的会静默弄坏另一个的消费者。按 E206 既有约定分工（eval 写 `*_rollout.tsv`、评审 feed 写 `*_case_metrics.tsv`）。
+
 ---
 
 ## 5. 事故：并发跑了两个 retarget 实例（两次）
@@ -313,8 +376,8 @@ V5c 首次运行时 **11 条 rot** 的 `scene_act*.xml` 在 line ~340 处失配�
 | C3 aug 构建正确性 | 位移/yaw/pair 数/V5c/V5e | ✅ **关闭**：110/110 建成、pair 数与 yaw 逐例正确、**V5c 105/105**、**V5e 105/105** |
 | C3b rot 可行率 | 报可行率 | ✅ 已升为一等结果（见 F6），不再是「免费副产品」 |
 | C4 aug-vs-orig 数值不劣 | McNemar ≤0.15、obj_pos HL ≤ +5cm | 🟡 CEM 进行中；**判据粒度已定为逐 case**（G4 见 F10） |
-| C5 人审 USE 率 | ≥0.85 | ⬜ 未开始 |
-| C6 视觉无度量欺骗 | ≤0.20 | ⬜ 未开始 |
+| C5 人审 USE 率 | ≥0.85 | 🟡 feed 就位（21×6 臂，播放器索引已验证）；门线由 orig 21/21=1.00 定为 **0.85**；未开审 |
+| C6 视觉无度量欺骗 | ≤0.20 | 🟡 计算脚本就位；抽样视觉已做 1 条 rot（无度量欺骗迹象） |
 | C7 复现性 / 快照 | (a) 快照 (b) V6d (c) rescore-orig (d) 冻结行集 | 🟡 (a) 完成（126 目录）、(d) 已冻结且**派发前已校验一次**；(b)(c) 未做 |
 
 **G1–G4 全部通过**（`preflight/p2_gate_decision.json`，从 TSV 派生非转抄）：G1 中位 3.16 min/例（门 25）、G2 采纳 110/110 → L0、G3 trans yaw 恰 0.0°/rot yaw 0.575–45.0°/pair 数逐例正确、G4 逐字节确定。
@@ -329,10 +392,10 @@ V5c 首次运行时 **11 条 rot** 的 `scene_act*.xml` 在 line ~340 处失配�
 
 ### 后续阶段
 
-- **P7** `render_aug_results.py` 已写好（读 manifest、只渲 `cem_ok`、`--watch` 可与 P6 重叠、`MUJOCO_GL=osmesa` 不抢 GPU），**尚未跑**（等第一批 run 完成）。
-- **P8** `eval_E208_aug.py` + wrapper + `gen_E208_aug_workbook.py` + `audit_runtime_config_vs_e206.py`（V6d）。C4 需加 **offset band 分层**（full 80 / partial 15 / weak 10）。
-- **P9** `build_aug_review_tsv.py` + `build_review_coverage.py` + `review_index.py` 注册 `E208AUG`；105 条全量人审。
-- **P10** 收口：本日志补完、`EXPERIMENT_TRACKER.md` 加行、`build_log_index.py`。
+- **P7** 链路已验证（2 条）。队列跑完后需 `--watch` 补齐 105 条 MP4。
+- **P8** runner + wrapper 已就位并跑通。**仍缺**：`gen_E208_aug_workbook.py`（xlsx，n<3 强制 indicative）、`audit_runtime_config_vs_e206.py`（V6d）；以及队列跑完后开 `--rescore-orig` 的正式一趟（C7c）。
+- **P9** feed / 覆盖率 / 播放器注册全部就位并验证。**仍缺**：105 条全量人审本身。
+- **P10** 收口：本日志补完、`EXPERIMENT_TRACKER.md` 加行、`build_log_index.py`、plan238 落盘。
 
 ### 遗留的证据缺口
 
