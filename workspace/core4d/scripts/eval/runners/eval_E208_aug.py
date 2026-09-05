@@ -61,6 +61,16 @@ from eval.core.core_metrics import (  # noqa: E402
 )
 from eval.core.motion_health import run_health  # noqa: E402
 
+# `body_z_err_p95_m` is NOT produced by evaluate_sequence or run_health -- it is a
+# separate frozen four-body Z-error p95, and E206 imports it from this same module
+# (eval_E206_arm_ablation.py:47).  Taking it from the same place keeps E208 on
+# E206's scale; computing it independently would silently create a second
+# definition of the metric the two experiments are compared on.
+# NOTE (rule 13): this function really belongs in eval/core, not in a runner.
+# Flagged in log297 rather than refactored here -- moving it touches E187/E206.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from eval_E187_e178_compat import body_z_p95  # noqa: E402
+
 import e208_common as C  # noqa: E402
 
 METHOD = C.E206.BASE_REWARD_METHOD          # E167A_zOnlyBody
@@ -85,7 +95,13 @@ C4_MAX_PASS_RATE_DROP = 0.15
 C4_MAX_OBJ_POS_HL_CM = 5.0
 C4_PRIMARY_METRIC = "track_obj_pos_err_cm_mean"
 
-RESCORE_TOL = 1e-6
+# E206's published table stores 4 decimals, so the largest legitimate disagreement
+# from a byte-identical rescore is 5e-5.  plan238 wrote 1e-6, which is tighter than
+# the data it compares against -- at that tolerance every rounded value reports as
+# a mismatch (measured: 231 of 252, all rounding) and a REAL drift would be
+# invisible in the noise.  The check is only meaningful at the published precision.
+RESCORE_TOL = 1e-4
+RESCORE_PUBLISHED_DECIMALS = 4
 INDICATIVE_MIN_N = 3
 
 
@@ -133,6 +149,12 @@ def score(row: dict[str, str], cfg: EvalConfig, *, npz_key: str, scene_key: str)
         person_idx=person_idx(row["case_id"]),
     )
     item.update(run_health(paths["qpos"], paths["scene"], cfg))
+    try:
+        item["body_z_err_p95_m"] = body_z_p95(
+            paths["qpos"], paths["scene"], paths["trajectory"])
+    except Exception as exc:  # noqa: BLE001 - a scene without the monitored bodies
+        item["body_z_err_p95_m"] = math.nan
+        item["body_z_error"] = f"{type(exc).__name__}: {exc}"
     gates = gate_set(item)
     for name, ok in gates.items():
         item[f"{name}_gate_pass"] = ok
@@ -171,7 +193,10 @@ def rescore_check(scored: list[dict[str, Any]]) -> dict[str, Any]:
     """C7(c): the same npz scored twice must agree to 1e-6."""
     published = e206_published()
     mismatches: list[dict[str, Any]] = []
+    not_published: list[dict[str, str]] = []
+    rescore_nan: list[dict[str, str]] = []
     checked = 0
+    compared = 0
     for item in scored:
         ref = published.get(item["case_id"])
         if ref is None:
@@ -180,16 +205,31 @@ def rescore_check(scored: list[dict[str, Any]]) -> dict[str, Any]:
         checked += 1
         for metric in KEY_METRICS:
             a, b = finite(item.get(metric)), finite(ref.get(metric))
-            if math.isnan(a) and math.isnan(b):
+            if math.isnan(b):
+                # E206's table does not carry this column -- nothing to compare
+                # against.  Reporting it as a mismatch would drown the real ones.
+                not_published.append({"case_id": item["case_id"], "metric": metric})
                 continue
-            if math.isnan(a) or math.isnan(b) or abs(a - b) > RESCORE_TOL:
+            if math.isnan(a):
+                rescore_nan.append({"case_id": item["case_id"], "metric": metric,
+                                    "published": b})
+                continue
+            compared += 1
+            if abs(a - b) > RESCORE_TOL:
                 mismatches.append({"case_id": item["case_id"], "metric": metric,
                                    "rescored": a, "published": b,
-                                   "abs_delta": abs(a - b) if not (math.isnan(a) or math.isnan(b)) else None})
+                                   "abs_delta": abs(a - b)})
     return {
-        "enabled": True, "n_checked": checked, "tolerance": RESCORE_TOL,
+        "enabled": True, "n_checked": checked, "n_compared": compared,
+        "tolerance": RESCORE_TOL,
+        "tolerance_rationale": (
+            f"E206's table stores {RESCORE_PUBLISHED_DECIMALS} decimals, so a "
+            "byte-identical rescore can legitimately differ by up to 5e-5"),
         "n_mismatches": len(mismatches), "mismatches": mismatches[:40],
-        "verdict": "pass" if not mismatches else "fail",
+        "n_not_published": len(not_published),
+        "not_published_metrics": sorted({m["metric"] for m in not_published}),
+        "n_rescore_nan": len(rescore_nan), "rescore_nan": rescore_nan[:20],
+        "verdict": "pass" if not mismatches and not rescore_nan else "fail",
         "scope": ("scoring reproducibility -- the same rollout npz scored twice. NOT "
                   "retarget reproducibility (F15), which P1 removed by seeding `_original` "
                   "byte-for-byte from E206."),
