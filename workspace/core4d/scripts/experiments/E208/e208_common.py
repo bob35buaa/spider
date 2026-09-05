@@ -366,6 +366,17 @@ def is_excluded(object_key: str) -> bool:
     return object_key in EXCLUDED_OBJECT_KEYS
 
 
+def eligible_potential() -> int:
+    """L-ladder denominator AFTER the exclusion: 21 cases x 5 variants = 105.
+
+    Kept separate from :data:`POTENTIAL_AUG_TASKS` (110) so the yield reported by
+    C2 -- which was measured before the exclusion and includes chair005 -- stays
+    comparable, while the ladder judges only what E208 actually intends to run.
+    """
+    dropped = sum(EXPECTED_CASES_BY_OBJECT[o] for o in EXCLUDED_OBJECT_KEYS)
+    return (EXPECTED_CASES - dropped) * len(BUILD_VARIANTS)
+
+
 # C4 stratification band on the effective offset (user decision 2026-09-05:
 # promote it from a reported number to a first-class stratification variable).
 # The question it answers -- and that no prior experiment could -- is at what
@@ -513,6 +524,30 @@ def frozen_budget() -> dict[str, Any]:
     }
 
 
+def queue_projection(n_runs: int, gpus: int | None = None) -> dict[str, Any]:
+    """E206's per-task timings applied to E208's queue size.
+
+    One implementation, used by both A8 and ``recheck_admission.py`` -- two
+    copies of this arithmetic would be two answers to "does the queue fit".
+    ``rounds`` is ceiling rather than fractional: a partially filled last round
+    still costs a full task's wall clock on the GPUs it occupies.
+    """
+    payload = source_admission()
+    gpus = gpus or len(GPU_DEFAULT.split(","))
+    rounds = -(-n_runs // gpus)
+    median = payload["A1_single_task"]["observed_median_min"]
+    bound = payload["A2_queue"]["per_task_bound_min"]
+    bar = payload["A2_queue"]["bar_hours"]
+    return {
+        "n_runs": n_runs, "gpus": gpus, "rounds": rounds,
+        "per_task_median_min": median, "per_task_bound_min": bound,
+        "optimistic_h": round(rounds * median / 60, 2),
+        "bound_h": round(rounds * bound / 60, 2),
+        "bar_hours": bar,
+        "verdict": "pass" if rounds * bound / 60 < bar else "fail",
+    }
+
+
 # Reference values only -- asserted against `frozen_budget()` by A8, never used
 # as the source of truth for a run.
 EXPECTED_BUDGET = {
@@ -536,6 +571,12 @@ EXTRA_FIELDS = [
     "rescue_state", "rescue_reason",
     "object_geom_count", "compiled_robot_object_pair_count",
     "orig_result_npz", "f15_divergent",
+    # The effective offset travels WITH the row rather than being re-joined from
+    # the artifacts TSV at eval time: it is a C4 stratification variable (user
+    # decision 2026-09-05), and a stratification key that can drift from the row
+    # it labels is worse than no stratification.
+    "approach_trans_offset_m_max", "offset_band",
+    "wall_min",   # written by the CEM runner, one of the five mutable columns
 ]
 FIELDS = list(E199.FIELDS) + [f for f in EXTRA_FIELDS if f not in E199.FIELDS]
 
@@ -580,6 +621,13 @@ PROBE_CASES = (
 # --------------------------------------------------------------------------
 # IO helpers -- single authority, re-exported from E199
 # --------------------------------------------------------------------------
+def sha256_text(text: str) -> str:
+    """Hash a derived string (e.g. the frozen (case, variant) set) -- not a file."""
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 now = E199.now
 repo_path = E199.repo_path
 rel = E199.rel

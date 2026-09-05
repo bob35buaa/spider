@@ -316,18 +316,13 @@ def a8_budget() -> Check:
                 f"per-task timeout {C.PER_TASK_TIMEOUT_MIN}min <= E206's per-task bound "
                 f"{payload['A2_queue']['per_task_bound_min']}min; healthy long runs would be killed")
 
-    # the queue arithmetic E208 will actually face
-    n_runs = C.EXPECTED_CASES * len(C.TRANS_VARIANTS)
-    gpus = len(C.GPU_DEFAULT.split(","))
-    rounds = -(-n_runs // gpus)
-    chk.detail["projected"] = {
-        "n_runs": n_runs, "gpus": gpus, "rounds": rounds,
-        "optimistic_h": round(rounds * payload["A1_single_task"]["observed_median_min"] / 60, 2),
-        "bound_h": round(rounds * payload["A2_queue"]["per_task_bound_min"] / 60, 2),
-    }
-    chk.require(chk.detail["projected"]["bound_h"] < payload["A2_queue"]["bar_hours"],
-                f"projected worst-case {chk.detail['projected']['bound_h']}h exceeds the "
-                f"{payload['A2_queue']['bar_hours']}h queue bar")
+    # The queue E208 will actually face: 5 variants (not the 3 plan238 assumed)
+    # over the 21 cases left after the chair005 exclusion.
+    proj = C.queue_projection(C.eligible_potential())
+    chk.detail["projected"] = proj
+    chk.require(proj["verdict"] == "pass",
+                f"projected worst-case {proj['bound_h']}h exceeds the "
+                f"{proj['bar_hours']}h queue bar")
     return chk
 
 
