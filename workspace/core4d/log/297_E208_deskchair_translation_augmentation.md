@@ -1,6 +1,6 @@
 # log297 · E208：desk/chair 物体增强 → PRG Full CEM
 
-**日期**: 2026-09-05（进行中，P0–P5 部分完成）
+**日期**: 2026-09-05（进行中，**P0–P5 完成，P6 已启动**）
 **实验域**: `core4d`
 **Run**: **R294**
 **分支**: `feat/E207-bucket-g1only-gravcomp`（用户指定不新建分支；E208 全部改动都在新路径下，与并行推进的 E207/E209 零文件冲突）
@@ -71,7 +71,12 @@ R1–R4 全过：`retargeted/_original` 与 `trimmed/_original` sha256 == E206�
 | **G1 成本** | 每例 6 变体 279–384 s（中位 322 s），远低于 25 min 阈值 → rot 开销可忽略，无需 upstream opt-in 补丁 |
 | **G2 产率** | 探针 15/15 trans 可行 |
 | **G3 构建** | 探针 15/15 aug 任务建成，`yaw=0.00deg`、PRG pair = 18×N 逐例正确 |
-| **G4 确定性** | **未做**（见 §7） |
+| **G4 确定性** | **已做（事后补测，零算力）** —— 24/24 逐字节相同，`max\|Δqpos\| = 0.0`，见 F10 |
+
+> 四个门此前只以散文形式记在本日志里，`p2_gate_decision.json` 从未写过 —— 而
+> 计划规定 eval runner 要读 `G4.verdict` 决定 C4 判据粒度。已补
+> `build_p2_gate_decision.py`，把四门**全部从 TSV 重新推导**（不转抄），
+> 顺带纠出 G1 的一处口径错误（F9）。
 
 ### P3 + P4 放量 retarget — **C2 通过，c = 110/110（L0）**
 
@@ -90,11 +95,45 @@ pass1 104/110；pass2 v2 rescue 补齐 6 个真 CVXPY infeasible → **最终 11
 
 `verify_retarget_artifacts.py`：**124/124** 通过 V1–V5（可加载 / 帧数与 `_original` 一致 / 宽度一致 / 全有限 / 物体通道确有位移）。这是应对 §5 并发事故的收口方式 —— 与其追查是哪个进程写的，不如直接证明产物可用。
 
-### P5 建 aug 任务（部分）
+### P5 建 aug 任务 / 场景 / override + 快照 + 冻结 — **C3 关闭**
 
 `build_augmented_tasks.py`：**110/110 建成，0 错误**（105 有效 + 5 degenerate）。rot 变体 `yaw=45.00deg` 端到端确认旋转修复生效。
 
 `build_arm_scenes.build_one` 靠 `target_task` 列落到 aug 目录，**E206 脚本零改动**复用成立。
+
+**V5c 场景奇偶（`check_scene_parity_vs_e206.py`）—— 105/105 gated 通过**，chair005 的 5 条单独报告（也全过）。范围不止 `scene.xml`，而是整条 arm 链五个 XML：
+
+| 检查 | 内容 |
+|---|---|
+| P1 | 掩码物体位姿后与 base **逐字节相等**。`scene_act_E206_lowgeom_PRG.xml`（CEM 真正加载的那份）的奇偶，是「E206 手部 rubber_hull 补丁与 18N pair 算术在 aug 目录里落对了」的最强单点证据 |
+| P2 | 物体 body / 6 关节 / 6 执行器数目正确 |
+| P3/P4 | 场景里的物体位姿 == **它所声称那条** trimmed npz 的第 0 帧。掩码比对本身看不出「拿错变体」，这条才看得出 |
+| P5 | 从 XML 独立重导出位移，与 manifest 的 `approach_trans_offset_m_max` 相符到 **1e-4 m**（正是 XML 的打印精度） |
+| P6 | 离线复现运行时那条 fail-closed 断言（见 F8），编译 210 个模型全过 |
+
+有效位移分档：**full 80 / partial 15 / weak 10**。
+
+**V5e override 审计（`build_aug_manifest.py`）—— 105/105 通过**。aug base yaml = E206 S5 base override **只换 `task:` 一行**，其余逐字节继承（reward、ref_fk 接触目标、3cm mask 路径、机位）；PRG override 展开 `e206_common.PRG_OVERRIDES` 的值，不重打字。compose 后与 E206 同 case 的 PRG config 做全键 diff，**实测差异集恰为 `{task}` 一个键** —— trajectory/scene/mask 路径都在运行时按 task 解析，不落进 composed config。据此把白名单从 8 键收紧到 `{task, output_dir}`：「差异 ⊆ 白名单」只在白名单够紧时才是个闸门。
+
+**队列排序**改为 (object × variant) 轮转 + 轮内 (object+variant) 对角线。4 物体 × 5 变体 = 20 格，**前 20 行恰好覆盖全部 20 格各一次**，前 4 行既是 4 个不同物体又是 4 个不同变体。任意时刻中断得到的是均衡设计而非截断样本。（plan238 让 chair005 排每轮第一的规则随它被排除一并删除。）
+
+**A2 重算（`recheck_admission.py`）**：不重做吞吐探针 —— V5c 已证场景只差物体初始位姿，E206 的拟合直接适用，再探一次就会有第二个预算权威。只重算队列算术：plan238 按 66 条（22×3）估，实际 **105 条** → 14 轮，乐观 **11.06 h**，最坏界 **41.35 h < 48 h 门**。`frozen` 块逐字继承，唯独 `queue_priority` 不继承并写明原因（E206 的 desk007 lifeline 服务于它的 C5a，E208 没有这条 claim；chair005 已排除）。
+
+**规则 7 快照**：126 个目录（105 aug + 21 base），HEAD `d481cc7`，manifest sha256 `4c1882e0…9930`。
+**冻结**：105 行，`(case_id, variant)` 集合 sha `41a31921…4570`，供 C7(d) 在 P6 后核对行集未变。
+
+### P6 Full CEM — **已启动，进行中**
+
+`run_e208_cem.py` + `scripts/launch/active/run_E208_local_8gpu.sh`，105 条，8 卡独占（启动时 E207/E209 队列已排空，8 卡全空）。
+
+runner = E206 的准入硬门 + E199 的队列模型 + 两次并发事故换来的三样东西：
+1. **flock 单实例锁** —— 这个 runner 每次状态变更都整表回写 manifest，第二个实例会静默把第一个的行改回去。`SingleInstance` 提到 `e208_common` 两个驱动共用。
+2. **per-task 超时 180 min**（略高于 E206 实测 177.2 min 的 per-task bound）。超时先 SIGTERM、10 s 后 SIGKILL，并在标记状态前**显式 unlink 半写的 npz** —— 否则下次续跑会把它当成已完成，正好掩盖超时要暴露的问题。
+3. **派发前校验冻结集**（C7d 提前到派发前而非只在 P8 事后查），收尾再校一次。
+
+刻意**不在命令行传 `task=`**：V5e 审的是 composed override 并已证明 `task` 是唯一差异键，命令行再传一次就多出一个 V5e 管不到的权威；改为在 preflight 断言 override 自己的 `task:` 行与 manifest 行一致。
+
+启动实测：8 卡各 ~50% 利用率、~2.5 GB 显存，`plan time ≈ 22 s/step`、`opt_steps=32`，日志确认加载了 E206 的 3cm mask（chair006 active L/R = 42.9%/48.3%，与已知 `blind3cm=0.429` 吻合）。按此速率约 **55 min/run × 14 轮 ≈ 12.8 h**，与 admission 的乐观 11.06 h 同量级。
 
 ---
 
@@ -105,6 +144,17 @@ pass1 104/110；pass2 v2 rescue 补齐 6 个真 CVXPY infeasible → **最终 11
 | 契约自检 | `workspace/core4d/results/E208/preflight/e208_contract_selfcheck.json` |
 | 播种完整性 | `.../preflight/orig_seed_integrity.{tsv,json}`、`orig_seed_report.json` |
 | 产物校验 | `.../preflight/retarget_artifact_verify.{tsv,json}` |
+| **G1–G4 门决策** | `.../preflight/p2_gate_decision.json` |
+| **V5c 场景奇偶** | `.../s5_handoff/scene_parity_vs_e206.{tsv,json}` |
+| **V5e override 审计** | `.../s5_handoff/aug_override_audit.json` |
+| **优先级 manifest** | `.../s6_downstream/manifests/e208_priority_manifest.tsv`（105 行） |
+| **冻结副本 / 冻结元数据** | `.../manifests/e208_priority_manifest.frozen.tsv`、`freeze.json` |
+| **权威表（含 orig 配对）** | `.../manifests/e208_aug_authority.tsv`（126 行 = 105 aug + 21 reused_e206） |
+| **准入决策** | `.../s6_downstream/cem/throughput/admission_decision.json` |
+| **规则 7 快照** | `.../scene_snapshot/`（126 目录 + manifest.txt） |
+| **CEM 输出** | `.../s6_downstream/cem/full/E208_{case}_aug_{variant}_PRG/` |
+| **CEM 队列/单任务日志** | `logs/E208/queue_*.log`、`logs/E208/cem/full/{variant_id}.log` |
+| aug override | `examples/config/override/core4d_{aug_task}.yaml` + `core4d_E208_{case}_aug_{v}_lowgeom_PRG.yaml`（各 105） |
 | 可行性 | `.../data_preprocess/manifests/e208_aug_feasibility.tsv`（130 行 = 110 pass1 + 20 pass2） |
 | aug 产物 | `.../data_preprocess/manifests/e208_aug_artifacts.tsv`（110 行） |
 | case-file | `.../data_preprocess/case_files/cases_e208_{object}_{seq}_{person}.tsv`（22 个） |
@@ -177,6 +227,37 @@ E208 逐物体：
 2. 改为：有效位移作为 **C3 一等输出**；只对「根本不算增强」设下限 `EFFECTIVE_AUG_FLOOR_M = 0.05`（低于 E199/E202 交付过的任何值，不追溯否定它们）。
 3. **用户决定**：直接**排除 chair005**（105 条，分层从 5 物体降为 4）；有效位移**升为 C4 分层变量**（分档 ≥0.18 / 0.10–0.18 / <0.10），用来回答一个此前无人能答的问题：**增强幅度多大时才开始付出跟踪代价**。
 
+### F8 · rot 变体会重新挑选 euler 约定 —— 不是 bug，但会让「只差物体位姿」的说法字面上不成立
+
+V5c 首次运行时 **11 条 rot** 的 `scene_act*.xml` 在 line ~340 处失配（`scene.xml` 本身是过的）。差异是**物体三个转动关节的顺序**（base `rot_x,rot_z,rot_y` vs aug `rot_z,rot_y,rot_x`），执行器顺序随之变化。
+
+- **机制**：`generate_scene_act.py:55-78` 的 `find_best_euler_convention` 会遍历 6 种 euler 约定，选中间轴角度最大值最小的那个（万向锁裕度）。rot 把物体转了 45°，物体的朝向轨迹变了，最优约定因此可能改变。
+- **只发生在 rot**：实测 **rot 11/42，trans 0/63** —— 完全符合「只有改变物体朝向的变体才会重挑」。变更方向 `XZY→ZYX` 3、`ZYX→XZY` 4、`XYZ→ZYX` 1、`XYZ→XZY` 1、`YZX→XZY` 2。
+- **为什么安全**，三条独立支撑：
+  1. `examples/run_mjwp.py:583` 用 `resolve_scene_act_reference(config.model_path, _m_act)` **从任务目录自己的 `scene_act_meta.json`** 读约定，再据此做 quat→euler（`:620`）。每个 aug 目录有自己正确的 meta。
+  2. `resolve_scene_act_reference` 是 **fail-closed** 的：meta 缺失/非法/**与编译后铰链轴序不符**都直接抛错，没有 euler fallback。
+  3. **E206 自己交付的 22 个 base 本就横跨 4 种约定**（XZY 16 / ZYX 4 / XYZ 1 / YZX 1）—— 下游不可能假定单一约定，E208 没有引入任何新暴露。
+- **强行统一反而更差**：被换掉的恰恰是离万向锁更近的那个约定。
+- **处置**：把物体 DOF 顺序并入 V5c 的掩码区（**对顺序不敏感、对集合仍敏感**），改为新增 **P6 在离线复现那条运行时断言** —— 它在运行时会在 CEM 已经派到 GPU 之后才失败，用一次模型编译提前挡掉。210 个模型全过。
+
+> 这条也说明「掩码比对」这类检查的设计要点：掩掉的东西必须**换成一条更强的检查**，否则就是把失败改成了沉默。
+
+### F9 · 两处会让报表算出错数的口径问题（都在派发 CEM 前纠正）
+
+**(a) `wall_s` 是整例耗时，被复制到该例 5 行上。** 一次 `pipeline.sh` 调用产出全部 5 个变体，driver 把同一个 `wall_s` 写到 5 行。按行求和会**多算 5 倍** —— G1 初版因此误报 fail（max 35.7 min > 25 min 门）。改为按例取值 + 断言例内取值一致，实测中位 **3.16 min/例**、最大 **7.14 min**，远在门下（G1 pass）。
+
+**(b) `built` ≠ `adopted`，差 14 行。** `pass2-rescue` 在 v2 树里只有 `_original` 可短路，所以会**重算全部 5 个配置**；20 行标 `rescued_v2`，但真正被采纳的只有 pass1 失败的那 **6** 个。`built=1` 有 **124** 行，实际进入实验的是 **110**。任何人从 `built` 直接算 C2 或 rescue 产率都会拿到错的数。已加 `adopted` 列（派生规则与 `build_augmented_tasks.effective_variants` 同一条），并在 `p2_gate_decision.json` 里同时报两个数。
+
+### F10 · **G4 实测：aug IK 跨进程逐字节确定 —— C4 可以逐 case 判**
+
+事故当时**隔离而非删除**那 24 个 rot npz，在这里付了息：每一个都有干净单实例重跑的对应文件，两者来自同一份播种 `_original`、同一 case file、同一六键 env，但**出自两个不同进程** —— 正是探针 R6 要问的问题。
+
+**结果：24/24 逐字节相同（sha256 相等），`max|Δqpos| = 0.0`。**
+
+- **这个方向的结论是决定性的**：aug IK 跨进程可复现 → per-case 的 aug-vs-orig delta 不含 IK 噪声 → **C4 判据保持逐 case，不触发 plan238 R7b 的分布级降级**。
+- **反方向不成立**，脚本与 JSON 里都写明了：若两者不同，无法区分「IK 不确定性」与「当时那次竞争」，只能给出确定性的**上界**。
+- **附带结论**：那次并发事故**实际造成零数据损坏**，隔离的 24 个文件本身就是好的。当初「不追查是谁写的、改为证明产物可用」的收口方式（124/124 V1–V5）是对的，而「隔离而非删除」让这个证据在两天后还能用。
+
 ---
 
 ## 5. 事故：并发跑了两个 retarget 实例（两次）
@@ -218,6 +299,7 @@ E208 逐物体：
 - **P4 第一次疑似静默死亡**：日志只有表头、per-case 日志停在进度条 18% 且无 traceback。事后判明是**我抓错 PID 导致的误判**（进程其实还活着），并非真的被杀。
 - **`kill` 被安全分类器拦截**：清理孤儿进程时 `kill` / `pkill` / `find -delete` 多次被拦，需要用户手工执行或改用 python 脚本（隔离而非删除，反而是更好的做法）。
 - **并发实验**：同分支上 E207（R293）、E209（R295）由其它会话并行推进，`EXPERIMENT_TRACKER.md` 与 GPU 都是共享资源。E208 提交时只 stage 自己的路径，从未 stage TRACKER。
+- **第三次资源碰撞：log 号**。并发的 E207 会话在 01:24 就提交了 `log/296`，我 15:16 才提交同号文件，A9 因此报冲突。按 plan239:40 的裁定让号到 **297**，并把 `LOG_SLOT`/`PLAN_SLOT` 提为契约常量、A9 改读常量（原先是测试里的硬编码 glob）。前两次碰撞是 GPU 与 retarget 进程，这次是编号空间 —— 同分支多会话并行的成本是持续的，不是一次性的。
 
 ---
 
@@ -228,39 +310,36 @@ E208 逐物体：
 | C0 契约闭合 | A1–A10 全过 | ✅ **10/10** |
 | C1 orig 播种完整性 | R1–R4 在 22/22 全过 | ✅ **22/22** |
 | C2 aug 可行率 | `c ≥ 22` 且 5/5 物体 `c_obj > 0` | ✅ **110/110（L0）** |
-| C3 aug 构建正确性 | 位移/yaw/pair 数/V5c/V5e | 🟡 部分：110/110 建成、pair 数逐例正确、yaw 正确；**V5c/V5e 未做** |
+| C3 aug 构建正确性 | 位移/yaw/pair 数/V5c/V5e | ✅ **关闭**：110/110 建成、pair 数与 yaw 逐例正确、**V5c 105/105**、**V5e 105/105** |
 | C3b rot 可行率 | 报可行率 | ✅ 已升为一等结果（见 F6），不再是「免费副产品」 |
-| C4 aug-vs-orig 数值不劣 | McNemar ≤0.15、obj_pos HL ≤ +5cm | ⬜ 未开始（需 CEM） |
+| C4 aug-vs-orig 数值不劣 | McNemar ≤0.15、obj_pos HL ≤ +5cm | 🟡 CEM 进行中；**判据粒度已定为逐 case**（G4 见 F10） |
 | C5 人审 USE 率 | ≥0.85 | ⬜ 未开始 |
 | C6 视觉无度量欺骗 | ≤0.20 | ⬜ 未开始 |
-| C7 复现性 / 快照 | 快照 / V6d / rescore-orig / 冻结 | ⬜ 未开始 |
+| C7 复现性 / 快照 | (a) 快照 (b) V6d (c) rescore-orig (d) 冻结行集 | 🟡 (a) 完成（126 目录）、(d) 已冻结且**派发前已校验一次**；(b)(c) 未做 |
+
+**G1–G4 全部通过**（`preflight/p2_gate_decision.json`，从 TSV 派生非转抄）：G1 中位 3.16 min/例（门 25）、G2 采纳 110/110 → L0、G3 trans yaw 恰 0.0°/rot yaw 0.575–45.0°/pair 数逐例正确、G4 逐字节确定。
 
 ---
 
 ## 7. 未做 / 待办
 
-### 立即（P5 收尾，阻塞 CEM）
+### 进行中
 
-1. **把 chair005 排除与 offset 分档写进 `e208_common`** —— 这一步在写本日志时被打断，代码**尚未落地**：需要加 `EXCLUDED_OBJECT_KEYS = ("chair005",)`、`is_excluded()`、`OFFSET_BANDS`、`offset_band()`。
-2. **`check_scene_parity_vs_e206.py`（V5c）** —— aug 的 `scene.xml` 剥掉 object `pos`/`quat` 后与 base 逐字相等。未写。
-3. **`build_aug_manifest.py`（V5e）** —— aug base yaml + `core4d_E208_{case}_aug_{variant}_lowgeom_PRG.yaml` + Hydra compose 差集审计 + 优先级 manifest + `reused_e206` 行。未写。
-4. **`recheck_admission.py`** —— 继承 E206 frozen，按 105 条重算 A2 队列算术。未写。
-5. **规则 7 快照** —— `snapshot_scenes.sh E208 <105 aug tasks> <21 base tasks>`。未做。
-6. **冻结 manifest** —— `e208_priority_manifest.frozen.tsv` + `freeze.json`。未做。
+- **P6 Full CEM**：105 条已在 8 卡跑，预计 ~12.8 h。收尾需核对：105 条 `cem_ok`、冻结行集 sha 未变（C7d）、`wall_min` 分布写进本 log。
 
 ### 后续阶段
 
-- **P6** `run_e208_cem.py` + `run_E208_local_8gpu.sh`：105 条 Full CEM。**⚠️ 与 E207/E209 共用 8 卡，需排队让路**；预计 105/8 = 14 轮 × 47.4 min ≈ 11 h（乐观）。
-- **P7** `render_aug_results.py`：105 条 MP4。
-- **P8** `eval_E208_aug.py` + wrapper + `gen_E208_aug_workbook.py` + `audit_runtime_config_vs_e206.py`（V6d）。C4 需加 **offset band 分层**。
+- **P7** `render_aug_results.py` 已写好（读 manifest、只渲 `cem_ok`、`--watch` 可与 P6 重叠、`MUJOCO_GL=osmesa` 不抢 GPU），**尚未跑**（等第一批 run 完成）。
+- **P8** `eval_E208_aug.py` + wrapper + `gen_E208_aug_workbook.py` + `audit_runtime_config_vs_e206.py`（V6d）。C4 需加 **offset band 分层**（full 80 / partial 15 / weak 10）。
 - **P9** `build_aug_review_tsv.py` + `build_review_coverage.py` + `review_index.py` 注册 `E208AUG`；105 条全量人审。
 - **P10** 收口：本日志补完、`EXPERIMENT_TRACKER.md` 加行、`build_log_index.py`。
 
 ### 遗留的证据缺口
 
-- **G4 / 探针 R6 未做**：aug IK 自身的确定性从未测量。计划里它决定 C4 是逐 case 判还是只判分布级。**在 C4 之前必须补**，否则 per-case delta 没有误差棒。隔离区的 24 个 rot npz 正可用于这个 diff。
-- **R5 未做**：F15 两个发散例的确认性重跑量化（非门，但计划里承诺写进 log）。
-- **plan238 未落盘**：计划仍在 `/root/.cc-mirror/.../plans/` 下，未按规范写入 `workspace/core4d/plan/238_E208_deskchair_translation_augmentation_plan.md`，且计划内容已被 3 项用户决定修订（5 变体 / 排除 chair005 / offset 分层），落盘时需一并订正。
+- ~~**G4 / 探针 R6**~~ —— **已补测**，见 F10：24/24 逐字节相同，C4 保持逐 case 判据。
+- **R5 未做**：F15 两个发散例的确认性重跑量化（非门，但计划里承诺写进 log）。注意 F10 已从侧面给出相关证据 —— aug IK 跨进程逐字节确定，说明 F15 的发散不来自求解器本身的随机性。
+- **plan238 未落盘**：计划仍在 `/root/.cc-mirror/.../plans/` 下，未按规范写入 `workspace/core4d/plan/238_*.md`。落盘时需订正 **6 处**已被实际执行推翻的内容：5 变体（非 trans-only）、排除 chair005（105 非 66）、offset 分层、`[0.18,0.22]` 硬门作废（F7）、V5c 需容纳 euler 约定重选（F8）、C4 粒度已由 G4 判定为逐 case。
+- **规则 7 的一处结构性限制**：`workspace/core4d/results` 是指向外部存储的 symlink，快照**无法进 git**（R11，E199/E202/E206 同）。可核对的部分是把 manifest sha256 记进本 log（在 git 里）：`4c1882e0…9930`。这不是 E208 引入的问题，但也不应被当作「规则 7 已满足」。
 
 ### 需要修正的既有记录（因 F6）
 
@@ -290,6 +369,18 @@ E208 逐物体：
 | `verify_retarget_artifacts.py` | 不依赖 provenance 的产物校验 V1–V5 |
 | `quarantine_rot_npz.py` | 事故处置：隔离而非删除 |
 | `test_rotation_fix.py` | holosoma 旋转修复的语义验证（须用 hsretargeting conda python 跑） |
+| `check_scene_parity_vs_e206.py` | **V5c**：整条 arm 链五个 XML 的掩码奇偶 + 场景↔npz 位姿绑定 + 离线复现运行时 scene-act 契约 |
+| `build_aug_manifest.py` | **V5e**：aug base yaml + PRG override + compose 差集审计 + 分层轮转队列 + 冻结 + `reused_e206` 权威表 |
+| `recheck_admission.py` | 继承 E206 frozen，只重算 A2 队列算术（105 条） |
+| `build_p2_gate_decision.py` | G1–G4 从 TSV 派生；G4/R6 用隔离区做零算力确定性实测 |
+| `run_e208_cem.py` | Full CEM 队列：准入硬门 + 显存准入 + sha 预检 + 输出校验 + 超时 + 冻结集校验 + flock |
+| `render_aug_results.py` | P7：读 manifest 只渲 `cem_ok`，`--watch` 与 P6 重叠，osmesa 不抢 GPU |
+
+### 新建 launch
+
+| 文件 | 用途 |
+|---|---|
+| `workspace/core4d/scripts/launch/active/run_E208_local_8gpu.sh` | P6 唯一入口（`DRY_RUN` / `GPUS` / `CASES` / `VARIANTS` / `LIMIT` / `E208_FORCE`） |
 
 ### 修改（跨仓）
 
@@ -309,4 +400,9 @@ E208 逐物体：
 | `0138792` | E208 P1 — 逐字节播种 orig，C1 22/22 |
 | `fb9928d` | E208 P2/P3 — 旋转修复 + 扩到 5 变体，trans 63/66 |
 | `dfc1581` | E208 P3/P4 收口 — 110/110（L0），旋转可行率 ~93% |
+| `9b954e1` | log 阶段性记录（P0–P5 部分） |
+| `d481cc7` | P5 — V5c 场景奇偶 105/105 + log 让号 296→297 |
+| `3dd5e8f` | P5 收口 — V5e 105/105、A2 重算、快照 + manifest 冻结，C3 关闭 |
+| `c30ab89` | G4 确定性实测（24/24 逐字节相同），G1–G4 门文件从数据派生 |
+| `7840258` | P6 — 105 条 Full CEM 队列已在 8 卡启动 |
 | holosoma `9e544b1` | 旋转增强 scipy 形状修复 |
