@@ -196,6 +196,53 @@ def rescore_check(scored: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+PUBLISHED_GATE_COL = {
+    "fall": "fall_gate_pass", "object_pos": "object_pos_gate_pass",
+    "object_ori": "object_ori_gate_pass", "contact": "contact_gate_pass",
+    "hand_penetration": "hand_penetration_gate_pass", "lower_body": "lower_body_gate_pass",
+}
+
+
+def criterion_crosscheck(case_ids: set[str]) -> dict[str, Any]:
+    """Measure how this script's 6 gates differ from E206's own published gates.
+
+    E206 released on TWELVE gates; the augmentation line (E199/E202/E208) uses a
+    six-gate subset, and at least one threshold genuinely differs -- E206's
+    lower_body gate passes at ~0.20 leg_penetration_frac while the augmentation
+    standard is 0.10.  That is fine for C4, which applies one criterion to orig
+    and aug alike, but it means three different "pass rates" exist for the same
+    22 cases (E206 human review, E206 12-gate release, E208 6-gate).  Reporting
+    the disagreement makes them impossible to conflate by accident.
+    """
+    published = e206_published()
+    disagreements: list[dict[str, Any]] = []
+    n = 0
+    for cid, ref in published.items():
+        if cid not in case_ids:
+            continue
+        n += 1
+        mine = gate_set({m: ref.get(m) for m in KEY_METRICS} | {
+            "fall_flag": str(ref.get("fall_flag", "")).strip().lower() in {"true", "1"}})
+        for gate, col in PUBLISHED_GATE_COL.items():
+            if col not in ref:
+                continue
+            pub = str(ref[col]).strip().lower() in {"true", "1"}
+            if mine[gate] != pub:
+                disagreements.append({"case_id": cid, "gate": gate,
+                                      "e208_6gate": mine[gate], "e206_published": pub})
+    return {
+        "n_cases": n,
+        "gates": sorted(PUBLISHED_GATE_COL),
+        "thresholds": GATE_THRESHOLDS,
+        "n_disagreements": len(disagreements),
+        "disagreements": disagreements,
+        "note": ("E206 released on 12 gates; this is the 6-gate augmentation-line subset "
+                 "(E199/E202), applied identically to orig and aug. Any disagreement "
+                 "listed here is a THRESHOLD difference, not a scoring bug -- E206's "
+                 "lower_body gate passes at ~0.20 leg_penetration_frac vs 0.10 here."),
+    }
+
+
 def orig_from_published(case_ids: set[str]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for cid, row in e206_published().items():
@@ -377,7 +424,10 @@ def c4_verdict(strata: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--authority", type=Path, default=C.AUTHORITY_TSV)
+    ap.add_argument("--manifest", type=Path, default=C.PRIORITY_MANIFEST,
+                    help="live run state; the CEM runner owns this file")
+    ap.add_argument("--authority", type=Path, default=C.AUTHORITY_TSV,
+                    help="static orig partners (reused_e206 rows)")
     ap.add_argument("--out-dir", type=Path, default=C.EVAL_DIR)
     ap.add_argument("--rescore-orig", dest="rescore", action="store_true", default=True)
     ap.add_argument("--no-rescore-orig", dest="rescore", action="store_false")
@@ -385,9 +435,14 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = EvalConfig()
-    rows = C.read_tsv(C.repo_path(args.authority))
-    aug_rows = [r for r in rows if r["aug_variant"] != "orig" and r.get("status") == "cem_ok"]
-    orig_rows = [r for r in rows if r["aug_variant"] == "orig"]
+    # Two files, two authorities.  The runner owns the priority manifest and is
+    # the only place a live `status` exists; the authority TSV's aug rows are a
+    # freeze-time snapshot and would report every run as unstarted.  The orig
+    # partners live only in the authority TSV and the runner never touches them.
+    aug_rows = [r for r in C.read_tsv(C.repo_path(args.manifest))
+                if r.get("status") == "cem_ok"]
+    orig_rows = [r for r in C.read_tsv(C.repo_path(args.authority))
+                 if r["aug_variant"] == "orig"]
     if args.limit:
         aug_rows = aug_rows[: args.limit]
     if not aug_rows:
@@ -453,6 +508,7 @@ def main() -> int:
         "excluded_reason": C.EXCLUDED_REASON,
         "offset_band_counts": dict(Counter(d["offset_band"] for d in deltas)),
         "rescore_orig": rescore,
+        "gate_criterion_vs_e206": criterion_crosscheck({r["case_id"] for r in orig_rows}),
         "strata": strata,
         "C4": c4_verdict(strata),
         "caveats": {

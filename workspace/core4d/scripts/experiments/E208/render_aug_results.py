@@ -113,11 +113,15 @@ def main() -> int:
         res = render_pass(args, render_row)
         for key in ("rendered", "reused", "failed"):
             total[key].extend(res[key])
-        expected = len([r for r in C.read_tsv(C.PRIORITY_MANIFEST)])
-        done = res["candidates"]
-        print(f"[pass] {done}/{expected} finished runs; rendered={len(res['rendered'])} "
+        # `candidates` is post-filter/post-limit, so it cannot stand in for queue
+        # progress -- with --limit it would stall the watch loop forever.
+        manifest = C.read_tsv(C.PRIORITY_MANIFEST)
+        expected = len(manifest)
+        finished = sum(1 for r in manifest if r.get("status") == DONE_STATUS)
+        print(f"[pass] queue {finished}/{expected} finished; this pass considered "
+              f"{res['candidates']}: rendered={len(res['rendered'])} "
               f"reused={len(res['reused'])} failed={len(res['failed'])}", flush=True)
-        if not args.watch or done >= expected:
+        if not args.watch or (finished >= expected and not res["rendered"]):
             break
         time.sleep(args.watch)
 
