@@ -1,4 +1,4 @@
-# log296 · E208：desk/chair 物体增强 → PRG Full CEM
+# log297 · E208：desk/chair 物体增强 → PRG Full CEM
 
 **日期**: 2026-09-05（进行中，P0–P5 部分完成）
 **实验域**: `core4d`
@@ -7,7 +7,9 @@
 **对应 Plan**: `/root/.cc-mirror/codewiz-cc/config/plans/e206-desk-chair-e207-aug-spider-agile-puddle.md`（**尚未落盘到 `workspace/core4d/plan/238_*.md`，见 §7 待办**）
 **前置**: [log295 · E206](295_E206_desk_chair_move2_dcv3_noprg_prg.md) · [log286 · E199](286_E199_omniretarget_object_augmentation_results.md) · [log291 · E202](291_E202_bucket_e178_translation_augmentation.md)
 
-> **编号说明**：用户原话是 "E207"，但 E207 已被 plan237（bucket G1-only gravcomp, R293）占用且当时正在跑，经用户确认改用 **E208 / plan238 / log296 / R294**。
+> **编号说明**：用户原话是 "E207"，但 E207 已被 plan237（bucket G1-only gravcomp, R293）占用且当时正在跑，经用户确认改用 **E208 / plan238 / R294**。
+>
+> **log 号二次让位（2026-09-05）**：本日志初次落盘时写作 `log296`，但并行会话的 E207 早在 01:24 就已提交 `log/296_E207_bucket_g1only_gravcomp.md`（我 15:16 才提交，晚了 14 h），A9 因此报冲突。按 [plan239:40](../plan/239_E209_desk_chair_prg_g1_gravcomp_plan.md) 的裁定 **E207=296 / E208=297 / E209=298**，本日志改号为 **log297**。这是同分支多会话并行的第三次资源碰撞（前两次是 GPU 与 retarget 进程，见 §5）。
 
 ---
 

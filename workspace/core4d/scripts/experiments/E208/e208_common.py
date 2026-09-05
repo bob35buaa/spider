@@ -94,7 +94,14 @@ def load_e208_module(name: str):
 # Identity
 # --------------------------------------------------------------------------
 EXP_ID = "E208"
-PLAN_REF = "workspace/core4d/plan/238_E208_deskchair_translation_augmentation_plan.md"
+PLAN_SLOT = 238
+# Log slot 296 was claimed first by the concurrent E207 session (committed 01:24
+# vs this experiment's 15:16 on 2026-09-05), so E208 moved to 297 per plan239's
+# adjudication E207=296 / E208=297 / E209=298.  Kept as a constant because A9
+# checks it and the doc paths derive from it.
+LOG_SLOT = 297
+PLAN_REF = f"workspace/core4d/plan/{PLAN_SLOT}_E208_deskchair_translation_augmentation_plan.md"
+LOG_REF = f"workspace/core4d/log/{LOG_SLOT}_E208_deskchair_translation_augmentation.md"
 RUN_ID = "R294"
 BASE_EXP_ID = E206.EXP_ID  # "E206" -- geometry, overrides, budget and orig baseline
 SPIDER_DATASET = E206.SPIDER_DATASET  # core4d v1

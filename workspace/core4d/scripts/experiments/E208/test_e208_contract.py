@@ -335,12 +335,14 @@ def a9_namespace() -> Check:
     chk = Check("A9", "the E208 namespace is free, and the in-flight E207 experiment is untouched")
     ws = C.REPO / "workspace/core4d"
 
-    plans = sorted(p.name for p in (ws / "plan").glob("238_*.md"))
-    logs = sorted(p.name for p in (ws / "log").glob("296_*.md"))
-    chk.detail["plan_238"] = plans
-    chk.detail["log_296"] = logs
-    chk.require(all("E208" in p for p in plans), f"plan slot 238 taken by something else: {plans}")
-    chk.require(all("E208" in p for p in logs), f"log slot 296 taken by something else: {logs}")
+    plans = sorted(p.name for p in (ws / "plan").glob(f"{C.PLAN_SLOT}_*.md"))
+    logs = sorted(p.name for p in (ws / "log").glob(f"{C.LOG_SLOT}_*.md"))
+    chk.detail[f"plan_{C.PLAN_SLOT}"] = plans
+    chk.detail[f"log_{C.LOG_SLOT}"] = logs
+    chk.require(all("E208" in p for p in plans),
+                f"plan slot {C.PLAN_SLOT} taken by something else: {plans}")
+    chk.require(all("E208" in p for p in logs),
+                f"log slot {C.LOG_SLOT} taken by something else: {logs}")
 
     tracker = (ws / "EXPERIMENT_TRACKER.md").read_text(encoding="utf-8")
     chk.require("R294" not in tracker, "run id R294 already appears in EXPERIMENT_TRACKER.md")
