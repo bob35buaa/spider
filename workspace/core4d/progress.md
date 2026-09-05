@@ -1,5 +1,47 @@
 # CORE4D 当前进度
 
+## 进行中：E210 — bucket007 aug × PRG+G1（plan240 / R296 / Phase 69）
+
+> 与 E207/E208/E209 **共用分支** `feat/E207-bucket-g1only-gravcomp`。E210 只往 E202 的
+> `__aug_trans*` 任务目录写 `scene_act_E210_*`，与三者零文件冲突；共享文件仅
+> `EXPERIMENT_TRACKER.md`（后续还会有 `review_index.py`）。
+
+### 2026-09-05 23:xx · P0–P6 全过，commit `2102ace`
+
+- **口径（用户 5 项）**：复用 E202 aug 资产只换 gravcomp scene；止于 full CEM + 14-gate +
+  视觉；**只做 trans 不做 rot**；基线 = E207 gravcomp orig；**Claude 只做到 smoke，full 由
+  用户自跑**。
+- **075_p2 排除**：E202 对它三档记的是 `runtime_initial_overlap`（参考首帧腿-桶重叠），
+  是参考层几何事实，gravcomp 不改变它；rot 被口径排除后已无未尝试变量 → 5 case / 15 变体。
+  契约里断言 E202 命中 0 行，日后回填会**主动报错**而非静默扩容。
+- P1 契约 15/15（两份 authority sha pin）· P2 sidecar 15/15 过 `assert_gravcomp_diff`
+  **且用篡改样本反向自测证守卫有效** · P3 compose diff **恰为 `{scene_name}`** ·
+  P4 manifest 轨迹/掩码 sha 与 E202 逐条相等 · P5 快照 106 文件 · P6 smoke 1/1 + 运行时 9/9。
+
+### 2026-09-06 02:xx · full 中断，7/15 完成，8 条卡死在 `running`
+
+**用户在共享 /mnt 的另一台机器上跑 full**（本机 ps 看不到，最初误判为 stale）。实际时间线：
+
+| 波次 | 时刻 | 条数 | 结果 |
+|---|---|--:|---|
+| 1 | 23:48:56–59 | 8（gpu 0–7） | log 只有 3 行 header、684/694 B，**零输出即死**；队列进程一并死亡，状态没写回 |
+| 2 | 23:51:22–25 | 7（gpu 0–6） | 全部 37–49 min 正常完成，00:28–00:40 收尾 |
+
+波次 2 在 2.5 min 后就复用了 gpu 0–6，证明波次 1 的进程当时已经没了。
+
+- **7 条完成的质量没问题**：运行时审计 7/7 全过，1024×32 seed0、A0 hand-gate（0.10/−0.020）、
+  gravcomp 场景、task 指 aug 目录。
+- **F1 · 队列对「中断」不是 resume-safe（会再犯，值得记）**：
+  `run_local_priority_queue.py:30` 的 `ELIGIBLE = {"", READY_FOR_FULL, failed, failed_preflight,
+  failed_validation, failed_postprocess}` —— **不含 `running`**。它能从产物文件重新认领
+  *已完成* 的行，却把 *被打断* 的行变成墓碑：重启后静默跳过，还报 "0 pending"，看起来像
+  manifest 已经跑完。E202/E208 都用同一个队列，同类事故会复现。
+- 处置：新增 `E210/reset_stale_rows.py`（默认 dry-run；产物齐全的不动、log 有输出的不动、
+  近 N 分钟被碰过的不动 —— 因为共享 /mnt 上「别的机器正在跑」是真实场景，误复位 = 两个进程
+  写同一个 outdir）。dry-run 判定 8 条可复位（log 仅 header、143 min 未动、零产物）。
+
+---
+
 ## 进行中：E209 — desk/chair PRG + G1 object gravcomp（plan239 / R295 / Phase 68）
 
 > 与 E207/E208 **共用分支** `feat/E207-bucket-g1only-gravcomp`。与 E208 共用同一批 22 case
