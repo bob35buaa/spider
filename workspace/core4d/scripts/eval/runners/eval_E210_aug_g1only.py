@@ -293,119 +293,22 @@ def main() -> int:
             cells_txt += f"{ok:>7d}/{len(g):<4d}"
         print(f"  {gname:12s}{cells_txt}")
 
-    # --- paired deltas -------------------------------------------------------
-    idx = {(r["cell"], r["case_id"], r["aug_variant"]): r for r in records}
-    metrics_of_interest = [EEF_ORI, HAND_PEN, CONTACT, "track_obj_pos_err_cm_mean",
-                           "track_obj_ori_err_deg_mean", "track_root_ori_err_deg_mean"]
-
-    def paired(a_cell: str, b_cell: str, per_variant: bool) -> dict[str, Any]:
-        """delta = b - a over matched units."""
-        pairs = []
-        for case_id in aug_cases:
-            variants = C210.TRANS_VARIANTS if per_variant else ("orig",)
-            for v in variants:
-                a_key = (a_cell, case_id, v if a_cell.startswith(("C", "D")) else "orig")
-                b_key = (b_cell, case_id, v if b_cell.startswith(("C", "D")) else "orig")
-                ra, rb = idx.get(a_key), idx.get(b_key)
-                if ra and rb:
-                    pairs.append((ra, rb))
-        if not pairs:
-            return {}
-        out: dict[str, Any] = {"n": len(pairs),
-                               "narrow_gain": sum(rb["narrow_pass"] and not ra["narrow_pass"]
-                                                  for ra, rb in pairs),
-                               "narrow_loss": sum(ra["narrow_pass"] and not rb["narrow_pass"]
-                                                  for ra, rb in pairs)}
-        for m in metrics_of_interest:
-            d = [ABL._finite(rb.get(m)) - ABL._finite(ra.get(m)) for ra, rb in pairs]
-            d = [x for x in d if math.isfinite(x)]
-            if d:
-                out[m] = {"delta_mean": round(st.fmean(d), 4),
-                          "n_worse": sum(x > 0 for x in d), "n_better": sum(x < 0 for x in d),
-                          **{k: v for k, v in summarize(m, d).items()
-                             if k in ("p75", "p90", "max", "min")}}
-        return out
-
-    contrasts = {
-        "C->D (gravcomp on aug, STRICT single-variable)": paired("C_aug_PRG", "D_aug_G1", True),
-        "A->B (gravcomp on orig, E207's own effect)": paired("A_orig_PRG", "B_orig_G1", False),
-        "B->D (delivery, CONFOUNDED: aug + v1->v2 retarget)": paired("B_orig_G1", "D_aug_G1", True),
-        "A->C (aug on PRG, CONFOUNDED: aug + v1->v2 retarget)": paired("A_orig_PRG", "C_aug_PRG", True),
-    }
-    print("\n=== paired contrasts ===")
-    for label, res in contrasts.items():
-        if not res:
-            continue
-        print(f"\n  {label}   n={res['n']}")
-        print(f"    narrow: +{res['narrow_gain']} / -{res['narrow_loss']}")
-        for m in metrics_of_interest:
-            if m in res:
-                r = res[m]
-                print(f"    {m:52s} d={r['delta_mean']:+8.4f}  worse={r['n_worse']:2d} "
-                      f"better={r['n_better']:2d}  p90={r['p90']:+.4f} max={r['max']:+.4f}")
-
-    # --- C5a / C5b / C6 ------------------------------------------------------
-    verdicts: dict[str, Any] = {}
-    cd, ab = contrasts.get("C->D (gravcomp on aug, STRICT single-variable)", {}), \
-        contrasts.get("A->B (gravcomp on orig, E207's own effect)", {})
-    if cd and ab and EEF_ORI in cd and EEF_ORI in ab:
-        d_aug, d_orig = cd[EEF_ORI]["delta_mean"], ab[EEF_ORI]["delta_mean"]
-        verdicts["C5a_phantom_support"] = {
-            "eef_ori_delta_aug(C->D)": d_aug, "eef_ori_delta_orig(A->B)": d_orig,
-            "excess_on_aug": round(d_aug - d_orig, 4), "gate": "excess <= +1.0 deg",
-            "pass": (d_aug - d_orig) <= 1.0,
-            "contact_delta_aug(C->D)": cd.get(CONTACT, {}).get("delta_mean"),
-            "note": "E209: contact_in_mask does not react to phantom support; eef_ori does.",
-        }
-    if "C_aug_PRG" in cells and "D_aug_G1" in cells:
-        rate = lambda c, f: (sum(  # noqa: E731
-            FC.passes(banded[f][2], ABL._finite(r[f]), banded[f][3]) for r in by_cell[c])
-            / max(1, len(by_cell[c])))
-        hp_c, hp_d = rate("C_aug_PRG", HAND_PEN), rate("D_aug_G1", HAND_PEN)
-        hp_b = rate("B_orig_G1", HAND_PEN) if "B_orig_G1" in cells else float("nan")
-        verdicts["C5b_hand_penetration"] = {
-            "narrow_rate_C_aug_PRG": round(hp_c, 3), "narrow_rate_D_aug_G1": round(hp_d, 3),
-            "narrow_rate_B_orig_G1": round(hp_b, 3),
-            "gate": "rate(D) >= rate(B) - 0.20",
-            "pass": bool(hp_d >= hp_b - 0.20) if math.isfinite(hp_b) else None,
-            "delta_dist_C->D": cd.get(HAND_PEN),
-            "delta_dist_B->D": contrasts.get(
-                "B->D (delivery, CONFOUNDED: aug + v1->v2 retarget)", {}).get(HAND_PEN),
-        }
-    if "D_aug_G1" in cells:
-        bands = Counter(r["offset_band"] for r in by_cell["D_aug_G1"])
-        offs = [r["approach_offset_m"] for r in by_cell["D_aug_G1"]
-                if isinstance(r["approach_offset_m"], float)]
-        verdicts["C6_effective_offset"] = {
-            "bands": dict(bands), "below_floor_0.05m": sum(o < 0.05 for o in offs),
-            "min": round(min(offs), 4) if offs else None,
-            "median": round(st.median(offs), 4) if offs else None,
-            "by_band_narrow_rate": {
-                b: round(st.fmean([float(r["narrow_pass"]) for r in by_cell["D_aug_G1"]
-                                   if r["offset_band"] == b]), 3) for b in bands},
-        }
-    verdicts["C3_delivery"] = {
-        "narrow_rate_B_orig_G1": round(st.fmean([float(r["narrow_pass"])
-                                                 for r in by_cell.get("B_orig_G1", [])] or [0]), 3),
-        "narrow_rate_D_aug_G1": round(st.fmean([float(r["narrow_pass"])
-                                                for r in by_cell.get("D_aug_G1", [])] or [0]), 3),
-        "gate": "rate(D) >= rate(B) - 0.15",
-        "fall_count_D": sum(str(r["fall_flag"]).strip().lower() in ("true", "1")
-                            for r in by_cell.get("D_aug_G1", [])),
-    }
-    verdicts["C3_delivery"]["pass"] = bool(
-        verdicts["C3_delivery"]["narrow_rate_D_aug_G1"]
-        >= verdicts["C3_delivery"]["narrow_rate_B_orig_G1"] - 0.15
-        and verdicts["C3_delivery"]["fall_count_D"] == 0)
-
-    print("\n=== pre-registered verdicts ===")
-    print(json.dumps(verdicts, ensure_ascii=False, indent=2))
+    # --- contrasts / verdicts live in the report generator ----------------
+    # NOT computed here on purpose. The delta arithmetic needs a per-metric
+    # direction (contact_in_mask is higher-is-better, everything else here is an
+    # error) and must read the funnel's own contact field
+    # `hand_object_physics_contact_in_mask_frac`, not the `..._3mm_...` variant
+    # from the RL-export schema. Duplicating that logic here once produced an
+    # inverted contact verdict; there is now exactly one implementation:
+    #   scripts/eval/reports/gen_E210_four_cell_workbook.py
+    print("\n[next] contrasts + verdicts + xlsx:")
+    print("  .venv/bin/python workspace/core4d/scripts/eval/reports/"
+          "gen_E210_four_cell_workbook.py")
 
     C210.write_json(args.out_dir / "e210_four_cell_summary.json", {
         "created_at": C210.now(), "cells": cells, "rows": len(records),
         "cases": aug_cases, "excluded_cases": C210.EXCLUDED_CASES,
         "evaluator_drift_vs_E207": drift or "none",
-        "contrasts": contrasts, "verdicts": verdicts,
         "confound_note": ("cells C/D use omnirt_v2 (E202 had to: v1 is often IK-infeasible "
                           "once the object moves); cells A/B use omnirt_v1. C->D and A->B are "
                           "clean; A->C and B->D move retarget variant as well as augmentation."),

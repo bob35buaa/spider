@@ -40,6 +40,30 @@
   近 N 分钟被碰过的不动 —— 因为共享 /mnt 上「别的机器正在跑」是真实场景，误复位 = 两个进程
   写同一个 outdir）。dry-run 判定 8 条可复位（log 仅 header、143 min 未动、零产物）。
 
+### 2026-09-06 · 15/15 跑完，P8/P9 收尾 → **PARTIAL SUCCESS**，详见 [log299](log/299_E210_bucket007_aug_g1only_gravcomp.md)
+
+四格 narrow：A 3/5 · B 2/5 · C 9/15 · **D 4/15**。严格单变量 `C→D` **+0/−5**（orig 上同一干预只 −1/5）。
+
+- **C3 压线过（0.267 vs 0.400，gap 0.133 ≤ 0.15）但不该当好消息**——基线 B 自己才 40%，
+  弱基线把真实退化吸收掉了。这是门的设计缺陷，如实记录不改门。
+- **C5a 破**（eef_ori 超出 +1.306° > 1.0）；C5b 过（hand_pen 反而更好）；C6 干净（12 full /
+  3 partial，0 条低于 0.05 m 下限）。
+- **F2 最重要**：代价两种互斥形态，单一指标必漏一种。021_p1 接触塌陷（手-桶接触帧
+  65/116→19/116，eef_ori 反而更好）；059_p1 末段姿态崩溃（root_ori 峰值 129.8°、只在最后
+  1 s 发散，contact 反而更好）。**这反驳了我依 E209 把 C5a 从 contact 换成 eef_ori 的改写**：
+  E209 的结论是「contact 不充分」，不是「contact 无用」。两条都得留。
+- **F3**：跨视频 A/B 无效**即使参考文件逐字节相同**——auto camera 取 sim∪ref 并集包围盒，
+  sim 不同 → 机位不同 → 同一份参考渲染成蹲伏 vs 直立。比 E208 F13 更强。只有同视频内
+  sim-vs-ref 可比。plan240 P9 我写的「C↔D 安全」是错的，已在 log 更正。
+- **F5**：059_p1 正是 E207 的过冲 case（orig |bias| 0.243→0.871）→ **orig 上被 gravcomp
+  过冲的 case 在 aug 上会崩，可作零成本事前筛选**。
+- **F6**：首版报告把 contact 的方向搞反（统一用 `n_worse=count(Δ>0)`，对「越高越好」的
+  contact 是反的，会把结论翻转），且混用了 `contact_in_mask` 与 `..._3mm_...` 两个字段。
+  已把全部对比算术收进 `gen_E210_four_cell_workbook.py` 单一实现（带 per-metric 方向表），
+  runner 不再自己算。
+- 交付建议：15 条里只有 `075_p1` 的 3 条干净；021_p1/059_p1 共 6 条应剔除；021_p2/073_p1
+  在无 gravcomp 时就已不过门。下一步试 **partial gravcomp ≈ 0.5**。
+
 ---
 
 ## 进行中：E209 — desk/chair PRG + G1 object gravcomp（plan239 / R295 / Phase 68）

@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 296 个日志文件。
+> 自动生成，共 299 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 64 (E201-E201)
@@ -613,3 +613,6 @@
 | 87 | - |  | R4 HDMI diagnosis init pose bug | [87_R4_HDMI_diagnosis_init_pose_bug.md](87_R4_HDMI_diagnosis_init_pose_bug.md) |
 | 295 | E206, e2 |  | Desk chair move2 dcv3 noprg prg | [295_E206_desk_chair_move2_dcv3_noprg_prg...](295_E206_desk_chair_move2_dcv3_noprg_prg.md) |
 | 296 | E207 |  | Bucket g1only gravcomp | [296_E207_bucket_g1only_gravcomp.md](296_E207_bucket_g1only_gravcomp.md) |
+| 297 | E208 |  | Deskchair translation augmentation | [297_E208_deskchair_translation_augmentat...](297_E208_deskchair_translation_augmentation.md) |
+| 298 | E209 |  | Desk chair prg g1 gravcomp | [298_E209_desk_chair_prg_g1_gravcomp.md](298_E209_desk_chair_prg_g1_gravcomp.md) |
+| 299 | E210 |  | Bucket007 aug g1only gravcomp | [299_E210_bucket007_aug_g1only_gravcomp.m...](299_E210_bucket007_aug_g1only_gravcomp.md) |
