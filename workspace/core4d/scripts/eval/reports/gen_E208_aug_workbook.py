@@ -32,6 +32,8 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Font, PatternFill
 
@@ -58,6 +60,10 @@ OUT_XLSX = EVAL_DIR / "E208_aug_vs_orig.xlsx"
 
 NAVY, BLUE, GREEN, RED, GRAY, WHITE, AMBER = (
     "1F3864", "2E5496", "C6EFCE", "FFC7CE", "D9D9D9", "FFFFFF", "FFE699")
+# Delta text colours -- dark enough to stay readable on the light pass/fail fills.
+# 8-digit aRGB: a 6-digit value is normalised to alpha 00 (fully transparent),
+# which can render as invisible text in Excel.
+TEXT_BETTER, TEXT_WORSE, TEXT_SAME = "FF008000", "FFC00000", "FF808080"
 
 INDICATIVE_MIN_N = 3
 PRIMARY = "track_obj_pos_err_cm_mean"
@@ -353,6 +359,37 @@ def gate_eval(row: dict[str, str], name: str, field: str, op: str,
     }
 
 
+
+def better_is_lower(op: str) -> bool:
+    """Gate direction, read off its own operator -- only `contact` is >=."""
+    return op != ">="
+
+
+def gate_cell_value(name: str, op: str, cur: dict[str, Any],
+                    ref: dict[str, Any] | None):
+    """`value(delta)` with the delta coloured by whether it beat orig.
+
+    The sign alone does not say better-or-worse: `contact` is a >= gate, so a
+    positive delta is an improvement there and a regression everywhere else.
+    Colour is therefore derived from the gate's own operator, never from the sign.
+    """
+    if cur["na"]:
+        return "n/a"
+    value = f"{cur['value']:.4f}"
+    if ref is None or ref["na"]:
+        return value
+    delta = cur["value"] - ref["value"]
+    if abs(delta) < 5e-5:
+        colour = TEXT_SAME
+    else:
+        improved = (delta < 0) if better_is_lower(op) else (delta > 0)
+        colour = TEXT_BETTER if improved else TEXT_WORSE
+    return CellRichText(
+        TextBlock(InlineFont(), value),
+        TextBlock(InlineFont(color=colour), f"({delta:+.4f})"),
+    )
+
+
 def sheet_gate14_values(wb: Workbook, scored: list[dict[str, str]]) -> None:
     """Every row's raw value for all 14 gates -- orig and aug side by side."""
     ws = wb.create_sheet("Gate14Values")
@@ -360,41 +397,48 @@ def sheet_gate14_values(wb: Workbook, scored: list[dict[str, str]]) -> None:
             + GATE14_NAMES
             + ["narrow 过", "wide 过", "14门全过(narrow)", "narrow 失败门", "n/a 门"])
     _title(ws, "Gate14Values · 14 门完整数值（4 硬门 + 10 带门）",
-           "阈值取自 funnel_config，与 E204/E205/E206 同一把尺。C4 用的是其中 6 门"
-           "（fall/obj_pos/obj_ori/contact/hand_pen/leg_pen），"
-           "评审 feed 的 12 门是另一子集 —— 三者口径不同，此页给全量原值。", len(cols))
+           "格式 值(Δ)，Δ = aug − orig；orig 行无 Δ。**Δ 的颜色已按每个门自己的方向判定**"
+           "（contact 越大越好，其余越小越好）：绿=比 orig 好，红=比 orig 差，灰=持平。"
+           "单元格底色是另一件事：粉=该门本身挂，灰=n/a。"
+           "阈值取自 funnel_config，与 E204/E205/E206 同一把尺。", len(cols))
     ws.append([])
     ws.append(cols)
     _hdr(ws, ws.max_row, len(cols))
 
+    by_case = {r["case_id"]: r for r in scored if r["aug_variant"] == "orig"}
     order = {"orig": 0, "trans0": 1, "trans1": 2, "trans2": 3, "rot0": 4, "rot1": 5}
     for row in sorted(scored, key=lambda r: (r["object_key"], r["case_id"],
                                              order.get(r["aug_variant"], 9))):
         res = {n: gate_eval(row, n, f, op, thr, wide) for n, f, op, thr, wide in GATE14}
         failed = [n for n in GATE14_NAMES if not res[n]["narrow"]]
         nas = [n for n in GATE14_NAMES if res[n]["na"]]
+        is_orig = row["aug_variant"] == "orig"
+        base = by_case.get(row["case_id"]) if not is_orig else None
+        ref = ({n: gate_eval(base, n, f, op, thr, wide)
+                for n, f, op, thr, wide in GATE14} if base is not None else None)
+
         ws.append(
             [row["object_key"], row["case_id"], row["aug_variant"],
              row.get("offset_band", "")]
-            + [("n/a" if res[n]["na"] else round(res[n]["value"], 4)) for n in GATE14_NAMES]
+            + [None] * len(GATE14_NAMES)
             + [sum(1 for n in GATE14_NAMES if res[n]["narrow"]),
                sum(1 for n in GATE14_NAMES if res[n]["wide"]),
                "TRUE" if not failed else "FALSE",
                ",".join(failed), ",".join(nas)])
         r = ws.max_row
-        for i, n in enumerate(GATE14_NAMES, 5):
+        for i, (n, _f, op, _thr, _wide) in enumerate(GATE14, 5):
             cell = ws.cell(r, i)
+            cell.value = gate_cell_value(n, op, res[n], ref[n] if ref else None)
+            cell.alignment = Alignment(horizontal="right")
             if res[n]["na"]:
                 cell.fill = PatternFill("solid", fgColor=GRAY)
             elif not res[n]["narrow"]:
                 cell.fill = PatternFill("solid", fgColor=RED)
-            elif res[n]["wide"] and n in C4_GATES:
-                cell.fill = PatternFill("solid", fgColor=GREEN)
-        if row["aug_variant"] == "orig":
+        if is_orig:
             for i in range(1, 5):
                 ws.cell(r, i).font = Font(bold=True)
     ws.freeze_panes = "E4"
-    for i, w in enumerate([10, 32, 8, 9] + [11] * len(GATE14_NAMES)
+    for i, w in enumerate([10, 32, 8, 9] + [19] * len(GATE14_NAMES)
                           + [10, 9, 16, 34, 16], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
