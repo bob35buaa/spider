@@ -128,7 +128,8 @@ plan241 §一 D5 写的是「034_p1 回退反而变少，所以这是放大器�
 | F4 | **运行时契约首轮报「15/15 PASS」，而当时有 1 条还在跑**。`config_act.yaml` 在进程启动时就写了，用它当完成判据会把在飞的行算成已审 | 改为以**结果 npz** 为完成判据，未完成的显式列为 `pending` 并写进 JSON |
 | F5 | `from build_manifest import FIELDS` 拿到的是 **E200 的** build_manifest。`e211_common` 把 E209/E206/E200/E199 依次插到 sys.path 前面，这几个目录都有同名模块 | 按显式路径 import（`_load_sibling`）。这类同名碰撞在 E2xx 目录间是普遍的，只是平时脚本都以 `__main__` 跑所以没暴露 |
 | F6 | 统一的 `Δ>0 == 变差` 会把 `contact`（越高越好）报反，E210 F6 已栽过 | 每个指标带 `DIRECTION`，`n_improved` 按各自方向算，逐门表写明 `higher_is_better` / `lower_is_better` |
-| F9 | **rules §7 保障 2「快照随实验 log 一并提交」自 E209 起一直没真正做到**。`workspace/core4d/results` 是指向外部存储的**符号链接**，`git add -f` 会直接报 `beyond a symbolic link`；E209/E210 的 log 都写了「已快照」，但 `git ls-files` 下 `core4d/results/E209`/`E210` **各 0 个文件**——快照只存在于外部盘，不在版本库里，外部盘一没就不可恢复 | 按 E196 的先例（`report/E196/provenance/scene_snapshot/`，是真实目录且已入库）把 E211 的 provenance 镜像到 `workspace/core4d/report/E211/provenance/`：场景快照 + 冻结端点 + manifest（含两分片与合流对账）+ 五档评测 TSV/JSON + 运行时契约，共 81 个文件、全文本。**E209/E210 的缺口未回填**，登记为遗留项 |
+| F9 | **rules §7 保障 2「快照随实验 log 一并提交」自 E209 起一直没真正做到**。`workspace/core4d/results` 是指向外部存储的**符号链接**，`git add -f` 会直接报 `beyond a symbolic link`；E209/E210 的 log 都写了「已快照」，但 `git ls-files` 下 `core4d/results/E209`/`E210` **各 0 个文件**——快照只存在于外部盘，不在版本库里，外部盘一没就不可恢复 | 按 E196 的先例（`report/E196/provenance/scene_snapshot/`，是真实目录且已入库）把 E211 的 provenance 镜像到 `workspace/core4d/report/E211/provenance/`。**E209/E210 的缺口未回填**，登记为遗留项 |
+| F10 | **F9 的修补第一次做的时候又漏了一半，而且我在 log 里把它写成了「共 81 个文件」**。`.gitignore` 有 `*.json` 与 `*.xlsx`（:243/:257），普通 `git add <dir>` 会**静默跳过**它们：实际只入库 64 个（55 xml + 9 tsv），漏掉全部 18 个 json、`manifest.txt` 和 xlsx。漏掉的恰好是最要紧的几个——`manifest.txt` 是快照的 sha256 索引（没有它快照无法校验）、`e211_stageA_full_merge.json` 是双机合流对账、`e211_runtime_contract.json` 是 `body_gravcomp` 读回证据 | 改用 `git add -f <provenance dir>`，实测 84/84 全部入库（55 xml + 18 json + 9 tsv + 1 txt + 1 xlsx）。**教训与 F3/F4 同类**：「我加了保障」和「保障真的生效」是两件事，每一条都要用产物反查一次，不能只看命令没报错 |
 | F7 | `release` 有一例（028_p2）释放窗为空、全臂 NaN；各臂按自己的有限集取均值会拿不同总体互比 | 只在**全五臂都有限**的公共案例集上取宏平均，并把 `release_n_common=4` 写进 summary |
 | F8 | **plan241 §一 D5 我断言「回退是放大器不是主因」，依据只有 g=0/1 两点** | 五点扫描后偏相关直接推翻。已在 §四如实登记，不改 plan241 正文（历史不可篡改） |
 
@@ -146,6 +147,10 @@ plan241 §一 D5 写的是「034_p1 回退反而变少，所以这是放大器�
 | 运行时契约（含 `body_gravcomp` 读回） | `results/E211/s6_downstream/cem/full/e211_runtime_contract.json` |
 | CEM 15 条 | `results/E211/s6_downstream/cem/full/E211_<case>_<arm>/` |
 | 五档 14-gate + z + 单调性 | `results/E211/s6_downstream/eval/g_sweep/e211_g_sweep_{rollout,per_gate}.tsv` + `e211_g_sweep_summary.json` |
+| **四档对比工作簿**（g=0/0.6/0.8/1.0） | `results/E211/s6_downstream/eval/g_sweep/E211_g_sweep_comparison.xlsx` + `e211_g_sweep_workbook.json` |
+| **渲染 10 条**（g=0.6 / g=0.8） | `results/E211/s6_downstream/render/full/E211_<case>_{G06,G08}.mp4` + `e211_render_summary.json` |
+| 端点 mp4（复用，未重渲） | g=0 `results/E206/.../E206_<case>_prg.mp4`；g=1 `results/E209/.../E209_<case>_G1.mp4`（各 5/5 已核在位） |
+| **viser 共享相机回放** | `workspace/core4d/scripts/experiments/E211/viser_replay_arms.py` |
 | 场景快照（rules §7 保障 2） | `results/E211/scene_snapshot/`（5 目录 + manifest.txt） |
 | **入库的 provenance 镜像**（见 F9） | `workspace/core4d/report/E211/provenance/`（81 文件：快照 + 端点 + manifest + 评测 + 运行时契约） |
 
@@ -159,7 +164,8 @@ plan241 §一 D5 写的是「034_p1 回退反而变少，所以这是放大器�
    - `cem_safety_gate_fallback: least_violation → 软惩罚`（posture gate 已有 `fallback_lambda=5.0` 的先例，即不丢弃奖励排序、只加罚）。
    预测（可证伪）：回退帧数下降 ⇒ eef_ori/root_ori 恢复，而 z 曲线**不动**（g 未变）。若回退降了 eef_ori 不动，则 D5 也被证伪，两个候选机制都排除。
 3. **034_p1 应单独看**。它在 PRG 阶段就是回退最多的一例，五档全崩，宏平均基本由它主导。建议在 Stage B′ 里把它作为预注册的**主要观察对象**，同时报「含/不含 034_p1」两套宏平均——不是为了挑拣，是因为 n=5 里一个离群例会淹没其余四例的真实信号，两套都报才诚实。
-4. **视觉复核未做**。Stage A 全档 FAIL、且下一步要换自变量，此时渲染 15 条（约 1.5 h CPU）不影响任何判定。登记为遗留项，Stage B′ 的胜出档必须补做（rules §5 强制）。
+4. **视觉复核：素材已就位，系统复核未做**。g=0.6 / g=0.8 共 10 条已渲染（0 失败），加上已存在的 g=0（E206）与 g=1（E209）各 5 条，四档 A/B 素材完整。目前只做了**一帧抽样**：`034_p1` g=0.6 第 180 帧，同视频内 sim 明显趴在桌上、ref 站立扶桌沿，与该例 eef_ori 43.7° 一致——**这只是与数值一致，不构成系统复核**。逐例复核留到 Stage B′ 与胜出档一起做（rules §5 强制）。
+   **跨档比对只能用 viser**：`E211/viser_replay_arms.py` 把参考与各档放进同一场景、同一相机、同一时间轴；mp4 是逐帧自动机位（E209 F6 / E210 F3），跨视频比姿态无效。
 5. **回填 E209**：log298 §4 的「CEM 把优化预算让渡出去」应加一条指向本 log 的修正——desk007 上总奖励是**净下降**的（7.702→7.505，而 chair006 是 6.771→6.902 净上升），不是主动权衡；且主要损失由门回退而非失重解释。不改 log298 正文，在 TRACKER 与本 log 交叉引用。
 
 **注**：desk007 与「细杆钩握」在数据里 100% 共线（n=5 vs n=5、每组一个物体），本实验按用户口径未做打破混淆的对照。§四对 D2 的「部分成立」判断因此只是**一致性证据**，不构成因果结论。

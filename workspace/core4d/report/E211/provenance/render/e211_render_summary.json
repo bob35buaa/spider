@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-09-06T20:23:32+08:00",
+  "stage": "full",
+  "arms": [
+    "G06",
+    "G08"
+  ],
+  "candidates": 10,
+  "rendered": [
+    "E211_desk007_20231030_028_p1_G06",
+    "E211_desk007_20231030_028_p1_G08",
+    "E211_desk007_20231030_028_p2_G06",
+    "E211_desk007_20231030_028_p2_G08",
+    "E211_desk007_20231030_030_p2_G06",
+    "E211_desk007_20231030_030_p2_G08",
+    "E211_desk007_20231030_032_p2_G06",
+    "E211_desk007_20231030_032_p2_G08",
+    "E211_desk007_20231030_034_p1_G06",
+    "E211_desk007_20231030_034_p1_G08"
+  ],
+  "reused": [],
+  "failed": [],
+  "endpoint_renders_present": {
+    "prg": {
+      "desk007_20231030_028_p1": true,
+      "desk007_20231030_028_p2": true,
+      "desk007_20231030_030_p2": true,
+      "desk007_20231030_032_p2": true,
+      "desk007_20231030_034_p1": true
+    },
+    "g1": {
+      "desk007_20231030_028_p1": true,
+      "desk007_20231030_028_p2": true,
+      "desk007_20231030_030_p2": true,
+      "desk007_20231030_032_p2": true,
+      "desk007_20231030_034_p1": true
+    }
+  },
+  "camera_caveat": "auto camera is recomputed per frame from the sim-union bbox; cross-video pose comparison is INVALID (E209 F6 / E210 F3). Compare sim vs ref within one video, or use E211/viser_replay_arms.py for a shared-camera A/B."
+}
