@@ -1,6 +1,313 @@
 # CORE4D 当前进度
 
-## 当前：E206 — desk+chair 走 dcv3 全流程 · **已收口，PARTIAL SUCCESS（偏强）**
+## 进行中：E212 — desk023 部分补偿扫描（plan242 / R298 / Phase 71）
+
+> 分支 `feat/E207-bucket-g1only-gravcomp`（与 E207–E211 共用）。E212 只往 4 个
+> desk023 dcv3 task dir 写 `scene_act_E212_*`，与 E211 的 desk007 目录零冲突（已核实
+> 这 4 个目录当前无任何 `scene_act_E21*` 文件）。
+
+### 2026-09-06 · plan242 已写，等待实现 P0–P6
+
+**用户口径（4 项已确认）**：① 主门 = 权衡型双门 C1a–C1f；② g 网格照原样 `0.4/0.6/0.8`
+（与 E211 desk007 逐格可比）；③ 本轮**纯诊断**，出片准入过门再议；④ 远端 = E211 同一台
+`lshb-k8s-al-sh-gpu-rdma-prod-103`，共享 /mnt 与 .venv，配置不变。
+**分工**：本机 8 条由 Claude 跑，远端 4 条给用户一条命令自跑。
+
+**规划期诊断结论（全部来自 E209 已交付产物，未跑新 CEM）**：
+
+desk023 与 desk007 是**不同 regime**，不是「换个 case 再跑一遍」：
+
+| | desk007(E211) | desk023(E212) |
+|---|---|---|
+| PRG narrow | 2/5 | **4/4（基线完美）** |
+| G1 narrow | 0/5 | 1/4 |
+| z_bias PRG→G1 | −2.784→+1.116（过冲） | −3.648→**+0.353（近乎归零）** |
+| 逐例 g* 中位 | 0.71 | **0.93** |
+| contact | .880→.764（塌陷） | .910→**.921（改善）** |
+| G1 破的门 | eef_ori+contact+release | **仅 eef_ori(3/4)+eef_pos/hand_pen(1/4)** |
+| fallback 子系统 | body/hand gate | **leg gate** |
+
+⇒ 两条推论：(a) desk023 **没有接触塌陷形态**，E210 F2 的两形态退化成一种；
+(b) z 侧已在 g=1 附近最优，**降 g 只会单调赔 z** ⇒ 这是「拿 z 换 eef_ori」的权衡曲线。
+
+**逐例（fallback 解释 3/4，066_p1 是干净反例）**：
+
+| case | eef_ori PRG→G1 | hand_pen | fallback | narrow |
+|---|---|---|---|---|
+| 066_p1 | 16.71→21.24 | .077→**.303** | **0.007→0.007（持平）** | T→F ← **反例** |
+| 066_p2 | 15.86→16.05 | .185→.106 | **0.000→0.000** | **T→T（唯一存活）** |
+| 005_p1 | 18.78→22.25 | .237→.124 | 0.148→0.207 | T→F |
+| 019_p1 | 16.47→**25.57** | .161→**.329** | 0.048→**0.105** | T→F（最坏，eef_pos 13.4→22.2）|
+
+066_p1 的损伤**不可能**由门回退解释 → 预注册 P5 专门测它。
+
+**分片**：12 行 = shardA 8（本机）+ shardB 4（远端），规则
+`(case_idx+arm_idx)%3==2 → B`。**必须改写 E211 的实现**——`build_manifest.py:130`
+是奇偶 parity，对 12 行会给 6/6 而非 8/4。不用 `i%3==2` 的朴素切法，因为它会把整个
+G08 档（预测最优）塞进远端片，远端一挂丢整档。
+
+### 2026-09-07 · P7/P8/P9 完成 — C1 FAIL 但 g=0.6 只差 0.26mm
+
+**执行侧全净**：12/12 `run_complete_pending_eval`；双机 median 48.8 min（本机 48.7 / 远端 52.5），
+C4 过；运行时 `body_gravcomp` 12/12 读回 0.4/0.6/0.8；端点重打分零漂移（`endpoint_rescore_drift: []`）。
+
+**g 曲线（desk023 n=4 宏平均）**
+
+| | g=0.0 | g=0.4 | g=0.6 | g=0.8 | g=1.0 |
+|---|---:|---:|---:|---:|---:|
+| \|z_bias\| cm | 3.648 | 2.360 | 1.526 | 0.596 | 0.353 |
+| eef_ori ° | 16.958 | 16.935 | 17.537 | 18.947 | 21.278 |
+| eef_pos cm | 13.413 | 12.450 | 13.214 | 13.947 | 15.732 |
+| contact | .910 | .881 | .908 | .892 | .921 |
+| narrow | 4/4 | 4/4 | 3/4 | 3/4 | 1/4 |
+
+**C1 = FAIL（winners 空），但边距是重点**：
+- **g=0.6 过 5/6 条，只差 C1a 的 0.026 cm**（|z_bias| 1.5263 vs 1.50）。拐点在 g≈0.5。
+- **g=0.4 机器人侧完全无损**（narrow 4/4 同 PRG），但只回收 1/3 的 z。
+- ⚠️ **g=1.0 的 C1a FAIL 是我自己造的舍入假象**：门冻结成 g=1.0 自身 z_mae 的 4 位小数
+  3.1752，真值 3.175202，超 **2e-6 cm**。门不改（P0 冻结），log 里标注；不影响 winners
+  （端点非候选）。**教训**：把门设成某个端点自身的舍入值，会让该端点判负自己。
+
+**预注册**：P1 ✅ R²=0.9908（slope 4.0065 vs 预注册 4.0013）· P2 ❌ 但唯一反向步 −0.023°
+（噪声级，desk023 实质单调，与 desk007 的 6° 乱跳本质不同）· P3 ✅ 066_p2 全 5 档存活 ·
+**P4 ✅ 偏相关 +0.615**（desk007 +0.504），r(g,fallback)=+0.057 → **E211 机制跨族外推成立** ·
+P5 ❌ 066_p1 非单调 → **既非载荷也非回退，第三种未识别机制，登记 core 层缺口**。
+
+⚠️ **P4 的重要限定**：desk023 的 fallback 几乎全是 **leg gate**（desk007 是 body/hand）。
+同一个 `cem_gate_fallback_used` 背后是不同子系统，Stage B′ 的旋钮必须改成 leg 侧，不能照抄。
+
+**P9 视觉（同视频内 sim-vs-ref，f103=t2.06s 由逐帧数值定位）**：损伤是**末段**的。
+019_p1 各档 @f103 eef_ori/eef_pos = prg 7.12°/2.66cm · G04 6.62/6.51 · G06 5.99/5.87 ·
+**G08 45.46/19.43** · **g1 71.74/44.29**。画面上 g≤0.6 双手仍搭在桌沿（同 ref），
+g≥0.8 手明显脱开、接触标记分离。各档 sim 躯干都比 ref 前倾——但那是躯干不是手，
+两者要分开读。末 25% 平均 eef_ori 差（vs PRG）：G04 −0.94、G06 −0.40、G08 +5.85、g1 +27.0。
+
+**产物**：xlsx 6 sheet（README/PerArm/Contrasts/Gates14/PerCase/AllArms）·
+mp4 6 条 · 抽帧 5 张 · viser 在 tmux `spider:E212viser` 端口 **8082**（8080 被 E211 旧进程占）。
+
+### 2026-09-07 · 综合 rl-export（21 case 混合臂）完成
+
+`E212/export_mixed_arm_rl_input.py`，输出 `results/E212/s6_downstream/rl_export`。
+21 case（E206 的 22 减 chair005，用户排除），每 case 一行，逐 case 选臂：
+
+| 物体 | n | 臂 |
+|---|--:|---|
+| chair006 | 5 | E209 G1 |
+| desk021 | 7 | E209 G1 |
+| desk023 | 4 | **E212 G06**（C1 最近档）|
+| desk007 028_p1/028_p2 | 2 | E211 G08 |
+| desk007 030_p2 | 1 | E211 G04 |
+| desk007 032_p2 | 1 | E211 G06 |
+| desk007 034_p1 | 1 | E206 PRG（每 g>0 档都退化）|
+
+**做法（E207 seed-and-override 模板 + E206 partner block）**：每行从 E206 已验证的
+`rl_export_input` 行拷贝，只覆写 arm 相关字段。E206 的 `paired_rl_export_input.tsv`
+sha256（= `e209_common.EXPECTED_SOURCE_SHA256`）作 seed 权威 pin，漂了就报错。
+
+**验证**：schema 是 E206 的严格超集（source 74→84、paired 95→103，共享前缀原序，无缺列）；
+新增 10 列 `arm/arm_experiment/arm_gravcomp/arm_scene_name/arm_selection_reason/
+selection_authority/prior_arm_manual_*`。partner 21/21 `RL_EXPORT_READY`、`PAIR_COMPLETE`，
+全部 `_pN` 翻转、trimmed_npz 全部在盘；**partner 内容与 E206 逐字节一致（除 source 回指列）
+→ 实证 partner 侧 arm-无关**。直接回退例 chair006_20231003_2_015_p1 与 E206 Route B 一致。
+每 case arm→scene_name 断言通过。**只有 034_p1（E206 PRG）保留真实 USE 评审**，其余 G 臂
+标 `NOT_REVIEWED`、E206 评审降级到 `prior_arm_manual_*`。
+
+**claim 边界**：臂选择是逐 case 的、非单一预注册门的产出（desk023 取 g=0.6 是 C1 最近档，
+C1 本身 FAIL）。已写进 summary/validation 的 `claim_boundary`。
+
+### 待办（下一步）
+
+P0–P6（common/scenes/overrides/manifest/快照/smoke+运行时契约）→ 本机 8 条 + 交付远端命令
+→ merge 对账 → P8 评测 → P9 渲染+viser → P10 provenance 入库 → P11 log301/TRACKER/归档。
+
+**实现期必须盯的点**（详见 plan242 §四之一 / §五）：
+- `c1_for()` **必须改写函数体**：E212 的 C1d=`eef_pos∧hand_pen`、C1e=`contact`，
+  与 E211 的 C1d=contact/C1e=release 不是同一组指标，只改 GATES 字典会用错门判 SUCCESS。
+- `A_P2/A_P3` 在 E211 里**没有 `pass` 键**，P2..P5 都要补显式判定。
+- `check_shards` 在非全量下 **early-return**，分片断言静默失效 → 必须全量跑一次留证。
+- `BASELINE_RELEASE_N=4`（desk023 四例 release 全部有限，不像 desk007 有空释放窗）。
+- provenance 走 `report/E212/provenance/` + `git add -f`（results 是符号链接；
+  `.gitignore` 的 `*.json`/`*.xlsx` 会让普通 add 静默漏掉最要紧的文件，E211 F9/F10）。
+- **progress.md 现 1806 行**，远超 rules §14 的 200 行阈值 → P11 归档 E209 及以前。
+
+---
+
+## 进行中：E210 — bucket007 aug × PRG+G1（plan240 / R296 / Phase 69）
+
+> 与 E207/E208/E209 **共用分支** `feat/E207-bucket-g1only-gravcomp`。E210 只往 E202 的
+> `__aug_trans*` 任务目录写 `scene_act_E210_*`，与三者零文件冲突；共享文件仅
+> `EXPERIMENT_TRACKER.md`（后续还会有 `review_index.py`）。
+
+### 2026-09-05 23:xx · P0–P6 全过，commit `2102ace`
+
+- **口径（用户 5 项）**：复用 E202 aug 资产只换 gravcomp scene；止于 full CEM + 14-gate +
+  视觉；**只做 trans 不做 rot**；基线 = E207 gravcomp orig；**Claude 只做到 smoke，full 由
+  用户自跑**。
+- **075_p2 排除**：E202 对它三档记的是 `runtime_initial_overlap`（参考首帧腿-桶重叠），
+  是参考层几何事实，gravcomp 不改变它；rot 被口径排除后已无未尝试变量 → 5 case / 15 变体。
+  契约里断言 E202 命中 0 行，日后回填会**主动报错**而非静默扩容。
+- P1 契约 15/15（两份 authority sha pin）· P2 sidecar 15/15 过 `assert_gravcomp_diff`
+  **且用篡改样本反向自测证守卫有效** · P3 compose diff **恰为 `{scene_name}`** ·
+  P4 manifest 轨迹/掩码 sha 与 E202 逐条相等 · P5 快照 106 文件 · P6 smoke 1/1 + 运行时 9/9。
+
+### 2026-09-06 02:xx · full 中断，7/15 完成，8 条卡死在 `running`
+
+**用户在共享 /mnt 的另一台机器上跑 full**（本机 ps 看不到，最初误判为 stale）。实际时间线：
+
+| 波次 | 时刻 | 条数 | 结果 |
+|---|---|--:|---|
+| 1 | 23:48:56–59 | 8（gpu 0–7） | log 只有 3 行 header、684/694 B，**零输出即死**；队列进程一并死亡，状态没写回 |
+| 2 | 23:51:22–25 | 7（gpu 0–6） | 全部 37–49 min 正常完成，00:28–00:40 收尾 |
+
+波次 2 在 2.5 min 后就复用了 gpu 0–6，证明波次 1 的进程当时已经没了。
+
+- **7 条完成的质量没问题**：运行时审计 7/7 全过，1024×32 seed0、A0 hand-gate（0.10/−0.020）、
+  gravcomp 场景、task 指 aug 目录。
+- **F1 · 队列对「中断」不是 resume-safe（会再犯，值得记）**：
+  `run_local_priority_queue.py:30` 的 `ELIGIBLE = {"", READY_FOR_FULL, failed, failed_preflight,
+  failed_validation, failed_postprocess}` —— **不含 `running`**。它能从产物文件重新认领
+  *已完成* 的行，却把 *被打断* 的行变成墓碑：重启后静默跳过，还报 "0 pending"，看起来像
+  manifest 已经跑完。E202/E208 都用同一个队列，同类事故会复现。
+- 处置：新增 `E210/reset_stale_rows.py`（默认 dry-run；产物齐全的不动、log 有输出的不动、
+  近 N 分钟被碰过的不动 —— 因为共享 /mnt 上「别的机器正在跑」是真实场景，误复位 = 两个进程
+  写同一个 outdir）。dry-run 判定 8 条可复位（log 仅 header、143 min 未动、零产物）。
+
+### 2026-09-06 · 15/15 跑完，P8/P9 收尾 → **PARTIAL SUCCESS**，详见 [log299](log/299_E210_bucket007_aug_g1only_gravcomp.md)
+
+四格 narrow：A 3/5 · B 2/5 · C 9/15 · **D 4/15**。严格单变量 `C→D` **+0/−5**（orig 上同一干预只 −1/5）。
+
+- **C3 压线过（0.267 vs 0.400，gap 0.133 ≤ 0.15）但不该当好消息**——基线 B 自己才 40%，
+  弱基线把真实退化吸收掉了。这是门的设计缺陷，如实记录不改门。
+- **C5a 破**（eef_ori 超出 +1.306° > 1.0）；C5b 过（hand_pen 反而更好）；C6 干净（12 full /
+  3 partial，0 条低于 0.05 m 下限）。
+- **F2 最重要**：代价两种互斥形态，单一指标必漏一种。021_p1 接触塌陷（手-桶接触帧
+  65/116→19/116，eef_ori 反而更好）；059_p1 末段姿态崩溃（root_ori 峰值 129.8°、只在最后
+  1 s 发散，contact 反而更好）。**这反驳了我依 E209 把 C5a 从 contact 换成 eef_ori 的改写**：
+  E209 的结论是「contact 不充分」，不是「contact 无用」。两条都得留。
+- **F3**：跨视频 A/B 无效**即使参考文件逐字节相同**——auto camera 取 sim∪ref 并集包围盒，
+  sim 不同 → 机位不同 → 同一份参考渲染成蹲伏 vs 直立。比 E208 F13 更强。只有同视频内
+  sim-vs-ref 可比。plan240 P9 我写的「C↔D 安全」是错的，已在 log 更正。
+- **F5**：059_p1 正是 E207 的过冲 case（orig |bias| 0.243→0.871）→ **orig 上被 gravcomp
+  过冲的 case 在 aug 上会崩，可作零成本事前筛选**。
+- **F6**：首版报告把 contact 的方向搞反（统一用 `n_worse=count(Δ>0)`，对「越高越好」的
+  contact 是反的，会把结论翻转），且混用了 `contact_in_mask` 与 `..._3mm_...` 两个字段。
+  已把全部对比算术收进 `gen_E210_four_cell_workbook.py` 单一实现（带 per-metric 方向表），
+  runner 不再自己算。
+- 交付建议：15 条里只有 `075_p1` 的 3 条干净；021_p1/059_p1 共 6 条应剔除；021_p2/073_p1
+  在无 gravcomp 时就已不过门。下一步试 **partial gravcomp ≈ 0.5**。
+
+---
+
+## 进行中：E209 — desk/chair PRG + G1 object gravcomp（plan239 / R295 / Phase 68）
+
+> 与 E207/E208 **共用分支** `feat/E207-bucket-g1only-gravcomp`。与 E208 共用同一批 22 case
+> 但零文件冲突（E208 写 `__aug_*` 任务目录，E209 只往 orig 目录写 `scene_act_E209_*`）；
+> 唯一共享文件是 `review_index.py` 与 `EXPERIMENT_TRACKER.md`。
+> **编号裁定**：E208 已占 E208/plan238/R294；`log/296` 已被 E207 落盘占用 →
+> **E208 用 log297，E209 用 log298**。
+
+### 2026-09-05 · P0–P5 契约就绪（C0/C1/C1b/C1c 全过），P6 full CEM 进行中
+
+- **口径（用户 4 项决策）**：编号 E209；**只跑 G1only 一格**（E206 PRG + 仅 object gravcomp，
+  A0 hand-gate），基线复用 E206 的 22 条 PRG rollout 零重跑；收尾 = 14-gate + z 诊断 +
+  渲染 + 22 例全量人审；**本实验先跑**（8 卡当时全空闲）；**不做 RL 重导出**。
+- **动机不是「把 E207 再做一遍」**。计划期实测：desk/chair 的 z 下沉比 bucket **更重**
+  （宏 bias **−2.517 cm**、18/22 为负、r(ref_lift,bias)=−0.738；对照 E178 bucket −1.820、
+  E207 子集 −1.379）。更关键的是 E207 的「gravcomp = +1.945 cm 常量」有**两重共线**：
+  按质量分层后 mass=2→+1.691(n=7)、mass=5→**+2.836**(n=2)、r(mass,delta)=+0.710；
+  且 E207 里 mass=5 的 pre-bias 均值 −2.08 vs mass=2 的 −1.18，**「收缩型」与「加性型」
+  在 E207 数据上结构性不可分**。E209 的 22 例 mass **全部 5.000 kg（零方差）**而 pre-bias
+  跨 **−5.646…+2.668** → 切断共线。三模型系数 P0 冻结进 `e209_common.PREREG_MODELS`，
+  7 例判别 case 分离 **5.6–9.0σ**（E207 OLS 残差 sd 仅 0.377 cm）。
+- **S⁺/S⁻ 分层由基线机械决定并随代码提交**（防事后辩护）：S⁻ n=18 宏 −3.519；
+  S⁺ n=4 宏 +1.994，恰为 chair006 的 4 例。`chair006_20231003_2_015_p1`(−0.726) **留在 S⁻**
+  —— 不按物体名切。C4b 是**可失败的预注册硬门**，C4c 强制报告全 22 例。
+- **P0**：8/8 退出检查复现（z −2.517 / neg 18/22 / narrow 13/22 / USE 22/22）。补
+  **rules §7 保障 1 的历史欠账**：22 个 dcv3 task dir **在 git 里原本一个文件都没有**，
+  已 `git add -f` 132 文件。
+- **P1**：22/22 sidecar 单变量。除 XML 签名断言外加了**编译层证明** —— MuJoCo 编出的
+  `ngeom/npair/nq/nv/nu/nbody` 逐 case 相等（npair 恰为 18N+24：chair005 60 / desk021 114 /
+  desk023 186 / chair006 204 / desk007 240，与 E206 实装 box 数吻合）。
+- **P2**：22/22 Hydra compose 对称差 **== {scene_name}**。注意**不能沿用 E206 的
+  `ARM_DIFF_KEYS`(12 键)**（那是 noPRG↔PRG 的集合；E209↔E206-PRG 两侧 leg 三件套相同）。
+  额外断言两臂 `contact_hdmi_mask_path` 逐字符相同（eval 从各自 config_act 读掩码）。
+- **P3/P4**：22 行 manifest，trajectory/contact_mask/baseline scene sha256 == E206 交付表。
+  快照**照 E207 拍 dcv3 task dir**（**E206 的快照拍的是源模板，不含真正跑 CEM 的
+  `scene_act_E206_lowgeom_PRG.xml`** —— 已存在的缺口），一份快照覆盖双臂。
+- **P5**：smoke 回读 `config_act.yaml` 证明跑的是 G1：`scene_name` 后缀 `_gravcomp`、
+  hand-gate 是 **A0(0.10/−0.020)** 而非 A2(0.05/−0.015)、leg 2.0/on、actuator gain 500/50，
+  且 model_path 载入的 XML 里 object `gravcomp="1"`。
+- **P6 进行中**：22 条 × 8 卡，预计 ~2.1 h（E206 PRG 同 22 例 wall median 44.0 min）。
+  已挂 20 分钟 watcher（cron，session-only）。P7 工具链已提前写好并 import 自检通过。
+
+**四个实现坑（已避开，均写进代码注释）**
+
+| # | 坑 | 处置 |
+|---|---|---|
+| F1 | `e200_common.build_gravcomp_sidecar` 把输出名**硬编码**成 `scene_act_E199_rubberHull_PRG_gravcomp`（:161），直接套用会往 desk/chair 目录写出名字撒谎的文件 | 自写 12 行 writer；`assert_gravcomp_diff` 逐字复用 |
+| F2 | `e200_common.TIER_RANK` 只有 `{"P1":1}`，E209 manifest 是 `tier=P0` → 派发即 KeyError | 队列必须用 **E199 版**（含 P0/P1/P2） |
+| F3 | 给 `e206_common.ARMS` 加第三 arm 会**静默污染在跑的 E208**（`e208_common:53` import 它）与 E206 自身重跑 | 新写 `eval_E209_g1_gravcomp.py`，`e206_common` 只读 |
+| F4 | 想把 `review_index.py:1011` 的 arm-sweep 元组改成派生式 `SOURCE_OVERRIDES[exp]["arm_sweep"]` —— **写回归测试后发现该 flag 还挂在 E194_FULL/E198/E199/E199P/E200G/E200N 上**，而该 elif 的触发条件是 summary.json *不存在*，派生式会静默改掉这 6 个实验的行为 | **放弃派生式**，保持显式元组只加 `E209ARM`，注释写明原因 |
+
+**一个协作观察**：本分支有并发提交者。我 `git add -f` 的 132 个 scene 文件 + 22 个 sidecar
+被并发的 `95d0000`（E207 RL 导出提交）一并扫走，落进了一个语义不相干的 commit。
+后续提交一律显式列路径，不用 `-a`/`-A`。
+
+---
+
+## 进行中：E208 — desk/chair 平移增强（plan238 / R294）
+
+> 与 E207（bucket G1-only gravcomp）**共用分支** `feat/E207-bucket-g1only-gravcomp`（用户指定不新建分支）。E208 全部改动都在新路径下，与 E207 零文件冲突；P6 的 8 卡 CEM 需给 E207 队列让路。
+
+### 2026-09-05 · P0 契约闭合 · **C0 通过 10/10**
+
+- 范围：E206 交付的 **22 例 USE**（desk021×7 / chair006×5 / desk007×5 / desk023×4 / chair005×1）× trans_0/1/2 = **66 aug 上限**。retarget **v1 优先 + v2 rescue**；**仅 PRG arm**；orig 基线复用 E206 的 22 条 PRG rollout 不重跑；验收 = 数值门 + orig delta + 全量人审。
+- 落地 `E208/e208_common.py`（registry / `OMNIRT_V{1,2}_ENV` / v1-aware `aug_task_name` / rescue 状态机 / PRG-only 命名 / `load_e208_module` / 48 列 FIELDS）+ `test_e208_contract.py`（A1–A10）。
+- **F1（新，R6 实锤）**：`e199_common.OMNIRT_V2_ENV` 只有 **5 个键，缺 `REPLACE_WRIST_WITH_FINGERTIP`**；`pipeline.sh:28` 该键默认 **1**，而 E206 实录是 **0**。照抄 E199 会静默换成「指尖替代腕部」的 IK 目标、不报错、aug 与 orig 系统性错位。A7 改为对着 `run_stage2b_omnirt_v{1,2}_ref_fk.sh` 的 `env` 字面量逐键 diff，六键全显式。
+- **F2（新，比计划预估更宽）**：`object_name` 大小写陷阱不只 desk021。实测 **`desk021 → "Desk021"`、`desk023 → "Desk023"` 都是大写**（合计 11/22 例），而 `parallel_robot_retarget.find_files` 用 `f"*{object_name}*.npz"` **大小写敏感**。任何 lowercase 归一化会静默匹配 0 文件。A4 强制逐字透传 `task_info.json`。
+- **A3 佐证**：`e199_common.aug_task_name` 对 v1 base 确实产出 v2 名（与 v1-aware 版本在 `omnirt_v1` 下不同），provenance 谎言风险确认存在。
+- **A8 队列算术**：66 条 / 8 卡 = 9 轮 → 乐观 7.1 h（中位 47.4 min）、上界 26.6 h（E206 的 `per_task_bound_min=177.2`），均 < 48 h 门。预算继承 E206 `admission_decision.json` 的 frozen 块（1024×32×seed0，compile=false），不新做探针。
+- **A10**：源模板确认仍带 E206 手编代理且**全为 box**（desk007=12 / chair006=10 / desk023=9 / desk021=5 / chair005=2），与 log295 C2 一致 → aug 任务目录自动继承代理成立。
+### 2026-09-05 · P1 播种 orig · **C1 通过 22/22**
+
+- `seed_from_e206.py` 把每例的 `converted/`（3 npz）+ `retargeted/_original.npz` + `trimmed/_original.npz` + `trim_window.json` 播进 `DP/omnirt_v{1,2}/holosoma_{base}/`。**43 个 case-variant**（21 例 v1 × 2 root + 1 例源 v2 × 1 root），215 硬链接 + 43 拷贝，增量仅 7 MB。
+- **两个已知 F15 发散例（chair005_20231030_043_p1 worst |Δ|=1.096、desk023_20231030_019_p1 0.097）都在这 22 例内**，且 chair005 是唯一的 chair005（n=1）。播种是**构造性免疫**：`_original` 根本不重算，所以 F15 的 IK 噪声进不了 aug-vs-orig 的 delta。
+- **F3（新，简化了计划）**：查 `pipeline.sh` 的三个跳过闸后确认——`converted/{task}.npz` 存在跳 convert（:319）、`trimmed/{task}_original.npz` 存在跳 holosoma trim（:403）、`parallel_robot_retarget.py:266-267` 按输出文件短路。所以播种后 **convert 与 trim 都不会跑**，`_original` 只作为 trans_k 的 warm-start 被读取。**推论**：`trim_start` 必然与 E206 相同 → E206 的 3cm mask 逐帧有效 → 驱动改用 `--skip-contact --skip-spider`，**mask 完全不重算**，override 继续指向 E206 那一份（单一权威，无第二份可漂移）。计划里原写的「播种 mask 副本」不需要了。
+- **F4（新，R4 因此加强）**：E206 的 3cm mask npz 是**自描述三时间轴**结构 —— `raw_*`(=untrimmed_frames)、`spider_*`(=trimmed_frames，与 `trajectory_kinematic.npz` 的 qpos 逐帧对齐)、`eval_*`(=trimmed×50/30)，且内嵌 `trim_start / ref_fps / eval_fps / threshold_m`。最初只取了 `list(keys)[0]`= raw 轴，帧数对不上 trimmed 让人误以为不对齐。R4 改为断言**内嵌 `trim_start` == 播种窗口**（这才是「mask 可复用」的真正充要条件）+ 三轴分别对齐 + `threshold_m==0.03`，22/22 全过。
+- **绝不能传 `--force`**：它会重算 `_original`，构造性免疫立刻失效。已写进 `seed_from_e206.py` 与 `run_upstream_retarget.py` 的注释。
+### 2026-09-05 · P2 探针 + P3 放量 · **G1/G2/G3 通过，两个重要发现，一次操作事故**
+
+- **G1 成本**：每例 6 变体全跑完 **279–384 s**（中位 322 s），远低于 25 min 阈值 → rot 变体的开销可忽略，**不需要给 holosoma 打 opt-in 补丁**。
+- **G2 产率**：探针 15/15 trans 全可行；放量后 **trans 63/66**（60 `v1_ok` + 3 `source_v2_ok` + **3 真 CVXPY infeasible**：chair006_20231003_1_005_p1/trans1、chair006_20231003_2_011_p2/trans0、desk021_20231011_010_p2/trans0）→ P4 rescue 对象。v1 下 desk/chair 的平移增强产率 **95.5%**，与 E199 box pilot 的悲观预期相反。
+- **G3 构建**：探针 15/15 aug 任务建成，`yaw=0.00deg`、PRG pair 数 = 18×N 逐例正确。`build_arm_scenes.build_one` 靠 `target_task` 列落到 aug 目录，**E206 脚本零改动**复用成立。
+
+#### F6（重大，推翻既有结论）：旋转增强从来没跑起来过，E199「系统性不可达」是误判
+
+- 根因：holosoma `src/utils.py:346` 的 `R.from_euler("z", rotation_list)`，`rotation_list` 是 `(N,)`，而 **scipy 1.17.1 要求 `(N,1)`**，抛 `ValueError: Expected last dimension of 'angles'...`，**发生在任何 IK 求解之前**，且会终止整个文件的处理（所以 `rot_1` 连尝试都没有过）。
+- 证据（E199 全量日志实测）：`rot_0` 尝试 **97** 次、`rot_1` **0** 次、产出 rot npz **0** 个（对照 trans npz **582** 个）、全实验只有 **1** 条真正的 `[skip] ... infeasible`。
+- 影响面：E199 log286 的「旋转档位系统性不可达」、E202 继承的 trans-only 理由、跟踪器对应行、记忆文件 `omniretarget-object-augmentation` 全部需修正。`trans_*` 不受影响，因为 `rotation_initial=0` 直接短路该分支。
+- 已修：holosoma `9e544b1`（`rotation_list[:, None]`）。语义验证 `E208/test_rotation_fix.py` **9/9**：起动帧前保持满角、之后按 `rotation_tau=25` 指数衰减、位置不受影响、四元数保持单位模、`rotation_initial=0` 严格 no-op、rot_1 与 rot_0 镜像。顺带确认 **rot_* 不是纯旋转**（每档还带 0.2 m 侧移，且 yaw 用 tau=25 而位移用 tau=50）。
+- **用户裁定：E208 扩到 5 变体**（trans_0/1/2 + rot_0/1）。`BUILD_VARIANTS` 与 `POTENTIAL_AUG_TASKS=110` 已入契约，L 阶梯改为按比例（L0≥83% / L1≥67% / L2≥38%）以保持 plan238 三变体阈值的语义。
+
+#### F7（新，E199/E202 也踩了但没发现）：增强位移在裁剪窗口开启前就衰减掉了
+
+- 增强扰动的是**接近段**，从 `object_moving_frame_idx` 起按 `translation_tau=50` 帧指数衰减；SPIDER 只拿到接触裁剪后的窗口，所以 **`trim_start` 越晚，SPIDER 看到的残余位移越小**。实测 chair005（trim_start=113）只剩 **0.023 m**，对得上 `0.2×exp(-109/50)`。
+- 横向实测（**不是 desk/chair 独有，且此前无任何实验对此设门**）：E199 fullscale n=249 min 0.083 m、21 个 <0.18 m（8.4%）；E202 bucket n=73 min 0.074 m、24 个 <0.18 m（**33%**）；E208 探针 n=15 min 0.023 m。
+- 结论：plan238 写的 `approach_trans_offset_m_max ∈ [0.18,0.22]` **作为硬门是错的**（会判掉 E202 已交付的 1/3）。改为：① 把有效位移分布作为 C3 的一等输出；② 只对「根本不算增强」设下限 `EFFECTIVE_AUG_FLOOR_M = 0.05`（低于 E199/E202 交付过的任何值，不追溯否定它们），低于它标 `built_degenerate_offset`。chair005 的 3 个变体全部落在门下 —— 它们是 orig 的近重复，会虚增数据集并让 C4 的 delta 假性变好。**chair005 是 n=1 物体，这条待 P5 拿到全量数据后需要用户裁定。**
+
+#### 事故：并发跑了两个 retarget 实例（已处置，无数据损失）
+
+- 原因：等待循环写成固定次数 sleep（最多 9 min）而非等进程真正退出，误判 P3 已结束就启动了第二个实例；**且 `kill -0` 对僵尸进程也返回成功**（P3 结束后因 nohup 父 shell 已退出而变成 `Z` 态，导致后续等待循环同样卡住）。
+- 后果：两实例在同物体的 `sync_generated_object_model`（`cp -a`）与 `ensure_g1_object_xml`（首写）上竞争 —— 正是 `run_upstream_retarget.py` 按物体分组要规避的那个 hazard。
+- 损害范围（按 mtime 实证，非假设）：`_original` **未受影响**（上游按文件短路，从不重写）→ C1 成立；`*_trans_*` **未受影响**（4 个探针 case 的 trans mtime 全在 00:51–01:21，早于第二实例的 01:40）→ 63/66 trans 成立；只有 `*_rot_*`（01:31–01:56，跨越重叠窗口）来源不确定。
+- 处置：`quarantine_rot_npz.py` 把 24 个 rot npz **隔离而非删除**（留证，且日后若测出 aug IK 不确定性可与干净重跑做 diff），单实例重算 rot。
+- **待改**：等待逻辑必须检查进程**状态**（排除 `Z`）而不只是存在性。
+
+- **下一步**：rot 重算完 → P4 v2 rescue（3 个真 infeasible trans + rot 侧的 infeasible）→ P5 建任务/场景/override + 快照 + 冻结 manifest。
+
+---
+
+## 已收口：E206 — desk+chair 走 dcv3 全流程 · **PARTIAL SUCCESS（偏强）**
 
 ### 2026-09-04 · P8–P10 收口：CEM 全成 / C5a+C5b 双过 / 人审 / RL 交付
 

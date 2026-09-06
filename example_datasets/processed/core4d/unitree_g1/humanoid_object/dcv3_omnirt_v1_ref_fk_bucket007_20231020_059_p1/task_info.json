@@ -1,0 +1,23 @@
+{
+  "source_scene": "example_datasets/processed/core4d/unitree_g1/humanoid_object/bucket007_person1/scene.xml",
+  "source_qpos": "workspace/core4d/results/E174/s3_retarget/omnirt_v1/ref_fk/results/omnirt_v1_ref_fk/holosoma_dcv3_omnirt_v1_ref_fk_bucket007_20231020_059_p1/trimmed/20231020-059-person1-Bucket007_with_obj_original.npz",
+  "task": "dcv3_omnirt_v1_ref_fk_bucket007_20231020_059_p1",
+  "data_id": "0",
+  "date": "20231020",
+  "seq": "059",
+  "person": "person1",
+  "object_name": "Bucket007",
+  "object_model_rel": "bucket/bucket007_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    -0.6075753569602966,
+    0.08715572208166122,
+    0.28610220551490784
+  ],
+  "object_initial_quat": [
+    0.5591697096824646,
+    0.5657198429107666,
+    0.42852675914764404,
+    0.42855000495910645
+  ]
+}

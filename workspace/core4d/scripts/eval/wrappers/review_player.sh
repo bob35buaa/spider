@@ -21,6 +21,11 @@
 #   proxy + omnirt_v1 trajectory, only the reward arm differs. Live-qpos playback; use
 #   the 实验/arm filters to A/B/C compare. TSV built by build_arm_review_tsv.py (no re-score).
 #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E204ARM [--port 8080]
+# E205 = the G1A2 arm of that sweep alone (27 cases), when you don't want the
+#   noPRG/PRG rows alongside. E205 has no eval/*_case_metrics.tsv of its own --
+#   its metrics live in E204's three_arm set -- so this is a filtered view of the
+#   same TSV, not a separate scoring run.
+#   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E205 [--port 8080]
 # E206ARM = two-arm ablation on the 65 desk/chair move2 cases (plan236/log295):
 #   noPRG / PRG per case on the hand-placed lowgeom proxy; both arms are fresh
 #   E206 rollouts scored through one code path, so the comparison is symmetric.

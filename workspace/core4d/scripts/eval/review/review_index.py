@@ -129,6 +129,33 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E207ARM = four-arm compare on the 9 E207 bucket cases (plan237/log296):
+    # PRG(E178) / noPRG(E204) / G1A2(E205) / G1only(E207). Read along the two
+    # single-variable contrasts: PRG->G1only isolates object gravcomp, and
+    # G1only->G1A2 isolates the A2 hand-gate. Only the G1only arm has an mp4.
+    # TSV built (no re-scoring) by E207/build_e207_arm_review_tsv.py.
+    #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E207ARM
+    "E207ARM": {
+        "result_exp": "E207",
+        "eval_subdir": "four_arm",
+        "case_metrics": "e207_arm_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
+    # E205 = just the G1A2 arm of the E204ARM sweep, for looking at E205 on its own
+    # instead of A/B/C against noPRG/PRG. Same TSV, filtered by `arm`.
+    # E205 never wrote its own s6_downstream/eval/*_case_metrics.tsv -- its metrics
+    # live in E204's three_arm set -- which is why plain `E205` used to report
+    # "never wired into the review player".
+    #   review_player.sh E205      # G1A2 only (27 cases)
+    #   review_player.sh E204ARM   # all three arms (81 rows)
+    "E205": {
+        "result_exp": "E204",
+        "eval_subdir": "three_arm",
+        "case_metrics": "e204e205_arm_case_metrics.tsv",
+        "arm": "G1A2",
+        "threshold_exp": "E178",
+    },
     # E206ARM = two-arm ablation on the 65 desk/chair move2 cases (plan236/log295):
     # noPRG / PRG as a 2-arm sweep per case, same hand-placed lowgeom proxy and
     # same rubber-hull hands -- the only difference is the 16N leg<->object pairs.
@@ -140,6 +167,38 @@ SOURCE_OVERRIDES = {
         "result_exp": "E206",
         "eval_subdir": "two_arm",
         "case_metrics": "e206_arm_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
+    # E208AUG = desk/chair object augmentation (plan238/log297): orig + trans0/1/2
+    # + rot0/1 as a 6-arm sweep over the 21 delivered cases (chair005 excluded --
+    # its trim window opens so late that every variant decays to 2.3 cm). The
+    # rot arms are the first rotation-augmented rollouts this repo has ever
+    # produced; E199/E202 reported rotation as infeasible, which turned out to be
+    # an upstream scipy shape crash before any IK (log297 F6, holosoma 9e544b1).
+    # orig rows reuse E206's PRG rollouts and carry their E206 human verdict as a
+    # prefill, so the reviewer sees what the same demonstration was judged before
+    # augmenting. TSV built (no re-scoring) by E208/build_aug_review_tsv.py.
+    # Opt-in via --exps E208AUG.
+    "E208AUG": {
+        "result_exp": "E208",
+        "eval_subdir": "aug",
+        "case_metrics": "e208_aug_case_metrics.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E206",
+    },
+    # E209ARM = two-arm compare on the 22 delivered desk/chair cases (plan239/log298):
+    # E206 PRG vs the same thing + object gravcomp (G1). Single variable: the
+    # object body's gravcomp 0 -> 1; the scenes are otherwise byte-identical.
+    # BOTH arms carry an mp4 (PRG reuses E206's renders), so this is a real
+    # side-by-side A/B -- which matters because gravcomp's characteristic failure
+    # is a weightless "floating / ghost-carried" object that no numeric gate sees.
+    # TSV built (no re-scoring) by E209/build_e209_arm_review_tsv.py.
+    # Opt-in via --exps E209ARM.
+    "E209ARM": {
+        "result_exp": "E209",
+        "eval_subdir": "two_arm",
+        "case_metrics": "e209_arm_case_metrics.tsv",
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
@@ -966,9 +1025,15 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM"):
-            # arm sweeps (E204ARM 3-arm, E206ARM 2-arm) have no `evaluated`-style
-            # summary.json; cross-check against the index itself like E199/E200.
+        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E208AUG", "E209ARM", "E205"):
+            # arm sweeps (E204ARM 3-arm, E206ARM/E209ARM 2-arm, E207ARM 4-arm,
+            # E208AUG 6-arm) and the
+            # single-arm E205 view have no `evaluated`-style summary.json; cross-check
+            # against the index itself like E199/E200.
+            # NB: deliberately an explicit tuple, not `SOURCE_OVERRIDES[exp]["arm_sweep"]`.
+            # That flag is also set on E194_FULL/E198/E199/E199P/E200G/E200N, which do
+            # not belong in this branch -- deriving the condition from it silently
+            # changes their behaviour whenever their summary.json is absent.
             evaluated = len(recs)
             npass = sum(1 for r in recs if r.numeric_release_pass)
         elif exp == "E197":

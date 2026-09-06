@@ -1,0 +1,29 @@
+{
+  "stage": "full",
+  "rows": 15,
+  "expected": 15,
+  "shards": {
+    "A": 8,
+    "B": 7
+  },
+  "by_host": {
+    "lshb-k8s-al-sh-gpu-rdma-prod-103": {
+      "n": 7,
+      "median_min": 46.9,
+      "min_min": 32.1,
+      "max_min": 72.9
+    },
+    "lshb-qs-u3x6-6": {
+      "n": 8,
+      "median_min": 43.9,
+      "min_min": 29.1,
+      "max_min": 71.3
+    }
+  },
+  "wall_median_min": 46.7,
+  "C4_wall_window_min": [
+    33.0,
+    55.0
+  ],
+  "problems": []
+}
