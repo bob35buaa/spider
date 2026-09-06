@@ -57,6 +57,7 @@ import csv
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -223,6 +224,36 @@ def rel(path: Path) -> str:
         return p.relative_to(REPO).as_posix()
     except ValueError:
         return p.as_posix()
+
+
+#: `results/` is a symlink to external storage, so several inherited columns
+#: (contact_mask, stage2b_result_root) and all partner npz paths come through as
+#: absolute /mnt/... paths. Rewrite anything that resolves under the results tree
+#: (or the repo) to a repo-relative path -- matching how trajectory/scene_act/
+#: cem_result_npz are already stored, and keeping the export machine-portable.
+RESULTS_REAL = os.path.realpath(REPO / "workspace/core4d/results")
+REPO_REAL = os.path.realpath(REPO)
+
+
+def to_repo_rel(value: str) -> str:
+    """Absolute path under results/ or repo -> repo-relative; else unchanged."""
+    if not isinstance(value, str) or not value.startswith("/"):
+        return value
+    rp = os.path.realpath(value)
+    if rp == RESULTS_REAL or rp.startswith(RESULTS_REAL + os.sep):
+        return ("workspace/core4d/results/" + rp[len(RESULTS_REAL) + 1:]).rstrip("/")
+    if rp == REPO_REAL or rp.startswith(REPO_REAL + os.sep):
+        return rp[len(REPO_REAL) + 1:]
+    return value  # genuinely outside the repo: leave absolute rather than lie
+
+
+def norm(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Copy of each row with every absolute in-repo path made repo-relative.
+
+    Applied only at write time; in-memory dicts keep absolute paths so file I/O
+    during processing resolves regardless of the working directory.
+    """
+    return [{k: to_repo_rel(v) for k, v in row.items()} for row in rows]
 
 
 def expected_scene_name(exp: str, arm: str) -> str:
@@ -473,9 +504,9 @@ def main() -> int:
     (staging / "partner_omnirt").mkdir(parents=True)
 
     source_path = staging / "rl_export_input.tsv"
-    write_tsv(source_path, rows, fields)
+    write_tsv(source_path, norm(rows), fields)
     (staging / "rl_export_input.json").write_text(
-        json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(norm(rows), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     partner_rows, audits, blocked = [], [], []
     for src in rows:
@@ -508,7 +539,7 @@ def main() -> int:
             src, source_evidence, source_provenance,
             prow, partner_evidence, partner_provenance))
 
-    write_tsv(staging / "partner_resolution_audit.tsv", audits, E206X.ALIGNMENT_FIELDS)
+    write_tsv(staging / "partner_resolution_audit.tsv", norm(audits), E206X.ALIGNMENT_FIELDS)
     # A resolved-but-misaligned partner is a real defect; a structurally blocked
     # one is a reported scope gap, not a failure (E206's distinction).
     misaligned = [a for a in audits if a["alignment_status"] not in ("RL_EXPORT_READY", BLOCKED)]
@@ -519,18 +550,18 @@ def main() -> int:
 
     pdir = staging / "partner_omnirt"
     partner_manifest = pdir / "rl_partner_omnirt_manifest.tsv"
-    write_tsv(partner_manifest, partner_rows, PARTNER.PARTNER_FIELDS)
+    write_tsv(partner_manifest, norm(partner_rows), PARTNER.PARTNER_FIELDS)
     (pdir / "rl_partner_omnirt_manifest.json").write_text(
-        json.dumps(partner_rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(norm(partner_rows), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     paired_fields = fields + [f for f in PARTNER.PAIRED_EXTRA_FIELDS if f not in fields]
     manifest_hash = sha256(partner_manifest)
     paired = [PARTNER.paired_row(s, p, manifest_ref=rel(partner_manifest),
                                  manifest_hash=manifest_hash, repo=REPO)
               for s, p in zip(rows, partner_rows)]
-    write_tsv(staging / "paired_rl_export_input.tsv", paired, paired_fields)
+    write_tsv(staging / "paired_rl_export_input.tsv", norm(paired), paired_fields)
     (staging / "paired_rl_export_input.json").write_text(
-        json.dumps(paired, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(norm(paired), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     ready = sum(1 for p in paired if p.get("paired_rl_export_decision") == "RL_EXPORT_READY")
     summary = {
@@ -583,16 +614,16 @@ def main() -> int:
         prow["source_rl_export_input_sha256"] = published_sha
     pdir = args.out_dir / "partner_omnirt"
     partner_manifest = pdir / "rl_partner_omnirt_manifest.tsv"
-    write_tsv(partner_manifest, partner_rows, PARTNER.PARTNER_FIELDS)
+    write_tsv(partner_manifest, norm(partner_rows), PARTNER.PARTNER_FIELDS)
     (pdir / "rl_partner_omnirt_manifest.json").write_text(
-        json.dumps(partner_rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(norm(partner_rows), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest_hash = sha256(partner_manifest)
     paired = [PARTNER.paired_row(s, p, manifest_ref=rel(partner_manifest),
                                  manifest_hash=manifest_hash, repo=REPO)
               for s, p in zip(rows, partner_rows)]
-    write_tsv(args.out_dir / "paired_rl_export_input.tsv", paired, paired_fields)
+    write_tsv(args.out_dir / "paired_rl_export_input.tsv", norm(paired), paired_fields)
     (args.out_dir / "paired_rl_export_input.json").write_text(
-        json.dumps(paired, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(norm(paired), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     validation = {
         **summary,
