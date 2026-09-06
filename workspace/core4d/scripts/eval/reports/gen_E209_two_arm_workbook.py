@@ -44,6 +44,7 @@ from typing import Any
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 REPO = Path(__file__).resolve().parents[5]
 for _p in (
@@ -76,15 +77,30 @@ ZSUM = EVAL / "e209_object_z_diff_summary.json"
 ARMS = ("prg", "g1")
 ARM_TITLE = {"prg": "PRG (E206 基线)", "g1": "G1 (PRG+gravcomp)"}
 
-DECISION_FIELDS = [
-    "track_eef_ori_err_deg_mean",
-    "track_root_ori_err_deg_mean",
-    "track_obj_pos_err_cm_mean",
-    "track_obj_ori_err_deg_mean",
-    "hand_object_physics_contact_in_mask_frac",
-    "hand_object_physics_penetration_3mm_frame_frac",
-    "leg_penetration_frac",
-]
+#: All 14 funnel gates in E201 order: 4 hard then 10 banded. `paired_delta` and
+#: `per_gate` both report the full set -- an earlier version showed only a
+#: 7-metric hand-picked subset, which let a reader assume the untabulated gates
+#: were unchanged when they had simply not been computed.
+GATES_14: list[tuple[str, str, str]] = (
+    [(g[0], g[1], "hard") for g in FC.HARD_GATES]
+    + [(g[0], g[1], "banded") for g in FC.BANDED_GATES]
+)
+GATE_FIELDS_14 = [f for _n, f, _k in GATES_14]
+
+#: `fall_flag` is boolean; a numeric delta on it is meaningless, so the
+#: paired_delta sheet renders it as a state transition instead.
+BOOL_FIELDS = {"fall_flag"}
+
+
+def gate_label(name: str, kind: str) -> str:
+    return f"{name}*" if kind == "hard" else name
+
+
+def numv(v: Any) -> float:
+    s = str(v).strip().lower()
+    if s in ("true", "false"):
+        return 1.0 if s == "true" else 0.0
+    return f(v)
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -265,51 +281,64 @@ def sheet_funnel(wb, sc: dict) -> None:
 def sheet_per_gate(wb) -> None:
     rows = read_tsv(PER_GATE)
     ws = wb.create_sheet("per_gate")
-    title(ws, "逐门统计 + 配对 delta（G1 − PRG）",
-          "每个 mean 旁都给 min/max（rule 5：禁止只报均值）。delta 列为零中心梯度："
-          "绿 = G1 改善，红 = G1 退化。注意 obj_pos/obj_ori/leg_pen 是绿的 —— "
-          "gravcomp 在物体侧确实是净收益，代价出在 eef_ori / root_ori。", 12)
-    cols = ["gate", "field",
+    title(ws, f"逐门统计 + 配对 delta（G1 − PRG）— 全 {len(rows)} 门",
+          "4 硬门 + 10 带门全列（kind 列标注）。每个 mean 旁都给 min/max"
+          "（rule 5：禁止只报均值）。delta 列为零中心梯度：绿 = G1 改善，红 = G1 退化。"
+          "注意 obj_pos/obj_ori/leg_pen 是绿的 —— gravcomp 在物体侧确实是净收益，"
+          "代价出在 eef_ori / root_ori。fall 已按 0/1 计入。", 13)
+    cols = ["gate", "kind", "field",
             "prg_mean", "prg_std", "prg_min", "prg_max",
             "g1_mean", "g1_std", "g1_min", "g1_max",
             "paired_delta_mean", "paired_delta_max"]
-    ws.append(["门", "字段", "PRG mean", "PRG std", "PRG min", "PRG max",
+    ws.append(["门", "类型", "字段", "PRG mean", "PRG std", "PRG min", "PRG max",
                "G1 mean", "G1 std", "G1 min", "G1 max", "Δ mean", "Δ max"])
     header(ws, 3, len(cols))
     for r in rows:
-        ws.append([r.get(c, "") if c in ("gate", "field") else f(r.get(c)) for c in cols])
+        ws.append([r.get(c, "") if c in ("gate", "kind", "field") else f(r.get(c))
+                   for c in cols])
+        if r.get("kind") == "hard":
+            for c in (1, 2):
+                ws.cell(ws.max_row, c).fill = PatternFill("solid", fgColor=LIGHT_AMBER)
     last = ws.max_row
     body_font(ws, 4, last)
-    # every banded gate here is lower-is-better except contact
     for i, r in enumerate(rows, start=4):
-        lower = LOWER_BETTER.get(r["field"], True)
-        delta_scale(ws, f"K{i}:K{i}", lower)
+        delta_scale(ws, f"L{i}:L{i}", LOWER_BETTER.get(r["field"], True))
     finish_table(ws, 3, last, len(cols), "E209PerGate")
-    set_widths(ws, {1: 16, 2: 46}, default=11)
+    set_widths(ws, {1: 14, 2: 8, 3: 46}, default=11)
 
 
 def sheet_paired(wb, rollout: list[dict]) -> None:
     by = {(r["arm"], r["case_id"]): r for r in rollout}
     cases = [c for c in C.CASES if ("g1", c) in by and ("prg", c) in by]
+    ncol = 2 + len(GATES_14)
     ws = wb.create_sheet("paired_delta")
-    title(ws, "逐 case 决策指标：G1 − PRG",
-          "正 = G1 更差（除 contact）。eef_ori 一列是本次退化的主因；"
-          "obj_pos 一列是干预的收益。两者必须并列看。", 2 + len(DECISION_FIELDS))
-    ws.append(["case_id", "层"] + [fld.replace("track_", "").replace("_err", "")
-                                   .replace("hand_object_physics_", "")
-                                   .replace("_frame_frac", "").replace("_frac", "")
-                                   for fld in DECISION_FIELDS])
-    header(ws, 3, 2 + len(DECISION_FIELDS))
+    title(ws, "逐 case · 全 14 门：G1 − PRG",
+          "全部 14 门（4 硬门带 * + 10 带门），不是挑出来的子集。"
+          "正 = G1 更差（contact 相反，其为 >= 门）。fall 是布尔，列出状态迁移而非差值。"
+          "eef_ori 列是本次退化主因；obj_pos / obj_ori 列是干预收益 —— 必须并列看。", ncol)
+    ws.append(["case_id", "层"] + [gate_label(n, k) for n, _fld, k in GATES_14])
+    header(ws, 3, ncol)
     for cid in cases:
         p, g = by[("prg", cid)], by[("g1", cid)]
-        ws.append([cid, p["stratum"]] + [f(g[fld]) - f(p[fld]) for fld in DECISION_FIELDS])
+        row: list[Any] = [cid, p["stratum"]]
+        for _n, fld, _k in GATES_14:
+            if fld in BOOL_FIELDS:
+                pv, gv = str(p[fld]).strip(), str(g[fld]).strip()
+                row.append("—" if pv == gv else f"{pv}→{gv}")
+            else:
+                row.append(numv(g[fld]) - numv(p[fld]))
+        ws.append(row)
     last = ws.max_row
     body_font(ws, 4, last)
-    for j, fld in enumerate(DECISION_FIELDS):
-        col = chr(ord("C") + j)
+    for j, (_n, fld, _k) in enumerate(GATES_14):
+        col = get_column_letter(3 + j)
+        if fld in BOOL_FIELDS:
+            for r in range(4, last + 1):
+                ws.cell(r, 3 + j).alignment = Alignment(horizontal="center")
+            continue
         delta_scale(ws, f"{col}4:{col}{last}", LOWER_BETTER.get(fld, True))
-    finish_table(ws, 3, last, 2 + len(DECISION_FIELDS), "E209Paired")
-    set_widths(ws, {1: 34, 2: 6}, default=15)
+    finish_table(ws, 3, last, ncol, "E209Paired")
+    set_widths(ws, {1: 34, 2: 6}, default=12)
 
 
 def sheet_flips(wb, rollout: list[dict]) -> None:

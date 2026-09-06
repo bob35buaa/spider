@@ -74,6 +74,18 @@ classify_12gate = ABL.classify_12gate
 stats = ABL.stats
 
 
+def num(value: Any) -> float:
+    """Numeric view of a rollout cell, coercing the boolean `fall_flag` to 0/1.
+
+    `_finite` returns NaN for "True"/"False", which would drop the fall gate out
+    of every aggregate silently rather than reporting it as 0% / 100%.
+    """
+    s = str(value).strip().lower()
+    if s in ("true", "false"):
+        return 1.0 if s == "true" else 0.0
+    return _finite(value)
+
+
 def arm_paths(arm: str, row: dict[str, str]) -> tuple[Path, Path]:
     case_id = row["case_id"]
     if arm == "g1":
@@ -213,14 +225,20 @@ def main() -> int:
     by = {(r["arm"], r["case_id"]): r for r in rows}
     paired = [r["case_id"] for r in sources if all((a, r["case_id"]) in by for a in ARMS)]
 
+    # All 14 funnel gates, not just the 10 banded ones. E206's runner reported
+    # `BANDED_GATES + body_z`, which silently drops the other three hard gates
+    # (fall / ankle_jerk / obj_speed) from every downstream table.
     per_gate = []
-    for name, field in [(g[0], g[1]) for g in FC.BANDED_GATES] + [("body_z", "body_z_err_p95_m")]:
-        entry: dict[str, Any] = {"gate": name, "field": field}
+    for name, field in ([(g[0], g[1]) for g in FC.HARD_GATES]
+                        + [(g[0], g[1]) for g in FC.BANDED_GATES]):
+        entry: dict[str, Any] = {"gate": name, "field": field,
+                                 "kind": "hard" if any(g[1] == field for g in FC.HARD_GATES)
+                                 else "banded"}
         for arm in ARMS:
-            for k, v in stats([_finite(by[(arm, c)][field]) for c in paired]).items():
+            for k, v in stats([num(by[(arm, c)][field]) for c in paired]).items():
                 entry[f"{arm}_{k}"] = v
         # delta = g1 - prg, i.e. the effect of gravcomp.
-        d = [_finite(by[("g1", c)][field]) - _finite(by[("prg", c)][field]) for c in paired]
+        d = [num(by[("g1", c)][field]) - num(by[("prg", c)][field]) for c in paired]
         ds = stats(d)
         entry.update({"paired_delta_mean": ds["mean"], "paired_delta_std": ds["std"],
                       "paired_delta_min": ds["min"], "paired_delta_max": ds["max"]})
