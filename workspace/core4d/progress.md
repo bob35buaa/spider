@@ -1,5 +1,68 @@
 # CORE4D 当前进度
 
+## 进行中：E212 — desk023 部分补偿扫描（plan242 / R298 / Phase 71）
+
+> 分支 `feat/E207-bucket-g1only-gravcomp`（与 E207–E211 共用）。E212 只往 4 个
+> desk023 dcv3 task dir 写 `scene_act_E212_*`，与 E211 的 desk007 目录零冲突（已核实
+> 这 4 个目录当前无任何 `scene_act_E21*` 文件）。
+
+### 2026-09-06 · plan242 已写，等待实现 P0–P6
+
+**用户口径（4 项已确认）**：① 主门 = 权衡型双门 C1a–C1f；② g 网格照原样 `0.4/0.6/0.8`
+（与 E211 desk007 逐格可比）；③ 本轮**纯诊断**，出片准入过门再议；④ 远端 = E211 同一台
+`lshb-k8s-al-sh-gpu-rdma-prod-103`，共享 /mnt 与 .venv，配置不变。
+**分工**：本机 8 条由 Claude 跑，远端 4 条给用户一条命令自跑。
+
+**规划期诊断结论（全部来自 E209 已交付产物，未跑新 CEM）**：
+
+desk023 与 desk007 是**不同 regime**，不是「换个 case 再跑一遍」：
+
+| | desk007(E211) | desk023(E212) |
+|---|---|---|
+| PRG narrow | 2/5 | **4/4（基线完美）** |
+| G1 narrow | 0/5 | 1/4 |
+| z_bias PRG→G1 | −2.784→+1.116（过冲） | −3.648→**+0.353（近乎归零）** |
+| 逐例 g* 中位 | 0.71 | **0.93** |
+| contact | .880→.764（塌陷） | .910→**.921（改善）** |
+| G1 破的门 | eef_ori+contact+release | **仅 eef_ori(3/4)+eef_pos/hand_pen(1/4)** |
+| fallback 子系统 | body/hand gate | **leg gate** |
+
+⇒ 两条推论：(a) desk023 **没有接触塌陷形态**，E210 F2 的两形态退化成一种；
+(b) z 侧已在 g=1 附近最优，**降 g 只会单调赔 z** ⇒ 这是「拿 z 换 eef_ori」的权衡曲线。
+
+**逐例（fallback 解释 3/4，066_p1 是干净反例）**：
+
+| case | eef_ori PRG→G1 | hand_pen | fallback | narrow |
+|---|---|---|---|---|
+| 066_p1 | 16.71→21.24 | .077→**.303** | **0.007→0.007（持平）** | T→F ← **反例** |
+| 066_p2 | 15.86→16.05 | .185→.106 | **0.000→0.000** | **T→T（唯一存活）** |
+| 005_p1 | 18.78→22.25 | .237→.124 | 0.148→0.207 | T→F |
+| 019_p1 | 16.47→**25.57** | .161→**.329** | 0.048→**0.105** | T→F（最坏，eef_pos 13.4→22.2）|
+
+066_p1 的损伤**不可能**由门回退解释 → 预注册 P5 专门测它。
+
+**分片**：12 行 = shardA 8（本机）+ shardB 4（远端），规则
+`(case_idx+arm_idx)%3==2 → B`。**必须改写 E211 的实现**——`build_manifest.py:130`
+是奇偶 parity，对 12 行会给 6/6 而非 8/4。不用 `i%3==2` 的朴素切法，因为它会把整个
+G08 档（预测最优）塞进远端片，远端一挂丢整档。
+
+### 待办（下一步）
+
+P0–P6（common/scenes/overrides/manifest/快照/smoke+运行时契约）→ 本机 8 条 + 交付远端命令
+→ merge 对账 → P8 评测 → P9 渲染+viser → P10 provenance 入库 → P11 log301/TRACKER/归档。
+
+**实现期必须盯的点**（详见 plan242 §四之一 / §五）：
+- `c1_for()` **必须改写函数体**：E212 的 C1d=`eef_pos∧hand_pen`、C1e=`contact`，
+  与 E211 的 C1d=contact/C1e=release 不是同一组指标，只改 GATES 字典会用错门判 SUCCESS。
+- `A_P2/A_P3` 在 E211 里**没有 `pass` 键**，P2..P5 都要补显式判定。
+- `check_shards` 在非全量下 **early-return**，分片断言静默失效 → 必须全量跑一次留证。
+- `BASELINE_RELEASE_N=4`（desk023 四例 release 全部有限，不像 desk007 有空释放窗）。
+- provenance 走 `report/E212/provenance/` + `git add -f`（results 是符号链接；
+  `.gitignore` 的 `*.json`/`*.xlsx` 会让普通 add 静默漏掉最要紧的文件，E211 F9/F10）。
+- **progress.md 现 1806 行**，远超 rules §14 的 200 行阈值 → P11 归档 E209 及以前。
+
+---
+
 ## 进行中：E210 — bucket007 aug × PRG+G1（plan240 / R296 / Phase 69）
 
 > 与 E207/E208/E209 **共用分支** `feat/E207-bucket-g1only-gravcomp`。E210 只往 E202 的
