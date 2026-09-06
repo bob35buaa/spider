@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import numpy as np
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,8 +37,19 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 REPO = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(REPO / "workspace/core4d/scripts/experiments/E208"))
+sys.path.insert(0, str(REPO / "workspace/core4d/scripts/experiments/E201"))
 
 import e208_common as C  # noqa: E402
+import funnel_config as FC  # noqa: E402
+
+# The full 14-gate funnel caliber (4 hard + 10 banded), taken BY VALUE from
+# funnel_config so E208 reads on the same scale as E204/E205/E206.  This is a
+# superset of both the 6-gate C4 set and the 12-gate review view; all three are
+# shown so the reader can see exactly which caliber produced which number.
+GATE14 = ([(n, f, op, thr, None) for n, f, op, thr in FC.HARD_GATES]
+          + [(n, f, op, nar, wide) for n, f, op, nar, wide in FC.BANDED_GATES])
+GATE14_NAMES = [g[0] for g in GATE14]
+C4_GATES = {"fall", "obj_pos", "obj_ori", "contact", "hand_pen", "leg_pen"}
 
 EVAL_DIR = C.EVAL_DIR
 SUMMARY_JSON = EVAL_DIR / "e208_aug_eval_summary.json"
@@ -87,16 +99,18 @@ def _verdict_fill(ws, row: int, col: int, ok: bool) -> None:
 
 
 def _mark_indicative(ws, row: int, ncol: int, n: int) -> None:
+    """Grey the row and blank its inferential columns. `n` is a CASE count."""
     for c in range(1, ncol + 1):
         ws.cell(row, c).fill = PatternFill("solid", fgColor=GRAY)
-    ws.cell(row, ncol).value = f"indicative (n={n} < {INDICATIVE_MIN_N}); point estimate only"
+    ws.cell(row, ncol).value = (
+        f"indicative ({n} independent cases < {INDICATIVE_MIN_N}); point estimate only")
     ws.cell(row, ncol).font = Font(size=8, italic=True, color="666666")
 
 
 def stratum_sheet(wb: Workbook, name: str, title: str, subtitle: str,
                   cells: dict[str, Any]) -> None:
     ws = wb.create_sheet(name)
-    cols = ["stratum", "n", "orig pass", "aug pass", "pass drop", "McNemar p",
+    cols = ["stratum", "n", "cases", "orig pass", "aug pass", "pass drop", "McNemar p",
             f"HL {PRIMARY}", "mean Δ", "std Δ", "worst Δ", "test", "p", "note"]
     _title(ws, title, subtitle, len(cols))
     ws.append([])
@@ -106,10 +120,12 @@ def stratum_sheet(wb: Workbook, name: str, title: str, subtitle: str,
     for key, cell in sorted(cells.items(), key=lambda kv: -kv[1]["n"]):
         g, m = cell["gates"], cell["metrics"][PRIMARY]
         n = cell["n"]
-        indicative = n < INDICATIVE_MIN_N
+        # independent units are CASES, not rows: each case contributes 5 variants
+        # sharing one orig, and all 5 land in the same offset band (0/21 cross).
+        indicative = cell.get("n_cases", n) < INDICATIVE_MIN_N
         hl = m.get("hl_shift")
         row = [
-            key, n,
+            key, n, cell.get("n_cases", ""),
             round(g["orig_pass_rate"], 3) if g["orig_pass_rate"] is not None else "",
             round(g["aug_pass_rate"], 3) if g["aug_pass_rate"] is not None else "",
             round(g["pass_rate_drop"], 3) if g["pass_rate_drop"] is not None else "",
@@ -127,15 +143,18 @@ def stratum_sheet(wb: Workbook, name: str, title: str, subtitle: str,
         ws.append(row)
         r = ws.max_row
         if indicative:
-            _mark_indicative(ws, r, len(cols), n)
+            _mark_indicative(ws, r, len(cols), cell.get("n_cases", n))
         else:
-            _verdict_fill(ws, r, 5, (g["pass_rate_drop"] or 0) <= 0.15)
-            _verdict_fill(ws, r, 7, hl is not None and hl <= 5.0)
-    for i, w in enumerate([24, 6, 10, 10, 10, 11, 16, 10, 10, 10, 16, 9, 46], 1):
+            _verdict_fill(ws, r, 6, (g["pass_rate_drop"] or 0) <= 0.15)
+            _verdict_fill(ws, r, 8, hl is not None and hl <= 5.0)
+    for i, w in enumerate([24, 6, 7, 10, 10, 10, 11, 16, 10, 10, 10, 16, 9, 46], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
 def sheet_readme(wb: Workbook, summary: dict[str, Any]) -> None:
+    # An older eval_summary.json predates the clustering block; degrade instead of
+    # crashing, so a stale summary still produces a readable workbook.
+    cl = summary.get("clustering") or {}
     ws = wb.active
     ws.title = "README"
     _title(ws, "E208 · desk/chair 物体增强 vs orig（R294）",
@@ -151,6 +170,17 @@ def sheet_readme(wb: Workbook, summary: dict[str, Any]) -> None:
         ("点估计为何用 HL", "n 小且 obj_pos 重尾，均值差会被单个失败 run 拖走；"
                           "HL 是中位数的稳健配对版本"),
         ("n<3 的格", summary["caveats"]["indicative_cells"]),
+        ("⚠ 配对是聚类的",
+         f"{cl.get('n_rows', '?')} 对来自 {cl.get('n_cases', '?')} 个 case（每例 "
+         f"{cl.get('rows_per_case', '?')} 条，共享同一条 orig），且每例的 5 个变体落在"
+         "同一 offset 档。Wilcoxon/McNemar 假设配对独立，故**行级 p 值偏小**；"
+         "点估计不受影响。分层的独立单元数看 cases 列，不是 n 列。"),
+        ("  case 级对照",
+         (f"把每例先塌缩成一个数再检验（{cl.get('n_cases', '?')} 个独立单元）：平均通过率下降 "
+          f"{cl['case_level_mean_pass_rate_drop']:+.3f}，变差/变好/持平 = "
+          f"{cl['case_level_n_cases_worse']}/{cl['case_level_n_cases_better']}/"
+          f"{cl['case_level_n_cases_unchanged']} 例")
+         if cl else "（本次 summary 尚无 clustering 块，重跑 eval 后生成）"),
         ("", ""),
         ("⚠ 三个不同的通过率", "同一批 case 有三个互不相等的数，都对，口径不同："),
         ("  E206 人审", "22/22 USE"),
@@ -302,6 +332,168 @@ def sheet_gates(wb: Workbook, deltas: list[dict[str, str]]) -> None:
     ws.column_dimensions["B"].width = 18
 
 
+
+def gate_eval(row: dict[str, str], name: str, field: str, op: str,
+              thr: float, wide: float | None) -> dict[str, Any]:
+    """One gate's value plus narrow/wide verdicts, with n/a kept distinct from fail."""
+    if op == "fall":
+        fell = str(row.get(field, "")).strip().lower() in ("true", "1")
+        return {"value": 1.0 if fell else 0.0, "narrow": not fell,
+                "wide": not fell, "na": False}
+    value = finite(row.get(field, ""))
+    na = math.isnan(value)
+    return {
+        "value": value,
+        # Convention kept identical to E206/E204 (FC.passes fails a non-finite
+        # value) so the pass counts stay comparable; `na` is carried separately
+        # so a not-applicable gate is visible rather than posing as a failure.
+        "narrow": FC.passes(op, value, thr),
+        "wide": FC.passes(op, value, wide) if wide is not None else FC.passes(op, value, thr),
+        "na": na,
+    }
+
+
+def sheet_gate14_values(wb: Workbook, scored: list[dict[str, str]]) -> None:
+    """Every row's raw value for all 14 gates -- orig and aug side by side."""
+    ws = wb.create_sheet("Gate14Values")
+    cols = (["object", "case_id", "variant", "band"]
+            + GATE14_NAMES
+            + ["narrow 过", "wide 过", "14门全过(narrow)", "narrow 失败门", "n/a 门"])
+    _title(ws, "Gate14Values · 14 门完整数值（4 硬门 + 10 带门）",
+           "阈值取自 funnel_config，与 E204/E205/E206 同一把尺。C4 用的是其中 6 门"
+           "（fall/obj_pos/obj_ori/contact/hand_pen/leg_pen），"
+           "评审 feed 的 12 门是另一子集 —— 三者口径不同，此页给全量原值。", len(cols))
+    ws.append([])
+    ws.append(cols)
+    _hdr(ws, ws.max_row, len(cols))
+
+    order = {"orig": 0, "trans0": 1, "trans1": 2, "trans2": 3, "rot0": 4, "rot1": 5}
+    for row in sorted(scored, key=lambda r: (r["object_key"], r["case_id"],
+                                             order.get(r["aug_variant"], 9))):
+        res = {n: gate_eval(row, n, f, op, thr, wide) for n, f, op, thr, wide in GATE14}
+        failed = [n for n in GATE14_NAMES if not res[n]["narrow"]]
+        nas = [n for n in GATE14_NAMES if res[n]["na"]]
+        ws.append(
+            [row["object_key"], row["case_id"], row["aug_variant"],
+             row.get("offset_band", "")]
+            + [("n/a" if res[n]["na"] else round(res[n]["value"], 4)) for n in GATE14_NAMES]
+            + [sum(1 for n in GATE14_NAMES if res[n]["narrow"]),
+               sum(1 for n in GATE14_NAMES if res[n]["wide"]),
+               "TRUE" if not failed else "FALSE",
+               ",".join(failed), ",".join(nas)])
+        r = ws.max_row
+        for i, n in enumerate(GATE14_NAMES, 5):
+            cell = ws.cell(r, i)
+            if res[n]["na"]:
+                cell.fill = PatternFill("solid", fgColor=GRAY)
+            elif not res[n]["narrow"]:
+                cell.fill = PatternFill("solid", fgColor=RED)
+            elif res[n]["wide"] and n in C4_GATES:
+                cell.fill = PatternFill("solid", fgColor=GREEN)
+        if row["aug_variant"] == "orig":
+            for i in range(1, 5):
+                ws.cell(r, i).font = Font(bold=True)
+    ws.freeze_panes = "E4"
+    for i, w in enumerate([10, 32, 8, 9] + [11] * len(GATE14_NAMES)
+                          + [10, 9, 16, 34, 16], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+
+def sheet_gate14_compare(wb: Workbook, scored: list[dict[str, str]]) -> None:
+    """Per pair, every gate's orig value, aug value and delta."""
+    ws = wb.create_sheet("Gate14Compare")
+    cols = ["object", "case_id", "variant", "band"]
+    for n in GATE14_NAMES:
+        cols += [f"{n} orig", f"{n} aug", f"{n} Δ"]
+    _title(ws, "Gate14Compare · 每一对在 14 门上的 orig / aug / Δ",
+           "红=aug 挂而 orig 过（该门被增强弄挂了）；黄=两侧都挂；绿=aug 过而 orig 挂。"
+           "Δ 的符号按原始指标方向，未按「越小越好」归一化。", len(cols))
+    ws.append([])
+    ws.append(cols)
+    _hdr(ws, ws.max_row, len(cols))
+
+    by_key = {(r["case_id"], r["aug_variant"]): r for r in scored}
+    order = {"trans0": 1, "trans1": 2, "trans2": 3, "rot0": 4, "rot1": 5}
+    pairs = [(k, v) for k, v in by_key.items() if k[1] != "orig"]
+    for (case_id, variant), aug_row in sorted(
+            pairs, key=lambda kv: (kv[1]["object_key"], kv[0][0], order.get(kv[0][1], 9))):
+        orig_row = by_key.get((case_id, "orig"))
+        if orig_row is None:
+            continue
+        line = [aug_row["object_key"], case_id, variant, aug_row.get("offset_band", "")]
+        marks = []
+        for n, f, op, thr, wide in GATE14:
+            a = gate_eval(aug_row, n, f, op, thr, wide)
+            o = gate_eval(orig_row, n, f, op, thr, wide)
+            av = "n/a" if a["na"] else round(a["value"], 4)
+            ov = "n/a" if o["na"] else round(o["value"], 4)
+            dv = ("" if (a["na"] or o["na"])
+                  else round(a["value"] - o["value"], 4))
+            line += [ov, av, dv]
+            marks.append((o["narrow"], a["narrow"]))
+        ws.append(line)
+        r = ws.max_row
+        for i, (o_ok, a_ok) in enumerate(marks):
+            col = 5 + i * 3 + 1          # the "aug" column of this gate
+            if o_ok and not a_ok:
+                ws.cell(r, col).fill = PatternFill("solid", fgColor=RED)
+            elif not o_ok and not a_ok:
+                ws.cell(r, col).fill = PatternFill("solid", fgColor=AMBER)
+            elif not o_ok and a_ok:
+                ws.cell(r, col).fill = PatternFill("solid", fgColor=GREEN)
+    ws.freeze_panes = "E4"
+    for i, w in enumerate([10, 32, 8, 9] + [10] * (3 * len(GATE14_NAMES)), 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+
+def sheet_gate14_summary(wb: Workbook, scored: list[dict[str, str]]) -> None:
+    ws = wb.create_sheet("Gate14Summary")
+    cols = ["门", "指标", "op", "narrow", "wide", "在 C4 的 6 门内",
+            "orig 过/21", "aug 过/105", "orig 过率", "aug 过率", "过率差",
+            "orig过→aug挂", "orig挂→aug过", "Δ 中位", "Δ p90", "n/a 数"]
+    _title(ws, "Gate14Summary · 逐门汇总（哪一道门真的动了）",
+           "orig 分母 21（每例一条），aug 分母 105。「过率差」= orig 过率 − aug 过率，正值表示增强后变差。", len(cols))
+    ws.append([])
+    ws.append(cols)
+    _hdr(ws, ws.max_row, len(cols))
+
+    by_key = {(r["case_id"], r["aug_variant"]): r for r in scored}
+    origs = [r for r in scored if r["aug_variant"] == "orig"]
+    augs = [r for r in scored if r["aug_variant"] != "orig"]
+    for n, f, op, thr, wide in GATE14:
+        o_pass = sum(1 for r in origs if gate_eval(r, n, f, op, thr, wide)["narrow"])
+        a_pass = sum(1 for r in augs if gate_eval(r, n, f, op, thr, wide)["narrow"])
+        lost = gained = 0
+        deltas: list[float] = []
+        for a in augs:
+            o = by_key.get((a["case_id"], "orig"))
+            if o is None:
+                continue
+            ra, ro = gate_eval(a, n, f, op, thr, wide), gate_eval(o, n, f, op, thr, wide)
+            if ro["narrow"] and not ra["narrow"]:
+                lost += 1
+            if not ro["narrow"] and ra["narrow"]:
+                gained += 1
+            if not (ra["na"] or ro["na"]):
+                deltas.append(ra["value"] - ro["value"])
+        na = sum(1 for r in scored if gate_eval(r, n, f, op, thr, wide)["na"])
+        o_rate = o_pass / len(origs) if origs else math.nan
+        a_rate = a_pass / len(augs) if augs else math.nan
+        arr = np.array(deltas) if deltas else np.array([math.nan])
+        ws.append([n, f, op, thr, wide if wide is not None else "",
+                   "✓" if n in C4_GATES else "",
+                   o_pass, a_pass, round(o_rate, 3), round(a_rate, 3),
+                   round(o_rate - a_rate, 3), lost, gained,
+                   round(float(np.nanmedian(arr)), 4),
+                   round(float(np.nanpercentile(arr, 90)), 4), na])
+        r = ws.max_row
+        if lost:
+            ws.cell(r, 12).fill = PatternFill("solid", fgColor=RED)
+        _verdict_fill(ws, r, 11, (o_rate - a_rate) <= 0.15)
+    for i, w in enumerate([12, 46, 5, 9, 8, 14, 11, 11, 10, 10, 9, 13, 13, 10, 10, 7], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=OUT_XLSX)
@@ -328,9 +520,12 @@ def main() -> int:
     stratum_sheet(wb, "ByObjectVariant", "按 物体 × 变体（20 格）",
                   "多数格 n 很小，按规则强制 indicative —— 灰底、数值带 ~、不出 p 值",
                   strata["by_object_variant"])
+    scored = C.read_tsv(EVAL_DIR / "e208_aug_rollout.tsv")
+    sheet_gate14_summary(wb, scored)
+    sheet_gate14_values(wb, scored)
+    sheet_gate14_compare(wb, scored)
     sheet_per_case(wb, deltas)
     sheet_f15(wb, deltas, summary)
-    sheet_gates(wb, deltas)
 
     out = C.repo_path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

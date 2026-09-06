@@ -404,9 +404,17 @@ def stratify(deltas: list[dict[str, Any]]) -> dict[str, Any]:
     for level, cells in groups.items():
         out[level] = {}
         for key, rows in sorted(cells.items()):
+            # The 105 pairs are 21 cases x 5 variants sharing 21 orig rollouts, and
+            # every case's 5 variants land in the SAME offset band (measured: 0/21
+            # cross bands).  So a stratum's independent unit count is its CASE count,
+            # not its row count -- `by_offset_band.weak` has 10 rows but 2 cases.
+            # `indicative` therefore keys on cases; keying on rows would never fire.
+            n_cases = len({r["case_id"] for r in rows})
             cell: dict[str, Any] = {
                 "n": len(rows),
-                "indicative": len(rows) < INDICATIVE_MIN_N,
+                "n_cases": n_cases,
+                "rows_per_case": round(len(rows) / n_cases, 2) if n_cases else None,
+                "indicative": n_cases < INDICATIVE_MIN_N,
                 "gates": mcnemar([(bool(r["orig_all_gates_pass"]), bool(r["aug_all_gates_pass"]))
                                   for r in rows]),
                 "metrics": {},
@@ -448,6 +456,59 @@ def deltas_vs_orig(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 if math.isfinite(a) and math.isfinite(b) and abs(b) > 1e-9 else math.nan
             )
         out.append(row)
+    return out
+
+
+def cluster_check(deltas: list[dict[str, Any]]) -> dict[str, Any]:
+    """The pairs are clustered by case; report a case-level test alongside.
+
+    Wilcoxon and McNemar assume independent pairs.  Here 105 pairs come from 21
+    cases, each contributing 5 variants that share ONE orig rollout, so the
+    row-level p-values are anti-conservative -- they treat 105 correlated
+    observations as 105 independent ones.  The point estimates are unaffected.
+
+    The honest companion test collapses each case to one number first (its mean
+    aug pass rate, and its median aug-vs-orig delta over its own variants), then
+    tests those 21 independent units.
+    """
+    by_case: dict[str, list[dict[str, Any]]] = {}
+    for row in deltas:
+        by_case.setdefault(row["case_id"], []).append(row)
+
+    case_pass_delta: list[float] = []
+    case_metric_delta: list[float] = []
+    for rows in by_case.values():
+        orig = 1.0 if bool(rows[0]["orig_all_gates_pass"]) else 0.0
+        aug = sum(1.0 for r in rows if r["aug_all_gates_pass"]) / len(rows)
+        case_pass_delta.append(orig - aug)
+        vals = [finite(r[f"delta_{C4_PRIMARY_METRIC}"]) for r in rows]
+        vals = [v for v in vals if math.isfinite(v)]
+        if vals:
+            case_metric_delta.append(float(np.median(vals)))
+
+    out: dict[str, Any] = {
+        "n_rows": len(deltas), "n_cases": len(by_case),
+        "rows_per_case": round(len(deltas) / len(by_case), 2) if by_case else None,
+        "why": ("each case contributes 5 variants that share one orig rollout, so "
+                "row-level Wilcoxon/McNemar p-values are anti-conservative; point "
+                "estimates are unaffected"),
+        "case_level_mean_pass_rate_drop": float(np.mean(case_pass_delta)),
+        "case_level_median_pass_rate_drop": float(np.median(case_pass_delta)),
+        "case_level_n_cases_worse": int(sum(1 for v in case_pass_delta if v > 0)),
+        "case_level_n_cases_better": int(sum(1 for v in case_pass_delta if v < 0)),
+        "case_level_n_cases_unchanged": int(sum(1 for v in case_pass_delta if v == 0)),
+    }
+    out["case_level_metric"] = paired_tests(np.array(case_metric_delta, dtype=float))
+    try:
+        from scipy import stats
+
+        nz = [v for v in case_pass_delta if v != 0]
+        if nz:
+            out["case_level_pass_sign_test_p"] = float(
+                stats.binomtest(sum(1 for v in nz if v > 0), len(nz), 0.5,
+                                alternative="two-sided").pvalue)
+    except Exception as exc:  # noqa: BLE001
+        out["test_error"] = f"{type(exc).__name__}: {exc}"
     return out
 
 
@@ -560,6 +621,7 @@ def main() -> int:
         "rescore_orig": rescore,
         "gate_criterion_vs_e206": criterion_crosscheck({r["case_id"] for r in orig_rows}),
         "strata": strata,
+        "clustering": cluster_check(deltas),
         "C4": c4_verdict(strata),
         "caveats": {
             "chair006_blind3cm": {
@@ -588,8 +650,15 @@ def main() -> int:
           f"n={hl['n']}, {hl.get('primary_test')} p={hl.get('wilcoxon_p', hl.get('sign_test_p'))}")
     for band, cell in sorted(strata["by_offset_band"].items()):
         m = cell["metrics"][C4_PRIMARY_METRIC]
-        print(f"  band {band:8s} n={cell['n']:3d} HL {m['hl_shift']:+.3f} cm"
-              + ("  [indicative]" if cell["indicative"] else ""))
+        print(f"  band {band:8s} n={cell['n']:3d} ({cell['n_cases']} cases) "
+              f"HL {m['hl_shift']:+.3f} cm"
+              + ("  [indicative: <3 cases]" if cell["indicative"] else ""))
+    cl = summary["clustering"]
+    print(f"  clustering: {cl['n_rows']} rows from {cl['n_cases']} cases "
+          f"({cl['rows_per_case']}/case); case-level mean pass drop "
+          f"{cl['case_level_mean_pass_rate_drop']:+.3f}, "
+          f"worse/better/same = {cl['case_level_n_cases_worse']}/"
+          f"{cl['case_level_n_cases_better']}/{cl['case_level_n_cases_unchanged']}")
     print(f"  rescore_orig: {rescore.get('verdict', 'skipped')} "
           f"({rescore.get('n_mismatches', '-')} mismatches)")
     print(f"  C4 verdict: {summary['C4']['verdict']}")
