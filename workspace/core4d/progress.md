@@ -46,6 +46,75 @@ desk023 与 desk007 是**不同 regime**，不是「换个 case 再跑一遍」�
 是奇偶 parity，对 12 行会给 6/6 而非 8/4。不用 `i%3==2` 的朴素切法，因为它会把整个
 G08 档（预测最优）塞进远端片，远端一挂丢整档。
 
+### 2026-09-07 · P7/P8/P9 完成 — C1 FAIL 但 g=0.6 只差 0.26mm
+
+**执行侧全净**：12/12 `run_complete_pending_eval`；双机 median 48.8 min（本机 48.7 / 远端 52.5），
+C4 过；运行时 `body_gravcomp` 12/12 读回 0.4/0.6/0.8；端点重打分零漂移（`endpoint_rescore_drift: []`）。
+
+**g 曲线（desk023 n=4 宏平均）**
+
+| | g=0.0 | g=0.4 | g=0.6 | g=0.8 | g=1.0 |
+|---|---:|---:|---:|---:|---:|
+| \|z_bias\| cm | 3.648 | 2.360 | 1.526 | 0.596 | 0.353 |
+| eef_ori ° | 16.958 | 16.935 | 17.537 | 18.947 | 21.278 |
+| eef_pos cm | 13.413 | 12.450 | 13.214 | 13.947 | 15.732 |
+| contact | .910 | .881 | .908 | .892 | .921 |
+| narrow | 4/4 | 4/4 | 3/4 | 3/4 | 1/4 |
+
+**C1 = FAIL（winners 空），但边距是重点**：
+- **g=0.6 过 5/6 条，只差 C1a 的 0.026 cm**（|z_bias| 1.5263 vs 1.50）。拐点在 g≈0.5。
+- **g=0.4 机器人侧完全无损**（narrow 4/4 同 PRG），但只回收 1/3 的 z。
+- ⚠️ **g=1.0 的 C1a FAIL 是我自己造的舍入假象**：门冻结成 g=1.0 自身 z_mae 的 4 位小数
+  3.1752，真值 3.175202，超 **2e-6 cm**。门不改（P0 冻结），log 里标注；不影响 winners
+  （端点非候选）。**教训**：把门设成某个端点自身的舍入值，会让该端点判负自己。
+
+**预注册**：P1 ✅ R²=0.9908（slope 4.0065 vs 预注册 4.0013）· P2 ❌ 但唯一反向步 −0.023°
+（噪声级，desk023 实质单调，与 desk007 的 6° 乱跳本质不同）· P3 ✅ 066_p2 全 5 档存活 ·
+**P4 ✅ 偏相关 +0.615**（desk007 +0.504），r(g,fallback)=+0.057 → **E211 机制跨族外推成立** ·
+P5 ❌ 066_p1 非单调 → **既非载荷也非回退，第三种未识别机制，登记 core 层缺口**。
+
+⚠️ **P4 的重要限定**：desk023 的 fallback 几乎全是 **leg gate**（desk007 是 body/hand）。
+同一个 `cem_gate_fallback_used` 背后是不同子系统，Stage B′ 的旋钮必须改成 leg 侧，不能照抄。
+
+**P9 视觉（同视频内 sim-vs-ref，f103=t2.06s 由逐帧数值定位）**：损伤是**末段**的。
+019_p1 各档 @f103 eef_ori/eef_pos = prg 7.12°/2.66cm · G04 6.62/6.51 · G06 5.99/5.87 ·
+**G08 45.46/19.43** · **g1 71.74/44.29**。画面上 g≤0.6 双手仍搭在桌沿（同 ref），
+g≥0.8 手明显脱开、接触标记分离。各档 sim 躯干都比 ref 前倾——但那是躯干不是手，
+两者要分开读。末 25% 平均 eef_ori 差（vs PRG）：G04 −0.94、G06 −0.40、G08 +5.85、g1 +27.0。
+
+**产物**：xlsx 6 sheet（README/PerArm/Contrasts/Gates14/PerCase/AllArms）·
+mp4 6 条 · 抽帧 5 张 · viser 在 tmux `spider:E212viser` 端口 **8082**（8080 被 E211 旧进程占）。
+
+### 2026-09-07 · 综合 rl-export（21 case 混合臂）完成
+
+`E212/export_mixed_arm_rl_input.py`，输出 `results/E212/s6_downstream/rl_export`。
+21 case（E206 的 22 减 chair005，用户排除），每 case 一行，逐 case 选臂：
+
+| 物体 | n | 臂 |
+|---|--:|---|
+| chair006 | 5 | E209 G1 |
+| desk021 | 7 | E209 G1 |
+| desk023 | 4 | **E212 G06**（C1 最近档）|
+| desk007 028_p1/028_p2 | 2 | E211 G08 |
+| desk007 030_p2 | 1 | E211 G04 |
+| desk007 032_p2 | 1 | E211 G06 |
+| desk007 034_p1 | 1 | E206 PRG（每 g>0 档都退化）|
+
+**做法（E207 seed-and-override 模板 + E206 partner block）**：每行从 E206 已验证的
+`rl_export_input` 行拷贝，只覆写 arm 相关字段。E206 的 `paired_rl_export_input.tsv`
+sha256（= `e209_common.EXPECTED_SOURCE_SHA256`）作 seed 权威 pin，漂了就报错。
+
+**验证**：schema 是 E206 的严格超集（source 74→84、paired 95→103，共享前缀原序，无缺列）；
+新增 10 列 `arm/arm_experiment/arm_gravcomp/arm_scene_name/arm_selection_reason/
+selection_authority/prior_arm_manual_*`。partner 21/21 `RL_EXPORT_READY`、`PAIR_COMPLETE`，
+全部 `_pN` 翻转、trimmed_npz 全部在盘；**partner 内容与 E206 逐字节一致（除 source 回指列）
+→ 实证 partner 侧 arm-无关**。直接回退例 chair006_20231003_2_015_p1 与 E206 Route B 一致。
+每 case arm→scene_name 断言通过。**只有 034_p1（E206 PRG）保留真实 USE 评审**，其余 G 臂
+标 `NOT_REVIEWED`、E206 评审降级到 `prior_arm_manual_*`。
+
+**claim 边界**：臂选择是逐 case 的、非单一预注册门的产出（desk023 取 g=0.6 是 C1 最近档，
+C1 本身 FAIL）。已写进 summary/validation 的 `claim_boundary`。
+
 ### 待办（下一步）
 
 P0–P6（common/scenes/overrides/manifest/快照/smoke+运行时契约）→ 本机 8 条 + 交付远端命令
