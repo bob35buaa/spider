@@ -1,6 +1,46 @@
 # CORE4D 当前进度
 
-## 进行中：E212 — desk023 部分补偿扫描（plan242 / R298 / Phase 71）
+## ✅ 已完成：E213 — paired-export 选定臂 object-augmentation（plan243 / R299 / Phase 71）
+
+> **2026-09-07 收口**：C4 PASS。source **100/100 cem_ok**（0 超时，merge 无问题，4 机各 25 条
+> 中位 44.9min）；obj_pos HL **+0.213cm** ≪ +5cm 门，fall 全 0，通过率行级/case 级各降 +0.114；
+> 逐臂 HL 全过门（G1+0.159 n60 / G06+0.397 n25 / G08+0.310 / G04+0.004 / PRG 复用 +0.133）。
+> partner **11 case × 5 变体 = 55 trimmed npz**（v1 优先 + v2 rescue）。render 100/100，
+> 视觉抽样 `chair006_..._003_p1 rot0/G1` 干净。规则 7 快照 805 行。
+> 详见 [log301](log/301_E213_paired_export_selected_arm_aug.md)。已 commit。
+
+<details><summary>过程记录（已完成，折叠）</summary>
+
+## E213 — paired-export 选定臂 object-augmentation（plan243 / R299）
+
+> 分支 `experiment/E199-omniretarget-object-augmentation`。目标：让 E212
+> `paired_rl_export_input.tsv` 的 21 个 source case 拿到「与选定臂一致」的 trans+rot 增强。
+> E208 已做源侧增强但只跑 PRG；E213 复用 E208 的 retarget+`__aug_*` 任务，只新生成每 case
+> 选定 g 的 gravcomp scene_act + 按选定臂重跑 CEM。partner 侧（11 例）仅做运动学增强重定向。
+
+### 2026-09-07 · 已实现 + 已启动（32 卡调度）
+
+- **脚本全就位** `scripts/experiments/E213/`：e213_common / build_source_arm_scenes /
+  build_source_overrides / build_manifest / run_source_cem / merge_shards /
+  build_partner_aug / snapshot_E213_scenes.sh / test_e213_contract（**A1–A7 PASS**）。
+  launcher `launch/active/run_E213_shard.sh <A|B|C|D>`。
+- **CPU 契约层全过**：100 选定臂 sidecar（C1 单变量）、100 override（C2 compose diff=={scene_name}
+  抽样过）、100 行 source CEM manifest + 4 shard（A/B/C/D 各 25，round-robin，每 shard 跨全部臂）。
+  smoke 1 行确认加载 scene_act_E209_lowgeom_PRG_gravcomp + parity pass + 3cm mask L/R 42.9/48.3%。
+- **调度**：4×8=32 卡共享 /mnt+.venv。A=本机（已后台启动，8 卡跑 25 行），B/C/D=3 台远端
+  （用户各跑 `run_E213_shard.sh {B,C,D}`）。100 行 ≈ ~3h wall。desk007_034_p1(PRG) 5 行复用 E208。
+- **partner Phase B**：chained 批跑 11 例（seed→pipeline aug v1+v2 rescue→trim），CPU，产运动学 npz。
+- **Phase C eval runner 已建+已验证**：`eval/runners/eval_E213_aug.py`（+wrapper）——每 aug 配对其
+  选定臂 orig（TSV cem_result_npz，非 E206 PRG），复用 6 门标准 + HL/Wilcoxon/sign/McNemar + case 级
+  聚类检验 + per-arm 分层，报 mean/std/worst。n=7 预览跑通 0 fail（obj_pos HL +0.223cm）。
+- **4 shard 全部在跑**（用户已启 B/C/D，32 卡全开）。监控 cron 78ebefaf：全 cem_ok+partner 完成后
+  自动 merge→eval→抽帧→log301+tracker+commit。
+- **待办**：等 CEM 收敛 → Phase C 收口（自动）。
+- **监控要点**：`nohup&` 的 task-notification 只对 wrapper 退出触发，真实进度看 `ps`/manifest/日志。
+
+</details>
+
+## 已完成（前置）：E212 — desk023 部分补偿扫描（plan242 / R298 / Phase 71）
 
 > 分支 `feat/E207-bucket-g1only-gravcomp`（与 E207–E211 共用）。E212 只往 4 个
 > desk023 dcv3 task dir 写 `scene_act_E212_*`，与 E211 的 desk007 目录零冲突（已核实
