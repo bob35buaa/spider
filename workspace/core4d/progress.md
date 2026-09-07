@@ -1,5 +1,15 @@
 # CORE4D 当前进度
 
+## ✅ 已完成：E213-export — 选定臂 aug 32 单元 → dcv3 paired RL 导出（plan244 / R299 / Phase 71）
+
+> **2026-09-08**：`E213_export_aug_cases.xlsx` 挑选的 **32 单元（20 case）**导出为 dcv3 paired RL 输入 →
+> `results/E213/s6_downstream/export/`。source=E213 选定臂 aug CEM；partner=对手同 variant 运动学 trimmed
+> （15 E213 partner_aug + 17 E208 source-aug）；下游 Holosoma re-anchor 保证两人物体一致。
+> **32/32 RL_EXPORT_READY**、对齐 32/32、C4 物理 0 排除、schema 全 dcv3。契约自检 ALL PASS。已 commit。
+> 坑：v2-rescue 单元 source 对齐 trim 的 retarget 树 holosoma 子目录用主变体名(v1)、父目录用 eff(v2)
+> → 改按 (eff 父目录, case_id) glob。详见 [log302](log/302_E213_export_selected_arm_aug_rl.md)。
+> **下一步**：交下游 Holosoma exporter 跑 partner re-anchor + post-reanchor 校验。
+
 ## ✅ 已完成：E213 — paired-export 选定臂 object-augmentation（plan243 / R299 / Phase 71）
 
 > **2026-09-07 收口**：C4 PASS。source **100/100 cem_ok**（0 超时，merge 无问题，4 机各 25 条

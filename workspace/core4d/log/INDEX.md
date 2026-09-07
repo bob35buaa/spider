@@ -1,7 +1,15 @@
 # 实验日志索引
 
-> 自动生成，共 301 个日志文件。
+> 自动生成，共 302 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
+
+## Phase 71 (E213-E213)
+
+| # | 实验 | 日期 | 摘要 | 文件 |
+|---|------|------|------|------|
+| 300 | E211 |  | Desk007 partial gravcomp sweep | [300_E211_desk007_partial_gravcomp_sweep....](300_E211_desk007_partial_gravcomp_sweep.md) |
+| 301 | E213 |  | Paired export selected arm aug | [301_E213_paired_export_selected_arm_aug....](301_E213_paired_export_selected_arm_aug.md) |
+| 302 | E213 |  | Export selected arm aug rl | [302_E213_export_selected_arm_aug_rl.md](302_E213_export_selected_arm_aug_rl.md) |
 
 ## Phase 64 (E201-E201)
 
@@ -616,5 +624,3 @@
 | 297 | E208 |  | Deskchair translation augmentation | [297_E208_deskchair_translation_augmentat...](297_E208_deskchair_translation_augmentation.md) |
 | 298 | E209 |  | Desk chair prg g1 gravcomp | [298_E209_desk_chair_prg_g1_gravcomp.md](298_E209_desk_chair_prg_g1_gravcomp.md) |
 | 299 | E210 |  | Bucket007 aug g1only gravcomp | [299_E210_bucket007_aug_g1only_gravcomp.m...](299_E210_bucket007_aug_g1only_gravcomp.md) |
-| 300 | E211 |  | Desk007 partial gravcomp sweep | [300_E211_desk007_partial_gravcomp_sweep....](300_E211_desk007_partial_gravcomp_sweep.md) |
-| 301 | E213 |  | Paired export selected arm aug | [301_E213_paired_export_selected_arm_aug....](301_E213_paired_export_selected_arm_aug.md) |
