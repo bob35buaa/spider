@@ -1,8 +1,9 @@
 % ============================================================================
-%  Algorithm blocks for the CORE4D human-object retargeting method.
-%  Mirrors the style of:
-%    - Pan et al. 2026 (SPIDER) Algorithm 1  (sampling MPC loop)
-%    - Dhedin et al. 2026 (DynaRetarget) Algorithm 1/2 (FHTO / SBTO)
+%  Algorithm blocks for the human-object retargeting method.
+%  Two contributions are named in the captions and marked in-line:
+%    (C1) Multi-Scale Contact Reward
+%    (C2) Part-wise Penetration Constraints
+%  Pseudocode style follows standard sampling-based MPC / CEM.
 %
 %  Required packages (add to preamble):
 %    \usepackage{algorithm}
@@ -10,22 +11,24 @@
 %    \usepackage{amsmath,amssymb}
 %
 %  Notation
-%    x^ref_{0:T} : kinematic reference from OmniRetarget (qpos, object pose, contact mask m_t)
+%    x^ref_{0:T} : kinematic reference trajectory (qpos, object pose, contact mask m_t)
 %    U          : control knots (PD targets); u_{0:T-1} = interp(U, tau)
 %    N_W        : number of sampled control sequences
-%    Sigma^i    : annealed sampling covariance (SPIDER eq.3; beta1 across iters, beta2 along horizon)
-%    phi_P(x)   : signed distance (grid-SDF, object-local) of robot part-group P to the object
-%    p^e, p^{*,e}: end-effector e contact point and its object-attached target anchor
+%    Sigma^i    : annealed sampling covariance (broad->narrow over iterations & horizon)
+%    phi_P(x)   : signed distance of robot part-group P to the object surface (object-local SDF)
+%    p^e, p^{*,e}: end-effector e contact point and its object-attached anchor point
 %    m^e_t      : reference contact mask for end-effector e at time t
 %    B          : thin surface band [d_lo, d_hi] = [-1mm, +3mm]
+%    theta_P    : per-part signed-clearance threshold (encodes the part's contact role)
 % ============================================================================
 
 % ---------------------------------------------------------------------------
-% ALGORITHM 1 : outer receding-horizon sampling MPC (SPIDER-style backbone
-%               + SDF contact reward + part-wise penetration gate)
+% ALGORITHM 1 : outer receding-horizon sampling MPC (backbone) that uses the
+%               two contributions via the cost/selection subroutine (Alg. 2).
 % ---------------------------------------------------------------------------
 \begin{algorithm}[t]
-\caption{SDF-Guided Sampling MPC for Human--Object Retargeting}
+\caption{Sampling-Based Retargeting with Multi-Scale Contact Reward
+         and Part-wise Penetration Constraints}
 \label{alg:core4d-mpc}
 \begin{algorithmic}[1]
 \Require reference $x^{\mathrm{ref}}_{0:T}$ (qpos, object pose, contact mask $m$),
@@ -38,7 +41,7 @@
     \State $i \gets i+1$;\; update $\Sigma^{i}_{h}$ by anneal schedule ($\beta_1,\beta_2$)
     \For{$j = 1,\dots,N_W$}
       \State $[W]_j \sim \mathcal N(0,\Sigma^{i})$;\;\; $[U^i]_j \gets U^i + [W]_j$
-      \State roll out $x^{j}_{0:H}$ in MuJoCo-Warp from $u^j = \mathrm{interp}([U^i]_j,\tau)$
+      \State roll out $x^{j}_{0:H}$ in the physics simulator from $u^j = \mathrm{interp}([U^i]_j,\tau)$
       \State $J^j,\; \mathbf g^j \gets \Call{CostAndGate}{x^{j}_{0:H}, x^{\mathrm{ref}}}$
              \Comment{Alg.~\ref{alg:cost-gate}}
     \EndFor
@@ -55,12 +58,15 @@
 \end{algorithm}
 
 % ---------------------------------------------------------------------------
-% ALGORITHM 2 : per-sample cost (multi-scale contact reward = coarse Euclidean
-%               anchor attraction + fine SDF surface band; part-wise penetration
-%               penalty) and the gated-elite selection.
+% ALGORITHM 2 : the two contributions.
+%   CostAndGate : per-sample cost = tracking + (C1) Multi-Scale Contact Reward
+%                 + (C2) Part-wise Penetration Constraints (soft layer), plus
+%                 the per-part gate statistics (C2 hard layer).
+%   GatedElite  : constraint-gated elite selection with least-violation fallback.
 % ---------------------------------------------------------------------------
 \begin{algorithm}[t]
-\caption{Cost with Multi-Scale Contact Reward, and Gated-Elite Selection}
+\caption{Multi-Scale Contact Reward and Part-wise Penetration Constraints,
+         with Gated-Elite Selection}
 \label{alg:cost-gate}
 \begin{algorithmic}[1]
 \Function{CostAndGate}{$x_{0:H}, x^{\mathrm{ref}}$}
@@ -68,19 +74,22 @@
   \For{$t = 0,\dots,H$}
     \State $J \mathrel{+}= \underbrace{\big\| (q_t - q^{\mathrm{ref}}_t)\,W_{\text{loc}} \big\|}_{\text{local-frame tracking}}
                          + \underbrace{\alpha_o\,\|\,o_t - o^{\mathrm{ref}}_t\|}_{\text{object pose}}$
-    \For{each end-effector $e$ with contact $m^e_t=1$}   \Comment{\textsc{coarse}: HDMI anchor}
-      \State $r^{\mathrm{c}}_{t,e} \gets g\,\exp\!\big(-\|p^e_t - p^{\star,e}_t\|/\sigma_c\big)$
-             \; (+ palm-orientation term)
-      \State $\phi \gets \phi_{e}(x_t)$   \Comment{\textsc{fine}: object-local grid-SDF}
-      \State $r^{\mathrm{f}}_{t,e} \gets s\,\exp\!\big(-|\phi|/\sigma_f\big)\cdot \mathbf 1[\phi\in B]$
-      \State $J \mathrel{-}= r^{\mathrm{c}}_{t,e} + r^{\mathrm{f}}_{t,e}$
+    \For{each end-effector $e$ with contact $m^e_t=1$}
+             \Comment{\textbf{C1: Multi-Scale Contact Reward}}
+      \State $r^{\mathrm{coarse}}_{t,e} \gets g\,\exp\!\big(-\|p^e_t - p^{\star,e}_t\|/\sigma_c\big)$
+             \Comment{broad scale ($\sigma_c$)}
+      \State $r^{\mathrm{fine}}_{t,e} \gets s\,\exp\!\big(-|\phi_{e}(x_t)|/\sigma_f\big)\cdot \mathbf 1[\phi_e(x_t)\in B]$
+             \Comment{sharp scale ($\sigma_f$)}
+      \State $J \mathrel{-}= r^{\mathrm{coarse}}_{t,e} + r^{\mathrm{fine}}_{t,e}$
     \EndFor
-    \For{each part group $P \in \{\text{hand},\text{body},\text{leg}\}$}   \Comment{part-wise constraint, soft layer}
+    \For{each part group $P \in \{\text{hand},\text{body},\text{leg}\}$}
+             \Comment{\textbf{C2: Part-wise Penetration Constraints}, soft}
       \State $J \mathrel{+}= w_P\,\max\!\big(0,\; \delta_P - \phi_P(x_t)\big)$
     \EndFor
-    \State $J \mathrel{+}= $ E167A body-$z$ / ground-$z$ penetration terms
+    \State $J \mathrel{+}= $ ground-penetration terms (body / foot height $z$)
   \EndFor
-  \For{each part group $P$}                              \Comment{same constraint, hard layer: gate stats}
+  \For{each part group $P$}
+             \Comment{hard}
     \State $g^{\min}_P \gets \min_t \phi_P(x_t)$;\quad
            $g^{\text{vio}}_P \gets \tfrac1H\sum_t \mathbf 1[\phi_P(x_t) < \theta_P]$
   \EndFor
