@@ -1,0 +1,8 @@
+# transient render / LaTeX build artifacts (not deliverables)
+_*.png
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.out
+__pycache__/
