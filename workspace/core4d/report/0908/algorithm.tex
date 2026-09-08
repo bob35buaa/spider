@@ -1,0 +1,103 @@
+% ============================================================================
+%  Algorithm blocks for the CORE4D human-object retargeting method.
+%  Mirrors the style of:
+%    - Pan et al. 2026 (SPIDER) Algorithm 1  (sampling MPC loop)
+%    - Dhedin et al. 2026 (DynaRetarget) Algorithm 1/2 (FHTO / SBTO)
+%
+%  Required packages (add to preamble):
+%    \usepackage{algorithm}
+%    \usepackage{algpseudocode}   % algorithmicx
+%    \usepackage{amsmath,amssymb}
+%
+%  Notation
+%    x^ref_{0:T} : kinematic reference from OmniRetarget (qpos, object pose, contact mask m_t)
+%    U          : control knots (PD targets); u_{0:T-1} = interp(U, tau)
+%    N_W        : number of sampled control sequences
+%    Sigma^i    : annealed sampling covariance (SPIDER eq.3; beta1 across iters, beta2 along horizon)
+%    phi_P(x)   : signed distance (grid-SDF, object-local) of robot part-group P to the object
+%    p^e, p^{*,e}: end-effector e contact point and its object-attached target anchor
+%    m^e_t      : reference contact mask for end-effector e at time t
+%    B          : thin surface band [d_lo, d_hi] = [-1mm, +3mm]
+% ============================================================================
+
+% ---------------------------------------------------------------------------
+% ALGORITHM 1 : outer receding-horizon sampling MPC (SPIDER-style backbone
+%               + SDF contact reward + part-wise penetration gate)
+% ---------------------------------------------------------------------------
+\begin{algorithm}[t]
+\caption{SDF-Guided Sampling MPC for Human--Object Retargeting}
+\label{alg:core4d-mpc}
+\begin{algorithmic}[1]
+\Require reference $x^{\mathrm{ref}}_{0:T}$ (qpos, object pose, contact mask $m$),
+         horizon $H$, samples $N_W$, iters $N$, elite frac $\rho$,
+         min-valid frac $f$, temperature $\lambda$, anneal $\beta_1,\beta_2$, tol $\epsilon$
+\State initialise control knots $U \gets \mathrm{interp}^{-1}(u^{\mathrm{ref}})$
+\For{each simulation step $s = 0,1,\dots$}          \Comment{outer receding horizon}
+  \State $J_{\text{best}} \gets \infty,\; i \gets 0$
+  \While{$i < N$ \textbf{and} not converged}         \Comment{inner CEM}
+    \State $i \gets i+1$;\; update $\Sigma^{i}_{h}$ by anneal schedule ($\beta_1,\beta_2$)
+    \For{$j = 1,\dots,N_W$}
+      \State $[W]_j \sim \mathcal N(0,\Sigma^{i})$;\;\; $[U^i]_j \gets U^i + [W]_j$
+      \State roll out $x^{j}_{0:H}$ in MuJoCo-Warp from $u^j = \mathrm{interp}([U^i]_j,\tau)$
+      \State $J^j,\; \mathbf g^j \gets \Call{CostAndGate}{x^{j}_{0:H}, x^{\mathrm{ref}}}$
+             \Comment{Alg.~\ref{alg:cost-gate}}
+    \EndFor
+    \State $U^{i+1} \gets \Call{GatedElite}{\{J^j\},\{\mathbf g^j\},\{[U^i]_j\},\rho,f,\lambda}$
+           \Comment{Alg.~\ref{alg:cost-gate}}
+    \If{$|J_{\text{best}} - \min_j J^j| < \epsilon$} \State \textbf{break} \Comment{early stop}
+    \EndIf
+    \State $J_{\text{best}} \gets \min_j J^j$
+  \EndWhile
+  \State execute first $n_{\text{exec}}$ controls of $U$;\; advance simulator
+\EndFor
+\State \Return refined dynamically-feasible controls $U^{*}$
+\end{algorithmic}
+\end{algorithm}
+
+% ---------------------------------------------------------------------------
+% ALGORITHM 2 : per-sample cost (multi-scale contact reward = coarse Euclidean
+%               anchor attraction + fine SDF surface band; part-wise penetration
+%               penalty) and the gated-elite selection.
+% ---------------------------------------------------------------------------
+\begin{algorithm}[t]
+\caption{Cost with Multi-Scale Contact Reward, and Gated-Elite Selection}
+\label{alg:cost-gate}
+\begin{algorithmic}[1]
+\Function{CostAndGate}{$x_{0:H}, x^{\mathrm{ref}}$}
+  \State $J \gets 0$
+  \For{$t = 0,\dots,H$}
+    \State $J \mathrel{+}= \underbrace{\big\| (q_t - q^{\mathrm{ref}}_t)\,W_{\text{loc}} \big\|}_{\text{local-frame tracking}}
+                         + \underbrace{\alpha_o\,\|\,o_t - o^{\mathrm{ref}}_t\|}_{\text{object pose}}$
+    \For{each end-effector $e$ with contact $m^e_t=1$}   \Comment{\textsc{coarse}: HDMI anchor}
+      \State $r^{\mathrm{c}}_{t,e} \gets g\,\exp\!\big(-\|p^e_t - p^{\star,e}_t\|/\sigma_c\big)$
+             \; (+ palm-orientation term)
+      \State $\phi \gets \phi_{e}(x_t)$   \Comment{\textsc{fine}: object-local grid-SDF}
+      \State $r^{\mathrm{f}}_{t,e} \gets s\,\exp\!\big(-|\phi|/\sigma_f\big)\cdot \mathbf 1[\phi\in B]$
+      \State $J \mathrel{-}= r^{\mathrm{c}}_{t,e} + r^{\mathrm{f}}_{t,e}$
+    \EndFor
+    \For{each part group $P \in \{\text{hand},\text{body},\text{leg}\}$}   \Comment{part-wise constraint, soft layer}
+      \State $J \mathrel{+}= w_P\,\max\!\big(0,\; \delta_P - \phi_P(x_t)\big)$
+    \EndFor
+    \State $J \mathrel{+}= $ E167A body-$z$ / ground-$z$ penetration terms
+  \EndFor
+  \For{each part group $P$}                              \Comment{same constraint, hard layer: gate stats}
+    \State $g^{\min}_P \gets \min_t \phi_P(x_t)$;\quad
+           $g^{\text{vio}}_P \gets \tfrac1H\sum_t \mathbf 1[\phi_P(x_t) < \theta_P]$
+  \EndFor
+  \State \Return $J,\; \mathbf g = \{(g^{\min}_P, g^{\text{vio}}_P)\}_P$
+\EndFunction
+\Statex
+\Function{GatedElite}{$\{J^j\},\{\mathbf g^j\},\{U_j\},\rho,f,\lambda$}
+  \State valid$_j \gets \bigwedge_P \big[\, g^{\min,j}_P \ge \text{floor}_P \;\wedge\; g^{\text{vio},j}_P \le \tau_P \,\big]$
+         \Comment{per-part AND}
+  \If{$\#\{j:\text{valid}_j\} \ge f\,N_W$}
+    \State $\mathcal E \gets$ top-$\lceil\rho N_W\rceil$ of $\{j:\text{valid}_j\}$ by lowest $J^j$
+  \Else                                                   \Comment{least-violation fallback}
+    \State $\mathcal E \gets$ top-$\lceil\rho N_W\rceil$ by lowest
+           $\big(\text{depth}^j + \text{vio}^j - 10^{-3}\,\tilde J^j\big)$
+  \EndIf
+  \State $w_j \gets \dfrac{\exp(-J^j/\lambda)\,\mathbf 1[j\in\mathcal E]}{\sum_{k\in\mathcal E}\exp(-J^k/\lambda)}$
+  \State \Return $\sum_j w_j\,U_j$                        \Comment{softmax elite refit}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}

@@ -1,0 +1,24 @@
+% ============================================================================
+%  Standalone preview wrapper for algorithm.tex
+%  Compile this file (NOT algorithm.tex) to get a PDF of the two algorithms.
+%
+%  VSCode:  install "LaTeX Workshop" + a TeX distribution (TeX Live / MiKTeX,
+%           or tectonic), open this file, save → auto-builds → PDF preview pane
+%           (Ctrl/Cmd+Alt+V).  See core4d_technical_summary usage notes.
+%  CLI:     latexmk -pdf algorithm_preview.tex     (or)   tectonic algorithm_preview.tex
+%  No install: upload algorithm_preview.tex + algorithm.tex to overleaf.com
+% ============================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}   % provides algorithmicx (\State, \For, \Function, ...)
+
+% algorithm.tex uses \Statex, \Call, \Comment, \Require — all from algpseudocode.
+
+\begin{document}
+
+\input{algorithm.tex}   % pulls in Algorithm 1 (MPC) and Algorithm 2 (cost/gate)
+
+\end{document}
