@@ -158,7 +158,8 @@ def fmt(v: float, kind: str) -> str:
     return f"{v:.3g}"
 
 
-def build_block(cases: list[str], full: dict, e214: dict, title: str) -> list[str]:
+def build_block(cases: list[str], full: dict, e214: dict, title: str,
+                mean_only: bool = False) -> list[str]:
     # per-series case->metrics restricted to `cases`
     per_series: dict[str, dict[str, dict[str, float]]] = {}
     for s in SERIES:
@@ -177,13 +178,22 @@ def build_block(cases: list[str], full: dict, e214: dict, title: str) -> list[st
         cells = []
         for s in SERIES:
             a = agg(series_values(per_series[s], key), direction)
-            cells.append(f"{fmt(a['mean'], kind)}±{fmt(a['std'], kind)} (w {fmt(a['worst'], kind)})")
+            if mean_only:
+                cells.append(fmt(a["mean"], kind))
+            else:
+                cells.append(f"{fmt(a['mean'], kind)}±{fmt(a['std'], kind)} (w {fmt(a['worst'], kind)})")
         lines.append(f"| {label} | {'↑' if direction=='higher' else '↓'} | " + " | ".join(cells) + " |")
     lines.append("")
     return lines
 
 
 def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mean-only", action="store_true",
+                    help="cells show only the mean (no ±std / worst); writes *_mean.md")
+    args = ap.parse_args()
+
     C.REPORT_DIR.mkdir(parents=True, exist_ok=True)
     full = load_full()
     e214 = load_e214()
@@ -192,19 +202,28 @@ def main() -> int:
     # coverage note
     have = {s: sum(1 for c in cases if (e214.get((c, s)) if s != "full" else full.get(c)))
             for s in SERIES}
-    md = ["# E214 四消融结果表（full vs A1–A4，50 case）", "",
+    cell_note = ("- 单元格：仅均值（over 50 case）。"
+                 if args.mean_only else
+                 "- 单元格：mean±std (worst)。worst=对该指标最差的 case（↓指标取最大，↑指标取最小）。")
+    md = ["# E214 四消融结果表（full vs A1–A4，50 case）"
+          + ("（均值版）" if args.mean_only else ""), "",
           f"- full 基线：43 non-box023 复用论文缓存 + 7 box023 用 E173 全栈重算。",
           f"- 覆盖：" + ", ".join(f"{SERIES_LABEL[s]}={have[s]}/50" for s in SERIES),
-          "- 单元格：mean±std (worst)。worst=对该指标最差的 case（↓指标取最大，↑指标取最小）。",
+          cell_note,
           "- max phys penetration：每 case 对序列取最深穿透(mm)，再在 case 上平均。foot skate：stance 脚水平滑移速度(m/s)。",
           "- 方向 ↑=越大越好，↓=越小越好。", ""]
-    md += build_block(cases, full, e214, "Overall")
+    md += build_block(cases, full, e214, "Overall", mean_only=args.mean_only)
     # per-object
     for obj in sorted({C.object_key_of(c) for c in cases}):
         ocases = [c for c in cases if C.object_key_of(c) == obj]
-        md += build_block(ocases, full, e214, f"Object: {obj}")
+        md += build_block(ocases, full, e214, f"Object: {obj}", mean_only=args.mean_only)
 
-    OUT_MD.write_text("\n".join(md) + "\n", encoding="utf-8")
+    out_md = (C.REPORT_DIR / "e214_ablation_table_mean.md") if args.mean_only else OUT_MD
+    out_md.write_text("\n".join(md) + "\n", encoding="utf-8")
+
+    if args.mean_only:
+        print(f"wrote {C.rel(out_md)} (mean-only)")
+        return 0
 
     # overall tsv (mean/std/worst per series per metric)
     tlines = ["metric\tseries\tmean\tstd\tworst\tn"]
@@ -228,7 +247,7 @@ def main() -> int:
     except Exception:  # noqa: BLE001
         xlsx_note = " (openpyxl absent, xlsx skipped)"
 
-    print(f"wrote {C.rel(OUT_MD)} + {C.rel(OUT_TSV)}{xlsx_note}")
+    print(f"wrote {C.rel(out_md)} + {C.rel(OUT_TSV)}{xlsx_note}")
     print("coverage:", have)
     return 0
 
