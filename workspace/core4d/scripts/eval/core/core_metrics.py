@@ -124,6 +124,8 @@ METRIC_FIELDS = [
     "hand_object_physics_contact_5mm_frac",
     "hand_object_physics_penetration_3mm_frame_frac",
     "hand_object_physics_penetration_5mm_frame_frac",
+    "hand_object_physics_penetration_10mm_frame_frac",
+    "hand_object_physics_penetration_max_mm",
     "hand_object_con_dist_mean_m",
     "hand_object_con_dist_min_m",
     "hand_object_con_dist_frac_lt_neg2mm",
@@ -175,6 +177,7 @@ TRACK_MASK_FIELDS = [
     "hand_object_clean_physics_contact_in_mask_frac",
     "hand_object_physics_contact_3mm_in_mask_frac",
     "hand_object_physics_contact_5mm_in_mask_frac",
+    "hand_object_physics_contact_10mm_in_mask_frac",
     "rl_object_contact_ref_frac",
     "rl_object_contact_gap_fill_frames",
     "rl_object_contact_filled_frame_count",
@@ -282,6 +285,8 @@ STANDARD_SUMMARY_METRICS = [
     "hand_object_physics_contact_5mm_frac",
     "hand_object_physics_penetration_3mm_frame_frac",
     "hand_object_physics_penetration_5mm_frame_frac",
+    "hand_object_physics_penetration_10mm_frame_frac",
+    "hand_object_physics_penetration_max_mm",
     "hand_object_con_dist_mean_m",
     "hand_object_con_dist_min_m",
     "hand_object_con_dist_frac_lt_neg2mm",
@@ -346,6 +351,7 @@ STANDARD_TRACK_DIAG = [
     "hand_object_clean_physics_contact_in_mask_frac",
     "hand_object_physics_contact_3mm_in_mask_frac",
     "hand_object_physics_contact_5mm_in_mask_frac",
+    "hand_object_physics_contact_10mm_in_mask_frac",
     "rl_object_contact_ref_frac",
     "rl_object_contact_gap_fill_frames",
     "rl_object_contact_filled_frame_count",
@@ -367,6 +373,7 @@ STANDARD_TRACK_DIAG = [
 STANDARD_MASK_DELTA_METRICS = [
     "hand_object_physics_contact_3mm_in_mask_frac",
     "hand_object_physics_contact_5mm_in_mask_frac",
+    "hand_object_physics_contact_10mm_in_mask_frac",
     "hand_geom_penetration_2mm_in_mask_frac",
 ]
 
@@ -1030,6 +1037,7 @@ def _masked_contact_metrics(
     hand_arr: np.ndarray,
     contact_mask_path: Path | None,
     person_idx: int | None,
+    hand_clean10_physics: list[bool] | None = None,
 ) -> dict[str, float]:
     """Contact/penetration restricted to the real 3cm reference contact window.
 
@@ -1097,6 +1105,8 @@ def _masked_contact_metrics(
     cp = np.asarray(hand_clean_physics[:H], dtype=bool)
     c3 = np.asarray(hand_clean3_physics[:H], dtype=bool)
     c5 = np.asarray(hand_clean5_physics[:H], dtype=bool)
+    c10 = (np.asarray(hand_clean10_physics[:H], dtype=bool)
+           if hand_clean10_physics is not None else None)
     m = mask_any[:H]
     ha = np.asarray(hand_arr[:H], dtype=np.float64)
     out["ref_contact_frac"] = float(np.mean(m))
@@ -1115,6 +1125,8 @@ def _masked_contact_metrics(
         out["hand_object_clean_physics_contact_in_mask_frac"] = float(np.mean(cp[m]))
         out["hand_object_physics_contact_3mm_in_mask_frac"] = float(np.mean(c3[m]))
         out["hand_object_physics_contact_5mm_in_mask_frac"] = float(np.mean(c5[m]))
+        if c10 is not None:
+            out["hand_object_physics_contact_10mm_in_mask_frac"] = float(np.mean(c10[m]))
         out["hand_geom_penetration_2mm_in_mask_frac"] = float(np.mean(ha[m] < -0.002))
         out["hand_geom_penetration_5mm_in_mask_frac"] = float(np.mean(ha[m] < -0.005))
     if rl_mask.any():
@@ -1221,9 +1233,11 @@ def evaluate_sequence(
     hand_clean_physics: list[bool] = []
     hand_clean3_physics: list[bool] = []
     hand_clean5_physics: list[bool] = []
+    hand_clean10_physics: list[bool] = []
     hand_object_deep2mm_frame: list[bool] = []
     hand_object_deep3mm_frame: list[bool] = []
     hand_object_deep_frame: list[bool] = []
+    hand_object_deep10mm_frame: list[bool] = []
     hand_object_contact_dists: list[float] = []
     hand_frame_min_con_dist: list[float] = []  # E191: per-frame min, inf when no contact
     leg_physics: list[bool] = []
@@ -1307,6 +1321,10 @@ def evaluate_sequence(
             bool(hand_object_frame_dists)
             and min(hand_object_frame_dists) >= -0.005
         )
+        hand_clean10_physics.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) >= -0.010
+        )
         hand_object_deep2mm_frame.append(
             bool(hand_object_frame_dists)
             and min(hand_object_frame_dists) < config.clean_contact_penetration_m
@@ -1318,6 +1336,10 @@ def evaluate_sequence(
         hand_object_deep_frame.append(
             bool(hand_object_frame_dists)
             and min(hand_object_frame_dists) < config.deep_contact_dist_m
+        )
+        hand_object_deep10mm_frame.append(
+            bool(hand_object_frame_dists)
+            and min(hand_object_frame_dists) < -0.010
         )
         hand_object_contact_dists.extend(hand_object_frame_dists)
         hand_frame_min_con_dist.append(
@@ -1384,6 +1406,15 @@ def evaluate_sequence(
         "hand_object_physics_penetration_5mm_frame_frac": frac(
             np.asarray(hand_object_deep_frame, dtype=bool)
         ),
+        "hand_object_physics_penetration_10mm_frame_frac": frac(
+            np.asarray(hand_object_deep10mm_frame, dtype=bool)
+        ),
+        # Per-sequence deepest hand-object penetration (mm, >=0); 0 if never
+        # penetrating. Aggregated across cases by the caller (mean of per-case max).
+        "hand_object_physics_penetration_max_mm": (
+            float(max(0.0, -min(hand_object_contact_dists)) * 1000.0)
+            if hand_object_contact_dists else 0.0
+        ),
         "hand_object_con_dist_mean_m": mean_or_nan(hand_object_contact_dists),
         "hand_object_con_dist_min_m": min_or_nan(hand_object_contact_dists),
         "hand_object_con_dist_frac_lt_neg2mm": contact_frac_lt(
@@ -1434,7 +1465,7 @@ def evaluate_sequence(
     # E154: body tracking vs fixed kin truth + masked contact (real 3cm).
     # Always populated (NaN when refs not supplied) so METRIC_FIELDS stays complete.
     out.update(_tracking_metrics(qpos, kin_ref_path, config, model=model))
-    out.update(_masked_contact_metrics(hand_physics, hand_clean_physics, hand_clean3_physics, hand_clean5_physics, hand_arr, contact_mask_path, person_idx))
+    out.update(_masked_contact_metrics(hand_physics, hand_clean_physics, hand_clean3_physics, hand_clean5_physics, hand_arr, contact_mask_path, person_idx, hand_clean10_physics))
     # E191: object-support diagnostics. Additive only — no existing column and no
     # 12-gate rule depends on these.
     out.update(_object_support_metrics(qpos, kin_ref_path, model, config, hand_frame_min_con_dist))

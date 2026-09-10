@@ -50,7 +50,12 @@ HAND_COLLISION_VARIANT = "rubber_hull"
 METRICS: list[dict[str, Any]] = [
     {"key": "raw_contact",    "field": "hand_object_physics_contact_in_mask_frac",      "src": "result"},
     {"key": "contact_3mm",    "field": "hand_object_physics_contact_3mm_in_mask_frac",  "src": "result"},
+    {"key": "contact_5mm",    "field": "hand_object_physics_contact_5mm_in_mask_frac",  "src": "result"},
+    {"key": "contact_10mm",   "field": "hand_object_physics_contact_10mm_in_mask_frac", "src": "result"},
     {"key": "pen_3mm",        "field": "hand_object_physics_penetration_3mm_frame_frac","src": "result"},
+    {"key": "pen_5mm",        "field": "hand_object_physics_penetration_5mm_frame_frac","src": "result"},
+    {"key": "pen_10mm",       "field": "hand_object_physics_penetration_10mm_frame_frac","src": "result"},
+    {"key": "pen_max_mm",     "field": "hand_object_physics_penetration_max_mm",        "src": "result"},
     {"key": "geom_2mm",       "field": "hand_geom_penetration_2mm_frac",                "src": "result"},
     {"key": "track_root_pos", "field": "track_root_pos_err_cm_mean",                    "src": "result"},
     {"key": "track_root_ori", "field": "track_root_ori_err_deg_mean",                   "src": "result"},
@@ -63,6 +68,8 @@ METRICS: list[dict[str, Any]] = [
     {"key": "ankle_jerk",     "field": "ankle_jerk_p95",                                "src": "health"},
     {"key": "obj_speed",      "field": "obj_speed_max",                                 "src": "health"},
     {"key": "foot_slip",      "field": "foot_slip_max_m",                               "src": "health"},
+    {"key": "foot_skate_mean","field": "foot_skate_speed_mean_m_s",                     "src": "health"},
+    {"key": "foot_skate_max", "field": "foot_skate_speed_max_m_s",                      "src": "health"},
 ]
 KEYS = [m["key"] for m in METRICS]
 CACHE = C.EVAL_DIR / "e214_metrics.jsonl"

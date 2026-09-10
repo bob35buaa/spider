@@ -45,6 +45,8 @@ METRIC_KEYS = [
     "foot_slip_max_m",
     "foot_ground_dev_max_m",
     "foot_grounded_frame_frac",
+    "foot_skate_speed_mean_m_s",
+    "foot_skate_speed_max_m_s",
 ]
 
 HEALTH_AGGS = {
@@ -139,7 +141,7 @@ def contiguous_segments(mask: np.ndarray) -> list[tuple[int, int]]:
     return [(int(start), int(end) + 1) for start, end in zip(starts, ends)]
 
 
-def foot_motion_metrics(ankles: np.ndarray) -> dict[str, float]:
+def foot_motion_metrics(ankles: np.ndarray, fps: float = 30.0) -> dict[str, float]:
     ground_z = np.percentile(ankles[:, :, 2], 5, axis=0)
     grounded = ankles[:, :, 2] <= (ground_z[np.newaxis, :] + 0.05)
     slip_values: list[float] = []
@@ -152,10 +154,19 @@ def foot_motion_metrics(ankles: np.ndarray) -> dict[str, float]:
             z = ankles[start:end, foot_index, 2]
             slip_values.append(float(np.linalg.norm(xy - xy[0], axis=-1).max()))
             ground_dev_values.append(float(np.abs(z - ground_z[foot_index]).max()))
+    # Foot skating: horizontal speed of a foot while it is a stance foot
+    # (grounded at both endpoints of the finite-difference step). This is the
+    # velocity a planted foot should NOT have; report mean and max over all
+    # stance-foot frames across both feet.
+    vel_xy = np.linalg.norm(np.diff(ankles[:, :, :2], axis=0), axis=-1) * fps  # (T-1, nfeet)
+    stance_step = grounded[:-1] & grounded[1:]  # both endpoints grounded
+    skate = vel_xy[stance_step]
     return {
         "foot_slip_max_m": max(slip_values) if slip_values else math.nan,
         "foot_ground_dev_max_m": max(ground_dev_values) if ground_dev_values else math.nan,
         "foot_grounded_frame_frac": float(np.mean(np.any(grounded, axis=1))),
+        "foot_skate_speed_mean_m_s": float(skate.mean()) if skate.size else math.nan,
+        "foot_skate_speed_max_m_s": float(skate.max()) if skate.size else math.nan,
     }
 
 
@@ -176,6 +187,8 @@ def body_motion_health(
         "foot_slip_max_m": math.nan,
         "foot_ground_dev_max_m": math.nan,
         "foot_grounded_frame_frac": math.nan,
+        "foot_skate_speed_mean_m_s": math.nan,
+        "foot_skate_speed_max_m_s": math.nan,
     }
     if not qpos_path.is_file() or not scene_xml.is_file():
         return out
@@ -253,7 +266,7 @@ def body_motion_health(
             "obj_speed_max": float(np.max(object_speed)) if object_speed.size else math.nan,
         }
     )
-    out.update(foot_motion_metrics(ankles))
+    out.update(foot_motion_metrics(ankles, fps))
     return out
 
 
