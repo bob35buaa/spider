@@ -915,7 +915,19 @@ def main(config: Config):
         return mask_np
 
     # E039b/E078: precompute per-EEF contact mask.
-    if config.contact_hdmi_gain > 0.0 and config.hand_approach_body_ids:
+    # E214: the contact-mask precompute historically only ran when the HDMI
+    # coarse term was active (contact_hdmi_gain>0), but surface_band's
+    # contact-mask gate reads the same mask. The E214 "surface_band only"
+    # ablation sets contact_hdmi_gain=0 while keeping surface_band on, so also
+    # trigger the precompute when surface_band needs a contact-mask gate. Guarded
+    # so every gain>0 run (baseline / A1 / A3 / A4) is byte-identical.
+    _surface_band_needs_mask = (
+        (config.surface_band_rew_scale > 0.0 or config.surface_band_penalty_scale > 0.0)
+        and config.surface_band_gate_source in (
+            "contact_mask", "contact_mask_strict_current", "contact_mask_time_window",
+        )
+    )
+    if (config.contact_hdmi_gain > 0.0 or _surface_band_needs_mask) and config.hand_approach_body_ids:
         obj_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "object")
         if config.contact_hdmi_mask_source == "core4d_3cm":
             if not config.contact_hdmi_mask_path:

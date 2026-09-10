@@ -1,5 +1,17 @@
 # CORE4D 当前进度
 
+## ✅ 已完成：E214 — 核心方法四消融（plan245 / R300 / Phase 72）
+
+> **2026-09-10 收口**：全 5 条 claim 成立，两大贡献四支均必要且互补。
+> 200/200 cem_ok（19.35h 本机 8 卡）、单变量审计 200/200 ALL PASS、eval 207/207（0 error）。
+> **贡献1(contact)**：A1 去 surface_band → contact@3mm 58.8%→26.3%、geom 穿透 5%→17.5%（p<.001，视觉手嵌箱体）；
+> A2 去 contact_hdmi → eef pos 13→40cm（w148，够不到）。**贡献2(penetration) 两层分工**：
+> A3 去全部硬门 → **fall 0%→14%** + body-z 0.091→0.149m（视觉整体摔倒），手-物穿透不显著变化；
+> A4 去软惩罚 → tracking 温和退化但硬门兜底 fall 仍 0%。full 不被任一消融全轴超过（C5）。
+> 机制：`load_config_path` + 单键 toggle（纯 additive）；核心改动 `run_mjwp.py` mask 预计算加 `OR surface_band` guard
+> （仅 A2 生效，gain>0 字节不变，用户批准）。caveat：基线复用论文缓存/E173、旧代码轨迹（二阶 confound）。
+> 详见 [log303](log/303_E214_core_method_four_ablation.md)。**待 commit**（用户"收尾"）。
+
 ## ✅ 已完成：E213-export — 选定臂 aug 32 单元 → dcv3 paired RL 导出（plan244 / R299 / Phase 71）
 
 > **2026-09-08**：`E213_export_aug_cases.xlsx` 挑选的 **32 单元（20 case）**导出为 dcv3 paired RL 输入 →
