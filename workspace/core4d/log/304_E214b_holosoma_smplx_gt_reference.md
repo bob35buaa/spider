@@ -82,13 +82,19 @@ EX="box024_20231011_026_p1,bucket003_20231020_068_p1,box021_20231011_037_p2"
 
 | 指标 | full | A1 | **A2** | A3 | A4 |
 |------|------|----|----|----|----|
-| contact precision@10cm (SMPLX-GT) ↑ | **57.4%** | 65.6% | **33.5%** | 55.3% | 56.4% |
+| contact precision@0.5cm (SMPLX-GT) ↑ | 57.8% | 57.9% | 57.9% | 57.9% | 58.0% |
+| contact precision@1cm (SMPLX-GT) ↑  | 52.8% | 52.8% | 52.7% | 52.8% | 52.9% |
+| contact precision@2cm (SMPLX-GT) ↑  | 46.9% | 47.3% | 46.7% | 46.9% | 47.4% |
 | contact precision@5cm (SMPLX-GT) ↑  | 38.2% | 41.7% | **33.5%** | 39.0% | 38.9% |
+| contact precision@10cm (SMPLX-GT) ↑ | **57.4%** | 65.6% | **33.5%** | 55.3% | 56.4% |
 | foot sliding frac >5mm/f (SMPLX-GT) ↓ | 59.7% | 57.3% | 52.5% | 61.3% | 60.5% |
 | penetration frac@5mm (holosoma) ↓ | 13.6% | **19.4%** | 10.4% | 15.7% | 14.3% |
 | penetration depth max (holosoma, m) ↓ | 0.014 | 0.016 | 0.014 | 0.017 | 0.016 |
 
 - **A2（去 contact_hdmi，够不到物体）** 的 contact precision@10cm 57.4%→**33.5%**：人体 GT 口径下清晰区分。
+- **contact precision 阈值扫 {0.5,1,2,5,10}cm**（用户追加 0.5/1cm）：≤1cm 各消融**饱和无区分**
+  （@0.5cm≈57.8%、@1cm≈52.8% 全列近似）——因参考点是 SMPLX **手腕关节**，抓握时手腕距物体表面本就 ~5–10cm，
+  ≤1cm 几乎无 demo-contact 帧、miss 极少；区分度在 **≥5cm** 才出现。若要在紧阈值下有区分，需把手关键点换成指尖。
 - A1（去 surface_band）penetration frac@5mm 13.6%→19.4%（穿透变差），与 E214 结论一致；其 contact 反而略高
   （A1 失效模式是穿透而非够不到）。penetration 各列与切换前**逐字一致**（下方 C3）。
 

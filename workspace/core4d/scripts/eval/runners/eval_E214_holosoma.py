@@ -88,13 +88,18 @@ WRIST_BODIES = ("left_wrist_yaw_link", "right_wrist_yaw_link")
 # threshold sweeps (user request)
 SLIDE_THRESHOLDS = (0.005, 0.01, 0.02)   # per-frame |dxy| of a stance foot
 PEN_THRESHOLDS_M = (0.005, 0.01, 0.02)   # robot-vs-(object|floor) penetration depth (m)
-CONTACT_THRESHOLDS_M = (0.02, 0.05, 0.10)  # hand-to-object-SURFACE distance (m)
+CONTACT_THRESHOLDS_M = (0.005, 0.01, 0.02, 0.05, 0.10)  # hand-to-object-SURFACE distance (m)
+
+
+def _cm_key(t: float) -> str:  # 0.005->"0.5cm", 0.01->"1cm", 0.10->"10cm"
+    return f"contact_precision_holosoma_{t * 100:g}cm"
+
 
 KEYS = (["foot_sliding_holosoma_vel_mean"]
         + [f"foot_sliding_holosoma_frac_{int(t*1000)}mm" for t in SLIDE_THRESHOLDS]
         + [f"penetration_holosoma_frac_{int(t*1000)}mm" for t in PEN_THRESHOLDS_M]
         + ["penetration_holosoma_depth_max_m"]
-        + [f"contact_precision_holosoma_{int(t*100)}cm" for t in CONTACT_THRESHOLDS_M])
+        + [_cm_key(t) for t in CONTACT_THRESHOLDS_M])
 
 
 def build_jobs() -> list[dict[str, str]]:
@@ -340,7 +345,7 @@ def _worker(job: dict[str, str]) -> dict[str, Any]:
             cp = _contact_precision(mujoco, np, model, run_q, ref.wrist_scene,
                                     ref.obj_pos, ref.obj_quat)
             for t, v in cp.items():
-                m[f"contact_precision_holosoma_{int(t*100)}cm"] = v
+                m[_cm_key(t)] = v
         pen_fracs, pdx = _penetration(mujoco, np, model, run_q)
         for t, v in pen_fracs.items():
             m[f"penetration_holosoma_frac_{int(t*1000)}mm"] = v
