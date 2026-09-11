@@ -23,6 +23,8 @@ from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "osmesa")
 
+import argparse  # noqa: E402
+
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 import imageio.v2 as imageio  # noqa: E402
@@ -30,30 +32,43 @@ from scipy.spatial.transform import Rotation as Rot  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(REPO / "workspace/core4d/scripts/convert"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from generate_dual_data import generate_scene_dual_robot  # noqa: E402
+from render_style import add_common_args, beautify_robot_scene_xml, default_out  # noqa: E402
 
+DEFAULT_PROCESSED_ROOT = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+
+# Reassigned from CLI in main(); load_cem / render() read these module globals.
 CASE = "box021_20231011_037"
 PRIMARY = "p2"          # rendered as robot1 (drives the shared object)
 PARTNER = "p1"          # re-anchored into primary's frame as robot2 (r2_)
-
+EXP = "E170"
 CEM_DIR = REPO / "workspace/core4d/results/E170/s6_downstream/cem/full"
-SCENE_DIR = (REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
-             / "dcv3_omnirt_v1_ref_fk_box021_20231011_037_p2")
-SRC_SCENE = SCENE_DIR / "scene_act_E170_lowerbody_physics.xml"
-DUAL_SCENE = SCENE_DIR / "scene_dual_render.xml"      # asset paths are relative to SCENE_DIR
-
-OUT = Path(__file__).resolve().parents[1] / "paper_results" / "viz" / f"{CASE}_p2"
-FRAME_DIR = OUT / "robot_frames"
-
 H, W = 1080, 1080
 FPS = 20
 # 3/4 view; azimuth/elevation reused from the contact-overlay body cam.
-CAM = {"azimuth": 135.0, "elevation": -12.0, "distance": 2.7, "lookat_z": 0.8}
+CAM = {"azimuth": 135.0, "elevation": -14.0, "distance": 2.7, "lookat_z": 0.8}
+PREVIEW_N = 0
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Clean two-person robot render (both persons + object).")
+    add_common_args(p)      # --case --data-root --smplx-model --out --res --fps --preview
+    p.add_argument("--primary", default="p2", help="person driving the shared object (default: p2)")
+    p.add_argument("--partner", default="p1", help="person re-anchored as robot2 (default: p1)")
+    p.add_argument("--exp", default="E170", help="retarget experiment id (default: E170)")
+    p.add_argument("--cem-dir", default=None,
+                   help="CEM results dir (default: <repo>/workspace/core4d/results/<exp>/s6_downstream/cem/full)")
+    p.add_argument("--processed-root", default=str(DEFAULT_PROCESSED_ROOT),
+                   help="processed humanoid_object root holding the scene dirs")
+    p.add_argument("--scene-prefix", default="dcv3_omnirt_v1_ref_fk",
+                   help="scene dir name prefix before <case>_<person>")
+    return p.parse_args()
 
 
 def load_cem(person: str) -> np.ndarray:
     """(T, 42) qpos of the selected CEM rollout: base7 + joints29 + obj(trans3+eulZYX3)."""
-    q = np.load(CEM_DIR / f"E170_{CASE}_{person}_PRG.npz")["qpos"]
+    q = np.load(CEM_DIR / f"{EXP}_{CASE}_{person}_PRG.npz")["qpos"]
     return q[:, 0, :] if q.ndim == 3 else q
 
 
@@ -101,17 +116,20 @@ def apply_T_to_base(base7: np.ndarray, T: np.ndarray) -> np.ndarray:
     return out
 
 
-def prep_scene(model):
-    """White floor->hidden, hide sites, hide object collision proxy geoms, solid mesh."""
+def prep_scene(model) -> int:
+    """Hide sites and object collision proxies; keep the (now-tiled) floor. Returns
+    the floor geom id so the white-bg pass can hide it per-render."""
     obj_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+    floor_gid = -1
     for gid in range(model.ngeom):
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or ""
         if name == "floor":
-            model.geom_rgba[gid, 3] = 0.0
+            floor_gid = gid
         if int(model.geom_bodyid[gid]) == obj_body:
             model.geom_rgba[gid, 3] = 0.0 if "collision" in name else 1.0
     for sid in range(model.nsite):
         model.site_rgba[sid, 3] = 0.0
+    return floor_gid
 
 
 def build_dual_qpos(prim: np.ndarray, part: np.ndarray, offset: int, n: int, T: np.ndarray):
@@ -130,14 +148,22 @@ def build_dual_qpos(prim: np.ndarray, part: np.ndarray, offset: int, n: int, T: 
     return dual
 
 
-def render(dual_qpos: np.ndarray, model) -> list[np.ndarray]:
+def render(dual_qpos: np.ndarray, model, floor_gid: int, mode: str) -> list[np.ndarray]:
+    """Render the dual-robot clip.
+
+    mode="bg":    tiled floor + gradient sky + soft shadow + reflection.
+    mode="white": floor hidden, no shadow/reflection, background painted white.
+    """
+    assert mode in ("bg", "white")
+    with_bg = mode == "bg"
+    if floor_gid >= 0:
+        model.geom_rgba[floor_gid, 3] = 1.0 if with_bg else 0.0
+
     data = mujoco.MjData(model)
     renderer = mujoco.Renderer(model, H, W)
     cam = mujoco.MjvCamera()
     mujoco.mjv_defaultCamera(cam)
     cam.azimuth, cam.elevation, cam.distance = CAM["azimuth"], CAM["elevation"], CAM["distance"]
-    obj_qadr = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "object_pos_x")
-    obj_qadr = model.jnt_qposadr[obj_qadr]
     r1_pel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
     r2_pel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "r2_pelvis")
     obj_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
@@ -151,21 +177,34 @@ def render(dual_qpos: np.ndarray, model) -> list[np.ndarray]:
         pts = np.stack([data.xpos[r1_pel], data.xpos[r2_pel], data.xpos[obj_body]])
         cam.lookat = np.array([pts[:, 0].mean(), pts[:, 1].mean(), CAM["lookat_z"]])
         renderer.update_scene(data, camera=cam)
-        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
+        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 1 if with_bg else 0
+        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 1 if with_bg else 0
         rgb = renderer.render().copy()
-        # pure white background via segmentation mask
-        renderer.enable_segmentation_rendering()
-        seg = renderer.render()[:, :, 0]
-        renderer.disable_segmentation_rendering()
-        rgb[seg < 0] = 255
+        if not with_bg:
+            # pure white background via segmentation mask
+            renderer.enable_segmentation_rendering()
+            seg = renderer.render()[:, :, 0]
+            renderer.disable_segmentation_rendering()
+            rgb[seg < 0] = 255
         frames.append(rgb)
     renderer.close()
     return frames
 
 
 def main():
+    global CASE, PRIMARY, PARTNER, EXP, CEM_DIR, H, W, FPS, PREVIEW_N
+    args = parse_args()
+    CASE, PRIMARY, PARTNER, EXP = args.case, args.primary, args.partner, args.exp
+    CEM_DIR = Path(args.cem_dir) if args.cem_dir else \
+        REPO / f"workspace/core4d/results/{EXP}/s6_downstream/cem/full"
+    H = W = args.res
+    FPS, PREVIEW_N = args.fps, args.preview
+    scene_dir = Path(args.processed_root) / f"{args.scene_prefix}_{CASE}_{PRIMARY}"
+    src_scene = scene_dir / f"scene_act_{EXP}_lowerbody_physics.xml"
+    dual_scene = scene_dir / "scene_dual_render.xml"          # asset paths relative to scene_dir
+    dual_scene_styled = scene_dir / "scene_dual_render_styled.xml"
+    OUT = Path(args.out) if args.out else default_out(CASE, PRIMARY)
     OUT.mkdir(parents=True, exist_ok=True)
-    FRAME_DIR.mkdir(parents=True, exist_ok=True)
 
     prim = load_cem(PRIMARY)
     part = load_cem(PARTNER)
@@ -180,19 +219,29 @@ def main():
           f"trans std={tv:.4f} m")
     print(f"  T trans={T[:3, 3]}  rot(ZYX deg)={Rot.from_matrix(T[:3, :3]).as_euler('ZYX', degrees=True)}")
 
-    generate_scene_dual_robot(str(SRC_SCENE), str(DUAL_SCENE))
-    model = mujoco.MjModel.from_xml_path(str(DUAL_SCENE))
-    prep_scene(model)
+    generate_scene_dual_robot(str(src_scene), str(dual_scene))
+    beautify_robot_scene_xml(str(dual_scene), str(dual_scene_styled))
+    model = mujoco.MjModel.from_xml_path(str(dual_scene_styled))
+    floor_gid = prep_scene(model)
 
     dual_qpos = build_dual_qpos(prim, part, offset, n, T)
-    frames = render(dual_qpos, model)
+    if PREVIEW_N > 0:
+        idx = np.linspace(0, len(dual_qpos) - 1, PREVIEW_N).round().astype(int)
+        dual_qpos = dual_qpos[idx]
+        print(f"[preview] rendering {PREVIEW_N} sampled frames")
 
-    for i, f in enumerate(frames):
-        imageio.imwrite(FRAME_DIR / f"frame_{i:04d}.png", f)
-    mp4 = OUT / "robot_dual.mp4"
-    imageio.mimsave(mp4, frames, fps=FPS, quality=9)
-    print(f"[ok] {len(frames)} frames -> {FRAME_DIR}")
-    print(f"[ok] video -> {mp4}")
+    for mode in ("bg", "white"):
+        frame_dir = OUT / f"robot_frames_{mode}"
+        frame_dir.mkdir(parents=True, exist_ok=True)
+        frames = render(dual_qpos, model, floor_gid, mode)
+        for i, f in enumerate(frames):
+            imageio.imwrite(frame_dir / f"frame_{i:04d}.png", f)
+        if PREVIEW_N == 0:
+            mp4 = OUT / f"robot_dual_{mode}.mp4"
+            imageio.mimsave(mp4, frames, fps=FPS, quality=9)
+            print(f"[ok] {mode}: {len(frames)} frames -> {frame_dir}  video -> {mp4}")
+        else:
+            print(f"[ok] {mode}: {len(frames)} preview frames -> {frame_dir}")
 
 
 if __name__ == "__main__":

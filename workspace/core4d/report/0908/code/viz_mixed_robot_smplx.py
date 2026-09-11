@@ -21,40 +21,58 @@ from pathlib import Path
 os.environ.setdefault("PYOPENGL_PLATFORM", "osmesa")
 os.environ.setdefault("MUJOCO_GL", "osmesa")
 
+import argparse
+import sys
+
 import numpy as np
+
+if not hasattr(np, "infty"):        # pyrender uses np.infty, removed in NumPy 2.0
+    np.infty = np.inf
+
 import trimesh
 import pyrender
 import mujoco
 import imageio.v2 as imageio
 from scipy.spatial.transform import Rotation as Rot
 
-RAW = Path("/mnt/ali-sh-1/usr/xiayibo/xyb_data_tidal_alsh/other-datasets/mocap_data/CORE4D/CORE4D_Real")
-SEQ = RAW / "human_object_motions" / "20231011" / "037"
-SMPLX_NEUTRAL = Path("/mnt/ali-sh-1/usr/xiayibo/xyb_data_tidal_alsh/other-datasets/"
-                     "mocap_data/human_model_files/smplx/SMPLX_NEUTRAL.npz")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from render_style import (BOX_COLOR, add_common_args, default_out,  # noqa: E402
+                          make_checker_floor, parse_case, seq_dir, soft_phong_lights)
+from smplx_min import SMPLXModel  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[5]
-CEM_DIR = REPO / "workspace/core4d/results/E170/s6_downstream/cem/full"
-HUM = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
-SCENE_P2 = HUM / "dcv3_omnirt_v1_ref_fk_box021_20231011_037_p2" / "scene_act_E170_lowerbody_physics.xml"
-SCENE_P1 = HUM / "dcv3_omnirt_v1_ref_fk_box021_20231011_037_p1" / "scene_act_E170_lowerbody_physics.xml"
+DEFAULT_PROCESSED_ROOT = REPO / "example_datasets/processed/core4d/unitree_g1/humanoid_object"
+_SMPLX_KEYS = ["global_orient", "body_pose", "left_hand_pose", "right_hand_pose", "transl"]
 
-OUT = (Path(__file__).resolve().parents[1] / "paper_results" / "viz"
-       / "box021_20231011_037_p2")
-FRAME_DIR = OUT / "mixed_frames"
+# Reassigned from CLI in main(); module-level mocap_to_cem_rot / nested human_cem read these.
+P1_TRIM_START = 109     # p1 cem[t] <-> mocap[P1_TRIM_START + t]
+P1_TO_P2 = 15           # p1 cem[t] <-> p2 cem[P1_TO_P2 + t]  (paired re-anchor offset)
 
-RES = 1080
-FPS = 20
-WINDOW = None
-
-# p1 cem[t] <-> mocap[109+t]; p1 cem[t] <-> p2 cem[15+t]  (E170 paired trims / re-anchor)
-P1_TRIM_START = 109
-P1_TO_P2 = 15
-
-ROBOT_COLOR = [0.82, 0.84, 0.88, 1.0]   # light gray (robot = p2)
 P1_COLOR = [0.30, 0.55, 0.85, 1.0]      # blue (human = p1)
-OBJ_COLOR = [0.55, 0.60, 0.68, 1.0]     # slate
+OBJ_COLOR = BOX_COLOR                   # slate blue (object)
 R_ZUP_TO_YUP = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]], float)
+
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Mixed render: p2 robot + p1 SMPLX human + shared object.")
+    add_common_args(p)      # --case --data-root --smplx-model --out --res --fps --preview
+    p.add_argument("--primary", default="p2", help="robot person driving the object (default: p2)")
+    p.add_argument("--partner", default="p1", help="SMPLX human person (default: p1)")
+    p.add_argument("--exp", default="E170", help="retarget experiment id (default: E170)")
+    p.add_argument("--cem-dir", default=None, help="CEM results dir (default derived from --exp)")
+    p.add_argument("--processed-root", default=str(DEFAULT_PROCESSED_ROOT),
+                   help="processed humanoid_object root holding the scene dirs")
+    p.add_argument("--scene-prefix", default="dcv3_omnirt_v1_ref_fk",
+                   help="scene dir name prefix before <case>_<person>")
+    p.add_argument("--window", default=None, help="cem frame window 'lo,hi' (default: auto)")
+    p.add_argument("--baked-shape", action="store_true",
+                   help="use partner's baked betas instead of the neutral betas=0 shape")
+    p.add_argument("--p1-trim-start", type=int, default=109,
+                   help="partner mocap<->cem trim offset (paired-export specific; default: 109)")
+    p.add_argument("--p1-to-p2", type=int, default=15,
+                   help="partner cem <-> primary cem offset (paired-export specific; default: 15)")
+    return p.parse_args()
 
 
 def look_at(eye, target, up):
@@ -139,16 +157,46 @@ def object_world_mesh(model, data):
 
 
 def main():
-    FRAME_DIR.mkdir(parents=True, exist_ok=True)
-    pose1 = np.load(SEQ / "person1_poses.npz", allow_pickle=True)["arr_0"].item()
+    global P1_TRIM_START, P1_TO_P2
+    args = parse_args()
+    obj, date, seq, category = parse_case(args.case)
+    SEQ = seq_dir(args.data_root, date, seq)
+    SMPLX_NEUTRAL = Path(args.smplx_model)
+    CEM_DIR = Path(args.cem_dir) if args.cem_dir else \
+        REPO / f"workspace/core4d/results/{args.exp}/s6_downstream/cem/full"
+    scene_primary = (Path(args.processed_root) / f"{args.scene_prefix}_{args.case}_{args.primary}"
+                     / f"scene_act_{args.exp}_lowerbody_physics.xml")
+    scene_partner = (Path(args.processed_root) / f"{args.scene_prefix}_{args.case}_{args.partner}"
+                     / f"scene_act_{args.exp}_lowerbody_physics.xml")
+    OUT = Path(args.out) if args.out else default_out(args.case, args.primary)
+    RES, FPS, PREVIEW_N = args.res, args.fps, args.preview
+    DEFAULT_SHAPE = not args.baked_shape
+    WINDOW = tuple(int(x) for x in args.window.split(",")) if args.window else None
+    P1_TRIM_START, P1_TO_P2 = args.p1_trim_start, args.p1_to_p2
+    partner_file = SEQ / f"person{args.partner[1:]}_poses.npz"
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    pose1 = np.load(partner_file, allow_pickle=True)["arr_0"].item()
     p1_verts, p1_joints = pose1["vertices"], pose1["joints"]
     smplx_faces = np.load(SMPLX_NEUTRAL, allow_pickle=True)["f"].astype(np.int64)
+    # Neutral-shape re-pose: swap baked verts for betas=0, and anchor by the
+    # matching default-shape pelvis (joint 0). p1_joints stays as-is for the
+    # betas-independent mocap->cem yaw fit.
+    p1_pel_moc = p1_joints[:, 0]
+    if DEFAULT_SHAPE:
+        model = SMPLXModel(str(SMPLX_NEUTRAL))
+        n = len(pose1["global_orient"])
+        verts_pel = [model.forward({k: pose1[k][t] for k in _SMPLX_KEYS}, return_joints=True)
+                     for t in range(n)]
+        p1_verts = np.stack([vp[0] for vp in verts_pel])
+        p1_pel_moc = np.stack([vp[1][0] for vp in verts_pel])
+        print("[shape] re-posed partner at neutral betas=0")
 
-    q2 = np.load(CEM_DIR / "E170_box021_20231011_037_p2_PRG.npz")["qpos"][:, 0, :]
-    q1 = np.load(CEM_DIR / "E170_box021_20231011_037_p1_PRG.npz")["qpos"][:, 0, :]
+    q2 = np.load(CEM_DIR / f"{args.exp}_{args.case}_{args.primary}_PRG.npz")["qpos"][:, 0, :]
+    q1 = np.load(CEM_DIR / f"{args.exp}_{args.case}_{args.partner}_PRG.npz")["qpos"][:, 0, :]
 
-    m2 = mujoco.MjModel.from_xml_path(str(SCENE_P2)); d2 = mujoco.MjData(m2)
-    m1 = mujoco.MjModel.from_xml_path(str(SCENE_P1)); d1 = mujoco.MjData(m1)
+    m2 = mujoco.MjModel.from_xml_path(str(scene_primary)); d2 = mujoco.MjData(m2)
+    m1 = mujoco.MjModel.from_xml_path(str(scene_partner)); d1 = mujoco.MjData(m1)
     pel1 = mujoco.mj_name2id(m1, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
     pel2 = mujoco.mj_name2id(m2, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
 
@@ -164,7 +212,7 @@ def main():
         t1 = f - P1_TO_P2                     # p1 cem index
         r = P1_TRIM_START + t1                # mocap index
         pel_cem = p1_pel_cem[t1]
-        pel_moc = p1_joints[r, 0]
+        pel_moc = p1_pel_moc[r]
         return (Rinv @ (p1_verts[r] - pel_moc).T).T + pel_cem, r
 
     lo = P1_TO_P2
@@ -179,11 +227,10 @@ def main():
     cdir = np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
     camera = pyrender.PerspectiveCamera(yfov=yfov, aspectRatio=1.0)
     renderer = pyrender.OffscreenRenderer(RES, RES)
-    mat = lambda c: pyrender.MetallicRoughnessMaterial(
-        baseColorFactor=c, metallicFactor=0.0, roughnessFactor=0.6)
-    lights = [(np.array([0.6, 0.9, 1.0]), 5.5),
-              (np.array([-0.9, -0.2, 0.3]), 1.0),
-              (np.array([0.1, -1.2, 0.5]), 1.3)]
+    # CARI4D-style soft Phong (low metallic, mid-high roughness).
+    mat = lambda c, r=0.55: pyrender.MetallicRoughnessMaterial(
+        baseColorFactor=c, metallicFactor=0.0, roughnessFactor=r, doubleSided=True)
+    shadow_flag = pyrender.constants.RenderFlags.SHADOWS_DIRECTIONAL
 
     def frame_meshes(f):
         d2.qpos[:] = q2[f]; d2.qvel[:] = 0.0; mujoco.mj_forward(m2, d2)
@@ -194,41 +241,62 @@ def main():
 
     sample = list(range(lo, hi, max(1, (hi - lo) // 16)))
     radius = 0.0
+    floor_z = np.inf
     for f in sample:
         robot, (ov, _, _), hv = frame_meshes(f)
         rall = np.concatenate([g[0] for g in robot] + [ov, hv], 0)
         radius = max(radius, np.linalg.norm(np.ptp(rall, axis=0)) / 2.0)
+        floor_z = min(floor_z, rall[:, 2].min())
     dist = radius / np.tan(yfov / 2.0) * 1.15
+    floor_trimesh = make_checker_floor(float(floor_z), extent=10.0, repeats=12, up="z")
 
-    frames = []
-    for f in range(lo, hi):
-        robot, (ov, of, orgb), hv = frame_meshes(f)
-        rmean = np.concatenate([g[0] for g in robot], 0).mean(0)
-        target = (rmean + hv.mean(0) + ov.mean(0)) / 3.0
-        scene = pyrender.Scene(bg_color=[1, 1, 1, 1], ambient_light=[0.15, 0.15, 0.15])
-        for rv, rf, rgb in robot:                          # G1 silver links + black joints
-            scene.add(pyrender.Mesh.from_trimesh(trimesh.Trimesh(rv, rf, process=False),
-                                                 material=mat(list(rgb) + [1.0]), smooth=False))
-        scene.add(pyrender.Mesh.from_trimesh(trimesh.Trimesh(hv, smplx_faces, process=False),
-                                             material=mat(P1_COLOR), smooth=True))
-        scene.add(pyrender.Mesh.from_trimesh(trimesh.Trimesh(ov, of, process=False),
-                                             material=mat(list(orgb) + [1.0]), smooth=False))
-        cam_pose = look_at(target + cdir * dist, target, [0, 0, 1])
-        scene.add(camera, pose=cam_pose)
-        for dvec, inten in lights:
-            scene.add(pyrender.DirectionalLight(color=[1, 1, 1], intensity=inten),
-                      pose=look_at(target + dvec, target, [0, 0, 1]))
-        color, depth = renderer.render(scene)
-        rgb = color[:, :, :3].copy()
-        rgb[depth == 0] = 255                 # pure white background (no-geometry pixels)
-        frames.append(rgb)
-        imageio.imwrite(FRAME_DIR / f"frame_{f - lo:04d}.png", rgb)
+    frame_fs = list(range(lo, hi))
+    if PREVIEW_N > 0:
+        idx = np.linspace(0, len(frame_fs) - 1, PREVIEW_N).round().astype(int)
+        frame_fs = [frame_fs[i] for i in idx]
+        print(f"[preview] rendering {PREVIEW_N} sampled frames")
+
+    def render_version(mode: str):
+        assert mode in ("bg", "white")
+        with_bg = mode == "bg"
+        frame_dir = OUT / f"mixed_frames_{mode}"
+        frame_dir.mkdir(parents=True, exist_ok=True)
+        bg_col = [0.90, 0.91, 0.93, 1.0] if with_bg else [1.0, 1.0, 1.0, 1.0]
+        frames = []
+        for i, f in enumerate(frame_fs):
+            robot, (ov, of, _orgb), hv = frame_meshes(f)
+            rmean = np.concatenate([g[0] for g in robot], 0).mean(0)
+            target = (rmean + hv.mean(0) + ov.mean(0)) / 3.0
+            scene = pyrender.Scene(bg_color=bg_col, ambient_light=[0.4, 0.4, 0.42])
+            if with_bg:
+                scene.add(pyrender.Mesh.from_trimesh(floor_trimesh))
+            for rv, rf, rgb in robot:                      # G1 silver links + black joints
+                scene.add(pyrender.Mesh.from_trimesh(trimesh.Trimesh(rv, rf, process=False),
+                                                     material=mat(list(rgb) + [1.0]), smooth=False))
+            scene.add(pyrender.Mesh.from_trimesh(trimesh.Trimesh(hv, smplx_faces, process=False),
+                                                 material=mat(P1_COLOR), smooth=True))
+            scene.add(pyrender.Mesh.from_trimesh(trimesh.Trimesh(ov, of, process=False),
+                                                 material=mat(BOX_COLOR), smooth=False))
+            scene.add(camera, pose=look_at(target + cdir * dist, target, [0, 0, 1]))
+            for light, pose in soft_phong_lights(look_at, target, [0, 0, 1], float(floor_z), up="z"):
+                scene.add(light, pose=pose)
+            color, depth = renderer.render(scene, flags=shadow_flag if with_bg else 0)
+            rgb = color[:, :, :3].copy()
+            if not with_bg:
+                rgb[depth == 0] = 255             # pure white background
+            frames.append(rgb)
+            imageio.imwrite(frame_dir / f"frame_{i:04d}.png", rgb)
+        return frames, frame_dir
+
+    for mode in ("bg", "white"):
+        frames, frame_dir = render_version(mode)
+        if PREVIEW_N == 0:
+            mp4 = OUT / f"mixed_robot_smplx_{mode}.mp4"
+            imageio.mimsave(mp4, frames, fps=FPS, quality=9)
+            print(f"[ok] {mode}: cem p2[{lo},{hi}) {len(frames)} frames -> {frame_dir}  video -> {mp4}")
+        else:
+            print(f"[ok] {mode}: {len(frames)} preview frames -> {frame_dir}")
     renderer.delete()
-
-    mp4 = OUT / "mixed_robot_smplx.mp4"
-    imageio.mimsave(mp4, frames, fps=FPS, quality=9)
-    print(f"[ok] cem frames p2[{lo},{hi})  {len(frames)} frames -> {FRAME_DIR}")
-    print(f"[ok] video -> {mp4}")
 
 
 if __name__ == "__main__":
