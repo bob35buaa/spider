@@ -169,6 +169,8 @@ TRACK_MASK_FIELDS = [
     "track_eef_ori_err_deg_mean",
     "track_root_pos_err_cm_mean",
     "track_root_ori_err_deg_mean",
+    "track_mpjpe_cm_mean",
+    "track_mpjpe_local_cm_mean",
     "track_obj_pos_err_cm_mean",
     "track_obj_z_abs_err_cm_mean",
     "track_obj_ori_err_deg_mean",
@@ -639,6 +641,8 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
         "track_eef_ori_err_deg_mean",
         "track_root_pos_err_cm_mean",
         "track_root_ori_err_deg_mean",
+        "track_mpjpe_cm_mean",
+        "track_mpjpe_local_cm_mean",
         "track_obj_pos_err_cm_mean",
         "track_obj_z_abs_err_cm_mean",
         "track_obj_ori_err_deg_mean",
@@ -665,12 +669,33 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
     object_id = mj_id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
     eef_ids = [bid for bid in (left_wrist_id, right_wrist_id) if bid >= 0]
 
+    # MPJPE: mean per-joint Cartesian position error over ALL robot bodies
+    # (the kinematic subtree rooted at pelvis -> every robot link, not just
+    # root/eef).  Static scene bodies (object, furniture) are excluded so they
+    # cannot dilute the error toward zero.  Two variants:
+    #   track_mpjpe_cm_mean        MPJPE-G: global (un-aligned) distance, cm,
+    #                              matching the eef/root pos-err convention above.
+    #   track_mpjpe_local_cm_mean  MPJPE-L: pelvis-aligned (subtract the run/ref
+    #                              root offset) -> pose fidelity independent of
+    #                              global root drift.
+    robot_body_ids: list[int] = []
+    if pelvis_id >= 0:
+        for bid in range(model.nbody):
+            cur = bid
+            while cur > 0:
+                if cur == pelvis_id:
+                    robot_body_ids.append(bid)
+                    break
+                cur = int(model.body_parentid[cur])
+
     data_run = mujoco.MjData(model)
     data_ref = mujoco.MjData(model)
     eef_pos: list[float] = []
     eef_ori: list[float] = []
     root_pos: list[float] = []
     root_ori: list[float] = []
+    mpjpe: list[float] = []
+    mpjpe_local: list[float] = []
     obj_pos: list[float] = []
     obj_z_abs: list[float] = []
     obj_ori: list[float] = []
@@ -693,6 +718,13 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
         if pelvis_id >= 0:
             root_pos.append(float(np.linalg.norm(data_run.xpos[pelvis_id] - data_ref.xpos[pelvis_id])))
             root_ori.append(_quat_angle_deg(data_run.xquat[pelvis_id], data_ref.xquat[pelvis_id]))
+
+        if robot_body_ids:
+            diff = data_run.xpos[robot_body_ids] - data_ref.xpos[robot_body_ids]
+            mpjpe.append(float(np.mean(np.linalg.norm(diff, axis=1))))
+            if pelvis_id >= 0:
+                root_offset = data_run.xpos[pelvis_id] - data_ref.xpos[pelvis_id]
+                mpjpe_local.append(float(np.mean(np.linalg.norm(diff - root_offset, axis=1))))
 
         frame_eef_pos = []
         frame_eef_ori = []
@@ -726,6 +758,10 @@ def _table4_tracking_metrics(robot_qpos: np.ndarray, kin_qpos: np.ndarray, model
         out["track_root_pos_err_cm_mean"] = float(np.nanmean(root_pos) * 100.0)
     if root_ori:
         out["track_root_ori_err_deg_mean"] = float(np.nanmean(root_ori))
+    if mpjpe:
+        out["track_mpjpe_cm_mean"] = float(np.nanmean(mpjpe) * 100.0)
+    if mpjpe_local:
+        out["track_mpjpe_local_cm_mean"] = float(np.nanmean(mpjpe_local) * 100.0)
     if obj_pos:
         out["track_obj_pos_err_cm_mean"] = float(np.nanmean(obj_pos) * 100.0)
     if obj_z_abs:
@@ -754,6 +790,7 @@ def _tracking_metrics(
         "track_joint_err_deg_mean",
         "track_eef_pos_err_cm_mean", "track_eef_ori_err_deg_mean",
         "track_root_pos_err_cm_mean", "track_root_ori_err_deg_mean",
+        "track_mpjpe_cm_mean", "track_mpjpe_local_cm_mean",
         "track_obj_pos_err_cm_mean", "track_obj_z_abs_err_cm_mean",
         "track_obj_ori_err_deg_mean",
     ]
