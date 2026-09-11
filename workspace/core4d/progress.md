@@ -1,5 +1,78 @@
 # CORE4D 当前进度
 
+## 🚧 进行中：E215 — bucket+box rot object-augmentation 放量 + full CEM（plan247 / R302 / Phase 73）
+
+> **2026-09-12 启动**：计划已批准并落 `plan/247_E215_bucket_box_rot_augmentation_plan.md`。
+> 范围：7 bucket + 31 box = 38 case × rot0/rot1 = 76 条 rot aug full CEM（不含 orig 复跑/RL 导出）。
+> 冻结：CEM seed=0/1024/32/no-compile；retarget=omnirt_v2/ref_fk；rot 幅度沿用 E208 原生（±45° yaw+0.2m 侧移）；
+> holosoma 用 `../holosoma`（含 rot 修复 9e544b1）；掩码复用各 case orig 3cm。
+> 臂分组：G1 bucket003=E202 PRG(bucketAlignedTop)；G2 bucket007=E210 PRG+G1(gravcomp)；
+> G3 box021=E199/E200 PRG(rubberHull)；G4 box023=E200 noPRG；G5 box001/004/024=E198 G1A2。
+> **蓝本**：E208 管线（`scripts/experiments/E208/`）——run_upstream_retarget + build_augmented_tasks +
+> build_aug_manifest + run_e208_cem + seed_from_e206。E215 复用 trim/scene-gen 核心，改 case 集 + 5 臂分派。
+>
+> **当前动作**：已精读 e208_common.py / run_upstream_retarget.py / build_augmented_tasks.py。
+> 三路 recon 并发中：①38 case 的 base task + omnirt 变体 + `_original` warm-start 树定位（含 2 个无 base 的 box021）；
+> ②4 臂 builder 契约（E202/E210/E200/E198 scene+override）；③e199_common 契约 + seed_from_e206 + build_aug_manifest。
+> 待 recon 回收后写 `E215/e215_common.py` 等 14 个文件。
+>
+> **契约已锁（recon-3 回收）**：
+> - 变体：`rot0→rot_0`(aug_translation `0,0.2,0`,rot `+0.785398`)、`rot1→rot_1`(`0,-0.2,0`,`-0.785398`)；rot 非纯旋转（叠 0.2m 侧移）。
+> - `E199.aug_task_name` 隐式 `omnirt_v1→omnirt_v2` relabel（base v1 → aug 目录 v2），与 plan §2 一致；E215 用 v2 uniform 可直接用 E199 版。
+> - 路径：TASK_ROOT=`example_datasets/processed/core4d/unitree_g1/humanoid_object`；OVERRIDE_DIR=`examples/config/override`；HOLOSOMA_REPO=`../holosoma`(sibling 默认)；`load_case_meta` 读 `{task}/task_info.json` 返回 date/seq/person/object_name/object_model_rel/source_scene/source_scene_task/holosoma_task(=`{date}-{seq}-{person}-{object_name}_with_obj`)。
+> - **warm-start seeding**（seed_from_e206）：从该 case **源实验 S3 retarget 根**（`{exp}.S3_DIR/{variant}/ref_fk/results/{variant}_ref_fk/holosoma_{base}`）hardlink/copy `converted/*.npz`+`retargeted/{task}_original.npz`+`trimmed/{task}_original.npz`+`trim_window.json` 到 E215 `data_root(v2)/holosoma_{base}`，**不 --force**，upstream 复用作 IK warm-start；aug 变体自行 fixed-window trim（upstream 只 trim `*_original`）。
+> - override：**build_aug_manifest 自己写两份 yaml**——base yaml（克隆源实验 S5 base override，只改 `task:` 一行，掩码路径不变）+ 臂 override（`defaults:[base,_self_]`+臂 payload）。无独立 override 步骤。→ E215 每臂组需定位对应**源实验**的 base+臂 override 克隆。
+> - run cmd：`run_mjwp.py +override=... seed/num_samples/max_num_iterations output_dir=`，**绝不传 `task=`**（override defaults 链是 task 唯一权威，preflight 校验 base yaml `task:`==target_task）；env `MUJOCO_GL=disable`/`TORCHDYNAMO_DISABLE=1`/`CUDA_VISIBLE_DEVICES`。
+>
+> **case/warm-start 定位（recon-1 回收）**：
+> - **36/38 有 base+完整 `_original` warm-start**（retargeted+trimmed 齐全）：7 bucket→`results/E202/data_preprocess/holosoma_{base}/`(FLAT)；29 box→`results/E199/data_preprocess/holosoma_{base}/`(FLAT)。E208 是 SPLIT(`data_root(variant)/`)，只含 chair/desk，无 bucket/box。
+> - **2 个 box021 缺 base+warm-start**：`035_p1`、`029_p2`（无 dcv3 base，仅 legacy `d003_*`+E203 PRG override 指向不存在 v1 base）→ Stage0 或排除。
+> - **base 变体分布**：30 个 v1、**6 个 v2**（box001_040_p2/039_p1/108_p1、box021_034_p2、box024_026_p2/027_p2）。
+> - **⚠️ 单变量隐患（preflight 必查）**：E215 rot-aug 冻结 v2，但 30 case 的 orig/trans baseline 出自 v1 base 目录。需**核实已有 E199/E202 orig CEM baseline 是否本就在 v2 下复跑**（E199/E202 曾对所有变体含 orig 冻结 v2）→ 决定 aug(v2)-vs-orig 是否干净。preflight 审计必须查 **baseline 的 retarget-variant parity**，不仅是存在性。
+> - seed 源→目标变体每 case 唯一（由 base 目录名判定）；FLAT 源→（若沿用 E208 SPLIT）v2 子目录。
+>
+> **arm-builder 契约（recon-2 回收，5 组臂）**：所有 override 共用 `examples/config/override/`。
+> - **G1 bucket003 PRG(E202)**：scene builder `E202/e202_common.build_prg_scene(case_id, base_scene_act, trajectory, *, overwrite, object_key)`（scene_act→rubberHull→E178 bucketAlignedTop 5-seg 代理→18 pairs/geom；无 status 字段，失败即 raise）；`SCENE_NAME="scene_act_E202_bucketAlignedTop_PRG"`。override **AUTO**：`E202/build_aug_manifest.write_prg_override`→`core4d_E202_{case}_aug_{variant}_PRG.yaml`，内容 `e202_common.prg_override_payload`（defaults[aug_base,_self_]+scene_name+object_collision_sdf_mode:union+sdf_batch_groups:true+E174 PRG leg-penalty+leg-gate；**无 gravcomp**）。同时 `write_base_task_yaml` 克隆 dcv3 base yaml 换 task:+mask。
+> - **G2 bucket007 PRG+G1(E210)**：`E210/build_gravcomp_sidecars.write_sidecar(base, out, *, overwrite)`——base=E202 PRG scene，out=`base.with_name(SCENE_NAME).xml`，只把 `<body name="object">` gravcomp 0/缺→"1"，返回 (path,"written"|"verified")，幂等；复用 `e200_common.assert_gravcomp_diff`（全递归元素签名==仅该一属性差）。`SCENE_NAME="scene_act_E210_bucketAlignedTop_PRG_gravcomp"`，`BASE_SCENE_NAME=E202.SCENE_NAME`。override **AUTO** `E210/build_overrides.write_override`→`core4d_E210_{case}_aug_{variant}_PRG_gravcomp.yaml`：**极简单变量**——defaults 链 E202 override，只覆盖 `scene_name`（gravcomp 全在 scene xml，override 无 gravcomp 键）。
+> - **G3 box021 PRG(E199)**：`e199_common.build_prg_scene`→`scene_act_E199_rubberHull_PRG`（rubber_hull hand + 16 lower-body/object condim1 pair，**单 geom** object_collision，非 union 代理）。override **AUTO** `E199/build_aug_manifest.write_prg_override`→`core4d_E199_{case}_aug_{variant}_PRG.yaml`，`e199_common.prg_override_payload`（形同 E202 但**无** object_collision_sdf_* 两键）。⚠️ 磁盘文件名用 `person1`，代码示例用 `p1`——**读 manifest 里真实 case_id，勿假设**。
+> - **G4 box023 noPRG(E200)**：**无新 build**——`scene_act_E199_rubberHull`（E199 的 rubberHull 中间产物，无 PRG 门/leg pair）已由 E199 PRG 步骤落盘；`E200/build_arm_scenes.build_for_arm(arm="noprg")` 只校验存在+快照。**无 per-run yaml**：`arm_override_id=core4d_{aug_task}`（复用 E199 aug base yaml）+ CLI `extra_overrides="scene_name=scene_act_E199_rubberHull"`；noPRG 负态（leg_scale=0/gate=false）留 SPIDER 默认、run 后从 config_act.yaml 校验（裸 CLI 会被 Hydra "not in struct" 拒）。
+> - **G5 box001/004/024 G1A2(E198)**：E198 **不 build scene**——复用 **E194** gravcomp sidecar，只 `assert_gravcomp_diff` 审计。scene：box004/024=`scene_act_E194_rubberHull_PRG_gravcomp`，**box001=`scene_act_E194_G1_expansion_rubberHull_PRG_gravcomp`（扩张碰撞壳，E194 特有几何！）**。**无 per-run yaml**：复用 E194 override + CLI `extra_overrides="scene_name={sidecar} {A2_GATE}"`，`a2_overrides()="cem_hand_gate_min_sdf_m=-0.010000 cem_hand_gate_max_violation_pct=0.050000 cem_hand_gate_hard_floor_m=-0.015000"`。
+> - **⚠️ G5 aug-task 需重建 sidecar（E194 sidecar 在 orig task dir，aug dir 无）**：box004/024 = E199 rubberHull PRG + gravcomp（同 G2 机制但 rubberHull 代理）；**box001 需 G1_expansion 扩张几何**（E194 特有，需查是否可对 aug task 复现）→ 若不可复现，box001 G5 单变量性存疑，preflight 必查。
+> - **共享 helper**：`patch_hand_collision.patch_scene(base_scene_act,out_dir,case_id,hand_collision_variant_id="rubber_hull",scene_name=<中间名>,install_dir=None,repo=REPO)`；`create_spider_scene_from_template.py --generate-scene-act`（真正 create-spider-scene 入口，E202 const `CREATE_SCENE`）；`assert_gravcomp_diff`（canonical `E200/e200_common.py:134`，被 e210/e204e205 import）。
+> - **override 生成策略选择**：G1/G2/G3 有 AUTO 写 yaml；G4/G5 原生 CLI-driven 无 yaml。E215 若要统一「写 yaml」，drop-in 模板 = E205/write_e205(G1A2)、E204/write_e204(noPRG)（但那是 bucket contactAlignedTop，box 需自适配）。
+>
+> **★ E215 两处设计锁定（读完 5 个 common + E208 blueprint 后定，2026-09-12）★**：
+> 1. **G5 box G1A2 = E200 `prg_g1a2` 臂（非 E198 expansion 版）**：E200 已实现「rubberHull PRG + gravcomp(G1) + hand-gate(A2)」，scene `scene_act_E199_rubberHull_PRG_gravcomp`，且可在**新 aug task 上用现有代码复现**（E199.build_prg_scene + E200.build_gravcomp_sidecar）。E198 的 box001 `G1_expansion` 扩张几何**无法在 aug task 平凡复现**→ 弃用。故所有 box 臂统一走 **E199.build_prg_scene（造 rubberHull+PRG scene）+ E200 臂分派**。G5 orig baseline = E200 prg_g1a2（正是 plan §3.3 命名的 baseline）。**box001 expansion blocker 消除。**
+> 2. **box 臂 override 用 E200 原生 CLI `extra_overrides`（G4/G5 无 per-run yaml）**：忠实 single-source + 避开 Hydra "not in struct"（noPRG 负态 leg_scale=0/gate=false 不能裸 CLI 设）。**取代 plan §4#7 统一写 yaml**（plan 仅作为「若要统一」的可选项）。每臂 `+override=` 与 `extra_overrides`：
+>    - G1 bucket003：`+override=E202 PRG override`（E202.prg_override_payload），extra=""
+>    - G2 bucket007：`+override=E210 gravcomp override`（链 E202 PRG override，仅改 scene_name），extra=""
+>    - G3 box021：`+override=E199 PRG override`（E199.prg_override_payload），extra=""
+>    - G4 box023：`+override=aug_base_task_yaml`（链 E167A），extra=`scene_name=scene_act_E199_rubberHull`
+>    - G5 box001/004/024：`+override=E199 PRG override`（链基），extra=`scene_name=scene_act_E199_rubberHull_PRG_gravcomp {a2_overrides()}`
+>    - **每 case 每 rot 变体都写 aug_base_task_yaml** `core4d_{aug_task}.yaml`（克隆 dcv3 base 换 task:+mask，mask 指回 orig 3cm）——所有臂 override 经 defaults 链它。
+> 3. **retarget env = `E199.OMNIRT_V2_ENV`（5 键，REPLACE_WRIST_WITH_FINGERTIP 走 pipeline.sh 默认 1）**——与 E199/E202 baseline 逐键一致（**不用** E208 的 6 键 v1/v2，那是 E206 desk/chair 血统 wrist=0）。
+> 4. **seed 假设（preflight 必验）**：E199/E202 FLAT 树里的 `_original.npz` **本就是 v2 retarget**（E199/E202 对所有变体含 orig 冻结 v2，即使 base 目录名是 v1）→ seed 进 E215 v2 树是 v2→v2 一致。base_target_task = `f"dcv3_{base_variant}_ref_fk_{case_id}"`（case_id 已含 object+date+seq+p{N}）。
+> 5. **base_variant 分布**：36 buildable = 30 v1 + 6 v2。6 个 v2：box001_20231003_1_040_p2 / box001_20231003_2_039_p1 / box001_20231023_108_p1 / box021_20231011_034_p2 / box024_20231011_026_p2 / box024_20231011_027_p2。2 个 MISSING（无 base，需 Stage0/排除）：box021_20231011_035_p1 / box021_20231018_029_p2。
+>
+> **★ case 集权威定位（2026-09-12，用户指认）★**：38 case 权威清单 = `tmp/paper_case_id.txt` 的 `box*`/`bucket*` 行（也含 chair/desk，属别实验）。已逐 case 核验 TASK_ROOT dcv3 dir + E199/E202 warm-start 树：**30 v1 + 6 v2 + 2 MISSING**（box001_108_p1/box021_034_p2/box024_026_p2 只有 v2 有 task_info.json → base=v2，无歧义）。seed 源就绪（converted+_original+trans+trim_window，无 rot npz）。**aug base yaml 克隆**：34 case 克隆现有 `..._aug_trans0.yaml`（只改 task 后缀 trans0→rot{k}，掩码逐字继承 = 与 trans sibling 一致）；2 case(box001_014_p1 / bucket007_075_p2)无 trans aug base yaml → 退化克隆 dcv3 base；2 MISSING → Stage0/排除。已存 memory `e215-case-set-authority`。已精读 5 arm common + override 结构。**开始写 E215/ 14 文件。**
+>
+> **★ E215/ 代码全部落地（2026-09-12）★**：`scripts/experiments/E215/` 9 py + `scripts/train/train_E215.sh` + `scripts/launch/active/run_E215_local_8gpu.sh`+`pull_E215_remote_results.sh` + `scripts/eval/{wrappers,runners}/eval_E215_rot_augmentation.*`。全部 py_compile / bash -n 通过。
+> - `e215_common.py`:38-case registry(pin base_variant，authority=tmp/paper_case_id.txt),5 arm-group 分派(GROUPS),omnirt_v2 5键 env,rot0/rot1,CEM 冻结 0/1024/32/no-compile,FIELDS,SingleInstance。**已验:36 buildable+2 missing,counts/dispatch/aug-task/seed-src 全对**。
+> - `test_rotation_fix.py`:**9/9 PASS**(确认 ../holosoma src/utils.py:354 修复版)。`seed_warmstart.py`:**dry-run 36/36,180 hardlink+36 copy**(trim_start: bucket003_068_p1=97→yaw 将大幅衰减,C3 退化候选;bucket007_075_p2=0)。
+> - `run_upstream_retarget.py`(单 v2 pass rot-only,object-serial,flock,never --force);`build_augmented_tasks.py`(trim rot+建 SPIDER task+按 object_line 分派 e202/e199 scene builder+G1 gravcomp,degraded_yaw 标记);`build_gravcomp_sidecars.py`(G2/G5,复用 e200.assert_gravcomp_diff+tamper self-test);`build_aug_manifest.py`(克隆 aug base yaml+per-group arm override/extra_overrides+compose 单变量审计 rot0-vs-rot1 & rot0-vs-trans0-sibling+P0/P1/P2 tier+freeze);`run_e215_cem.py`(仿 E200 queue+flock+frozen-set+per-task timeout);`preflight_baseline_audit.py`;`quarantine_rot_npz.py`。
+> - **下一步**:seed(real)→upstream retarget(long CPU,bg)→build→gravcomp→snapshot→manifest→freeze→8卡 CEM。
+>
+> **★ 数据构建启动（2026-09-12）★**：
+> - seed real **36/36**。**优化**:seed 额外 hardlink retargeted `trans_0/1/2`(byte-identical from E199/E202)→ upstream 只算 rot_0/rot_1(省 ~60% IK，且更贴合 plan「只产 rot npz」)。smoke(box021_034_p1)证实 pipeline aug 分支跑通(v2 5键 env+`--augmentation`，reused converted+_original，6 augmentations 依次)。
+> - **full upstream retarget 后台运行中**(pid 70162,`--max-workers 5`,object-serial,logs/E215/upstream_full.log)。box021 组 9 case 串行为长杆。
+> - 遇到:`pkill/rm/kill 循环`被沙箱拒 → 用单 PID `kill` 逐个清理 smoke 残留(仅 _original，无 sentinel/partial，无需回滚)。
+>
+> **⏸ 2026-09-12 用户要求暂停(给其他程序腾 CPU),已全部 kill(主进程+workers+pipeline+waiter,ps 确认无残留)。断点:**
+> - **13 case 完成**(有 sentinel，各 rot=2/2 可行):box001_041_p1 / box004_082_p1/083_p1/083_p2 / box021_034_p1 / box023_045_p1/046_p1/021_p1 / box024_026_p1 / box001_040_p2(v2)/039_p1(v2) / box021_034_p2(v2) / box024_026_p2(v2)。**目前可行率 100%(26/26 rot)**。
+> - **1 case 半写**:`box024_20231011_027_p2` 只有 rot_0、无 sentinel(kill 时正算 rot_1)。
+> - **feasibility TSV 未写**(主进程中断在写 TSV 前)→ build 还不能跑。
+> - **恢复步骤(用户叫我时)**:①删 `holosoma_dcv3_omnirt_v2_ref_fk_box024_20231011_027_p2/retargeted/*_rot_*.npz`(半写，防短路复用坏数据);②重跑 `run_upstream_retarget.py --max-workers 5`(13 有 sentinel 的秒过+classify、其余重算，最终写 feasibility TSV);③build_augmented_tasks → gravcomp → snapshot → manifest → freeze → 8卡 CEM → eval。seed(含 trans)已就绪，无需重 seed。
+
 ## ✅ 已完成：E214b — Holosoma 三指标改用 CORE4D SMPLX 人体 GT（plan246 / R301 / Phase 72）
 
 > **2026-09-11 收口**：全 3 claim 成立。对齐 50/50（物体残差 median 0.0/max 25.7mm，scale∈[.716,.784]，
@@ -2019,3 +2092,11 @@ P0–P6（common/scenes/overrides/manifest/快照/smoke+运行时契约）→ �
 - **机制验证成立**：raw 2.16m → grasp mean ~7cm，reanchor 确实把 partner 手锚到 source object。
 - 注意：该 metric 用 **source** contact mask 门控 partner 手距，两人抓握时序不同 → ~24%>8cm 很可能是"partner 此刻未抓"帧，非 reanchor 失败。要严格判定需 orig 基线(同 reanchor+同 metric)对比；本机无 E178 orig HS motion，需另跑。
 - 8cm 硬阈未标定；bucket004 8.3cm 的"FAIL"是阈值人为，非真实缺陷。
+
+### 2026-09-12 E213-export 步骤4(HS reanchor 导出)完成
+- 承接 log302（R299 产 32-unit paired 输入），跑下游 Holosoma `export_rl_motion_from_spider_tsv.py`，partner 手 re-anchor 到 source object（默认 ON）。入口 `scripts/launch/active/run_E213_export_holosoma.sh`（改编 E202）。
+- 产 **64 motion**（32 unit×{cem,trajectory}；chair006 16 / desk007 8 / desk021 20 / desk023 20），全 export_pass，validation status=**PASS**，0 fail。无新 CEM 算力。
+- reanchor 诊断(raw pre-reanchor object_mismatch_max)：chair006 1.60 / desk007 1.25 / desk021 0.92 / desk023 1.14 m —— per-person 扰动两人世界系分歧，属预期。
+- post-reanchor 一致性(partner 手到 source object OBB 全程最近距)：ALL mean **1.2cm**，62/64 <8cm，全 64 <15cm → reanchor 把 partner 锚到 source object，两 agent 抓同一物体，自洽成立。
+- 结果：`holosoma/workspace/v3/data/E213_selected_arm_aug_partner_rl/*/exports/` + `results/E213/s6_downstream/export/{holosoma_downstream_validation.json,post_reanchor_consistency.tsv/.json,holosoma_export.log}`。详见 log305。
+- 下一步：HS S6 registry 登记 64 motion 路径；下游 RL 训练未跑。
