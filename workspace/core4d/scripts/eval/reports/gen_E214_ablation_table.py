@@ -84,18 +84,20 @@ METRICS = [
     ("foot_slip",      "foot slip max (m)",       "lower",  "m"),
     ("foot_skate_mean","foot skate mean (m/s)",   "lower",  "mps"),
     ("foot_skate_max", "foot skate max (m/s)",    "lower",  "mps"),
-    # --- holosoma gauge (ported from eval_retargeting.py; separate criteria) ---
-    ("fs_holo_vel",  "foot sliding vel mean (holosoma, m/frame)", "lower", "m"),
-    ("fs_holo_5",    "foot sliding frac >5mm/f (holosoma)",  "lower",  "pct"),
-    ("fs_holo_10",   "foot sliding frac >10mm/f (holosoma)", "lower",  "pct"),
-    ("fs_holo_20",   "foot sliding frac >20mm/f (holosoma)", "lower",  "pct"),
+    # --- holosoma gauge (ported from eval_retargeting.py; separate criteria).
+    # foot sliding & contact precision reference the CORE4D SMPLX human GT (scene
+    # frame); penetration needs no reference. ---
+    ("fs_holo_vel",  "foot sliding vel mean (holosoma SMPLX-GT, m/frame)", "lower", "m"),
+    ("fs_holo_5",    "foot sliding frac >5mm/f (holosoma SMPLX-GT)",  "lower",  "pct"),
+    ("fs_holo_10",   "foot sliding frac >10mm/f (holosoma SMPLX-GT)", "lower",  "pct"),
+    ("fs_holo_20",   "foot sliding frac >20mm/f (holosoma SMPLX-GT)", "lower",  "pct"),
     ("pen_holo_5",   "penetration frac@5mm (holosoma)",      "lower",  "pct"),
     ("pen_holo_10",  "penetration frac@10mm (holosoma)",     "lower",  "pct"),
     ("pen_holo_20",  "penetration frac@20mm (holosoma)",     "lower",  "pct"),
     ("pen_holo_max", "penetration depth max (holosoma, m)",  "lower",  "m"),
-    ("cprec_holo_2", "contact precision@2cm (holosoma)",     "higher", "pct"),
-    ("cprec_holo_5", "contact precision@5cm (holosoma)",     "higher", "pct"),
-    ("cprec_holo_10","contact precision@10cm (holosoma)",    "higher", "pct"),
+    ("cprec_holo_2", "contact precision@2cm (holosoma SMPLX-GT)",     "higher", "pct"),
+    ("cprec_holo_5", "contact precision@5cm (holosoma SMPLX-GT)",     "higher", "pct"),
+    ("cprec_holo_10","contact precision@10cm (holosoma SMPLX-GT)",    "higher", "pct"),
 ]
 MK = [m[0] for m in METRICS]
 SERIES = ["full", "A1_contactHDMI_only", "A2_surfaceBand_only",
@@ -208,6 +210,30 @@ def load_holosoma() -> dict[tuple[str, str], dict[str, float]]:
         if vals:
             out[(r["case_id"], r["series"])] = vals
     return out
+
+
+def holosoma_alignment_note() -> str:
+    """One-line SMPLX-GT alignment coverage summary from the holosoma cache."""
+    if not HOLOSOMA_CACHE.is_file():
+        return ""
+    per_case: dict[str, tuple[float, str]] = {}
+    for line in HOLOSOMA_CACHE.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        res = r.get("smplx_gt_align_residual_m")
+        st = r.get("smplx_gt_status", "")
+        if res is not None and r["case_id"] not in per_case:
+            per_case[r["case_id"]] = (float(res), st)
+    if not per_case:
+        return ""
+    res_mm = sorted(v[0] * 1000 for v in per_case.values())
+    noalign = [c for c, (_, st) in per_case.items() if not str(st).startswith("ok")]
+    med = res_mm[len(res_mm) // 2]
+    return (f"- holosoma foot-sliding/contact 参考=CORE4D SMPLX 人体 GT（场景系）；对齐 "
+            f"{len(per_case) - len(noalign)}/{len(per_case)} case（物体拟合残差 median "
+            f"{med:.1f}mm, max {max(res_mm):.1f}mm）"
+            + (f"；NO_GT_ALIGN: {noalign}" if noalign else "；全部通过对齐 gate") + "。")
 
 
 def load_e214() -> dict[tuple[str, str], dict[str, float]]:
@@ -342,6 +368,9 @@ def main() -> int:
           cell_note,
           "- max phys penetration：每 case 对序列取最深穿透(mm)，再在 case 上平均。foot skate：stance 脚水平滑移速度(m/s)。",
           "- 方向 ↑=越大越好，↓=越小越好。"]
+    holo_note = holosoma_alignment_note()
+    if holo_note:
+        md.append(holo_note)
     if dropped:
         md.append(f"- 已剔除 {len(dropped)} 个 floor-effect case：{', '.join(dropped)}。")
     md.append("")

@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 303 个日志文件。
+> 自动生成，共 304 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 71 (E213-E213)
@@ -11,6 +11,7 @@
 | 301 | E213 |  | Paired export selected arm aug | [301_E213_paired_export_selected_arm_aug....](301_E213_paired_export_selected_arm_aug.md) |
 | 302 | E213 |  | Export selected arm aug rl | [302_E213_export_selected_arm_aug_rl.md](302_E213_export_selected_arm_aug_rl.md) |
 | 303 | E214 |  | Core method four ablation | [303_E214_core_method_four_ablation.md](303_E214_core_method_four_ablation.md) |
+| 304 | E214b |  | Holosoma smplx gt reference | [304_E214b_holosoma_smplx_gt_reference.md](304_E214b_holosoma_smplx_gt_reference.md) |
 
 ## Phase 64 (E201-E201)
 
@@ -25,8 +26,8 @@
 | # | 实验 | 日期 | 摘要 | 文件 |
 |---|------|------|------|------|
 | 291 | E202, e178 | 2026-08-20 | Bucket e178 translation augmentation | [291_E202_bucket_e178_translation_augment...](291_E202_bucket_e178_translation_augmentation.md) |
-| 292 | E204, E205 |  | Bucket noprg g1a2 three arm 14gate | [292_E204_E205_bucket_noprg_g1a2_three_ar...](292_E204_E205_bucket_noprg_g1a2_three_arm_14gate.md) |
 | 292 | E203, e4d |  | P1 core4d v2 orig cem results | [292_E203_p1_core4d_v2_orig_cem_results.m...](292_E203_p1_core4d_v2_orig_cem_results.md) |
+| 292 | E204, E205 |  | Bucket noprg g1a2 three arm 14gate | [292_E204_E205_bucket_noprg_g1a2_three_ar...](292_E204_E205_bucket_noprg_g1a2_three_arm_14gate.md) |
 | 293 | E203, e4d |  | Core4d v2 orig full results | [293_E203_core4d_v2_orig_full_results.md](293_E203_core4d_v2_orig_full_results.md) |
 | 294 | E202 | 2026-08-20 | Export translation aug partner rl results | [294_E202_export_translation_aug_partner_...](294_E202_export_translation_aug_partner_rl_results.md) |
 

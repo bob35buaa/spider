@@ -1,5 +1,26 @@
 # CORE4D 当前进度
 
+## ✅ 已完成：E214b — Holosoma 三指标改用 CORE4D SMPLX 人体 GT（plan246 / R301 / Phase 72）
+
+> **2026-09-11 收口**：全 3 claim 成立。对齐 50/50（物体残差 median 0.0/max 25.7mm，scale∈[.716,.784]，
+> pelvis 交叉核验 median 54mm）；C2：contact precision@10cm full 57.4% ≫ A2 33.5%（去 contact_hdmi 够不到物体）；
+> C3：penetration 逐字不变（仅 foot sliding/contact precision 参考侧改为 SMPLX-GT）。250/250 ok 重算，47/50 报告重生成。
+> 详见 [log304](log/304_E214b_holosoma_smplx_gt_reference.md)。**待 commit**。
+
+> **2026-09-11 探索确认（关键）**：
+> - 50/50 case 全部有 s3 converted `_with_obj.npz`（509 个文件跨 E203/E206/E173…）。
+> - **converted = raw 关节 Rx(90°)（Y-up→Z-up），s=1、t=0**（Umeyama 残差 0.00mm）；converted 的 object 在
+>   converted 系（Z-up、贴地）——**converted 不在 rollout scene 系**，故 converted 不能直接给 raw→scene。
+> - raw CORE4D 是 **Y-up**（toe y≈0 为地面，水平面=xz）；rollout/kin 是 **Z-up + 机器人尺度**。
+> - **raw→scene 是干净相似变换**：以 object 平移做 Umeyama(含尺度) + 暴力单调线性时间映射（raw[a..b]→N_roll 均匀重采样），
+>   box001_20231003_2_039_p1 结果：map=raw[16..115]→100、**obj 残差 0.00mm**、scale 0.73；
+>   映射后 SMPLX pelvis z[0.76,0.80] ≈ robot pelvis z[0.76,0.81]（全局对齐正确）。object 是完美锚点。
+> - 参考 object 位姿 = 变换后 raw object ≡ kin object（OmniRetarget 对 object 做运动学 replay，二者 0.00mm 重合）。
+> - **对齐用 DTW 时间映射**：object 平移 Umeyama(含尺度) + 暴力线性时间映射初始化 + ICP 式单调 DTW 精修。
+>   坑：加 object 旋转 rigid-points 会污染拟合（raw 与 scene 的 object body 系差一个 mesh 规范旋转）→ 只用平移。
+>   产物：`scripts/eval/runners/smplx_reference.py`（含 per-case npz cache）、`validate_smplx_reference.py`；
+>   缓存 `results/E214/eval/smplx_ref/*.npz` + `smplx_reference_alignment.tsv`。
+
 ## ✅ 已完成：E214 — 核心方法四消融（plan245 / R300 / Phase 72）
 
 > **2026-09-10 收口**：全 5 条 claim 成立，两大贡献四支均必要且互补。

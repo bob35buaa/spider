@@ -6,13 +6,16 @@ Faithful port of the holosoma_retargeting reference evaluator
 are computed with the SAME criteria/thresholds as holosoma. These are reported
 SEPARATELY from the existing SPIDER metrics and are always labelled "holosoma".
 
-Data adaptation (holosoma evals InterMimic SMPL human demos; CORE4D has the
-retargeted robot kin reference instead). We keep every algorithm/threshold
-identical and only substitute the inputs the reference gauge needs:
-  * "reference / demo" foot & hand = the CORE4D kinematic reference (kin_ref) FK,
-    standing in for holosoma's human SMPL joints.
-  * "robot / retarget" = the rollout NPZ (cem/ablation output).
-This is documented per metric below.
+Data adaptation. holosoma evals InterMimic SMPL *human* demos as the reference.
+Our pipeline is CORE4D SMPLX -> OmniRetarget -> SPIDER-CEM, so the faithful
+reference is the CORE4D SMPLX human GT, expressed in the rollout scene frame by
+``smplx_reference.build_smplx_reference`` (object-anchored similarity + DTW time
+map; see that module). We keep every algorithm/threshold identical and substitute:
+  * "reference / demo" foot (sticking phase) = SMPLX toe joints (10/11), scene frame.
+  * "reference / demo" hand (contact) = true SMPLX wrist joints (20/21), scene frame.
+  * "reference / demo" object pose = the human-driven object pose (scene frame).
+  * "robot / retarget" foot & hand & object = the rollout NPZ (cem/ablation output).
+penetration needs no reference and is unchanged. This is documented per metric below.
 
 Gauge (from eval_retargeting.py):
   penetration_tolerance          = 0.01 m   (strict penetration deeper than 1cm)
@@ -23,21 +26,21 @@ Gauge (from eval_retargeting.py):
                                              this is distance to the object centre)
 
 Foot sliding (detect_foot_sliding + extract_foot_sticking_sequence_velocity):
-  reference "sticking" per foot = reference toe per-frame |dxy| <= 0.01
+  reference "sticking" per foot = SMPLX toe per-frame |dxy| <= 0.01 (scene frame)
   sliding frame = reference-sticking AND robot toe per-frame |dxy| > 0.01
   foot_sliding_holosoma_frac     = #sliding frames / #sticking frames
   foot_sliding_holosoma_vel_mean = mean of per-frame max(L,R) sliding speed
-  (foot = <side>_ankle_roll_link body; holosoma used its toe sphere link.)
+  (robot foot = <side>_ankle_roll_link body; reference foot = SMPLX toe 10/11.)
 
 Penetration (evaluate_penetration): robot-vs-(object OR floor) strict penetration
   penetration_holosoma_frac        = fraction of frames with any penetration >1cm
   penetration_holosoma_depth_mean_m= mean per-frame max depth over penetrating frames
   penetration_holosoma_depth_max_m = max penetration depth over the sequence
 
-Contact precision (evaluate_contact_precision), hands (L/R wrist):
-  contact_precision_holosoma = 1 - (frames where the reference hand is within 0.28m
-                               of the reference object centre but the robot hand is
-                               NOT within 0.28m of the rollout object centre) / N
+Contact precision (evaluate_contact_precision), hands (L/R SMPLX wrist):
+  contact_precision_holosoma = 1 - (frames where the SMPLX GT hand is within X of the
+                               reference object SURFACE but the robot hand is NOT
+                               within X of the rollout object surface) / N   (swept X)
 
 Output (results/E214/eval/):  e214_holosoma.jsonl  one record per (case, series)
 
@@ -55,6 +58,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 REPO = Path(__file__).resolve().parents[5]
 for _p in ("workspace/core4d/report/0908/code",
            "workspace/core4d/scripts",
@@ -68,8 +73,10 @@ G.REPO = REPO  # gen_paper_results computes REPO one level short (parents[4]); f
 
 import e214_common as C  # noqa: E402
 from eval_E214_ablation import jobs_from_manifest  # noqa: E402
+from smplx_reference import build_smplx_reference  # noqa: E402
 
 CACHE = C.EVAL_DIR / "e214_holosoma.jsonl"
+SMPLX_CACHE = C.EVAL_DIR / "smplx_ref"  # per-case SMPLX-GT reference npz cache
 
 # holosoma gauge constants (from eval_retargeting.py, non-multi_boxes)
 COLLISION_DETECTION_THRESHOLD = 0.10   # prefilter + mj_geomDistance margin
@@ -114,36 +121,34 @@ def build_jobs() -> list[dict[str, str]]:
 
 # ---- holosoma gauge, ported (heavy imports done inside the worker) ----------
 
-def _foot_sliding(mujoco, np, model, run_q, ref_q):
+def _foot_sliding(mujoco, np, model, run_q, ref_toe_xy):
     """detect_foot_sliding + extract_foot_sticking_sequence_velocity, ported, with a
-    sweep over the sliding velocity threshold. Reference "sticking" (contact phase)
-    is fixed at STICK_THRESHOLD as in holosoma; the sweep varies only the robot
-    sliding cutoff. Returns (vel_mean, {thr: frac}).
-      vel_mean = mean per-frame max robot toe speed over sticking frames (thr-free)
-      frac[thr] = #(sticking frames with a stance foot exceeding thr) / #sticking frames
+    sweep over the sliding velocity threshold. The reference "sticking" (contact
+    phase) is defined by the SMPLX GT toe (scene frame) per-frame |dxy|, fixed at
+    STICK_THRESHOLD as in holosoma; the sweep varies only the robot sliding cutoff.
+      ref_toe_xy : (N,2,2) SMPLX toe (L,R) horizontal position in the scene frame.
+      vel_mean   = mean per-frame max robot toe speed over sticking frames (thr-free)
+      frac[thr]  = #(sticking frames with a stance foot exceeding thr) / #sticking frames
     """
     import mujoco as _mj  # noqa: PLC0415
     ankle_ids = [_mj.mj_name2id(model, _mj.mjtObj.mjOBJ_BODY, n) for n in ANKLE_BODIES]
     if any(a < 0 for a in ankle_ids):
         return math.nan, {t: math.nan for t in SLIDE_THRESHOLDS}
-    H = min(len(run_q), len(ref_q))
+    H = min(len(run_q), len(ref_toe_xy))
     if H < 2:
         return math.nan, {t: math.nan for t in SLIDE_THRESHOLDS}
     data = _mj.MjData(model)
 
-    def ankle_xy(qframe, robot_prefix_only):
-        if robot_prefix_only or qframe.shape[0] != model.nq:
-            q = np.zeros(model.nq)
-            q[:NQ_ROBOT] = qframe[:NQ_ROBOT]
-        else:
-            q = qframe[:model.nq]
+    def ankle_xy(qframe):
+        q = qframe[:model.nq] if qframe.shape[0] == model.nq else \
+            np.concatenate([qframe[:NQ_ROBOT], np.zeros(model.nq - NQ_ROBOT)])
         data.qpos[:] = q
         data.qvel[:] = 0.0
         _mj.mj_forward(model, data)
         return data.xpos[ankle_ids][:, :2].copy()
 
-    ref_xy = np.array([ankle_xy(ref_q[i], True) for i in range(H)])
-    run_xy = np.array([ankle_xy(run_q[i], False) for i in range(H)])
+    ref_xy = np.asarray(ref_toe_xy[:H])                       # (H,2,2) SMPLX toe
+    run_xy = np.array([ankle_xy(run_q[i]) for i in range(H)])  # (H,2,2) robot ankle
     ref_vel = np.linalg.norm(np.diff(ref_xy, axis=0), axis=2)
     ref_vel = np.concatenate([[[STICK_THRESHOLD + 1, STICK_THRESHOLD + 1]], ref_vel], axis=0)
     stick = ref_vel <= STICK_THRESHOLD  # (H,2)
@@ -245,18 +250,22 @@ def _penetration(mujoco, np, model, run_q):
     return fracs, depth_max
 
 
-def _contact_precision(mujoco, np, model, run_q, ref_q):
+def _contact_precision(mujoco, np, model, run_q, ref_wrist, ref_obj_pos, ref_obj_quat):
     """evaluate_contact_precision, ported to hand-to-object-SURFACE distance
-    (docstring intent: "keypoints <= X from object surface"), swept over X.
+    (docstring intent: "keypoints <= X from object surface"), swept over X, with
+    the SMPLX GT human hand as the reference.
 
-    Per frame, for each hand keypoint (L/R wrist):
-      demo_sdf  = min signed distance of the reference wrist to the reference-pose
-                  object boxes   (reference object pose from the kin freejoint)
+    Per frame, for each hand keypoint (L/R):
+      demo_sdf  = min signed distance of the SMPLX GT wrist (scene frame) to the
+                  reference-pose object boxes (human-driven object pose)
       robot_sdf = min signed distance of the rollout wrist to the rollout-pose
                   object boxes   (point_object_sdf on the FK'd rollout)
     For threshold X: demo_contact = demo_sdf <= X; robot_contact = robot_sdf <= X.
     A frame is a miss if any hand is demo-contact but not robot-contact.
     precision(X) = 1 - miss_frames / N   (holosoma evaluate_contact_precision formula)
+      ref_wrist    : (N,2,3) SMPLX wrist (L,R) in the scene frame.
+      ref_obj_pos  : (N,3)   reference object position (scene frame).
+      ref_obj_quat : (N,4)   reference object orientation (wxyz, scene frame).
     """
     import mujoco as _mj  # noqa: PLC0415
     from eval.core.core_metrics import (  # noqa: PLC0415
@@ -270,7 +279,7 @@ def _contact_precision(mujoco, np, model, run_q, ref_q):
         obj_gids = object_collision_geoms(model)
     except ValueError:
         return {t: math.nan for t in CONTACT_THRESHOLDS_M}
-    H = min(len(run_q), len(ref_q))
+    H = min(len(run_q), len(ref_wrist))
     if H == 0:
         return {t: math.nan for t in CONTACT_THRESHOLDS_M}
     data = _mj.MjData(model)
@@ -287,16 +296,9 @@ def _contact_precision(mujoco, np, model, run_q, ref_q):
 
     miss = {t: 0 for t in CONTACT_THRESHOLDS_M}
     for i in range(H):
-        # reference: FK robot prefix for wrists; object pose from kin freejoint
-        q = np.zeros(model.nq); q[:NQ_ROBOT] = ref_q[i][:NQ_ROBOT]
-        data.qpos[:] = q; data.qvel[:] = 0.0; _mj.mj_forward(model, data)
-        ref_wr = data.xpos[wrist_ids].copy()
-        if ref_q[i].shape[0] >= NQ_ROBOT + 7:
-            obj_pos = ref_q[i][NQ_ROBOT:NQ_ROBOT + 3]
-            obj_quat = ref_q[i][NQ_ROBOT + 3:NQ_ROBOT + 7]
-            demo_sdf = np.array([ref_object_sdf(ref_wr[h], obj_pos, obj_quat) for h in range(len(wrist_ids))])
-        else:
-            demo_sdf = np.array([point_object_sdf(model, data, ref_wr[h], obj_gids) for h in range(len(wrist_ids))])
+        # reference: SMPLX GT wrist (scene frame) vs human-driven object pose
+        demo_sdf = np.array([ref_object_sdf(ref_wrist[i][h], ref_obj_pos[i], ref_obj_quat[i])
+                             for h in range(len(wrist_ids))])
         # robot: FK rollout, object at rollout pose
         data.qpos[:] = run_q[i][:model.nq]; data.qvel[:] = 0.0; _mj.mj_forward(model, data)
         run_wr = data.xpos[wrist_ids].copy()
@@ -320,18 +322,24 @@ def _worker(job: dict[str, str]) -> dict[str, Any]:
     try:
         model = mujoco.MjModel.from_xml_path(job["scene"])
         run_q, _ = npz_qpos(Path(job["qpos"]))
-        ref_q = None
+        # SMPLX GT reference (scene frame), shared across a case's series (cached).
+        ref = None
         if job["kin"]:
             ref_q = np.asarray(np.load(job["kin"], allow_pickle=True)["qpos"], dtype=np.float64)
             if ref_q.ndim == 3:
                 ref_q = ref_q[:, 0, :]
+            ref = build_smplx_reference(case, ref_q, cache_dir=SMPLX_CACHE)
         m: dict[str, float] = {}
-        if ref_q is not None:
-            vel_mean, fs_fracs = _foot_sliding(mujoco, np, model, run_q, ref_q)
+        if ref is not None:
+            rec["smplx_gt_align_residual_m"] = ref.align_residual_m
+            rec["smplx_gt_status"] = ref.status
+            vel_mean, fs_fracs = _foot_sliding(mujoco, np, model, run_q, ref.toe_scene[:, :, :2])
             m["foot_sliding_holosoma_vel_mean"] = vel_mean
             for t, v in fs_fracs.items():
                 m[f"foot_sliding_holosoma_frac_{int(t*1000)}mm"] = v
-            for t, v in _contact_precision(mujoco, np, model, run_q, ref_q).items():
+            cp = _contact_precision(mujoco, np, model, run_q, ref.wrist_scene,
+                                    ref.obj_pos, ref.obj_quat)
+            for t, v in cp.items():
                 m[f"contact_precision_holosoma_{int(t*100)}cm"] = v
         pen_fracs, pdx = _penetration(mujoco, np, model, run_q)
         for t, v in pen_fracs.items():
@@ -364,6 +372,23 @@ def main() -> int:
         CACHE.unlink()
     cache = load_cache()
     jobs = [j for j in build_jobs() if (j["case_id"], j["series"]) not in cache]
+
+    # Precompute the per-case SMPLX-GT reference single-threaded so pool workers
+    # only read the cache (no write race), and report alignment coverage upfront.
+    if jobs:
+        kin_by_case: dict[str, str] = {}
+        for j in build_jobs():
+            if j["kin"] and j["case_id"] not in kin_by_case:
+                kin_by_case[j["case_id"]] = j["kin"]
+        noalign = []
+        for case, kin in kin_by_case.items():
+            q = np.asarray(np.load(kin, allow_pickle=True)["qpos"], dtype=np.float64)
+            r = build_smplx_reference(case, q, cache_dir=SMPLX_CACHE)
+            if not r.status.startswith("ok"):
+                noalign.append(case)
+        print(f"SMPLX-GT reference: {len(kin_by_case)} cases aligned, "
+              f"{len(noalign)} NO_GT_ALIGN {noalign}", flush=True)
+
     print(f"{len(cache)} cached, {len(jobs)} to compute (workers={args.workers})", flush=True)
     if jobs:
         with CACHE.open("a", encoding="utf-8") as fh, \
