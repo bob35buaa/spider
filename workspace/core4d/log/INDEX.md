@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 304 个日志文件。
+> 自动生成，共 306 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 71 (E213-E213)
@@ -12,6 +12,8 @@
 | 302 | E213 |  | Export selected arm aug rl | [302_E213_export_selected_arm_aug_rl.md](302_E213_export_selected_arm_aug_rl.md) |
 | 303 | E214 |  | Core method four ablation | [303_E214_core_method_four_ablation.md](303_E214_core_method_four_ablation.md) |
 | 304 | E214b |  | Holosoma smplx gt reference | [304_E214b_holosoma_smplx_gt_reference.md](304_E214b_holosoma_smplx_gt_reference.md) |
+| 305 | E213 |  | Export holosoma partner reanchor rl | [305_E213_export_holosoma_partner_reancho...](305_E213_export_holosoma_partner_reanchor_rl.md) |
+| 306 | E215 |  | Bucket box rot augmentation | [306_E215_bucket_box_rot_augmentation.md](306_E215_bucket_box_rot_augmentation.md) |
 
 ## Phase 64 (E201-E201)
 

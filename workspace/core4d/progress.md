@@ -72,6 +72,15 @@
 > - **1 case 半写**:`box024_20231011_027_p2` 只有 rot_0、无 sentinel(kill 时正算 rot_1)。
 > - **feasibility TSV 未写**(主进程中断在写 TSV 前)→ build 还不能跑。
 > - **恢复步骤(用户叫我时)**:①删 `holosoma_dcv3_omnirt_v2_ref_fk_box024_20231011_027_p2/retargeted/*_rot_*.npz`(半写，防短路复用坏数据);②重跑 `run_upstream_retarget.py --max-workers 5`(13 有 sentinel 的秒过+classify、其余重算，最终写 feasibility TSV);③build_augmented_tasks → gravcomp → snapshot → manifest → freeze → 8卡 CEM → eval。seed(含 trans)已就绪，无需重 seed。
+>
+> **▶ 2026-09-12 恢复运行:上游 retarget 全部完成 → 72/72 rot 全可行(state=rot_ok, built=1, 100%)**。远好于 plan 对 bucket/box 45° yaw 可行率的担忧。feasibility TSV 已写。**build_augmented_tasks 后台启动**(trim rot+建 SPIDER task+按 object_line 分派 e202/e199 scene builder+G1 gravcomp,logs/E215/build_tasks.log)。下一步:gravcomp→快照→manifest→freeze→8卡 CEM→eval。
+>
+> **▶ build/gravcomp/manifest/freeze 全部完成 + 3 机 24 卡 CEM(2026-09-12)**:
+> - build **70/72**(64 OK + 6 退化-yaw + 2 不可行 runtime_initial_overlap)。退化-yaw(C3 单列):bucket003_068_p1(6.9°)/box021_022_p1(21°)/bucket007_2_021_p1(20.2°)。不可行:box001_014_p1/rot1、bucket007_075_p2/rot0(rot 后初始帧腿-物穿透超硬地板)。
+> - gravcomp 复验 **32 verified**(单变量 + tamper 自测过);快照 **70 task**(git HEAD+sha256);override+manifest **70 行、单变量 compose 审计 pass(36/36)**;freeze set sha 84745707。
+> - **遇到 bug 并修**:build_aug_manifest 空 list 写成 `key:`(→YAML null)而非 `key: []` → rot-vs-trans compose 报 geom_ids diff;修为 `[]` 后审计全过。
+> - **CEM 分 3 shard(round-robin,均衡 tier/臂)= 24/23/23,3 机各 8 卡**(本机 shardA + 2 远程),`run_e215_cem` 支持 shard 子集校验 + per-manifest lock。用户在 3 机启动。**68/70 完成,0 失败**(剩 2 条远程收尾)。占卡脚本 `run.py` 跑前已 kill,全完后挂回(memory `gpu-keepalive-script`)。
+> - **eval baseline 考古(用户选)**:同臂无增强 orig 源 = box→E198 A0(box_prg/box_noprg)/G1A2(box_prg_g1a2)、bucket→E178(bucket003 干净;bucket007 无 gravcomp orig→arm 差 gravcomp 单列)。**36/36 定位**,但 **30 个 v1-retarget confound**(vs v2 rot),6 个干净 v2。eval 按 retarget parity 分层 + 可补 rot-vs-trans-sibling 纯 v2 对照。
 
 ## ✅ 已完成：E214b — Holosoma 三指标改用 CORE4D SMPLX 人体 GT（plan246 / R301 / Phase 72）
 

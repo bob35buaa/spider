@@ -1,0 +1,23 @@
+{
+  "source_scene": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/example_datasets/processed/core4d/unitree_g1/humanoid_object/dcv3_omnirt_v1_ref_fk_box023_20231008_045_p1/scene.xml",
+  "source_qpos": "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider/workspace/core4d/results/E215/data_preprocess/holosoma_dcv3_omnirt_v1_ref_fk_box023_20231008_045_p1/trimmed/20231008-045-person1-Box023_with_obj_rot_0.npz",
+  "task": "dcv3_omnirt_v2_ref_fk_box023_20231008_045_p1__aug_rot0",
+  "data_id": "0",
+  "date": "20231008",
+  "seq": "045",
+  "person": "person1",
+  "object_name": "Box023",
+  "object_model_rel": "box/box023_m.obj",
+  "object_body_name": "object",
+  "object_initial_pos": [
+    -1.0259788036346436,
+    -1.181982398033142,
+    0.14025886356830597
+  ],
+  "object_initial_quat": [
+    -0.27888384461402893,
+    -0.2689364552497864,
+    0.6472771167755127,
+    0.6564520597457886
+  ]
+}
