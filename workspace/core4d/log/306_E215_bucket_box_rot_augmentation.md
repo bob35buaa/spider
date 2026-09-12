@@ -168,7 +168,9 @@ E215 数值/视觉已闭合(§0–§7),按仓库既有成熟形态补三件交�
   含 2 个 mask-length 例——render 不依赖 contact mask)各自 sim-vs-aug-ref;默认(不带 --all)
   仍是 9-case 门样本,向后兼容。用户选定**只渲 rot,不含 orig**。
 - wrapper `scripts/eval/wrappers/render_E215.sh`(MUJOCO_GL=osmesa,CPU 渲染不占 GPU,占卡脚本可留)。
-- 产物:`results/E215/s6_downstream/render/c6/*.mp4`(gitignored)。<!-- RENDER_STATUS -->
+- 产物:`results/E215/s6_downstream/render/c6/*.mp4`(gitignored)。**已渲 70/70,0 失败**;
+  抽验 clean(box021_034_p1/rot0:sim 直立抱旋转箱、精确跟踪 ref)+ fall(box004_083_p2/rot0:
+  sim 上身前倾扑箱崩溃、ref 直立)两帧,渲染无损、与数值/C6 一致。
 
 ### 11.4 改动文件
 
