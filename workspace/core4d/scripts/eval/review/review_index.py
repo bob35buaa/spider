@@ -202,6 +202,21 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E215AUG = bucket+box ROTATION augmentation (plan247/log306): orig + rot0 + rot1
+    # as a 3-arm sweep over the 34 delivered cases. rot = +/-45 deg object yaw +
+    # 0.2 m lateral (the first bucket/box rotation-aug rollouts; E199/E202 shipped
+    # translation only). Metrics + replay come straight from the finished E215 eval
+    # rollout TSV + the 3 CEM shard manifests; orig replay paths come from the
+    # frozen preflight baseline_audit.json (headless, no spider import). Each record
+    # carries its E201 14-gate funnel layer in `status`. Read-only, no eval re-run.
+    #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E215AUG
+    "E215AUG": {
+        "result_exp": "E215",
+        "eval_subdir": "aug",
+        "case_metrics": "e215_rot_rollout.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -959,6 +974,128 @@ def _read_e200_arm(exp: str) -> list[CaseRecord]:
     return records
 
 
+# E215 rotation augmentation (plan247/log306). The eval rollout TSV holds metrics +
+# 6 physics gates for all 102 rows (34 orig + 34 rot0 + 34 rot1); replay paths come
+# from the 3 CEM shard manifests (rot) and the frozen baseline audit (orig).
+E215_DIR = REPO / "workspace/core4d/results/E215"
+E215_SHARD_MANIFESTS = [
+    E215_DIR / "s6_downstream/manifests" / f"e215_priority_manifest.shard{s}.tsv"
+    for s in ("A", "B", "C")
+]
+E215_ROLLOUT_TSV = E215_DIR / "s6_downstream/eval/aug/e215_rot_rollout.tsv"
+E215_BASELINE_AUDIT = E215_DIR / "preflight/baseline_audit.json"
+E215_VARIANT_ORDER = {"orig": 0, "rot0": 1, "rot1": 2}
+E215_DONE = {"run_complete_pending_eval", "cem_ok"}
+
+
+def _e215_funnel(row: dict[str, str], is_orig: bool) -> tuple[bool, list[str], str]:
+    """(numeric_pass, failed_gate_names, layer) under the E201 14-gate funnel.
+
+    funnel_config is pure-python (math/typing only), so importing it keeps this
+    module headless-importable for the ``--check`` self-test."""
+    import sys as _sys
+
+    fc_dir = str(REPO / "workspace/core4d/scripts/experiments/E201")
+    if fc_dir not in _sys.path:
+        _sys.path.insert(0, fc_dir)
+    import funnel_config as FC
+
+    hard_ok, hard_failed = FC.hard_gate_result(row)
+    n_ok, n_failed = FC.banded_gate_result(row, "narrow")
+    _w_ok, w_failed = FC.banded_gate_result(row, "wide")
+    if not hard_ok or not _w_ok:
+        layer = "L1_reject"
+    elif not n_ok:
+        layer = "L2_review"
+    else:
+        layer = "L3_auto" if is_orig else "L3_review"
+    failed = list(dict.fromkeys(hard_failed + n_failed))  # dedup, keep order
+    return (hard_ok and n_ok), failed, layer
+
+
+def _read_e215_aug() -> list[CaseRecord]:
+    """E215 rotation-aug review set: orig + rot0 + rot1 per case, one arm each.
+
+    Every record's metrics come from the finished eval rollout TSV; replay paths
+    from the CEM shard manifests (rot) or baseline_audit.json (orig). numeric pass
+    / failure modes / status use the E201 14-gate funnel so the player is
+    consistent with the E215 funnel xlsx. Live qpos playback (no MP4)."""
+    if not E215_ROLLOUT_TSV.is_file():
+        return []
+    # rot replay paths, keyed by (case_id, aug_variant)
+    manifest: dict[tuple[str, str], dict[str, str]] = {}
+    for mf in E215_SHARD_MANIFESTS:
+        if not mf.is_file():
+            continue
+        with mf.open("r", encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh, delimiter="\t"):
+                if (row.get("status") or "") in E215_DONE:
+                    manifest[(row.get("case_id", ""), row.get("aug_variant", ""))] = row
+    # orig replay paths, keyed by case_id
+    orig_paths: dict[str, dict[str, str]] = {}
+    if E215_BASELINE_AUDIT.is_file():
+        import json
+        for b in json.loads(E215_BASELINE_AUDIT.read_text(encoding="utf-8")).get("rows", []):
+            if b.get("npz_exists"):
+                orig_paths[b.get("case_id", "")] = b
+
+    anns = load_annotations("E215AUG")
+    records: list[CaseRecord] = []
+    with E215_ROLLOUT_TSV.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            case_id = (row.get("case_id") or "").strip()
+            variant = (row.get("aug_variant") or "").strip()
+            if not case_id or variant not in E215_VARIANT_ORDER:
+                continue
+            is_orig = variant == "orig"
+            if is_orig:
+                src = orig_paths.get(case_id, {})
+                outdir_npz = normalize_path(src.get("result_npz", ""))
+                scene_src = src.get("scene_act", "")
+                trajectory = normalize_path(src.get("trajectory", ""))
+                rvar = src.get("retarget_variant_id", "") or "omnirt_v1"
+            else:
+                mrow = manifest.get((case_id, variant))
+                if mrow is None:
+                    continue
+                outdir_npz = normalize_path(mrow.get("outdir_npz", ""))
+                scene_src = mrow.get("scene_act", "") or row.get("scene_act", "")
+                trajectory = normalize_path(mrow.get("trajectory", ""))
+                rvar = "omnirt_v2"
+            config_act = ""
+            if outdir_npz:
+                p = Path(outdir_npz)
+                for cand in (p.with_name(p.stem + "_outdir_full") / "config_act.yaml",
+                             p.parent / "config_act.yaml"):
+                    if cand.is_file():
+                        config_act = str(cand)
+                        break
+            scene_xml = resolve_scene("E215", case_id, normalize_path(scene_src))
+            numeric_pass, failed, layer = _e215_funnel(row, is_orig)
+            records.append(
+                CaseRecord(
+                    exp_id="E215AUG",
+                    arm=variant,
+                    case_id=case_id,
+                    variant=variant,
+                    object_key=(row.get("object_key") or "").strip(),
+                    retarget_variant_id=rvar,
+                    numeric_release_pass=numeric_pass,
+                    numeric_failure_modes=failed,
+                    gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
+                    status=f"{layer} · {(row.get('arm_group') or '').strip()}",
+                    outdir_npz=outdir_npz,
+                    scene_xml=scene_xml,
+                    config_act=config_act,
+                    trajectory=trajectory,
+                    video="",
+                    annotation=anns.get(_ann_id(case_id, variant), {}),
+                    metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
+                )
+            )
+    return records
+
+
 def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
     out: list[CaseRecord] = []
     for exp in exps:
@@ -972,6 +1109,8 @@ def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
             out.extend(_read_e197_reexport())
         elif exp in ("E200N", "E200G"):
             out.extend(_read_e200_arm(exp))
+        elif exp == "E215AUG":
+            out.extend(_read_e215_aug())
         else:
             out.extend(_read_exp(exp))
     return out
@@ -1025,9 +1164,9 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E208AUG", "E209ARM", "E205"):
+        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E208AUG", "E209ARM", "E215AUG", "E205"):
             # arm sweeps (E204ARM 3-arm, E206ARM/E209ARM 2-arm, E207ARM 4-arm,
-            # E208AUG 6-arm) and the
+            # E208AUG 6-arm, E215AUG 3-arm) and the
             # single-arm E205 view have no `evaluated`-style summary.json; cross-check
             # against the index itself like E199/E200.
             # NB: deliberately an explicit tuple, not `SOURCE_OVERRIDES[exp]["arm_sweep"]`.

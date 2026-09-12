@@ -130,3 +130,51 @@ bucket→E178 contactAlignedTop。**36/36 定位**,但 **30 个 orig 是 v1 reta
 1. box004_083_p2(两 rot 皆崩,v1-confound)复核;30 个 v1-confound case 若要干净 C4 需补 v2 orig CEM。
 2. 达标后交下游 RL 导出(同 E202-export/E213 partner re-anchor)。
 3. (可选)C6 补渲 orig 三联对照 + fall case 中段帧,定位崩溃时刻。
+
+## 11. 交付补全(2026-09-12 · 用户要求:14-gate xlsx + viser + 全量 render)
+
+E215 数值/视觉已闭合(§0–§7),按仓库既有成熟形态补三件交付物,**均复用已完成的 CEM/eval,零重跑**。
+
+### 11.1 rot-vs-orig · 14-gate 宽/窄漏斗 xlsx
+
+- 口径**升级**:E215 evaluator 自身是 6-gate C4;本表改用仓库权威的 **E201 14-gate 漏斗**
+  (`E201/funnel_config.py`:4 硬门 fall/body_z/ankle_jerk/obj_speed + 10 带门 6-tracking/contact/
+  release/hand_pen/leg_pen,宽/窄双阈,L1/L2/L3 分层),与 E199/E200/E208 同尺。
+- 生成器 `scripts/eval/reports/gen_E215_rot_vs_orig_funnel_xlsx.py`(蓝本 = `gen_E200_arm_funnel_compare_xlsx.py`):
+  读 `e215_rot_rollout.tsv`(102 行 = 34 orig + 34 rot0 + 34 rot1,全部字段现成),逐行**内联分类**
+  (E215 没跑 classify_funnel),无公式全 python 预算。
+- 三 sheet:**Overview**(口径来源 + sha256 + 排除项)、**Detail**(每 case orig/rot0/rot1 相邻,
+  4 硬门 value+PASS / 10 带门 value+N+W + layer,102 行 44 列)、**Summary**(pooled + 逐 arm_group×5 +
+  逐 object×7:layer 分布 + 宽/窄接受率 + 逐门通过率 + 关键指标均值 & Δ(rot−orig))。
+- 产物:`results/E215/s6_downstream/eval/aug/E215_rot_vs_orig_funnel.xlsx`。
+  layer 分布:**L3(接受)44 · L2(审)13 · L1(拒)45**;抽验 box004_083_p2/rot0 = L1_reject
+  (fall+body_z 硬破,与 §6 new-fall 一致)。wrapper:`scripts/eval/wrappers/gen_E215_funnel_xlsx.sh`。
+
+### 11.2 viser 交互可视化
+
+- 接入既有回放器 `viser_review_player.py`(**播放器本体零改动**),在 `review_index.py` 注册
+  `SOURCE_OVERRIDES["E215AUG"]` + `_read_e215_aug()`:orig/rot0/rot1 三臂 sweep,每 case 并列。
+- rot 回放路径取自 3 个 CEM shard manifest,orig 取自冻结的 `preflight/baseline_audit.json`
+  (headless 不 import spider,`--check` 可跑);metrics 从 rollout TSV join;每条 record 的
+  `status` 携带 **14-gate funnel layer**(如 `L2_review · box_prg_g1a2`),numeric pass/失败原因
+  亦按 14-gate。
+- 校验:`review_index.py --check E215AUG` → **102/102 playable、44 pass、exit 0**;
+  实测经播放器 `_load_case_data_raw` 载入 orig+rot0(nq=42、sim/ref qpos + 帧全部对上)。
+- 启动:`bash scripts/eval/wrappers/review_player.sh E215AUG`(wrapper 正则已匹配,无需改)。
+
+### 11.3 全量 render
+
+- `E215/render_c6.py` 加 `--all`:渲染 shard 里全部 70 条 finished rot 行(35 rot0 + 35 rot1,
+  含 2 个 mask-length 例——render 不依赖 contact mask)各自 sim-vs-aug-ref;默认(不带 --all)
+  仍是 9-case 门样本,向后兼容。用户选定**只渲 rot,不含 orig**。
+- wrapper `scripts/eval/wrappers/render_E215.sh`(MUJOCO_GL=osmesa,CPU 渲染不占 GPU,占卡脚本可留)。
+- 产物:`results/E215/s6_downstream/render/c6/*.mp4`(gitignored)。<!-- RENDER_STATUS -->
+
+### 11.4 改动文件
+
+| 文件 | 动作 |
+|---|---|
+| `scripts/eval/reports/gen_E215_rot_vs_orig_funnel_xlsx.py` | 新增 |
+| `scripts/eval/review/review_index.py` | 改:+E215AUG override + `_read_e215_aug` + `_e215_funnel` + 分派/_check |
+| `scripts/experiments/E215/render_c6.py` | 改:+`--all` |
+| `scripts/eval/wrappers/render_E215.sh` · `gen_E215_funnel_xlsx.sh` | 新增 |

@@ -61,6 +61,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cases", default="")
     ap.add_argument("--variants", default="")
+    ap.add_argument("--all", action="store_true",
+                    help="render EVERY finished rot row (68 rot0/rot1), not just the 9-case gate sample")
     ap.add_argument("--max-frames", type=int, default=0)
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--out-dir", type=Path, default=C.S6_DIR / "render/c6")
@@ -72,7 +74,10 @@ def main() -> int:
 
     rows_by_key = all_done_rows()
     select = DEFAULT_SELECT
-    if args.cases or args.variants:
+    if args.all:
+        # every finished rot row (the shard manifests carry only rot0/rot1, no orig)
+        select = [(cid, v, "all") for (cid, v) in sorted(rows_by_key)]
+    elif args.cases or args.variants:
         cf = {c for c in args.cases.split(",") if c}
         vf = {v for v in args.variants.split(",") if v}
         select = [(cid, v, "") for (cid, v) in rows_by_key
