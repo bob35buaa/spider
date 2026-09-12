@@ -180,3 +180,31 @@ E215 数值/视觉已闭合(§0–§7),按仓库既有成熟形态补三件交�
 | `scripts/eval/review/review_index.py` | 改:+E215AUG override + `_read_e215_aug` + `_e215_funnel` + 分派/_check |
 | `scripts/experiments/E215/render_c6.py` | 改:+`--all` |
 | `scripts/eval/wrappers/render_E215.sh` · `gen_E215_funnel_xlsx.sh` | 新增 |
+
+## 12. RL-export(dcv3 partner-paired · 用户 `E215_rot_aug_export.xlsx` 选 27 单元)
+
+用户提供 27 行选择表(object_key/case_id/arm_group/aug_variant,rot only),要求导出为 dcv3
+RL-export **且带 partner 信息**。双人协作数据:每单元除本人(source)rot CEM rollout,还配对
+**对侧人同 rot 变体**的运动学重定向;两人物体一致性由下游 Holosoma exporter 的 **partner
+re-anchor** 强制(本层只产 RL 输入 + 硬门 C4)。蓝本 = E213-export(rot 版),dcv3 schema/partner
+adapter 全复用 E206 exporter + dcv3 `finalize_reused_partner_rl.py`,**零 CEM 重跑**。
+
+**partner 分派**:27 单元的 partner = **11 是已交付 E215 source**(rot trimmed npz 现成)+
+**16 是 gap**(不在 source 集)。16 gap partner 全部有 E199_DP(box)/E202_DP(bucket)的
+`_original` seed → `build_partner_aug.py` 运动学重定向(hsretargeting,CPU,无 CEM,seed 已有
+trans_* 以只算 rot):**16/16 ok,32 rot 变体全产**(22 v1 + 4 v2 rescue:039_p2/082_p2/027_p1/028_p1)。
+
+**导出结果**(`export_selected_arm_aug_rl.py`):**26 source + 26 partner 行,26/26 paired
+RL_EXPORT_READY**;**1 排除**(box023_021_p2/rot1:C4 fall,已知 new-fall)。partner 来源
+16 partner_aug + 10 source-retarget;partner 变体 22 v1 + 4 v2。validation_report 五项检查全 True
+(sha 精确 / source 可加载 / partner 解析完整 / **对齐零 misaligned** / paired==source)。
+抽验 box021_034_p1/rot1(source-retarget partner v2)+ box023_045_p1/rot0(gap-built partner v1):
+两侧 npz 可加载、公共窗对齐(144/135 帧)、status READY。
+
+**产物**(`results/E215/s6_downstream/export/`,符号链外/不入库,脚本可重生):
+`rl_export_input.{tsv,json}` · `partner_omnirt/rl_partner_omnirt_manifest.{tsv,json}` ·
+`paired_rl_export_input.{tsv,json}`(26×97)· `partner_resolution_audit.tsv` ·
+`excluded_units.json` · `rl_export_summary.json` · `validation_report.json` · `selection_snapshot.xlsx`。
+partner_aug 重定向:`results/E215/data_preprocess/partner_aug/**` + `manifests/e215_partner_aug_artifacts.tsv`。
+
+**改动文件**:`scripts/experiments/E215/{e215_export_common,build_partner_aug,export_selected_arm_aug_rl}.py`(新增)。
