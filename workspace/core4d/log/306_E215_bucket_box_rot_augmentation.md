@@ -84,13 +84,20 @@ bucket→E178 contactAlignedTop。**36/36 定位**,但 **30 个 orig 是 v1 reta
   v1→v2 retarget 变化,归因不纯,单列(非纯 rot 代价);box004_083_p2 两 rot 皆 fall,是需复核的可疑 case。
 - **C5 数据增益** ✅(定性):rot 把初始 obj yaw 从 orig/trans 的 ~0° 扩到 ±45°(64/70 达 45°,median 45°),
   显著扩大旋转方向覆盖。
-- **C6 视觉门** ⏳ **未做(遗留)**:CEM 未存视频,需回放 rollout 抽帧;用户决定先 log/commit、视觉后补。
+- **C6 视觉门** ✅(osmesa 软渲染 9 代表案例,sim vs aug-ref 同视频同机位,`render_c6.py`):
+  - **健康 rot 变体**(box_prg box021_034_p1 / box_prg_g1a2-v2 box001_040_p2 / bucket_prg_gravcomp bucket007_073_p1):
+    sim 精确跟踪 aug-ref,45° 旋转下正常抓取/搬运/按压,**无穿模、无漂浮、无 reward-hacking**。
+  - **2 个 fall case 视觉确认真崩溃**(非度量欺骗,与 fall_flag 一致):box004_083_p2 rot0/rot1 上半身前倾扑到箱上(姿态崩溃);
+    box023_021_p2 rot1 重度前倾/临界摔(noPRG 无腿保护)。两者均 v1-orig confound case。
+  - **退化档** bucket003_068_p1:sim 与 ref 姿态几乎一致(半蹲桶上),物体几乎无转(6.9°≈orig 复制),物理正常——符合 C3 退化定性。
+  - 视频:`results/E215/s6_downstream/render/c6/*.mp4`(gitignored)。
 
 ## 7. 判定
 
-按 plan 成功标准"≥80% rot 变体满足 C4 且视觉无致命 artifact":**数值侧达标(89.7%)**;
-视觉侧 C6 待补。臂组级聚合 verdict 因 3 个 confound-fall 显示 fail,**正确判据是逐变体 89.7%**。
-**rot 增强判定为基本可用于下游扩数据**,遗留:C6 视觉、3 fall case 复核、30 v1-confound 的干净对照(需 v2 orig)。
+按 plan 成功标准"≥80% rot 变体满足 C4 且视觉无致命 artifact":**数值侧达标(逐变体 89.7%)+ 视觉侧通过**
+(健康档无致命 artifact、sim 精确跟踪 ref;fall/退化档视觉与数值一致,无 reward-hacking)。臂组级聚合 verdict 因
+3 个 confound-fall 显示 fail,**正确判据是逐变体 89.7%**。**rot 增强判定为可用于下游扩数据**。
+遗留:box004_083_p2(两 rot 皆崩)复核、30 个 v1-confound case 若要干净 C4 需补 v2 orig。
 
 ## 8. 主要坑 / 修复
 
@@ -120,6 +127,6 @@ bucket→E178 contactAlignedTop。**36/36 定位**,但 **30 个 orig 是 v1 reta
 
 ## 10. 下一步
 
-1. **C6 视觉**(强制门,遗留):回放每臂组 orig+rot0/rot1 + 3 fall case + 退化-yaw case,osmesa/借卡渲染 + `/video-frames` 抽帧。
-2. box004_083_p2(两 rot 皆 fall)复核;30 v1-confound case 若要干净 C4 需补 v2 orig。
-3. 达标后交下游 RL 导出(同 E202-export/E213 partner re-anchor)。
+1. box004_083_p2(两 rot 皆崩,v1-confound)复核;30 个 v1-confound case 若要干净 C4 需补 v2 orig CEM。
+2. 达标后交下游 RL 导出(同 E202-export/E213 partner re-anchor)。
+3. (可选)C6 补渲 orig 三联对照 + fall case 中段帧,定位崩溃时刻。
