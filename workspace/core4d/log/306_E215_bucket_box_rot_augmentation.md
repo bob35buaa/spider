@@ -208,3 +208,21 @@ RL_EXPORT_READY**;**1 排除**(box023_021_p2/rot1:C4 fall,已知 new-fall)。par
 partner_aug 重定向:`results/E215/data_preprocess/partner_aug/**` + `manifests/e215_partner_aug_artifacts.tsv`。
 
 **改动文件**:`scripts/experiments/E215/{e215_export_common,build_partner_aug,export_selected_arm_aug_rl}.py`(新增)。
+
+### 12.1 下游 re-anchor(holosoma exporter,和 E213 同路)
+
+spider 侧 export **只产 paired RL INPUT**,不做 re-anchor;真正的两人 re-anchor 在下游 holosoma
+`workspace/v3/scripts/data/export_rl_motion_from_spider_tsv.py`(默认开:partner wrist → partner
+物体局部系 → target 物体 pose),E213 亦然。本步补齐(driver `E215/run_holosoma_reanchor.py`,
+按物体分组喂 exporter):
+- **52 份 re-anchored motion**(26 单元 × CEM-target `spider_` + omnirt-target `omnirt_`),
+  7/7 物体 ok,输出 `../holosoma/workspace/v3/data/E215_rot_aug_partner_rl/<object>/exports/
+  *_mj_w_obj_w_partner.npz`(结构同 E213:含 joint/body/object + `partner_hand_pos_w/quat_w`)。
+- **post-reanchor 一致性抽验**(E202 口径,partner 手→source 物体表面距离):grasp 窗
+  box021 **1.4cm** / box023 5.7cm / bucket007 **0.0cm**(均 <E202 8cm 阈;非接触帧 p90 16–50cm
+  属 approach/release 正常)→ **re-anchor 后两人对同一物体一致**。
+- 坑:converter 子进程 cwd 更深 → `--out-dir` 必须**绝对路径**;object_name 大小写不一
+  (`Box001`/`box001`)→ driver 统一小写分组;box001/024/bucket003/007 不在 exporter 内置
+  half-extents 表 → 由物体网格 bbox 补传(bucket 值与 E202 逐位吻合)。
+- 新增文件:`scripts/experiments/E215/run_holosoma_reanchor.py`;re-anchored motion 在 holosoma 仓
+  (另一 repo,不入 spider git)。
