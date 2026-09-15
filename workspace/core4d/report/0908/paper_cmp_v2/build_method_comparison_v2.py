@@ -17,8 +17,10 @@ Sources:
   SPIDER-CEM  gen_E214_ablation_table.load_full()  -- the ablation "full" column
               (paper-cache SPIDER-CEM values + the recomputed 5mm/max-pen metrics),
               identical to the SPIDER-CEM method in gen_paper_results.
-  SBTO        sbto/paper_results/sbto_paper_results.xlsx  (ByCase sheet)
-  GMR         GMR/out/core4d_g1/paper_metrics/paper_metrics.xlsx  (per_case sheet)
+  SBTO        report/0908/upstream/sbto/sbto_paper_results.xlsx  (ByCase sheet)
+  GMR         report/0908/upstream/gmr/paper_metrics.xlsx         (per_case sheet)
+              (in-repo copies of the upstream bundles; external sources are only a
+               fallback -- see _pick.)
 
 Outputs (report/0908/paper_cmp_v2/): method_comparison.{md,tex,tsv,xlsx}
 Overall + per-object mean +/- std (+ worst); best method per metric is bold.
@@ -44,8 +46,24 @@ import e214_common as C  # noqa: E402
 import gen_E214_ablation_table as A  # noqa: E402
 
 OUT = Path(__file__).resolve().parent
-GMR_XLSX = Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/GMR/out/core4d_g1/paper_metrics/paper_metrics.xlsx")
-SBTO_XLSX = Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/sbto/paper_results/sbto_paper_results.xlsx")
+# In-repo copies of the upstream metric bundles (report/0908/upstream/); the
+# external absolute paths are kept only as a fallback for a fresh re-pull.
+UPSTREAM = OUT.parent / "upstream"
+
+
+def _pick(local: Path, external: str) -> Path:
+    """Prefer the in-repo copy; fall back to the external source if absent."""
+    return local if local.is_file() else Path(external)
+
+
+GMR_XLSX = _pick(
+    UPSTREAM / "gmr/paper_metrics.xlsx",
+    "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/GMR/out/core4d_g1/paper_metrics/paper_metrics.xlsx",
+)
+SBTO_XLSX = _pick(
+    UPSTREAM / "sbto/sbto_paper_results.xlsx",
+    "/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/sbto/paper_results/sbto_paper_results.xlsx",
+)
 
 METHODS = ["SPIDER-CEM", "SBTO", "GMR"]  # ours first, then baselines
 
