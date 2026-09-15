@@ -3,17 +3,17 @@
 
 \begin{table}[t]
 \centering
-\caption{Method comparison on CORE4D-G1 (all 50 paper sequences), mean over cases. \textbf{SPIDER-CEM} (ours) vs \textbf{SBTO} and \textbf{GMR}. Physical contact/penetration are frame fractions from the same MuJoCo contact detector; max penetration is the deepest hand-object interpenetration. $\uparrow$/$\downarrow$: higher/lower is better; best per row in bold. Note GMR's low penetration@5mm is an artifact of barely contacting the object (contact@5mm $\approx0.2\%$), not clean contact: its max penetration (23.5\,mm) still exceeds ours (12.0\,mm).}
+\caption{Method comparison on CORE4D-G1 (all 50 paper sequences), mean over cases. \textbf{SPIDER-CEM} (ours) vs \textbf{SBTO} and \textbf{GMR}. Physical contact/penetration are frame fractions from the same MuJoCo contact detector; max penetration is the deepest hand-object interpenetration. $\uparrow$/$\downarrow$: higher/lower is better; best per row in bold. Note GMR's low penetration@5mm is an artifact of barely contacting the object (contact@5mm $\approx0.24\%$), not clean contact: its max penetration (23.47\,mm) still exceeds ours (12.01\,mm).}
 \label{tab:method_cmp50}
 \begin{tabular}{l ccc}
 \toprule
 Metric & SPIDER-CEM & SBTO & GMR \\
 \midrule
-Phys. contact@5mm ($\%$) $\uparrow$ & \textbf{72.5} & 34.4 & 0.2 \\
-Phys. penetration@5mm ($\%$) $\downarrow$ & 7.6 & 36.6 & \textbf{4.6} \\
-Max phys penetration (mm) $\downarrow$ & \textbf{12.0} & 25.4 & 23.5 \\
-Obj speed max (m/s) $\downarrow$ & \textbf{1.288} & 1.763 & 1.834 \\
-Foot slip max (m) $\downarrow$ & \textbf{0.866} & 1.200 & 0.971 \\
+Phys. contact@5mm ($\%$) $\uparrow$ & \textbf{72.47} & 34.37 & 0.22 \\
+Phys. penetration@5mm ($\%$) $\downarrow$ & 7.59 & 36.59 & \textbf{4.65} \\
+Max phys penetration (mm) $\downarrow$ & \textbf{12.01} & 25.36 & 23.51 \\
+Obj speed max (m/s) $\downarrow$ & \textbf{1.29} & 1.76 & 1.83 \\
+Foot slip max (m) $\downarrow$ & \textbf{0.87} & 1.20 & 0.97 \\
 \bottomrule
 \end{tabular}
 \end{table}
