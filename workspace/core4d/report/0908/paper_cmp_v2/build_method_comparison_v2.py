@@ -203,10 +203,15 @@ def fmt_tex(v: float, kind: str) -> str:
 
 def best_method(summ: dict[str, dict[str, dict[str, float]]], key: str, direction: str) -> str | None:
     """Method with the best mean for a metric (over the given per-object summaries)."""
+    ranked = ranked_methods(summ, key, direction)
+    return ranked[0] if ranked else None
+
+
+def ranked_methods(summ: dict[str, dict[str, dict[str, float]]], key: str, direction: str) -> list[str]:
+    """Methods ordered best -> worst by mean (finite only)."""
     cand = [(m, summ[m][key]["mean"]) for m in METHODS if _finite(summ[m][key]["mean"])]
-    if not cand:
-        return None
-    return (max if direction == "higher" else min)(cand, key=lambda t: t[1])[0]
+    cand.sort(key=lambda t: t[1], reverse=(direction == "higher"))
+    return [m for m, _ in cand]
 
 
 # --------------------------------------------------------------------------- md
@@ -288,7 +293,8 @@ def write_latex(methods, cases) -> None:
          r"Physical contact/penetration are frame fractions from the same MuJoCo "
          r"contact detector; max penetration is the deepest hand-object "
          r"interpenetration. $\uparrow$/$\downarrow$: higher/lower is better; best "
-         r"per row in bold. OmniRetarget (kinematic, no collision) penetrates "
+         r"per row in bold, second best \underline{underlined}. OmniRetarget "
+         r"(kinematic, no collision) penetrates "
          r"heavily (44.6\% pen@5mm, 21.6\,mm max) at modest contact; SPIDER-CEM's "
          r"physics optimisation raises contact to 72\% while cutting pen to 7.6\%. "
          r"GMR's low pen@5mm is instead a `barely-touches' artifact (contact@5mm "
@@ -297,12 +303,21 @@ def write_latex(methods, cases) -> None:
          r"\begin{tabular}{l " + "c" * len(METHODS) + r"}", r"\toprule",
          "Metric & " + " & ".join(METHODS) + r" \\", r"\midrule"]
     for key, label, direction, kind in METRICS:
-        b = best_method(summ, key, direction)
+        ranked = ranked_methods(summ, key, direction)
+        best = ranked[0] if ranked else None
+        second = ranked[1] if len(ranked) > 1 else None
         cells = []
         for m in METHODS:
             s = summ[m][key]
-            txt = fmt_tex(s["mean"], kind) if s["n"] else "--"
-            cells.append(rf"\textbf{{{txt}}}" if m == b and s["n"] else txt)
+            if not s["n"]:
+                cells.append("--")
+                continue
+            txt = fmt_tex(s["mean"], kind)
+            if m == best:
+                txt = rf"\textbf{{{txt}}}"
+            elif m == second:
+                txt = rf"\underline{{{txt}}}"
+            cells.append(txt)
         arrow = r"\uparrow" if direction == "higher" else r"\downarrow"
         unit = r" ($\%$)" if kind == "pct" else ""
         L.append(rf"{label}{unit} ${arrow}$ & " + " & ".join(cells) + r" \\")

@@ -3,17 +3,17 @@
 
 \begin{table}[t]
 \centering
-\caption{Method comparison on CORE4D-G1 (all 50 paper sequences), mean over cases. \textbf{SPIDER-CEM} (ours) vs \textbf{OmniRetarget} (our upstream kinematic input), \textbf{SBTO}, and \textbf{GMR}. Physical contact/penetration are frame fractions from the same MuJoCo contact detector; max penetration is the deepest hand-object interpenetration. $\uparrow$/$\downarrow$: higher/lower is better; best per row in bold. OmniRetarget (kinematic, no collision) penetrates heavily (44.6\% pen@5mm, 21.6\,mm max) at modest contact; SPIDER-CEM's physics optimisation raises contact to 72\% while cutting pen to 7.6\%. GMR's low pen@5mm is instead a `barely-touches' artifact (contact@5mm $\approx0.24\%$); its max penetration (23.5\,mm) still exceeds ours.}
+\caption{Method comparison on CORE4D-G1 (all 50 paper sequences), mean over cases. \textbf{SPIDER-CEM} (ours) vs \textbf{OmniRetarget} (our upstream kinematic input), \textbf{SBTO}, and \textbf{GMR}. Physical contact/penetration are frame fractions from the same MuJoCo contact detector; max penetration is the deepest hand-object interpenetration. $\uparrow$/$\downarrow$: higher/lower is better; best per row in bold, second best \underline{underlined}. OmniRetarget (kinematic, no collision) penetrates heavily (44.6\% pen@5mm, 21.6\,mm max) at modest contact; SPIDER-CEM's physics optimisation raises contact to 72\% while cutting pen to 7.6\%. GMR's low pen@5mm is instead a `barely-touches' artifact (contact@5mm $\approx0.24\%$); its max penetration (23.5\,mm) still exceeds ours.}
 \label{tab:method_cmp50}
 \begin{tabular}{l cccc}
 \toprule
 Metric & SPIDER-CEM & OmniRetarget & SBTO & GMR \\
 \midrule
-Phys. contact@5mm ($\%$) $\uparrow$ & \textbf{72.47} & 21.86 & 34.37 & 0.22 \\
-Phys. penetration@5mm ($\%$) $\downarrow$ & 7.59 & 44.63 & 36.59 & \textbf{4.65} \\
-Max phys penetration (mm) $\downarrow$ & \textbf{12.01} & 21.61 & 25.36 & 23.51 \\
-Obj speed max (m/s) $\downarrow$ & \textbf{1.29} & 2.77 & 1.76 & 1.83 \\
-Foot slip max (m) $\downarrow$ & \textbf{0.87} & 1.33 & 1.20 & 0.97 \\
+Phys. contact@5mm ($\%$) $\uparrow$ & \textbf{72.47} & 21.86 & \underline{34.37} & 0.22 \\
+Phys. penetration@5mm ($\%$) $\downarrow$ & \underline{7.59} & 44.63 & 36.59 & \textbf{4.65} \\
+Max phys penetration (mm) $\downarrow$ & \textbf{12.01} & \underline{21.61} & 25.36 & 23.51 \\
+Obj speed max (m/s) $\downarrow$ & \textbf{1.29} & 2.77 & \underline{1.76} & 1.83 \\
+Foot slip max (m) $\downarrow$ & \textbf{0.87} & 1.33 & 1.20 & \underline{0.97} \\
 \bottomrule
 \end{tabular}
 \end{table}
