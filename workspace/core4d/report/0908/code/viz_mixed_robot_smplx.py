@@ -22,6 +22,7 @@ os.environ.setdefault("PYOPENGL_PLATFORM", "osmesa")
 os.environ.setdefault("MUJOCO_GL", "osmesa")
 
 import argparse
+import json
 import sys
 
 import numpy as np
@@ -68,6 +69,10 @@ def parse_args():
     p.add_argument("--window", default=None, help="cem frame window 'lo,hi' (default: auto)")
     p.add_argument("--baked-shape", action="store_true",
                    help="use partner's baked betas instead of the neutral betas=0 shape")
+    p.add_argument("--human-scale", type=float, default=1.0,
+                   help="uniform scale of the partner SMPLX mesh about its own pelvis "
+                        "(<1 shrinks the human so it stops visually swallowing the G1; "
+                        "default: 1.0 = real size)")
     p.add_argument("--p1-trim-start", type=int, default=109,
                    help="partner mocap<->cem trim offset (paired-export specific; default: 109)")
     p.add_argument("--p1-to-p2", type=int, default=15,
@@ -219,12 +224,26 @@ def main():
     print(f"mocap->cem rotation yaw={yaw:.1f}deg")
 
     def human_cem(f):
-        """person1 SMPLX vertices mapped into the CEM frame at p2 cem index f."""
+        """person1 SMPLX vertices mapped into the CEM frame at p2 cem index f.
+
+        Horizontal position tracks the partner robot's pelvis; VERTICAL position is
+        grounded onto the physical floor (`floor_z`, from the robot+object) so the
+        human's feet never float -- the earlier pelvis-height anchoring inherited the
+        robot/human height mismatch and left the feet above the floor. With
+        args.human_scale != 1 the mesh is then uniform-scaled about the grounded feet
+        (pelvis column at floor_z), so the torso/back sink toward the feet and pull
+        away from the G1 behind it -- reducing the overlap while the feet stay put."""
         t1 = f - P1_TO_P2                     # p1 cem index
         r = P1_TRIM_START + t1                # mocap index
         pel_cem = p1_pel_cem[t1]
         pel_moc = p1_pel_moc[r]
-        return (Rinv @ (p1_verts[r] - pel_moc).T).T + pel_cem, r
+        v = (Rinv @ (p1_verts[r] - pel_moc).T).T + pel_cem     # cem frame, pelvis-anchored
+        v[:, 2] += floor_z - v[:, 2].min()                     # drop feet onto the floor
+        s = args.human_scale
+        if s != 1.0:
+            anchor = np.array([pel_cem[0], pel_cem[1], floor_z])
+            v = anchor + (v - anchor) * s
+        return v, r
 
     lo = P1_TO_P2
     hi = min(len(q2), P1_TO_P2 + (len(q1) - 0))          # p1 cem valid: t1 in [0,len(q1))
@@ -240,6 +259,23 @@ def main():
     az, el = np.radians(facing + args.cam_az_offset), np.radians(args.cam_el)
     print(f"[cam] primary facing yaw={facing:.1f}deg -> camera az={np.degrees(az):.1f}deg el={args.cam_el:.1f}deg")
     cdir = np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
+    # Emit the SAME target->eye direction expressed in the Y-up mocap frame so the
+    # SMPLX reference render (mocap frame) can reproduce this exact viewpoint.
+    # R = Rinv.T maps cem->mocap; it preserves the up axis (z-up [0,0,1] -> y-up
+    # [0,1,0]) so the two views read as one camera. yfov / dist_mult are echoed so
+    # the companion render matches framing too.
+    cdir_mocap = (Rinv.T @ cdir).tolist()
+    align_json = OUT / "camera_align.json"
+    align_json.write_text(json.dumps({
+        "cam_dir_mocap": cdir_mocap,
+        "yfov_deg": float(np.degrees(yfov)),
+        "dist_mult": 1.15,
+        "source": "viz_mixed_robot_smplx.py",
+        "cem_az_deg": float(np.degrees(az)),
+        "cem_el_deg": float(args.cam_el),
+        "mocap_to_cem_yaw_deg": float(yaw),
+    }, indent=2))
+    print(f"[align] wrote mocap-frame camera dir {np.round(cdir_mocap, 3)} -> {align_json}")
     camera = pyrender.PerspectiveCamera(yfov=yfov, aspectRatio=1.0)
     renderer = pyrender.OffscreenRenderer(RES, RES)
     # CARI4D-style soft Phong (low metallic, mid-high roughness).
@@ -255,15 +291,23 @@ def main():
         return robot, (ov, of, orgb), hv
 
     sample = list(range(lo, hi, max(1, (hi - lo) // 16)))
-    radius = 0.0
+    # Physical floor from the ROBOT + OBJECT only (both physics-grounded); human_cem
+    # then drops the SMPLX feet onto this plane. Computed before any human_cem call.
     floor_z = np.inf
+    for f in sample:
+        d2.qpos[:] = q2[f]; d2.qvel[:] = 0.0; mujoco.mj_forward(m2, d2)
+        allv = np.concatenate([g[0] for g in robot_world_meshes(m2, d2)]
+                              + [object_world_mesh(m2, d2)[0]], 0)
+        floor_z = min(floor_z, allv[:, 2].min())
+    floor_z = float(floor_z)
+
+    radius = 0.0
     for f in sample:
         robot, (ov, _, _), hv = frame_meshes(f)
         rall = np.concatenate([g[0] for g in robot] + [ov, hv], 0)
         radius = max(radius, np.linalg.norm(np.ptp(rall, axis=0)) / 2.0)
-        floor_z = min(floor_z, rall[:, 2].min())
     dist = radius / np.tan(yfov / 2.0) * 1.15
-    floor_trimesh = make_checker_floor(float(floor_z), extent=10.0, repeats=12, up="z")
+    floor_trimesh = make_checker_floor(floor_z, extent=10.0, repeats=12, up="z")
 
     frame_fs = list(range(lo, hi))
     if PREVIEW_N > 0:

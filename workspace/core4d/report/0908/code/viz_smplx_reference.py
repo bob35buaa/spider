@@ -17,6 +17,7 @@ headless with osmesa:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -67,8 +68,12 @@ def parse_args():
     # Camera: match the mixed render's look (3/4 front where p2 faces the camera).
     # Default direction views from the -X/+Z side so p2 (blue) faces the camera,
     # consistent with viz_mixed_robot_smplx.py; yfov/dist-mult match the mixed script.
-    p.add_argument("--cam-dir", default="-1,0.3,1",
-                   help="camera direction 'x,y,z' in the Y-up mocap frame (default: -1,0.3,1)")
+    p.add_argument("--cam-dir", default=None,
+                   help="camera direction 'x,y,z' in the Y-up mocap frame. If unset, "
+                        "auto-reads OUT/camera_align.json (emitted by the mixed render) "
+                        "to reproduce that exact viewpoint; falls back to -1,0.3,1.")
+    p.add_argument("--cam-align-json", default=None,
+                   help="path to a camera_align.json (default: <out>/camera_align.json)")
     p.add_argument("--yfov-deg", type=float, default=45.0, help="vertical FOV deg (default: 45, matches mixed)")
     p.add_argument("--dist-mult", type=float, default=1.15, help="distance multiplier (default: 1.15, matches mixed)")
     return p.parse_args()
@@ -139,8 +144,20 @@ def main():
     # Follow camera: 3/4 front view aligned with the mixed render (p2 faces the
     # camera). yfov / dist-mult / direction are CLI-tunable and default to the
     # mixed script's values so the two deliverables read as one viewpoint.
+    # Camera direction priority: explicit --cam-dir > camera_align.json (emitted by
+    # the mixed render, in this same OUT dir by default) > hardcoded fallback. The
+    # json path reproduces the mixed render's exact viewpoint in the mocap frame.
+    align_path = Path(args.cam_align_json) if args.cam_align_json else OUT / "camera_align.json"
+    if args.cam_dir is not None:
+        cam_dir = args.cam_dir
+    elif align_path.exists():
+        cam_dir = ",".join(str(x) for x in json.loads(align_path.read_text())["cam_dir_mocap"])
+        print(f"[cam] aligned to mixed render via {align_path}: dir={cam_dir}")
+    else:
+        cam_dir = "-1,0.3,1"
+        print(f"[cam] no align json at {align_path}; using fallback dir={cam_dir}")
     yfov = np.radians(args.yfov_deg)
-    direction = np.array([float(x) for x in args.cam_dir.split(",")], float)
+    direction = np.array([float(x) for x in cam_dir.split(",")], float)
     direction /= np.linalg.norm(direction)
     sub = list(range(lo, hi, max(1, (hi - lo) // 16)))
     radius = max(
