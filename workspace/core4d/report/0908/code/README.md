@@ -8,11 +8,18 @@
 
 | 脚本 | 内容 | 渲染后端 |
 |---|---|---|
-| `viz_dual_robot_clean.py` | 两个人的重定向 G1 机器人 + 共享物体 | MuJoCo 原生渲染 |
-| `viz_smplx_reference.py` | 两个人的 SMPLX 真值 + 物体 | pyrender（Phong 柔和着色） |
-| `viz_mixed_robot_smplx.py` | p2 机器人 + p1 SMPLX 人体 + 物体 | pyrender + MuJoCo 取网格 |
+| `viz_mixed_robot_smplx.py` | p2 机器人 + p1 SMPLX 人体 + 物体（交付） | pyrender + MuJoCo 取网格 |
+| `viz_smplx_reference.py` | 两个人的 SMPLX 真值 + 物体（交付） | pyrender（Phong 柔和着色） |
+| `viz_methods_compare.py` | **四方法 p2/G1 对比**（SPIDER / OmniRetarget / SBTO / GMR），仅 p2、仅 G1 + 物体 | pyrender + MuJoCo 取网格 |
+| `viz_dual_robot_clean.py` | 两个人的重定向 G1 机器人 + 共享物体（不再作为交付，函数被 compare 复用） | MuJoCo 原生渲染 |
 | `render_style.py` | 共享样式：MuJoCo 场景美化、pyrender 柔光/瓷砖地板、配色常量、CLI 公共参数 | — |
 | `smplx_min.py` | 纯 NumPy 的最小 SMPLX 前向（LBS），用于按需重摆姿 | — |
+
+**视角一致性（本轮更新）**：`mixed` 与 `smplx` 交付的相机已对齐到同一 3/4 正面视角
+（p2 面向镜头）。`mixed` 相机方位角由 p2 机器人的平均朝向自动推出（`facing_yaw + --cam-az-offset`，
+默认 +45°），不再固定 135°（旧值导致 p2 背对镜头）；`smplx` 的相机方向/FOV/距离系数默认与
+`mixed` 对齐（`--cam-dir -1,0.3,1`、`--yfov-deg 45`、`--dist-mult 1.15`），且 p2（蓝）面向镜头。
+`robot_dual` 不再作为交付渲染。
 
 设计要点：
 - **机器人 + 物体**贴近 OmniRetarget 论文配图：暖米色瓷砖地板、反射、柔和阴影、三点布光、渐变天空；机器人保留真实银/黑材质。
@@ -48,18 +55,37 @@
 ```bash
 cd /mnt/ali-sh-1/usr/xiayibo/work_dir/embodied/spider
 
-# 机器人 + 物体（两版）
-MUJOCO_GL=osmesa .venv/bin/python \
-  workspace/core4d/report/0908/code/viz_dual_robot_clean.py
-
-# SMPLX 真值（两版）
-PYOPENGL_PLATFORM=osmesa .venv/bin/python \
-  workspace/core4d/report/0908/code/viz_smplx_reference.py
-
-# 混合：机器人 + SMPLX 人体 + 物体（两版）
+# 混合：p2 机器人 + p1 SMPLX 人体 + 物体（两版，交付）
 PYOPENGL_PLATFORM=osmesa MUJOCO_GL=osmesa .venv/bin/python \
   workspace/core4d/report/0908/code/viz_mixed_robot_smplx.py
+
+# SMPLX 真值（两版，交付）—— 用 --window 裁到与 g1 一致的段（box021 为 mocap [109,217)）
+PYOPENGL_PLATFORM=osmesa .venv/bin/python \
+  workspace/core4d/report/0908/code/viz_smplx_reference.py --window 109,217
+
+# 四方法 p2/G1 对比（SPIDER/OmniRetarget/SBTO/GMR，各出 bg+white + 逐帧）
+PYOPENGL_PLATFORM=osmesa MUJOCO_GL=osmesa .venv/bin/python \
+  workspace/core4d/report/0908/code/viz_methods_compare.py
 ```
+
+### 四方法对比（`viz_methods_compare.py`）
+
+仅渲染 **p2、仅 G1 机器人 + 物体**，四方法风格一致、逐帧时序对齐，用于并排对比。
+
+- **数据源**（都是 42 列 qpos = 7 base + 29 G1 关节 + 6 物体[trans3+欧拉ZYX]，统一跑在
+  `scene_act_E170_lowerbody_physics.xml` 上）：
+  - SPIDER：`workspace/core4d/results/E170/s6_downstream/cem/full/E170_<case>_p2_PRG.npz`（论文 box 组 SPIDER-CEM）
+  - OmniRetarget：`paper_results/omni_scene_act_qpos/<case>_p2_omnirt_scene_act_qpos.npz`（对比表复算用的同一条）
+  - SBTO：`<sbto>/paper_results/_sbto_scene_qpos/<case>_p2_omnirt_scene_act_qpos.npz`
+  - GMR：`<GMR>/out/core4d_g1/paper_metrics/qpos/<case>_p2.qpos.npz`（按 30fps）
+- **对齐**：以 SPIDER 为参考。时序上，同一 trim 的 SPIDER/OmniRetarget/SBTO 按帧号对齐（lag 0），
+  GMR（独立帧、131 帧）按物体轨迹相关性求整数 lag。空间上做 **物体对齐**（yaw+平移把每个方法的
+  箱子摆到同一世界位置），机器人各自落在方法产出的相对位置。**GMR 是纯身体重定向、不感知物体，
+  机器人手全程距箱 ≥1.4m**，因此对齐后其机器人会明显偏离箱子——这是它接触率≈0 的如实呈现。
+- **相机**：共享距离/地面（统一比例），逐帧跟随各方法 robot+object 中点；方位角由 SPIDER 朝向
+  推出使机器人正面朝向镜头。
+- **输出**：`paper_results/viz/<case>_p2/methods_compare/<method>/{frames_bg,frames_white,<method>_{bg,white}.mp4}`，
+  method ∈ `spider/omniretarget/sbto/gmr`。
 
 ### 渲染任意序列 / 自定义数据源
 
@@ -88,9 +114,10 @@ PYOPENGL_PLATFORM=osmesa .venv/bin/python \
 
 各脚本额外参数：
 
-- **viz_smplx_reference.py**：`--primary`（输出目录人物 tag，默认 p2）、`--window lo,hi`、`--baked-shape`（用原始体型）、`--object-mesh`（覆盖物体 obj 路径）。
-- **viz_dual_robot_clean.py**：`--primary/--partner`（默认 p2/p1）、`--exp`（默认 E170）、`--cem-dir`、`--processed-root`、`--scene-prefix`（默认 `dcv3_omnirt_v1_ref_fk`）。
-- **viz_mixed_robot_smplx.py**：以上机器人参数 + `--window lo,hi`、`--baked-shape`、`--p1-trim-start`（默认 109）、`--p1-to-p2`（默认 15）。
+- **viz_smplx_reference.py**：`--primary`（输出目录人物 tag，默认 p2）、`--window lo,hi`、`--baked-shape`（用原始体型）、`--object-mesh`（覆盖物体 obj 路径）、`--cam-dir`（默认 `-1,0.3,1`，与 mixed 对齐使 p2 面向镜头）、`--yfov-deg`（默认 45）、`--dist-mult`（默认 1.15）。
+- **viz_mixed_robot_smplx.py**：`--primary/--partner`（默认 p2/p1）、`--exp`（默认 E170）、`--cem-dir`、`--processed-root`、`--scene-prefix` + `--window lo,hi`、`--baked-shape`、`--p1-trim-start`（默认 109）、`--p1-to-p2`（默认 15）、`--cam-az-offset`（默认 45，相机方位角=p2朝向+此偏移）、`--cam-el`（默认 12）。
+- **viz_methods_compare.py**：`--case`、`--scene`（默认 E170 单机器人场景）、`--out`、`--res/--fps/--preview`、`--az`（默认按 SPIDER 朝向推出）、`--az-offset`（默认 45）、`--el`（默认 12）。
+- **viz_dual_robot_clean.py**（已不作交付）：`--primary/--partner`（默认 p2/p1）、`--exp`（默认 E170）、`--cem-dir`、`--processed-root`、`--scene-prefix`（默认 `dcv3_omnirt_v1_ref_fk`）。
 
 > ⚠️ `--p1-trim-start` / `--p1-to-p2` 是 **paired-export 特定** 的对齐偏移（当前 E170 box021
 > 序列的 p1↔mocap、p1↔p2 时间对齐）。换序列时需按该序列的配对导出重新确定，否则人体

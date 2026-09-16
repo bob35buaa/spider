@@ -64,6 +64,13 @@ def parse_args():
     p.add_argument("--baked-shape", action="store_true",
                    help="use the subjects' baked betas instead of the neutral betas=0 shape")
     p.add_argument("--object-mesh", default=None, help="override object .obj path")
+    # Camera: match the mixed render's look (3/4 front where p2 faces the camera).
+    # Default direction views from the -X/+Z side so p2 (blue) faces the camera,
+    # consistent with viz_mixed_robot_smplx.py; yfov/dist-mult match the mixed script.
+    p.add_argument("--cam-dir", default="-1,0.3,1",
+                   help="camera direction 'x,y,z' in the Y-up mocap frame (default: -1,0.3,1)")
+    p.add_argument("--yfov-deg", type=float, default=45.0, help="vertical FOV deg (default: 45, matches mixed)")
+    p.add_argument("--dist-mult", type=float, default=1.15, help="distance multiplier (default: 1.15, matches mixed)")
     return p.parse_args()
 
 
@@ -129,17 +136,17 @@ def main():
         c[1] = target_y
         return c
 
-    # Follow camera: frontal 3/4 view (holosoma visualize_retarget_smpl style),
-    # per-frame lookat on the horizontally-following centroid; distance fits the
-    # widest single-frame spread over the window.
-    yfov = np.pi / 3.0                            # 60 deg, like the reference
-    direction = np.array([1.0, 0.3, -1.0])        # front-right, slightly elevated
+    # Follow camera: 3/4 front view aligned with the mixed render (p2 faces the
+    # camera). yfov / dist-mult / direction are CLI-tunable and default to the
+    # mixed script's values so the two deliverables read as one viewpoint.
+    yfov = np.radians(args.yfov_deg)
+    direction = np.array([float(x) for x in args.cam_dir.split(",")], float)
     direction /= np.linalg.norm(direction)
     sub = list(range(lo, hi, max(1, (hi - lo) // 16)))
     radius = max(
         np.linalg.norm(np.ptp(np.concatenate([p1[t], p2[t], obj_verts(t)], 0), axis=0)) / 2.0
         for t in sub)
-    dist = radius / np.tan(yfov / 2.0) * 1.25
+    dist = radius / np.tan(yfov / 2.0) * args.dist_mult
 
     floor_y = float(min(min(p1[t][:, 1].min(), p2[t][:, 1].min()) for t in sub))
     floor_trimesh = make_checker_floor(floor_y, extent=10.0, repeats=12, up="y")

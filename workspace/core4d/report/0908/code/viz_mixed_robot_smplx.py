@@ -72,7 +72,18 @@ def parse_args():
                    help="partner mocap<->cem trim offset (paired-export specific; default: 109)")
     p.add_argument("--p1-to-p2", type=int, default=15,
                    help="partner cem <-> primary cem offset (paired-export specific; default: 15)")
+    p.add_argument("--cam-az-offset", type=float, default=45.0,
+                   help="camera azimuth = primary robot mean facing yaw + this offset (deg); "
+                        "keeps the primary robot FACING the camera in a 3/4 view (default: 45)")
+    p.add_argument("--cam-el", type=float, default=12.0, help="camera elevation deg (default: 12)")
     return p.parse_args()
+
+
+def mean_facing_yaw(qpos: np.ndarray) -> float:
+    """Mean world yaw (deg) of the robot's forward (+x body axis) from base quat (wxyz)."""
+    quats = qpos[:, 3:7][:, [1, 2, 3, 0]]          # wxyz -> xyzw
+    fwd = Rot.from_quat(quats).apply(np.tile([1.0, 0.0, 0.0], (len(qpos), 1)))
+    return float(np.degrees(np.arctan2(fwd[:, 1].mean(), fwd[:, 0].mean())))
 
 
 def look_at(eye, target, up):
@@ -221,9 +232,13 @@ def main():
     if WINDOW is not None:
         lo, hi = WINDOW
 
-    # camera: cem Z-up, 3/4 elevated view (azimuth 135, elevation +12), follow centroid
+    # camera: cem Z-up, 3/4 elevated view, follow centroid. Azimuth is derived from
+    # the primary robot's mean facing yaw so p2 FACES the camera (fixes the earlier
+    # back-to-camera view); elevation fixed.
     yfov = np.pi / 4.0
-    az, el = np.radians(135.0), np.radians(12.0)
+    facing = mean_facing_yaw(q2)
+    az, el = np.radians(facing + args.cam_az_offset), np.radians(args.cam_el)
+    print(f"[cam] primary facing yaw={facing:.1f}deg -> camera az={np.degrees(az):.1f}deg el={args.cam_el:.1f}deg")
     cdir = np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
     camera = pyrender.PerspectiveCamera(yfov=yfov, aspectRatio=1.0)
     renderer = pyrender.OffscreenRenderer(RES, RES)
