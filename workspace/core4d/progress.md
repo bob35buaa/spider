@@ -1,5 +1,42 @@
 # CORE4D 当前进度
 
+## 📝 已规划待执行：E214c — Part-wise Penetration 阈值统一消融（plan248 / R303 / Phase 72）
+
+> **2026-09-18 写计划**：`plan/248_E214c_partwise_threshold_ablation_plan.md`，补 E214 未覆盖的「分部位阈值必要性」。
+> 两臂：**A5 uniform_hand**（body/leg 门←hand 阈值，最宽松）、**A6 uniform_leg**（body/hand 门←leg 阈值，最严格）。
+> 用户 4 项决定：①软层保持不变（核查发现软惩罚本就部位统一 2cm，part-wise 只在硬门）②硬门统一全部三参数(min_sdf+hard_floor+max_vio)③case 集＝E214 实际 50 ④只动 3 个 SDF 硬门（posture/e167/peak 不变）。
+> 关键：hand 门 floor/vio 因源实验异（E198 −15mm/5% vs 其余 −20mm/10%）→ A5 toggle **per-case 计算**（读各 case 基线 hand 值），非固定 dict。零核心代码改动（只翻 config 键，run_mjwp.py 不变）。
+> 评估器已含逐部位穿透(leg/body/upper_body_penetration_frac)，C1–C4 可直接量化。100 CEM 重跑，预计 ~10h(8卡)。
+> **状态**：计划待用户批准 → 批准后建 `scripts/experiments/E214c/`（7 文件）+ eval/launch（4 文件）。
+>
+> **2026-09-18 实现完成 +  smoke 验证中**（用户已批准，E214c / 本机 8 卡）：
+> - 已建 12 文件：`experiments/E214c/`{e214c_common, build_manifest, run_ablation_cem, audit_single_variable, test_e214c_contract, snapshot_E214c_scenes.sh, render_E214c, smoke_E214c.sh} + `eval/runners/eval_E214c_ablation.py` + `eval/wrappers/eval_E214c_ablation.sh` + `eval/reports/gen_E214c_ablation_table.py` + `launch/active/run_E214c_local_8gpu.sh`。`tmp/E214c_case_id.txt`(=E214 50case)。
+> - **零核心代码改动**：只翻 6 个既有 config 键（run_mjwp.py `_parse_override_tokens` lstrip('+') 已验证）。
+> - **CPU 验证全过**：contract test ALL PASS（C1–C7：50case≡E214、baseline 全解析、part-wise 阈值在位、per-case toggle 6 键值正确、'+' 前缀）；manifest 100 行（A5 两变体 13×E198/37×rest，A6 单一 leg 值）；runner dry-run 命令正确。
+> - **GPU smoke A5 PASS**（GPU5，max_iter=3，不动 keepalive）：config 经 load_config_path 加载、6 toggle 落地、safety 门接受非 NaN hard_floor、CEM 运行无崩溃；saved config 核验 safety&leg←hand(-0.01/-0.015/0.05)、hand 不变、soft/posture/e167 不变。
+> - **A6 smoke 待确认**：over-strict 手门(+5mm)预期几乎全候选被否→least_violation 回退（比 E214 更极端），需确认不报错。
+> - **下一步**：A6 smoke 过 → kill keepalive(7 workers+main) → nohup 全量 100 CEM(8卡,~10h,链式跑完挂回 keepalive) → eval → 出表 → 可视化 → log/307 + tracker R303。
+>
+> **2026-09-18 全量 CEM 已启动（健康运行中）**：
+> - A6 smoke 也 PASS（config 正确 safety&hand←leg +0.005/-0.005/0.02；over-strict 手门 opt_steps 跑到 3、sim 134/256 无 error/NaN，least_violation 回退兜底）。
+> - 已 kill keepalive(main 2608826 + 7 workers) + smoke，8 卡全空。
+> - **launch**：`nohup bash run_E214c_local_8gpu.sh > logs/E214c/run.log`，链式：CEM 完成后自动 `nohup python /mnt/ali-sh-1/usr/xiayibo/.cache/run.py &` 挂回 keepalive（见 run.log [chain] 行）。chain pid 3361373。
+> - snapshot 50 scene 完成、contract ALL PASS、manifest 100 行重建、dispatch 8 卡。启动 ~3min 后：8 running / 92 pending / **0 fail**，8 卡 util ~46%，sample log opt_steps=32 正常。
+> - **预计 ~9-10h**（100 任务 / 8 卡 / wall median ~43min）。runner 可续跑：重invoke launch 脚本即跳过 cem_ok（output 存在则重判 ok）。
+> - **resume/监控**：`awk -F'\t' 'NR>1{c[$NF? "":""]}' ...` 看 manifest status 计数；或 `tail logs/E214c/run.log`。完成后跑 `bash workspace/core4d/scripts/eval/wrappers/eval_E214c_ablation.sh`（eval full+A5+A6 → audit → 出表 partwise + 6arm）→ render_E214c 可视化 → 写 log/307 + tracker R303。
+> - **待办（CEM 完成后）**：①确认 100/100 cem_ok + audit ALL PASS ②eval ③gen 表 ④渲染代表 case（box021 抱箱 + 一 bucket/desk）抽帧验证 A5 腿/身扎箱、A6 手离物 ⑤log/307 填 C1–C4 ⑥tracker R303 ⑦确认 keepalive 已挂回 ⑧git commit（claims 过则提交）。
+>
+> **2026-09-18 23:22 事故 + 23:55 恢复**：
+> - **事故**：runner 写 task-56 log 时 `OSError [Errno 122] Disk quota exceeded`（spider 子树 JuiceFS **目录 inode 配额** 95%→顶，空间本身才 1%）→ runner 崩溃退出 rc=1 → 链式 keepalive 被误触发抢了 GPU0/1；7 个在跑任务里 6 个随后正常写盘完成（进程退出但没人记账）、1 个孤儿继续跑。
+> - **恢复**：kill 误启 keepalive(3 pid) + 孤儿 run_mjwp；manifest 7 条僵尸 running 重置；**绕过 launch 脚本直接重启 run_ablation_cem**（避免 build_manifest 重建冲掉 48 个 cem_ok 状态）；启动自检把 6 条已有有效产出的僵尸行收编为 cem_ok（验证 npz+qpos有限+toggle落地）。
+> - **keepalive 链加 rc 守卫**：只有 runner rc=0（零 problem rows）才自动挂回 keepalive；rc≠0 只写日志不抢卡（run2.log [chain] 行）。
+> - **用户同步清理**：inode 配额 88414→441630（用量 95%→19%，剩 35.8 万），隐患解除。
+> - **重启后状态（23:56）**：54 cem_ok + 8 running + 38 pending，8 卡 util 42-52%，剩余 ~46 任务 ≈ **4h**（ETA ~04:00）。日志切换到 `logs/E214c/run2.log`。
+> **2026-09-19 04:5x E214c 完结**：100/100 cem_ok(0 fail)→ eval 150/150 → audit 100/100 ALL PASS → 主表+6臂表 → 渲染 6/6 + zoom 抽帧 → **log/307 写完、tracker R303 已加行、git commit**。keepalive 已挂回(chain rc=0)、watchdog 已退役。
+> - **结论一句话**：part-wise 阈值必要性成立但不对称——腿/身"严格"方向是真实约束(放宽→腿穿箱×3)，手"宽松"方向由 least_violation 回退兜底(收紧不破接触→行为漂移腿穿箱×3.7)；C2 诚实证伪。
+> - **E214c 方向已完结**，无未竟动作；可选后续=log/307 §9（6臂论文表已产出；单 case gate 合法率机理实验可选）。
+> - **教训**：长跑批任务前除了 GPU/内存，还要查 **inode 配额**（`df -i`，JuiceFS 目录配额空间与 inode 分开限）；chain 收尾动作必须带 rc 守卫。
+
 ## 🚧 进行中：E215 — bucket+box rot object-augmentation 放量 + full CEM（plan247 / R302 / Phase 73）
 
 > **2026-09-12 启动**：计划已批准并落 `plan/247_E215_bucket_box_rot_augmentation_plan.md`。
