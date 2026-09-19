@@ -15,7 +15,7 @@
 - **A6 uniform_leg**：body/hand 门 ← leg 阈值（最严格：θ+5mm，floor−5mm，vio 2%；全 case 一致）。
 - **训练**：100/100 `cem_ok`，**0 失败**。第二段 4.55h + 第一段 ~4.5h（23:22 inode 配额事故中断，见 §8）；wall median 41.8min，max 67.1min（本机 8 卡）。
 - **单变量审计**：100/100 **ALL PASS**（`preflight/e214c_single_variable_audit.json`）——每臂只改 6 个目标键（2 门×3 参数，per-case 值与基线 source 门逐字一致），source 门未动，其余键与基线逐字一致。
-- **评估**：150/150 序列 `ok`（full 现算 50 + A5 50 + A6 50），同一评估器（`eval.core.core_metrics` + `motion_health` + `fixed_reference_z_metrics`）。**full 现算与 E214 full 列（论文缓存）标准指标 mean±std 逐位一致**（82.3%±10.4% / 58.8%±13.9% / eef 13.07±2.84 …）——消除评估器漂移疑虑。
+- **评估**：150/150 序列 `ok`（full 现算 50 + A5 50 + A6 50），同一评估器（`eval.core.core_metrics` + `motion_health` + `fixed_reference_z_metrics`）。**full 现算与 E214 full 列（论文缓存）标准指标 mean±std 逐位一致**（82.3%±10.4% / 58.8%±13.9% / eef 13.07±2.84 …）——消除评估器漂移疑虑。MPJPE（全 G1 关节、G=global / L=root-aligned）由轻量 FK pass `eval_E214c_mpjpe.py` 补算，150/150 ok。
 
 ## 2. Overall 指标表（n=50，mean±std (worst)，附 full-vs-臂配对 Wilcoxon，*=p<0.05）
 
@@ -30,6 +30,8 @@
 | BODY / UPPER-BODY penetration | ↓ | 0.0% | 0.0% | 0.0% |
 | root pos err (cm) | ↓ | 13.66±3.37 | 14.38 p=.093 | 14.04 p=.490 |
 | eef pos err (cm) | ↓ | 13.07±2.84 | 13.68 p=.059 | 13.52 p=.066 |
+| MPJPE-G (cm) | ↓ | 14.34±3.23 | 15.19 p=.057 | 14.79 p=.357 |
+| MPJPE-L (cm) | ↓ | **4.55±1.24** | **4.85 *p=.023** | 4.63 p=.304 |
 | obj pos err (cm) | ↓ | 10.34±2.59 | 10.59 p=.954 | 10.59 p=.169 |
 | obj ori err (deg) | ↓ | 5.11±2.68 | 5.43 *p=.0076 | 5.26 p=.215 |
 | **fall rate** | ↓ | **0.0%** | **0.0%** | **0.0%** |
@@ -42,7 +44,7 @@
 ## 3. 核心发现
 
 1. **腿-箱净空是分部位阈值的真正价值所在**：full 的 LEG penetration 1.5% 同时显著优于 A5 4.5%（×3，p=.0013）与 A6 5.5%（×3.7，p=7.4e-5）。两个统一方向都以腿穿箱为代价。
-2. **A5（放宽腿/身门到手级）→ 腿穿透直接放行**：机制直白——θ 从 +5mm 放到 −10mm、vio 2%→10% 后，软层 2cm margin 压不住的残留腿-箱接触不再被硬门剔除。连带 obj ori 变差（5.11→5.43°，p=.0076：腿碰箱扰动箱体）；hand geom pen 边缘上升（5.0→6.3%，p=.0495，行为漂移二阶效应）。手接触对照轴不变（contact@3mm 58.8→58.2 ns，hand 门未动）——内部对照成立。
+2. **A5（放宽腿/身门到手级）→ 腿穿透直接放行**：机制直白——θ 从 +5mm 放到 −10mm、vio 2%→10% 后，软层 2cm margin 压不住的残留腿-箱接触不再被硬门剔除。连带 obj ori 变差（5.11→5.43°，p=.0076：腿碰箱扰动箱体）；hand geom pen 边缘上升（5.0→6.3%，p=.0495，行为漂移二阶效应）。**全身追踪亦付代价**：MPJPE-L 4.55→4.85cm（*p=.023）、MPJPE-G 14.34→15.19（p=.057 边缘）——腿-箱穿透扰动的是全身姿态而非仅腿。手接触对照轴不变（contact@3mm 58.8→58.2 ns，hand 门未动）——内部对照成立。
 3. **A6（收紧手/身门到腿级）→ 手接触没有崩（C2 预期落空），但腿穿透反而显著上升**：手门 θ+5mm 与接触任务本质冲突（抱箱帧全部 φ<5mm）→ 候选几乎全违约 → `least_violation` 回退**常态化接管**精英选择。硬门是**相对筛选器**而非绝对约束：当"违约"成为所有候选的共性，阈值收紧不再淘汰接触行为，只降低精英质量。body 门 +5mm 同理使"箱体贴躯干"常态违约 → 抱箱姿态漂移、下肢代偿靠近箱体 → 腿穿箱（leg 门未动却 ×3.7）。eef/root tracking 边缘变差（p≈.06）。
 4. **BODY/UPPER-BODY penetration 全 0、fall 全 0**：躯干在任何口径下都不穿箱（软层 robot_object 2cm 仍生效 + 躯干本就不主动近箱）；统一阈值不引发摔倒——与 A3（去全部硬门 → fall 14%）对照：**防灾难是"硬门存在性"的价值，腿部净空是"阈值分部位"的价值**，两层分工进一步细化。
 
@@ -76,7 +78,7 @@
 |---|---|
 | `tmp/E214c_case_id.txt` | 50 case（=E214，contract 断言相同） |
 | `workspace/core4d/scripts/experiments/E214c/` | e214c_common（per-case toggle 引擎）/ build_manifest / run_ablation_cem / audit_single_variable / test_e214c_contract / snapshot_E214c_scenes.sh / smoke_E214c.sh / render_E214c.py / watchdog_keepalive_E214c.sh |
-| `workspace/core4d/scripts/eval/runners/eval_E214c_ablation.py`、`wrappers/eval_E214c_ablation.sh`、`reports/gen_E214c_ablation_table.py` | 评估（full 现算+A5/A6，逐部位穿透指标）+ 出表（主表+6臂） |
+| `workspace/core4d/scripts/eval/runners/eval_E214c_ablation.py`、`eval_E214c_mpjpe.py`、`wrappers/eval_E214c_ablation.sh`、`reports/gen_E214c_ablation_table.py` | 评估（full 现算+A5/A6，逐部位穿透指标）+ MPJPE 轻量 FK pass（G/L 两口径）+ 出表（主表+6臂） |
 | `workspace/core4d/scripts/launch/active/run_E214c_local_8gpu.sh` | 本机 8 卡入口（snapshot→contract→manifest→dispatch→audit） |
 | `workspace/core4d/results/E214c/scene_snapshot/` | 50 case 基线 scene 快照 + manifest（git HEAD + sha256，rule 7） |
 | **核心代码零改动** | `examples/run_mjwp.py`/`spider/config.py` 未动；仅翻既有 config 键（smoke+audit 验证） |

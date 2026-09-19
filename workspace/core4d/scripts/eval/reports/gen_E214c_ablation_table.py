@@ -39,6 +39,9 @@ import e214c_common as C  # noqa: E402
 
 E214C_EVAL = C.EVAL_DIR / "e214c_metrics.jsonl"
 E214_EVAL = C.E214.RESULTS / "eval" / "e214_metrics.jsonl"  # for A1-A4 (6-arm only)
+# MPJPE passes (eval_E214c_mpjpe.py / eval_E214_mpjpe.py), overlaid per (case, series).
+MPJPE_CACHE = C.EVAL_DIR / "e214c_mpjpe.jsonl"
+E214_MPJPE_CACHE = C.E214.RESULTS / "eval" / "e214_mpjpe.jsonl"  # for A1-A4 (6-arm only)
 OUT_MD = C.REPORT_DIR / "e214c_partwise_table.md"
 OUT_TSV = C.REPORT_DIR / "e214c_partwise_overall.tsv"
 OUT_XLSX = C.REPORT_DIR / "e214c_partwise_table.xlsx"
@@ -65,6 +68,8 @@ METRICS = [
     ("track_root_pos", "root pos err (cm)",      "lower",  "cm"),
     ("track_eef_pos",  "eef pos err (cm)",       "lower",  "cm"),
     ("track_eef_ori",  "eef ori err (deg)",      "lower",  "deg"),
+    ("track_mpjpe_g",  "MPJPE-G (cm)",           "lower",  "cm"),
+    ("track_mpjpe_l",  "MPJPE-L (cm)",           "lower",  "cm"),
     ("track_obj_pos",  "obj pos err (cm)",       "lower",  "cm"),
     ("track_obj_ori",  "obj ori err (deg)",      "lower",  "deg"),
     ("fall_flag",      "fall rate",              "lower",  "pct"),
@@ -110,6 +115,27 @@ def load_jsonl(path: Path) -> dict[tuple[str, str], dict[str, float]]:
         r = json.loads(line)
         if r.get("status") == "ok":
             out[(r["case_id"], r["series"])] = {k: _finite(v) for k, v in r.get("metrics", {}).items()}
+    return out
+
+
+def load_mpjpe(path: Path) -> dict[tuple[str, str], dict[str, float]]:
+    """(case, series) -> {track_mpjpe_g, track_mpjpe_l} in cm (absent if pass not run)."""
+    out: dict[tuple[str, str], dict[str, float]] = {}
+    if not path.is_file():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        if r.get("status") != "ok":
+            continue
+        vals: dict[str, float] = {}
+        if r.get("mpjpe") is not None:
+            vals["track_mpjpe_g"] = _finite(r["mpjpe"])
+        if r.get("mpjpe_local") is not None:
+            vals["track_mpjpe_l"] = _finite(r["mpjpe_local"])
+        if vals:
+            out[(r["case_id"], r["series"])] = vals
     return out
 
 
@@ -192,6 +218,11 @@ def main() -> int:
 
     e214c = load_jsonl(E214C_EVAL)
     e214 = load_jsonl(E214_EVAL)
+    # overlay the lightweight MPJPE pass (not part of the full evaluate_sequence set)
+    for (case, series), vals in load_mpjpe(MPJPE_CACHE).items():
+        e214c.setdefault((case, series), {}).update(vals)
+    for (case, series), vals in load_mpjpe(E214_MPJPE_CACHE).items():
+        e214.setdefault((case, series), {}).update(vals)
     cases = C.load_cases()
     n = len(cases)
     C.REPORT_DIR.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,9 @@ export MUJOCO_GL="${MUJOCO_GL:-egl}"
 echo "=== [E214c] eval: per-case metrics (full + A5 + A6) ==="
 $PY workspace/core4d/scripts/eval/runners/eval_E214c_ablation.py "$@"
 
+echo "=== [E214c] eval: MPJPE (lightweight FK pass, G/L) ==="
+$PY workspace/core4d/scripts/eval/runners/eval_E214c_mpjpe.py --workers 8
+
 echo "=== [E214c] eval: single-variable audit ==="
 $PY workspace/core4d/scripts/experiments/E214c/audit_single_variable.py || true
 
