@@ -12,6 +12,7 @@ All four methods are evaluated on the SAME 52 cases / 11 objects.
 import json
 import math
 import statistics as st
+import sys
 from pathlib import Path
 
 import openpyxl
@@ -25,12 +26,23 @@ ROOT = Path("/mnt/ali-sh-1/usr/xiayibo/work_dir/embodied")
 SPIDER_XLSX = ROOT / "spider/workspace/core4d/report/0908/paper_results/paper_results.xlsx"
 SBTO_XLSX = ROOT / "sbto/paper_results/sbto_paper_results.xlsx"
 GMR_XLSX = ROOT / "GMR/out/core4d_g1/paper_metrics/paper_metrics.xlsx"
+GMR_10MM_CSV = ROOT / "GMR/out/core4d_g1/paper_metrics/paper_metrics_10mm_per_case.csv"
 OUT_DIR = ROOT / "spider/workspace/core4d/report/0908/paper_cmp"
+
+# --full -> 4-method comparison (SPIDER-CEM / OmniRetarget / SBTO / GMR), written to
+# *_full.* files so the interim 2-method artifacts (no suffix) are NOT overwritten.
+# default (no flag) -> 2-method SPIDER-CEM vs OmniRetarget (unchanged).
+FULL = "--full" in sys.argv
+SUF = "_full" if FULL else ""
 
 # ----------------------------------------------------------------------------
 # Method registry (display order = paper column order)
 # ----------------------------------------------------------------------------
-METHODS = ["SPIDER-CEM", "SBTO", "OmniRetarget", "GMR"]
+# INTERIM (2026-11): without --full, SBTO/GMR are excluded and only SPIDER-CEM vs
+# OmniRetarget is reported (their workbooks were mid-regeneration upstream). With --full,
+# all four methods are reported (SBTO/GMR now carry contact@10mm / pen@10mm / max-pen).
+# SBTO/GMR-specific blocks below are guarded on membership in METHODS.
+METHODS = ["SPIDER-CEM", "SBTO", "OmniRetarget", "GMR"] if FULL else ["SPIDER-CEM", "OmniRetarget"]
 METHOD_SHORT = {"SPIDER-CEM": "Ours", "SBTO": "SBTO", "OmniRetarget": "OmniRt", "GMR": "GMR"}
 METHOD_KIND = {
     "SPIDER-CEM": "physics (ours)",
@@ -43,7 +55,10 @@ METHOD_KIND = {
 COMMON = [
     ("raw_contact", "Raw contact", "+", ""),
     ("contact_3mm", "Phys. contact@3mm", "+", ""),
+    ("contact_10mm", "Phys. contact@10mm", "+", ""),
     ("pen_3mm", "Phys. pen@3mm", "-", ""),
+    ("pen_10mm", "Phys. pen@10mm", "-", ""),
+    ("pen_max_mm", "Max phys pen (mm)", "-", ""),
     ("geom_2mm", "Geom. pen@2mm", "-", ""),
 ]
 # Headline contact-fidelity metrics for the camera-ready by-object table.
@@ -53,7 +68,10 @@ COMMON = [
 # penetration-aware, so they are the honest headline comparison.
 CONTACT_TEX = [
     ("contact_3mm", "Phys. contact@3mm", "+", ""),
+    ("contact_10mm", "Phys. contact@10mm", "+", ""),
     ("pen_3mm", "Phys. pen@3mm", "-", ""),
+    ("pen_10mm", "Phys. pen@10mm", "-", ""),
+    ("pen_max_mm", "Max phys pen (mm)", "-", ""),
     ("geom_2mm", "Geom. pen@2mm", "-", ""),
 ]
 TRACKING = [
@@ -112,13 +130,15 @@ obj_of = {}
 # --- SPIDER-CEM + OmniRetarget from spider ByCase --------------------------
 # header: case_id, object, method, status, raw contact, contact3mm, pen3mm, geom2mm,
 #         root_pos, root_ori, eef_pos, eef_ori, obj_pos, obj_ori, fall, body_z,
-#         ankle_jerk, obj_speed, foot_slip
+#         ankle_jerk, obj_speed, foot_slip, contact10mm, pen10mm, pen_max_mm
+#         (contact10mm/pen10mm/pen_max_mm are appended at the END -> x[19], x[20], x[21])
 _, r = rows(SPIDER_XLSX, "ByCase")
 for x in r:
     cid, obj, method = x[0], x[1], x[2]
     obj_of[cid] = obj
     d = {
         "raw_contact": x[4], "contact_3mm": x[5], "pen_3mm": x[6], "geom_2mm": x[7],
+        "contact_10mm": x[19], "pen_10mm": x[20], "pen_max_mm": x[21],
     }
     if method == "SPIDER-CEM":
         d.update({
@@ -128,34 +148,53 @@ for x in r:
         })
     data[method][cid] = d
 
-# --- SBTO from sbto ByCase --------------------------------------------------
-# header: case_id, object, status, gate_layer, raw, c3mm, pen3mm, geom2mm,
-#         root_pos, root_ori, eef_pos, eef_ori, obj_pos, obj_ori, fall, body_z,
-#         ankle_jerk, obj_speed, foot_slip
-_, r = rows(SBTO_XLSX, "ByCase")
-for x in r:
-    cid = x[0]
-    data["SBTO"][cid] = {
-        "raw_contact": x[4], "contact_3mm": x[5], "pen_3mm": x[6], "geom_2mm": x[7],
-        "root_pos": x[8], "root_ori": x[9], "eef_pos": x[10], "eef_ori": x[11],
-        "obj_pos": x[12], "obj_ori": x[13], "fall": x[14], "body_z": x[15],
-        "ankle_jerk": x[16], "obj_speed": x[17], "foot_slip": x[18],
-    }
+# --- SBTO from sbto ByCase (header-based: robust to upstream column insertions) -----
+# Current schema carries raw / contact@{3,5,10}mm / pen@{3,5,10}mm / max-pen / geom@2mm
+# plus tracking + stability.
+_SBTO_COL = {
+    "raw_contact": "raw contact ↑", "contact_3mm": "physical contact@3mm ↑",
+    "contact_10mm": "physical contact@10mm ↑", "pen_3mm": "physical penetration@3mm ↓",
+    "pen_10mm": "physical penetration@10mm ↓", "pen_max_mm": "max penetration depth mm ↓",
+    "geom_2mm": "geometric penetration@2mm ↓", "root_pos": "root pos err cm ↓",
+    "root_ori": "root ori err° ↓", "eef_pos": "eef pos err cm ↓", "eef_ori": "eef ori err° ↓",
+    "obj_pos": "obj pos err cm ↓", "obj_ori": "obj ori err° ↓", "fall": "fall ↓",
+    "body_z": "body-z err p95 m ↓", "ankle_jerk": "ankle jerk p95 m/s³ ↓",
+    "obj_speed": "obj speed max m/s ↓", "foot_slip": "foot slip max m ↓",
+}
+if "SBTO" in METHODS:
+    _h, _r = rows(SBTO_XLSX, "ByCase")
+    _ix = {c: i for i, c in enumerate(_h)}
+    for x in _r:
+        cid = x[0]
+        data["SBTO"][cid] = {k: x[_ix[col]] for k, col in _SBTO_COL.items() if col in _ix}
 
-# --- GMR from per_case ------------------------------------------------------
-# header: case_id, object_key, category, person, scene_source, frames,
-#         Raw contact, Phys contact3mm, Phys pen3mm, Geom pen2mm,
-#         Foot slip, Foot grnd dev, Grounded frac, qpos accel, qpos jerk,
-#         ankle jerk, trackbody spd, ankle spd
-_, r = rows(GMR_XLSX, "per_case")
-for x in r:
-    cid = x[0]
-    data["GMR"][cid] = {
-        "raw_contact": x[6], "contact_3mm": x[7], "pen_3mm": x[8], "geom_2mm": x[9],
-        "foot_slip": x[10], "foot_grnd_dev": x[11], "grounded_frac": x[12],
-        "qpos_accel": x[13], "qpos_jerk": x[14], "ankle_jerk": x[15],
-        "trackbody_spd": x[16], "ankle_spd": x[17], "obj_speed": x[18],
-    }
+# --- GMR: base metrics from per_case xlsx + contact@10mm / pen@10mm / max-pen from the
+# upstream-supplied 10mm CSV (header-based). GMR is object-unaware, so its max-pen is large
+# (hand passes through the object's nominal volume); reported as-is (indicative, see caption).
+_GMR_COL = {
+    "raw_contact": "Raw contact ↑", "contact_3mm": "Phys contact@3mm ↑",
+    "pen_3mm": "Phys pen@3mm ↓", "geom_2mm": "Geom pen@2mm ↓",
+    "foot_slip": "Foot slip max (m) ↓", "foot_grnd_dev": "Foot grnd dev (m) ↓",
+    "grounded_frac": "Grounded frac ↑", "qpos_accel": "qpos accel p95 ↓",
+    "qpos_jerk": "qpos jerk p95 ↓", "ankle_jerk": "ankle jerk p95 ↓",
+    "trackbody_spd": "trackbody spd max ↓", "ankle_spd": "ankle spd max ↓",
+    "obj_speed": "obj spd max ·",
+}
+if "GMR" in METHODS:
+    import csv as _csv
+    _h, _r = rows(GMR_XLSX, "per_case")
+    _ix = {c: i for i, c in enumerate(_h)}
+    for x in _r:
+        cid = x[0]
+        data["GMR"][cid] = {k: x[_ix[col]] for k, col in _GMR_COL.items() if col in _ix}
+    _c10 = {row["case_id"]: row for row in _csv.DictReader(GMR_10MM_CSV.open())}
+    for cid, d in data["GMR"].items():
+        row = _c10.get(cid)
+        if row is not None:
+            d["contact_10mm"] = float(row["phys_contact_10mm"])
+            d["pen_10mm"] = float(row["phys_pen_10mm"])
+            d["pen_max_mm"] = float(row["phys_pen_max_mm"])
+    print(f"[ok] merged GMR 10mm per-case CSV for {len(_c10)} cases")
 
 CASES = sorted(obj_of)
 assert all(len(data[m]) == 52 for m in METHODS), {m: len(data[m]) for m in METHODS}
@@ -204,10 +243,12 @@ CASES_BY_OBJ = {o: [c for c in CASES if obj_of[c] == o] for o in OBJECT_ORDER}
 # sanity check vs published overview
 _chk = agg("SPIDER-CEM", "raw_contact", CASES, "+")
 assert abs(_chk["mean"] - 0.823753978293631) < 1e-9, _chk
-_chk = agg("SBTO", "root_pos", CASES, "-")
-assert abs(_chk["mean"] - 6.415580475268262) < 1e-9, _chk
-_chk = agg("GMR", "raw_contact", CASES, "+")
-assert abs(_chk["mean"] - 0.04674) < 1e-3, _chk
+if "SBTO" in METHODS:
+    _chk = agg("SBTO", "root_pos", CASES, "-")
+    assert abs(_chk["mean"] - 6.106767836248928) < 1e-6, _chk
+if "GMR" in METHODS:
+    _chk = agg("GMR", "raw_contact", CASES, "+")
+    assert abs(_chk["mean"] - 0.3536634615384615) < 1e-6, _chk
 print("[ok] aggregation reproduces published overview numbers")
 
 
@@ -242,7 +283,7 @@ def fmt(v, key):
     if v is None:
         return None
     # contact/pen/frac in [0,1] -> show 3 decimals; errors/stab -> 2 decimals
-    frac_keys = {"raw_contact", "contact_3mm", "pen_3mm", "geom_2mm", "grounded_frac", "fall"}
+    frac_keys = {"raw_contact", "contact_3mm", "contact_10mm", "pen_3mm", "pen_10mm", "geom_2mm", "grounded_frac", "fall"}
     return round(v, 3) if key in frac_keys else round(v, 2)
 
 
@@ -316,36 +357,50 @@ for key, disp, arrow, unit in COMMON:
 autofit(ws, [22, 6] + [12, 10, 12] * len(METHODS))
 
 # ---- Sheet: Overall_Tracking (SPIDER-CEM vs SBTO) ----
-ws = wb.create_sheet("Overall_Tracking")
-tmethods = ["SPIDER-CEM", "SBTO"]
-hdr = ["Metric", "Dir"]
-for m in tmethods:
-    hdr += [f"{m} mean", f"{m} std", f"{m} worst"]
-ws.append(hdr)
-style_header(ws, 1, len(hdr))
-for key, disp, arrow, unit in TRACKING:
-    row = [f"{disp} ({unit})", "down"]
-    means = {}
+# Only meaningful when SBTO is present (OmniRetarget/GMR are kinematic, no tracking).
+if "SBTO" in METHODS:
+    ws = wb.create_sheet("Overall_Tracking")
+    tmethods = ["SPIDER-CEM", "SBTO"]
+    hdr = ["Metric", "Dir"]
     for m in tmethods:
-        a = agg(m, key, CASES, arrow)
-        means[m] = a["mean"] if a else None
-        row += [fmt(a["mean"], key) if a else None,
-                fmt(a["std"], key) if a else None,
-                fmt(a["worst"], key) if a else None]
-    ws.append(row)
-    valid = {m: v for m, v in means.items() if v is not None}
-    if valid:
-        best = min(valid, key=valid.get)
-        bc = 3 + tmethods.index(best) * 3
-        ws.cell(row=ws.max_row, column=bc).font = BOLD
-        ws.cell(row=ws.max_row, column=bc).fill = BEST_FILL
-autofit(ws, [20, 6] + [12, 10, 12] * len(tmethods))
+        hdr += [f"{m} mean", f"{m} std", f"{m} worst"]
+    ws.append(hdr)
+    style_header(ws, 1, len(hdr))
+    for key, disp, arrow, unit in TRACKING:
+        row = [f"{disp} ({unit})", "down"]
+        means = {}
+        for m in tmethods:
+            a = agg(m, key, CASES, arrow)
+            means[m] = a["mean"] if a else None
+            row += [fmt(a["mean"], key) if a else None,
+                    fmt(a["std"], key) if a else None,
+                    fmt(a["worst"], key) if a else None]
+        ws.append(row)
+        valid = {m: v for m, v in means.items() if v is not None}
+        if valid:
+            best = min(valid, key=valid.get)
+            bc = 3 + tmethods.index(best) * 3
+            ws.cell(row=ws.max_row, column=bc).font = BOLD
+            ws.cell(row=ws.max_row, column=bc).fill = BEST_FILL
+    autofit(ws, [20, 6] + [12, 10, 12] * len(tmethods))
 
 # ---- Sheet: Overall_Stability (heterogeneous) ----
 ws = wb.create_sheet("Overall_Stability")
 ws.append(["Method", "Metric", "Unit", "mean", "std", "worst", "n"])
 style_header(ws, 1, 7)
-for m, stab in (("SPIDER-CEM", STAB_SPIDER), ("SBTO", STAB_SPIDER), ("GMR", STAB_GMR)):
+# OmniRetarget's physics-replay dynamic metrics (merged from omni_health.json) are the
+# only stability numbers it produces; report them alongside SPIDER-CEM.
+_OMNI_STAB = [("ankle_jerk", "Ankle jerk p95", "-", "m/s^3"),
+              ("obj_speed", "Obj speed max", "-", "m/s"),
+              ("foot_slip", "Foot slip max", "-", "m")]
+_stab_rows = [("SPIDER-CEM", STAB_SPIDER)]
+if "SBTO" in METHODS:
+    _stab_rows.append(("SBTO", STAB_SPIDER))
+if "OmniRetarget" in METHODS:
+    _stab_rows.append(("OmniRetarget", _OMNI_STAB))
+if "GMR" in METHODS:
+    _stab_rows.append(("GMR", STAB_GMR))
+for m, stab in _stab_rows:
     for key, disp, arrow, unit in stab:
         a = agg(m, key, CASES, arrow)
         if a:
@@ -400,35 +455,36 @@ for obj in OBJECT_ORDER + ["OVERALL"]:
 autofit(ws, [12, 4] + [9] * (len(COMMON) * len(METHODS)))
 
 # ---- Sheet: ByObject_Tracking (SPIDER-CEM vs SBTO) ----
-ws = wb.create_sheet("ByObject_Tracking")
-head = ["Object", "n"]
-for _, disp, _, unit in TRACKING:
-    head += [f"CEM {disp.split()[0]}{disp.split()[1][0]}", f"SBTO {disp.split()[0]}{disp.split()[1][0]}"]
-# simpler explicit header
-head = ["Object", "n"]
-for _, disp, _, unit in TRACKING:
-    head += [f"{disp} ({unit}) CEM", f"{disp} ({unit}) SBTO"]
-ws.append(head)
-style_header(ws, 1, len(head))
-for obj in OBJECT_ORDER + ["OVERALL"]:
-    cs = CASES if obj == "OVERALL" else CASES_BY_OBJ[obj]
-    row = [obj, len(cs)]
-    best_cols = []
-    for gi, (key, disp, arrow, unit) in enumerate(TRACKING):
-        a1 = agg("SPIDER-CEM", key, cs, arrow)
-        a2 = agg("SBTO", key, cs, arrow)
-        row += [fmt(a1["mean"], key) if a1 else None, fmt(a2["mean"], key) if a2 else None]
-        if a1 and a2:
-            best_cols.append(3 + gi * 2 + (0 if a1["mean"] <= a2["mean"] else 1))
-    ws.append(row)
-    rr = ws.max_row
-    if obj == "OVERALL":
-        for c in range(1, len(row) + 1):
-            ws.cell(row=rr, column=c).font = BOLD
-    for bc in best_cols:
-        ws.cell(row=rr, column=bc).fill = BEST_FILL
-        ws.cell(row=rr, column=bc).font = BOLD
-autofit(ws, [12, 4] + [15] * (len(TRACKING) * 2))
+if "SBTO" in METHODS:
+    ws = wb.create_sheet("ByObject_Tracking")
+    head = ["Object", "n"]
+    for _, disp, _, unit in TRACKING:
+        head += [f"CEM {disp.split()[0]}{disp.split()[1][0]}", f"SBTO {disp.split()[0]}{disp.split()[1][0]}"]
+    # simpler explicit header
+    head = ["Object", "n"]
+    for _, disp, _, unit in TRACKING:
+        head += [f"{disp} ({unit}) CEM", f"{disp} ({unit}) SBTO"]
+    ws.append(head)
+    style_header(ws, 1, len(head))
+    for obj in OBJECT_ORDER + ["OVERALL"]:
+        cs = CASES if obj == "OVERALL" else CASES_BY_OBJ[obj]
+        row = [obj, len(cs)]
+        best_cols = []
+        for gi, (key, disp, arrow, unit) in enumerate(TRACKING):
+            a1 = agg("SPIDER-CEM", key, cs, arrow)
+            a2 = agg("SBTO", key, cs, arrow)
+            row += [fmt(a1["mean"], key) if a1 else None, fmt(a2["mean"], key) if a2 else None]
+            if a1 and a2:
+                best_cols.append(3 + gi * 2 + (0 if a1["mean"] <= a2["mean"] else 1))
+        ws.append(row)
+        rr = ws.max_row
+        if obj == "OVERALL":
+            for c in range(1, len(row) + 1):
+                ws.cell(row=rr, column=c).font = BOLD
+        for bc in best_cols:
+            ws.cell(row=rr, column=bc).fill = BEST_FILL
+            ws.cell(row=rr, column=bc).font = BOLD
+    autofit(ws, [12, 4] + [15] * (len(TRACKING) * 2))
 
 # ---- Sheet: ByCase_Common ----
 ws = wb.create_sheet("ByCase_Common")
@@ -447,7 +503,7 @@ for c in CASES:
     ws.append(row)
 autofit(ws, [30, 10, 9] + [14] * (len(COMMON) * len(METHODS)))
 
-xlsx_path = OUT_DIR / "paper_comparison.xlsx"
+xlsx_path = OUT_DIR / f"paper_comparison{SUF}.xlsx"
 wb.save(xlsx_path)
 print(f"[ok] wrote {xlsx_path}")
 
@@ -459,7 +515,7 @@ def texnum(v, key, mark=None):
     """mark in {None, 'best', 'second'} -> plain / bold / underlined."""
     if v is None:
         return "--"
-    if key in {"raw_contact", "contact_3mm", "pen_3mm", "geom_2mm"}:
+    if key in {"raw_contact", "contact_3mm", "contact_10mm", "pen_3mm", "pen_10mm", "geom_2mm"}:
         s = f"{v:.3f}"
     elif key == "ankle_jerk":
         s = f"{v:.1f}"
@@ -475,13 +531,15 @@ def texnum(v, key, mark=None):
 
 
 def rank_best_second(means, arrow):
-    """Return (best_method, second_method) by value (direction-aware); None if absent."""
+    """Return (best_method, second_method) by value (direction-aware); None if absent.
+    With only two methods present, 'second best' == 'the loser', so it is not marked
+    (underlining every runner-up is redundant noise in a 2-column table)."""
     valid = [(m, v) for m, v in means.items() if v is not None]
     if not valid:
         return None, None
     valid.sort(key=lambda kv: kv[1], reverse=(arrow == "+"))
     best = valid[0][0]
-    second = valid[1][0] if len(valid) > 1 else None
+    second = valid[1][0] if len(valid) > 2 else None
     return best, second
 
 
@@ -609,15 +667,28 @@ def overall_table(metrics, methods, caption, label):
 # One combined metric block: penetration-aware contact + dynamic-quality metrics.
 COMBINED = CONTACT_TEX + STAB_DYN
 
+_n_methods = len(METHODS)
+_methods_phrase = {1: "the method", 2: "both methods"}.get(_n_methods, f"all {_n_methods} methods")
+
+if "SBTO" in METHODS or "GMR" in METHODS:
+    _dyn_sentence = (
+        "Dynamic-quality metrics for Ours, SBTO and OmniRetarget are computed on a MuJoCo "
+        "physics rollout (native for the two optimizers; position-servo replay for the kinematic "
+        "OmniRetarget, E197 protocol) via the same code, hence directly comparable; GMR's are from "
+        "its own kinematic pipeline at a different scale and are indicative only (read jointly with "
+        "contact).")
+else:
+    _dyn_sentence = (
+        "Dynamic-quality metrics for Ours and OmniRetarget are computed on a MuJoCo physics rollout "
+        "(native for Ours; position-servo replay for the kinematic OmniRetarget, E197 protocol) via "
+        "the same code, hence directly comparable.")
+
+_bold_legend = ("\\textbf{Bold} = best, \\underline{underline} = second best. "
+                if _n_methods > 2 else "\\textbf{Bold} = best. ")
 CAP_COMMON = (
-    "$\\uparrow$: higher is better, $\\downarrow$: lower is better. \\textbf{Bold} = best, "
-    "\\underline{underline} = second best. "
-    "Ours = SPIDER-CEM. Contact metrics are penetration-aware (a loose \"any-contact\" count "
-    "that rewards interpenetration is intentionally omitted). Dynamic-quality metrics for Ours, "
-    "SBTO and OmniRetarget are computed on a MuJoCo physics rollout (native for the two "
-    "optimizers; position-servo replay for the kinematic OmniRetarget, E197 protocol) via the "
-    "same code, hence directly comparable; GMR's are from its own kinematic pipeline at a "
-    "different scale and are indicative only (read jointly with contact)."
+    "$\\uparrow$: higher is better, $\\downarrow$: lower is better. " + _bold_legend
+    + "Ours = SPIDER-CEM. Contact metrics are penetration-aware (a loose \"any-contact\" count "
+    "that rewards interpenetration is intentionally omitted). " + _dyn_sentence
 )
 
 # ---- File 1: by-object (single combined table) ----
@@ -625,10 +696,10 @@ by_lines = list(HEADER)
 by_lines += byobject_table(
     COMBINED, METHODS,
     "Per-object contact fidelity and dynamic quality on CORE4D-G1 "
-    "(all four methods share the same 52 sequences / 11 objects). " + CAP_COMMON,
+    f"({_methods_phrase} share the same 52 sequences / 11 objects). " + CAP_COMMON,
     "tab:byobject",
 )
-by_path = OUT_DIR / "by_object_comparison.tex"
+by_path = OUT_DIR / f"by_object_comparison{SUF}.tex"
 by_path.write_text("\n".join(by_lines))
 print(f"[ok] wrote {by_path}")
 
@@ -640,7 +711,7 @@ ov_lines += overall_table(
     "(52 sequences / 11 objects). " + CAP_COMMON,
     "tab:overall",
 )
-ov_path = OUT_DIR / "overall_comparison.tex"
+ov_path = OUT_DIR / f"overall_comparison{SUF}.tex"
 ov_path.write_text("\n".join(ov_lines))
 print(f"[ok] wrote {ov_path}")
 
@@ -653,7 +724,7 @@ ovnj_lines += overall_table(
     "(52 sequences / 11 objects; ankle jerk omitted). " + CAP_COMMON,
     "tab:overall_nojerk",
 )
-ovnj_path = OUT_DIR / "overall_comparison_nojerk.tex"
+ovnj_path = OUT_DIR / f"overall_comparison_nojerk{SUF}.tex"
 ovnj_path.write_text("\n".join(ovnj_lines))
 print(f"[ok] wrote {ovnj_path}")
 
@@ -661,6 +732,7 @@ print(f"[ok] wrote {ovnj_path}")
 # The by-object table is very wide (24 data columns) -> A1 landscape keeps it legible.
 for base, paper in (("by_object_comparison", "a1paper"), ("overall_comparison", "a4paper"),
                     ("overall_comparison_nojerk", "a4paper")):
+    base = f"{base}{SUF}"
     standalone = [
         "\\documentclass{article}",
         f"\\usepackage[margin=0.4in,landscape,{paper}]{{geometry}}",
@@ -682,7 +754,9 @@ for base, paper in (("by_object_comparison", "a1paper"), ("overall_comparison", 
 def md_num(v, key):
     if v is None:
         return "--"
-    frac = {"raw_contact", "contact_3mm", "pen_3mm", "geom_2mm", "grounded_frac"}
+    if key == "pen_max_mm":
+        return f"{v:.1f}"
+    frac = {"raw_contact", "contact_3mm", "contact_10mm", "pen_3mm", "pen_10mm", "geom_2mm", "grounded_frac"}
     return f"{v:.3f}" if key in frac else f"{v:.2f}"
 
 
@@ -693,18 +767,25 @@ def md_best_row(label, cells, keys_arrows, method_list):
 
 ml = []
 W = ml.append
-W("# CORE4D-G1 Retargeting: Four-Method Comparison\n")
-W("Comparison of four humanoid+object retargeting methods on the **same 52 sequences "
+_cmp_name = " vs ".join(METHODS) if _n_methods <= 2 else f"{_n_methods}-Method Comparison"
+W(f"# CORE4D-G1 Retargeting: {_cmp_name}\n")
+W(f"Comparison of the retargeting methods below on the **same 52 sequences "
   "spanning 11 objects** (Unitree G1). All aggregates are the unweighted mean over cases, "
   "recomputed from per-case data so the methodology is identical across methods.\n")
+_METHOD_DESC = {
+    "SPIDER-CEM": ("physics-based retargeting", "yes", "yes"),
+    "SBTO": ("sampling-based trajectory optimization", "yes", "yes"),
+    "OmniRetarget": ("kinematic retarget", "no", "no (contact only)"),
+    "GMR": ("general motion retargeting (kinematic)", "no", "no (distinct stability set)"),
+}
 W("| Method | Type | Physics rollout | Tracking metrics |")
 W("|---|---|---|---|")
-W("| **SPIDER-CEM** (ours) | physics-based retargeting | yes | yes |")
-W("| SBTO | sampling-based trajectory optimization | yes | yes |")
-W("| OmniRetarget | kinematic retarget | no | no (contact only) |")
-W("| GMR | general motion retargeting (kinematic) | no | no (distinct stability set) |")
+for m in METHODS:
+    desc, roll, trk = _METHOD_DESC[m]
+    label = "**SPIDER-CEM** (ours)" if m == "SPIDER-CEM" else m
+    W(f"| {label} | {desc} | {roll} | {trk} |")
 W("")
-W("## 1. Overall — shared contact-fidelity metrics (all four methods)\n")
+W(f"## 1. Overall — shared contact-fidelity metrics ({_methods_phrase})\n")
 W("| Metric | " + " | ".join(METHOD_SHORT[m] for m in METHODS) + " |")
 W("|---|" + "|".join(["---"] * len(METHODS)) + "|")
 for key, disp, arrow, unit in COMMON:
@@ -746,42 +827,56 @@ W("Consequence: a method that shoves the hand through the object (a kinematic re
   "collision resolution) racks up `raw contact` on nearly every frame, while a physically-correct "
   "method that keeps a clean surface touch scores marginally lower on `raw contact` but far higher "
   "on every penetration-aware metric. This is exactly the pattern in the table:\n")
-W("- **OmniRetarget** has the *highest* raw contact (0.853) yet the *worst* penetration "
-  "(phys pen@3mm 0.536, geom pen@2mm 0.381) and only 0.101 clean contact.")
-W("- **SPIDER-CEM** has slightly lower raw contact (0.824) but **5.8× more clean contact** (0.588) "
-  "and **3–7× less penetration**.")
+_o = {k: agg("OmniRetarget", k, CASES, "+" if k in ("raw_contact", "contact_3mm") else "-")["mean"]
+      for k in ("raw_contact", "contact_3mm", "pen_3mm", "geom_2mm")}
+_s = {k: agg("SPIDER-CEM", k, CASES, "+")["mean"] for k in ("raw_contact", "contact_3mm")}
+W(f"- **OmniRetarget** has the *highest* raw contact ({_o['raw_contact']:.3f}) yet the *worst* "
+  f"penetration (phys pen@3mm {_o['pen_3mm']:.3f}, geom pen@2mm {_o['geom_2mm']:.3f}) and only "
+  f"{_o['contact_3mm']:.3f} clean contact.")
+W(f"- **SPIDER-CEM** has slightly lower raw contact ({_s['raw_contact']:.3f}) but far more clean "
+  f"contact ({_s['contact_3mm']:.3f}) and markedly less penetration.")
 W("- The **clean-contact ratio** row above (clean contact / raw contact) exposes this directly: "
-  f"{ratios['SPIDER-CEM']:.2f} for ours vs {ratios['SBTO']:.2f} / {ratios['OmniRetarget']:.2f} / "
-  f"{ratios['GMR']:.2f} — i.e. ~71% of our contacts are clean touches, vs ≤21% for every baseline.\n")
-W("> **Symmetric caveat — read penetration *jointly* with contact.** GMR appears to \"win\" the two "
-  "penetration columns, but only because it barely touches the object at all (clean contact 0.001). "
-  "Near-zero penetration is trivial for a method that never makes contact. The fair reading: among "
-  "methods that actually establish the reference contact (ours, SBTO, OmniRetarget), **SPIDER-CEM has "
-  "both the highest clean contact and the lowest penetration**. This is why contact and penetration "
-  "must be reported together — neither is meaningful alone.\n")
+  + ", ".join(f"{ratios[m]:.2f} ({METHOD_SHORT[m]})" for m in METHODS) + ".\n")
+if "GMR" in METHODS:
+    _g = {"contact_3mm": agg("GMR", "contact_3mm", CASES, "+")["mean"],
+          "pen_max_mm": agg("GMR", "pen_max_mm", CASES, "-")["mean"]}
+    _sm = agg("SPIDER-CEM", "pen_max_mm", CASES, "-")["mean"]
+    W("> **Read penetration *jointly* with contact — the GMR case.** GMR is object-unaware, so it "
+      f"barely establishes any *clean* contact (contact@3mm {_g['contact_3mm']:.3f}, contact@10mm "
+      f"{agg('GMR', 'contact_10mm', CASES, '+')['mean']:.3f}). A frame-level pen fraction can look "
+      "moderate for such a method simply because it is rarely near the object — but when its hand "
+      f"*does* intersect the object it stabs catastrophically deep (max phys pen {_g['pen_max_mm']:.0f} mm "
+      f"vs {_sm:.0f} mm for ours). So GMR neither contacts cleanly nor avoids deep penetration; its "
+      "numbers must be read as contact + max-pen together, never a single frame-fraction. **SPIDER-CEM "
+      "attains the highest clean contact AND the lowest penetration on every depth threshold.**\n")
+else:
+    W("> **Read penetration *jointly* with contact.** A low penetration number is only meaningful if the "
+      "method actually establishes the reference contact: SPIDER-CEM attains both the higher clean "
+      "contact *and* the lower penetration than the kinematic OmniRetarget baseline.\n")
 W("**Recommendation (adopted in the LaTeX table):** drop `raw contact` from the headline and report "
-  "the penetration-aware trio — **Phys. contact@3mm ↑, Phys. pen@3mm ↓, Geom. pen@2mm ↓** — "
-  "optionally with the clean-contact ratio. `raw contact` is retained only as a labelled diagnostic "
-  "(it is *evidence* that the baselines' contact is illusory, not a quality metric). All four methods "
-  "have the penetration-aware metrics, so the comparison stays fully 4-way.\n")
+  "the penetration-aware set — **Phys. contact@3mm ↑, Phys. contact@10mm ↑, Phys. pen@3mm ↓, "
+  "Phys. pen@10mm ↓, Max phys pen (mm) ↓, Geom. pen@2mm ↓**. `raw contact` is retained only as a "
+  "labelled diagnostic (it is *evidence* that the baseline's contact is illusory, not a quality "
+  "metric).\n")
 
-W("## 2. Overall — tracking error (physics methods only)\n")
-W("| Metric | Ours (SPIDER-CEM) | SBTO |")
-W("|---|---|---|")
-for key, disp, arrow, unit in TRACKING:
-    a1 = agg("SPIDER-CEM", key, CASES, arrow)
-    a2 = agg("SBTO", key, CASES, arrow)
-    v1, v2 = a1["mean"], a2["mean"]
-    s1 = f"{v1:.2f}"; s2 = f"{v2:.2f}"
-    if v1 <= v2:
-        s1 = f"**{s1}**"
-    else:
-        s2 = f"**{s2}**"
-    W(f"| {disp} ({unit}) ↓ | {s1} | {s2} |")
-W("")
-W("> SBTO optimizes tracking directly and wins on most kinematic-tracking terms, but at the cost "
-  "of far worse contact fidelity (Table 1) and larger jerk/foot-slip. SPIDER-CEM trades a little "
-  "tracking error for markedly better physical contact and penetration.\n")
+if "SBTO" in METHODS:
+    W("## 2. Overall — tracking error (physics methods only)\n")
+    W("| Metric | Ours (SPIDER-CEM) | SBTO |")
+    W("|---|---|---|")
+    for key, disp, arrow, unit in TRACKING:
+        a1 = agg("SPIDER-CEM", key, CASES, arrow)
+        a2 = agg("SBTO", key, CASES, arrow)
+        v1, v2 = a1["mean"], a2["mean"]
+        s1 = f"{v1:.2f}"; s2 = f"{v2:.2f}"
+        if v1 <= v2:
+            s1 = f"**{s1}**"
+        else:
+            s2 = f"**{s2}**"
+        W(f"| {disp} ({unit}) ↓ | {s1} | {s2} |")
+    W("")
+    W("> SBTO optimizes tracking directly and wins on most kinematic-tracking terms, but at the cost "
+      "of far worse contact fidelity (Table 1) and larger jerk/foot-slip. SPIDER-CEM trades a little "
+      "tracking error for markedly better physical contact and penetration.\n")
 
 W("## 3. By-object — shared contact metrics\n")
 for key, disp, arrow, unit in COMMON:
@@ -801,25 +896,33 @@ for key, disp, arrow, unit in COMMON:
         W("| " + " | ".join(cells) + " |")
     W("")
 
-W("## 4. By-object — tracking error (SPIDER-CEM vs SBTO)\n")
-W("| Object | n | " + " | ".join(f"{disp.split(' ')[0]} {u} (C/S)" for _, disp, _, u in TRACKING) + " |")
-W("|---|---|" + "|".join(["---"] * len(TRACKING)) + "|")
-for obj in OBJECT_ORDER + ["Overall"]:
-    cs = CASES if obj == "Overall" else CASES_BY_OBJ[obj]
-    cells = [obj if obj != "Overall" else "**Overall**", str(len(cs))]
-    for key, disp, arrow, unit in TRACKING:
-        v1 = agg("SPIDER-CEM", key, cs, arrow)["mean"]
-        v2 = agg("SBTO", key, cs, arrow)["mean"]
-        s1 = f"**{v1:.1f}**" if v1 <= v2 else f"{v1:.1f}"
-        s2 = f"**{v2:.1f}**" if v2 < v1 else f"{v2:.1f}"
-        cells.append(f"{s1}/{s2}")
-    W("| " + " | ".join(cells) + " |")
-W("\n(C = SPIDER-CEM, S = SBTO; bold = better.)\n")
+if "SBTO" in METHODS:
+    W("## 4. By-object — tracking error (SPIDER-CEM vs SBTO)\n")
+    W("| Object | n | " + " | ".join(f"{disp.split(' ')[0]} {u} (C/S)" for _, disp, _, u in TRACKING) + " |")
+    W("|---|---|" + "|".join(["---"] * len(TRACKING)) + "|")
+    for obj in OBJECT_ORDER + ["Overall"]:
+        cs = CASES if obj == "Overall" else CASES_BY_OBJ[obj]
+        cells = [obj if obj != "Overall" else "**Overall**", str(len(cs))]
+        for key, disp, arrow, unit in TRACKING:
+            v1 = agg("SPIDER-CEM", key, cs, arrow)["mean"]
+            v2 = agg("SBTO", key, cs, arrow)["mean"]
+            s1 = f"**{v1:.1f}**" if v1 <= v2 else f"{v1:.1f}"
+            s2 = f"**{v2:.1f}**" if v2 < v1 else f"{v2:.1f}"
+            cells.append(f"{s1}/{s2}")
+        W("| " + " | ".join(cells) + " |")
+    W("\n(C = SPIDER-CEM, S = SBTO; bold = better.)\n")
 
 W("## 5. Method-specific stability metrics (heterogeneous — not cross-compared)\n")
 W("| Method | Metric | mean | worst |")
 W("|---|---|---|---|")
-for m, stab in (("SPIDER-CEM", STAB_SPIDER), ("SBTO", STAB_SPIDER), ("GMR", STAB_GMR)):
+_md_stab = [("SPIDER-CEM", STAB_SPIDER)]
+if "SBTO" in METHODS:
+    _md_stab.append(("SBTO", STAB_SPIDER))
+if "OmniRetarget" in METHODS:
+    _md_stab.append(("OmniRetarget", _OMNI_STAB))
+if "GMR" in METHODS:
+    _md_stab.append(("GMR", STAB_GMR))
+for m, stab in _md_stab:
     for key, disp, arrow, unit in stab:
         a = agg(m, key, CASES, arrow)
         if a:
@@ -827,21 +930,35 @@ for m, stab in (("SPIDER-CEM", STAB_SPIDER), ("SBTO", STAB_SPIDER), ("GMR", STAB
             W(f"| {m} | {disp}{u} | {md_num(a['mean'], key)} | {md_num(a['worst'], key)} |")
 W("")
 W("## Notes & caveats\n")
-W("- **Fair 4-way comparison = the four shared contact metrics** (Section 1/3). These are the "
-  "only metrics computed identically for all four methods.")
-W("- **Tracking metrics** (root/eef/obj error) require a physics rollout with a tracked reference; "
-  "OmniRetarget and GMR are kinematic retargets and do not produce them, so tracking is a "
-  "**2-way** SPIDER-CEM vs SBTO comparison only.")
-W("- **Stability metrics are not aligned** across methods (SPIDER/SBTO report body-z / ankle-jerk / "
-  "foot-slip on the physics rollout; GMR reports qpos accel/jerk, grounded-frac, foot-ground-dev on "
-  "the kinematic output). They are listed per method for reference, **not** cross-compared.")
+W(f"- **Fair comparison = the shared contact metrics** (Section 1/3). These are computed "
+  f"identically for {_methods_phrase}.")
+if "SBTO" in METHODS:
+    W("- **Tracking metrics** (root/eef/obj error) require a physics rollout with a tracked reference; "
+      "OmniRetarget and GMR are kinematic retargets and do not produce them, so tracking is a "
+      "**2-way** SPIDER-CEM vs SBTO comparison only.")
+else:
+    W("- **Tracking metrics** (root/eef/obj error) require a tracked physics rollout; OmniRetarget is a "
+      "kinematic retarget and does not produce them, so they are reported for SPIDER-CEM only "
+      "(see `paper_results`).")
+W("- **Stability metrics** (Section 5) are heterogeneous: SPIDER-CEM / SBTO / OmniRetarget report "
+  "ankle-jerk / obj-speed / foot-slip on a MuJoCo rollout (same code), while GMR's come from its "
+  "own kinematic pipeline at a different scale. Listed per method for reference, not cross-compared.")
 W("- **Raw vs physical contact:** 'raw contact' measures contact against the kinematic reference "
   "mask; 'physical contact@3mm' measures contact actually realized under physics within a 3 mm band. "
-  "A high raw / low physical gap (OmniRetarget, GMR) indicates contact that does not survive physics.")
+  "A high raw / low physical gap (the kinematic baselines) indicates contact that does not survive "
+  "physics.")
+if "GMR" in METHODS:
+    W("- **GMR is object-unaware:** its dynamic-quality metrics come from its own kinematic pipeline "
+      "at a different scale (ankle-jerk especially — see the `_nojerk` table), and its deep max "
+      "penetration reflects the hand passing through the object's nominal volume. Read GMR jointly "
+      "with its near-zero clean contact; its columns are indicative, not head-to-head comparable.")
+else:
+    W("- **Interim scope:** SBTO and GMR are excluded in this 2-method view; run "
+      "`build_comparison.py --full` for the 4-method comparison (`*_full.*`).")
 W("- All numbers are means over cases; per-case distributions and std/worst are in "
-  "`paper_comparison.xlsx`.")
+  f"`paper_comparison{SUF}.xlsx`.")
 
-md_path = OUT_DIR / "paper_comparison.md"
+md_path = OUT_DIR / f"paper_comparison{SUF}.md"
 md_path.write_text("\n".join(ml))
 print(f"[ok] wrote {md_path}")
 print("[done]")

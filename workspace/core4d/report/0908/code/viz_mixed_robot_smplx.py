@@ -81,6 +81,8 @@ def parse_args():
                    help="camera azimuth = primary robot mean facing yaw + this offset (deg); "
                         "keeps the primary robot FACING the camera in a 3/4 view (default: 45)")
     p.add_argument("--cam-el", type=float, default=12.0, help="camera elevation deg (default: 12)")
+    p.add_argument("--white-only", action="store_true",
+                   help="render only the white-background pass (skip the bg version)")
     return p.parse_args()
 
 
@@ -347,7 +349,7 @@ def main():
             imageio.imwrite(frame_dir / f"frame_{i:04d}.png", rgb)
         return frames, frame_dir
 
-    for mode in ("bg", "white"):
+    for mode in (("white",) if args.white_only else ("bg", "white")):
         frames, frame_dir = render_version(mode)
         if PREVIEW_N == 0:
             mp4 = OUT / f"mixed_robot_smplx_{mode}.mp4"

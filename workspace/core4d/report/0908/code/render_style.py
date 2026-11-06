@@ -30,11 +30,15 @@ _VIZ_ROOT = Path(__file__).resolve().parents[1] / "paper_results" / "viz"
 
 def parse_case(case: str):
     """'box021_20231011_037' -> (object, date, seq, category). The object-model
-    subdir is the object name with its trailing digits stripped (box021 -> box)."""
+    subdir is the object name with its trailing digits stripped (box021 -> box).
+    Some CORE4D sequences carry a split-suffixed date (e.g. 'box001_20231003_2_039'
+    where date='20231003_2', seq='039'): everything between the object and the final
+    token is the date."""
     parts = case.split("_")
-    if len(parts) != 3:
+    if len(parts) < 3:
         raise ValueError(f"--case must be '<object>_<date>_<seq>', got {case!r}")
-    obj, date, seq = parts
+    obj, seq = parts[0], parts[-1]
+    date = "_".join(parts[1:-1])
     category = re.sub(r"\d+$", "", obj)
     return obj, date, seq, category
 

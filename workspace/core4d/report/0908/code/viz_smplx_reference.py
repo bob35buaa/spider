@@ -45,8 +45,13 @@ from smplx_min import SMPLXModel  # noqa: E402
 _SMPLX_KEYS = ["global_orient", "body_pose", "left_hand_pose", "right_hand_pose", "transl"]
 
 # CORE4D-Instructions official human palette; object recoloured to slate blue.
-P1_COLOR = [135 / 255, 235 / 255, 156 / 255, 1.0]   # green  (person1)
-P2_COLOR = [117 / 255, 157 / 255, 231 / 255, 1.0]   # blue   (person2)
+# HUMAN_BLUE is the mixed-render human blue (viz_mixed_robot_smplx.P1_COLOR); it is
+# assigned to whichever person is the mixed render's human (= the partner), so the
+# two deliverables show the identical blue on the SAME person. The other person reads
+# green. Which person gets blue is chosen by --blue-person (default p1, matching the
+# box021 set where partner=p1); set p2 when the mixed partner is p2.
+HUMAN_BLUE = [0.30, 0.55, 0.85, 1.0]                 # blue  (the mixed human / partner)
+HUMAN_GREEN = [135 / 255, 235 / 255, 156 / 255, 1.0]  # green (the other person)
 OBJ_COLOR = BOX_COLOR                                # slate blue (object)
 
 
@@ -61,6 +66,10 @@ def parse_args():
     p = argparse.ArgumentParser(description="SMPLX reference render (both persons + object).")
     add_common_args(p)
     p.add_argument("--primary", default="p2", help="output-dir person tag (default: p2)")
+    p.add_argument("--blue-person", default="p1", choices=["p1", "p2"],
+                   help="which person is rendered blue (= the mixed render's human/partner); "
+                        "default p1 matches box021 (partner=p1). Set p2 when the mixed "
+                        "render's partner/human is p2 so the SAME person is blue in both.")
     p.add_argument("--window", default=None, help="frame window 'lo,hi' (default: full clip)")
     p.add_argument("--baked-shape", action="store_true",
                    help="use the subjects' baked betas instead of the neutral betas=0 shape")
@@ -76,6 +85,16 @@ def parse_args():
                    help="path to a camera_align.json (default: <out>/camera_align.json)")
     p.add_argument("--yfov-deg", type=float, default=45.0, help="vertical FOV deg (default: 45, matches mixed)")
     p.add_argument("--dist-mult", type=float, default=1.15, help="distance multiplier (default: 1.15, matches mixed)")
+    # Lighting knobs. Defaults tuned (light-scale 0.7, ambient 0.3) so the blue
+    # human's rendered RGB matches the mixed render's human blue to within a few
+    # levels (the mixed frame sits in a z-up frame with full-intensity lights; the
+    # mocap y-up lighting here reads a touch brighter, so it is dialed back).
+    p.add_argument("--light-scale", type=float, default=0.7,
+                   help="multiplier on all light intensities (default: 0.7; matches mixed blue)")
+    p.add_argument("--ambient", type=float, default=0.3,
+                   help="ambient light level (default: 0.3; matches mixed blue)")
+    p.add_argument("--white-only", action="store_true",
+                   help="render only the white-background pass (skip the bg version)")
     return p.parse_args()
 
 
@@ -181,6 +200,11 @@ def main():
         baseColorFactor=c, metallicFactor=0.0, roughnessFactor=r, doubleSided=True)
     shadow_flag = pyrender.constants.RenderFlags.SHADOWS_DIRECTIONAL
 
+    # Assign blue to the chosen person (= mixed render's human/partner), green to the
+    # other, so the identical blue lands on the SAME person across mixed + smplx.
+    c1 = HUMAN_BLUE if args.blue_person == "p1" else HUMAN_GREEN
+    c2 = HUMAN_BLUE if args.blue_person == "p2" else HUMAN_GREEN
+
     def render_version(mode: str):
         assert mode in ("bg", "white")
         with_bg = mode == "bg"
@@ -189,25 +213,26 @@ def main():
         bg_col = [0.90, 0.91, 0.93, 1.0] if with_bg else [1.0, 1.0, 1.0, 1.0]
         frames = []
         for t in frame_ts:
-            scene = pyrender.Scene(bg_color=bg_col, ambient_light=[0.4, 0.4, 0.42])
+            scene = pyrender.Scene(bg_color=bg_col, ambient_light=[args.ambient] * 3)
             if with_bg:
                 scene.add(pyrender.Mesh.from_trimesh(floor_trimesh))
             scene.add(pyrender.Mesh.from_trimesh(
-                trimesh.Trimesh(p1[t], faces, process=False), material=mat(P1_COLOR), smooth=True))
+                trimesh.Trimesh(p1[t], faces, process=False), material=mat(c1), smooth=True))
             scene.add(pyrender.Mesh.from_trimesh(
-                trimesh.Trimesh(p2[t], faces, process=False), material=mat(P2_COLOR), smooth=True))
+                trimesh.Trimesh(p2[t], faces, process=False), material=mat(c2), smooth=True))
             scene.add(pyrender.Mesh.from_trimesh(
                 trimesh.Trimesh(obj_verts(t), obj_f, process=False), material=mat(OBJ_COLOR), smooth=True))
             target = frame_centroid(t)
             scene.add(camera, pose=look_at(target + direction * dist, target, [0, 1, 0]))
             for light, pose in soft_phong_lights(look_at, target, [0, 1, 0], floor_y, up="y"):
+                light.intensity *= args.light_scale
                 scene.add(light, pose=pose)
             color, _ = renderer.render(scene, flags=shadow_flag if with_bg else 0)
             frames.append(color[:, :, :3].copy())
             imageio.imwrite(stage_dir / f"frame_{frame_ts.index(t):04d}.png", color[:, :, :3])
         return frames, stage_dir
 
-    for mode in ("bg", "white"):
+    for mode in (("white",) if args.white_only else ("bg", "white")):
         frames, stage_dir = render_version(mode)
         out_frame_dir = OUT / f"smplx_frames_{mode}"
         out_frame_dir.mkdir(parents=True, exist_ok=True)

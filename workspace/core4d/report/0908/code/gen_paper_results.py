@@ -28,7 +28,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = Path(__file__).resolve().parents[5]  # .../spider (this file lives in report/0908/code/)
 sys.path.insert(0, str(REPO / "workspace/core4d/scripts"))
 
 from eval.core.core_metrics import (  # noqa: E402
@@ -184,6 +184,11 @@ METRICS: list[Metric] = [
     {"key": "ankle_jerk",     "field": "ankle_jerk_p95",                                  "src": "health", "kind": "jerk", "dir": "lower", "omni": False, "label": "ankle jerk p95"},
     {"key": "obj_speed",      "field": "obj_speed_max",                                   "src": "health", "kind": "mps", "dir": "lower",  "omni": False, "label": "obj speed max"},
     {"key": "foot_slip",      "field": "foot_slip_max_m",                                 "src": "health", "kind": "m",   "dir": "lower",  "omni": False, "label": "foot slip max"},
+    # Loose-threshold companions to contact@3mm / pen@3mm (appended at END to keep ByCase
+    # column order stable for downstream positional readers, e.g. paper_cmp build_comparison).
+    {"key": "contact_10mm",  "field": "hand_object_physics_contact_10mm_in_mask_frac",    "src": "result", "kind": "pct", "dir": "higher", "omni": True,  "label": "physical contact@10mm"},
+    {"key": "pen_10mm",      "field": "hand_object_physics_penetration_10mm_frame_frac",  "src": "result", "kind": "pct", "dir": "lower",  "omni": True,  "label": "physical penetration@10mm"},
+    {"key": "pen_max_mm",    "field": "hand_object_physics_penetration_max_mm",           "src": "result", "kind": "mm",  "dir": "lower",  "omni": True,  "label": "physical max penetration"},
 ]
 METRIC_BY_KEY = {m["key"]: m for m in METRICS}
 OMNI_KEYS = [m["key"] for m in METRICS if m["omni"]]
@@ -408,7 +413,7 @@ def compute_spider(idx: SourceIndex, case_id: str) -> dict[str, Any]:
 
     # E167 override: reuse the E167 arm-metrics table (its mask alignment) + recompute body_z.
     if cfg.get("e167_table"):
-        return _spider_from_e167(idx, case_id, cfg, cem_npz, scene, kin_ref, rec)
+        return _spider_from_e167(idx, case_id, cfg, cem_npz, scene, kin_ref, mask, rec)
 
     cols: set[str] = idx.table(cfg["table"])[1] if cfg.get("table") else set()
     trow = find_table_row(idx, case_id, cfg, rl_row, cem_npz)
@@ -514,7 +519,7 @@ E167_FIELD_MAP = {  # metric key -> column in e167_arm_metrics.tsv (body_z absen
 
 def _spider_from_e167(idx: SourceIndex, case_id: str, cfg: dict[str, Any],
                       cem_npz: Path | None, scene: Path | None, kin_ref: Path | None,
-                      rec: dict[str, Any]) -> dict[str, Any]:
+                      mask: Path | None, rec: dict[str, Any]) -> dict[str, Any]:
     rows = [r for r in idx.rl_rows(cfg["e167_table"])
             if r.get("short_case_id") == cfg["e167_short"] and r.get("arm") == cfg["e167_arm"]]
     values: dict[str, float] = {}
@@ -526,13 +531,30 @@ def _spider_from_e167(idx: SourceIndex, case_id: str, cfg: dict[str, Any],
             provenance[k] = f"table:e167:{col}"
     else:
         rec["status"] = "UNRESOLVED"; rec["notes"].append("no E167 arm-metrics row")
-    # body_z recomputed (no contact mask needed)
-    if cem_npz is not None and scene is not None and kin_ref is not None:
-        z = recompute_metrics(case_id, "SPIDER-CEM", cem_npz, scene, kin_ref, None, keys=["body_z"])
-        values["body_z"] = z.get("body_z", math.nan)
-        provenance["body_z"] = "recompute"
+    # body_z (zmetric) + 10mm contact band recomputed from the rollout.  The E167
+    # arm-metrics table has no 10mm column, so contact_10mm/pen_10mm are recomputed
+    # here (with the E167-era mask resampled onto the rollout timeline) while the
+    # authoritative table 3mm/pen/geom values are kept untouched.
+    extra = ["contact_10mm", "pen_10mm", "pen_max_mm"]
+    if cem_npz is not None and scene is not None:
+        m10 = mask
+        if m10 is not None:
+            try:
+                nf = len(np.load(cem_npz, allow_pickle=True)["qpos"])
+                m10 = _aligned_mask(mask, nf)
+            except Exception as exc:  # noqa: BLE001
+                rec["notes"].append(f"mask_align_failed:{exc}")
+        keys = extra + (["body_z"] if kin_ref is not None else [])
+        r = recompute_metrics(case_id, "SPIDER-CEM", cem_npz, scene, kin_ref, m10, keys=keys)
+        for k in extra:
+            values[k] = r.get(k, math.nan); provenance[k] = "recompute"
+        if kin_ref is not None:
+            values["body_z"] = r.get("body_z", math.nan); provenance["body_z"] = "recompute"
+        else:
+            values["body_z"] = math.nan; provenance["body_z"] = "MISSING"
     else:
-        values["body_z"] = math.nan; provenance["body_z"] = "MISSING"
+        for k in extra + ["body_z"]:
+            values[k] = math.nan; provenance[k] = "MISSING"
     rec["metrics"] = values
     rec["provenance"] = provenance
     rec["xcheck_abs"] = {}

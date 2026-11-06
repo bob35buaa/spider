@@ -18,7 +18,7 @@ from gen_paper_results import (
     METRICS, METRIC_BY_KEY, OMNI_KEYS, SPIDER_KEYS, OBJECT_ORDER, OUT,
 )
 
-CONTACT_KEYS = [m["key"] for m in METRICS if m["kind"] == "pct"]
+CONTACT_KEYS = [m["key"] for m in METRICS if m["kind"] in ("pct", "mm")]
 TRACK_KEYS = ["track_root_pos", "track_root_ori", "track_eef_pos", "track_eef_ori",
               "track_obj_pos", "track_obj_ori"]
 HEALTH_KEYS = ["fall_flag", "body_z", "ankle_jerk", "obj_speed", "foot_slip"]
@@ -52,6 +52,8 @@ def fmt_val(key: str, v: Any) -> str:
         return f"{100 * v:.1f}%"
     if kind == "cm":
         return f"{v:.1f}"
+    if kind == "mm":
+        return f"{v:.1f}"
     if kind == "deg":
         return f"{v:.1f}"
     if kind == "m":
@@ -66,7 +68,7 @@ def fmt_val(key: str, v: Any) -> str:
 
 
 def unit(key: str) -> str:
-    return {"pct": "", "cm": " cm", "deg": "°", "m": " m", "mps": " m/s",
+    return {"pct": "", "cm": " cm", "mm": " mm", "deg": "°", "m": " m", "mps": " m/s",
             "jerk": " m/s³", "flag": ""}[METRIC_BY_KEY[key]["kind"]]
 
 
