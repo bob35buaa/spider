@@ -1,16 +1,12 @@
 # CORE4D 当前进度
 
-## 📝 已规划待执行：E216 — 下游对应臂的 trans-only **0.1m** 物体增强放量（plan249 / R304 / Phase 74）
-
-> **2026-11-06 写计划**：`plan/249_E216_trans_0p1m_perobject_arm_plan.md`，待用户批准。
-> 核心：基于下游 RL 实际采用的逐物体重定向臂（已核实 `e215_common.ARM_GROUP_BY_OBJECT` + E213 `e213_source_arm_cem.tsv`），仅做 **trans 0.1m**（前/左/右 3 方向，无 rot），case 取上游该臂全量（比下游预筛后多）。
-> 唯一核心改动：holosoma `parallel_robot_retarget.py:117-119` trans 位移 0.2→0.1（env 参数化 `OMNIRT_TRANS_OFFSET_M`，git 追踪）；SPIDER 核心零改动，各臂 scene/gravcomp 全复用，只换 0.1m 轨迹。
-> **Case 盘点（已从文件核实）**：124 base case × 3 = 372 变体 = box 83（box021 PRG / box023 noPRG / box001·004·024 PRG+G1A2）+ bucket 21（003·007 PRG，E202，不含 bucket004）+ chair-desk 20（E213 已知选定臂：chair006·desk021 G1 / desk007 G0.8·0.4·0.6 per-case / desk023 G0.6）。
-> **预算**：~372 CEM runs ≈ 290–300 GPU-h；24 卡 ~12–14h / 8 卡 ~37h。
-> **判据**：C1 可行 ≥95%、C3 obj_pos HL ≤+5cm vs 同臂 orig、C4 14-gate 通过率 ≥ 0.2m（核心动机：更温和→更易过下游预筛）、C5 视觉门。
-> **用户 2 项决定**：① chair/desk 只保留 E213 已知臂 20 case（不扩 E206 全量，避开臂歧义）；② bucket007 用 E202 PRG（非 E215 的 E210 gravcomp）。
-> **状态**：计划待批准 → 批准后建 `scripts/experiments/E216/`（8 文件）+ eval/launch（6 文件）+ holosoma 分支改 1 处。
-> **RL-export（partner + re-anchor）为可选后续 E216-export**，本计划只交付 source 侧 CEM + 0.1m-vs-0.2m 质量对比。
+## ✅ 已完成：E216 — 下游对应臂的 trans-only **0.1m** 物体增强放量（plan249 / R304 / log308 / Phase 74）
+> **Phase 1 (box+bucket 104 case) 全流程完成 2026-11-08**。结论：✅ C1/C2/C3/C5 达标，C4 诚实为"等价"（非更优）。
+> 唯一核心改动：holosoma `parallel_robot_retarget.py`（commit 2248e39）`OMNIRT_TRANS_OFFSET_M=0.1 + TRANS_ONLY`；SPIDER 核心零改动。
+> **C1** retarget 312/312=100% 可行（bucket 优于 0.2m 的 90%）；build 309/312（3 runtime_initial_overlap 排除）；audit 103/103 clean；CEM **309/309 0 失败**（25.74h，中位 37.9min）。**C2** approach=0.100m/endpoint 0.009m。**C3** vs 同臂 orig obj_pos HL ≤+0.284cm（2 臂为负），总 fall 10<orig 12（坑：88/104 orig 基线 v1 混淆）。**C4 清洁 0.1m-vs-0.2m（309 配对同臂同评估器）：6-gate pooled 51.8% vs 52.4%=−0.6pp、fall 10≤11、obj_pos 全臂 0.1m 更优 → "更温和更易过门"在 CEM 层为 null；0.1m 真实优势=上游可行率+贴近 orig**。**C5** 视觉：4 臂代表干净，2 fall（box004_083_p2/bucket003_005_p1）真崩溃非欺骗。
+> **交付**：log308、tracker R304、scene_snapshot(1976行)、eval/aug/{rollout,deltas,summary,0p1m_vs_0p2m}、render/c5(9 MP4)。
+> **下一步**：① chair/desk Phase 2（20 case，E213 选定 gravcomp 臂）→ 124 全量；② 如需 E216-export（partner+re-anchor）；③ v2-orig 清洁对照消除 v1 混淆。
+> **用户 2 项决定**：① chair/desk 只保留 E213 已知臂 20 case；② bucket007 用 E202 PRG。
 
 ## 📝 已规划待执行：E214c — Part-wise Penetration 阈值统一消融（plan248 / R303 / Phase 72）
 

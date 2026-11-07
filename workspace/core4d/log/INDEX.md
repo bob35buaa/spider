@@ -1,6 +1,6 @@
 # 实验日志索引
 
-> 自动生成，共 306 个日志文件。
+> 自动生成，共 308 个日志文件。
 > 运行 `python workspace/core4d/scripts/build_log_index.py` 更新。
 
 ## Phase 71 (E213-E213)
@@ -14,6 +14,7 @@
 | 304 | E214b |  | Holosoma smplx gt reference | [304_E214b_holosoma_smplx_gt_reference.md](304_E214b_holosoma_smplx_gt_reference.md) |
 | 305 | E213 |  | Export holosoma partner reanchor rl | [305_E213_export_holosoma_partner_reancho...](305_E213_export_holosoma_partner_reanchor_rl.md) |
 | 306 | E215 |  | Bucket box rot augmentation | [306_E215_bucket_box_rot_augmentation.md](306_E215_bucket_box_rot_augmentation.md) |
+| 307 | E214c |  | Partwise threshold ablation | [307_E214c_partwise_threshold_ablation.md](307_E214c_partwise_threshold_ablation.md) |
 
 ## Phase 64 (E201-E201)
 
@@ -628,3 +629,4 @@
 | 297 | E208 |  | Deskchair translation augmentation | [297_E208_deskchair_translation_augmentat...](297_E208_deskchair_translation_augmentation.md) |
 | 298 | E209 |  | Desk chair prg g1 gravcomp | [298_E209_desk_chair_prg_g1_gravcomp.md](298_E209_desk_chair_prg_g1_gravcomp.md) |
 | 299 | E210 |  | Bucket007 aug g1only gravcomp | [299_E210_bucket007_aug_g1only_gravcomp.m...](299_E210_bucket007_aug_g1only_gravcomp.md) |
+| 308 | E216 |  | Trans 0p1m perobject arm | [308_E216_trans_0p1m_perobject_arm.md](308_E216_trans_0p1m_perobject_arm.md) |
