@@ -70,8 +70,33 @@
 | scene 快照（rule 7） | `workspace/core4d/results/E216/scene_snapshot/`（309 task dirs，manifest.txt 1976 行 git HEAD+sha256） |
 | 结果 | `results/E216/s6_downstream/{manifests/e216_priority_manifest.frozen.tsv, cem/full/*, eval/aug/*}` |
 
-## 7. 结论与下一步
+## 7. Phase 2 — chair/desk（E213 选定 gravcomp 臂，3 机 8 卡分片）
 
-**0.1m trans 物体增强物理可信、上游 100% 可行、与 0.2m 在 CEM 门等价、物体追踪略优、不增 fall。** 诚实地说，"0.1m 更温和→更易过门"的核心动机**在 CEM 物理门层面未被证实**（pooled −0.6pp）；0.1m 的实证价值是上游可行率与贴近 orig 的轨迹，是否利于下游预筛留存需下游实测。
+Phase 1（box+bucket）之后补全 chair/desk 20 case（E213 逐 case 选定 gravcomp 臂 chair006·desk021 G1 / desk007 G0.8·0.4·0.6 per-case / desk023 G0.6），3 台 8 卡机分片并行（共享 /mnt）。
 
-**下一步**：① chair/desk Phase 2（20 case，E213 选定 gravcomp 臂）补全 → 124 case 全量；② 若下游需要，E216-export（partner 配对 + Holosoma re-anchor）；③ bucket_prg −5pp 与 box004_083_p2/bucket003_005_p1 fall 的 v2-orig 清洁对照（消除 v1 混淆）。
+**执行**：seed 自 E208 split v{1,2} 树 → retarget @0.1m（**per-case v1/v2 env**：desk021_014_p2 走 v2，其余 v1，匹配下游）→ E206 lowgeom PRG 场景（`build_arm_scenes.build_one`）+ per-case 分数 gravcomp sidecar → 冻结 **59/60 变体**（1 个 desk021_010_p2 trans0 v1-infeasible 诚实掉；1 个 v2 case 初跑 env bug 已修）。3 分片（A20/B20/C19）各机独立 flock+子集校验，**59/59 CEM 0 失败**。C2 approach=**0.100m**。本机 smoke 验证 E209 分数-gravcomp 场景能加载。
+
+**结果（0 fall，59 paired vs E213 同选定臂 0.2m，同评估器）**：
+
+| 物体 | n | 0.1m pass | 0.2m pass | Δpp | Δobj_pos |
+|------|---|-----------|-----------|-----|----------|
+| chair006 | 15 | 73.3% | 80.0% | −6.7 | −0.226 |
+| desk007 | 12 | **8.3%** | 75.0% | **−66.7** | −0.016 |
+| desk021 | 20 | 45.0% | 60.0% | −15.0 | −0.795 |
+| desk023 | 12 | 75.0% | 100.0% | −25.0 | +0.223 |
+| **POOLED** | **59** | **50.8%** | **76.3%** | **−25.4** | −0.285 |
+
+**关键发现（与 box/bucket 相反，诚实且物理可解释）**：chair/desk 的 0.1m **显著劣于 0.2m（−25.4pp）**，desk007 最极端（−66.7pp）。绝对 0.1m 过门率 50.8% 与 box/bucket 0.1m（51.8%）相当、**0 fall**、obj_pos 多数更优——即 0.1m 本身不差，是 0.2m 选定臂基线高（76.3%）。失败模式全在 **hand_penetration(11)+leg_penetration(9)**，非 tracking。**机制（osmesa 视觉证实）**：aug offset 把物体 approach 推离身体；**0.2m 给更大身-物净空、0.1m 净空更小→腿/脚穿入桌子下框**（desk007_030_p2 sim 脚手橙色穿透高亮，ref 有净空）。大件家具贴身,净空效应主导;小件(box/bucket)可携带,0.1m≈0.2m。→ **"更小 offset 更温和"对大件家具反而有害**。
+
+## 8. 全局结论（box+bucket+chair/desk，124 case / 368 变体）
+
+**0.1m trans 增强的价值依物体类型分化（核心结论）**：
+- **box/bucket（小件可携带）**：0.1m **≈ 0.2m** 过门率（−0.6pp）、obj_pos 略优、不增 fall、上游 100% 可行 → 0.1m 是等价的更温和变体。
+- **chair/desk（大件家具）**：0.1m **劣于 0.2m（−25.4pp）** → 更小 offset 减少身-家具净空、腿/手穿透↑；大件家具应保留 0.2m。
+
+诚实地说，Phase 1 最初的动机假设"更温和→更易过门→更易过下游预筛"**在 CEM 门层面不成立**：小件等价、大件更差。0.1m 的真实、稳健价值仅是**上游可行率**（100%，bucket 优于 0.2m 的 90%）与**贴近 orig 的 obj 追踪**。是否利于下游预筛留存仍需下游 RL 实测。
+
+**交付**：chair/desk 脚本 `e216cd_common/build_cd/run_E216cd_cem/split_cd_shards/run_E216cd_shard.sh/gen_E216cd_eval` + registry_chair_desk.tsv；results `E216/chair_desk/{manifests(frozen+3shard), cem/full, eval/aug}`；scene_snapshot(E216CD, 477 行)。
+
+**下一步**：① E216-export（partner + Holosoma re-anchor）若下游要；② 大件家具若仍想要 0.1m，需提高 gravcomp 或放宽 leg gate 补偿净空损失；③ v2-orig 清洁对照消除 box/bucket 的 v1 混淆。
+

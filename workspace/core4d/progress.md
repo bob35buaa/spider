@@ -1,6 +1,10 @@
 # CORE4D 当前进度
 
 ## ✅ 已完成：E216 — 下游对应臂的 trans-only **0.1m** 物体增强放量（plan249 / R304 / log308 / Phase 74）
+> **全量 124 case 完成（box+bucket 104 Phase1 + chair/desk 20 Phase2）2026-11-08**。核心结论:**0.1m 价值依物体类型分化**。
+> **Phase1 box+bucket**:retarget 312/312=100%可行、CEM 309/309 0失败(25.74h);0.1m-vs-0.2m **≈等价(−0.6pp)**、obj_pos略优、不增fall。
+> **Phase2 chair/desk**(3机8卡分片,omnirt_v1+E206 lowgeom+per-case分数gravcomp G1/G0.8/G0.6/G0.4):59/60 built、59/59 CEM 0失败、0 fall;**0.1m-vs-0.2m(E213同选定臂) −25.4pp(desk007 −66.7pp)**,失败全在hand/leg穿透,osmesa视觉证实=0.1m身-家具净空更小→腿脚穿桌。
+> **全局**:小件(box/bucket)0.1m≈0.2m;大件(chair/desk)0.1m劣于0.2m(净空损失)。"更温和→更易过门"在CEM层面不成立;0.1m稳健价值仅上游可行率+贴近orig。
 > **Phase 1 (box+bucket 104 case) 全流程完成 2026-11-08**。结论：✅ C1/C2/C3/C5 达标，C4 诚实为"等价"（非更优）。
 > 唯一核心改动：holosoma `parallel_robot_retarget.py`（commit 2248e39）`OMNIRT_TRANS_OFFSET_M=0.1 + TRANS_ONLY`；SPIDER 核心零改动。
 > **C1** retarget 312/312=100% 可行（bucket 优于 0.2m 的 90%）；build 309/312（3 runtime_initial_overlap 排除）；audit 103/103 clean；CEM **309/309 0 失败**（25.74h，中位 37.9min）。**C2** approach=0.100m/endpoint 0.009m。**C3** vs 同臂 orig obj_pos HL ≤+0.284cm（2 臂为负），总 fall 10<orig 12（坑：88/104 orig 基线 v1 混淆）。**C4 清洁 0.1m-vs-0.2m（309 配对同臂同评估器）：6-gate pooled 51.8% vs 52.4%=−0.6pp、fall 10≤11、obj_pos 全臂 0.1m 更优 → "更温和更易过门"在 CEM 层为 null；0.1m 真实优势=上游可行率+贴近 orig**。**C5** 视觉：4 臂代表干净，2 fall（box004_083_p2/bucket003_005_p1）真崩溃非欺骗。
