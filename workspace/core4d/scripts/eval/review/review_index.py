@@ -228,6 +228,16 @@ SOURCE_OVERRIDES = {
         "arm_sweep": True,
         "threshold_exp": "E178",
     },
+    # E216CDAUG = chair/desk Phase 2 (log308 §7): trans0/1/2 on E206 lowgeom PRG +
+    # per-case fractional gravcomp arm, 3-shard CEM.  Aug-only (no orig rows).
+    #   bash workspace/core4d/scripts/eval/wrappers/review_player.sh E216CDAUG
+    "E216CDAUG": {
+        "result_exp": "E216",
+        "eval_subdir": "aug",
+        "case_metrics": "e216cd_trans_rollout.tsv",
+        "arm_sweep": True,
+        "threshold_exp": "E178",
+    },
 }
 
 E194_CORRECTED_EVAL = (
@@ -1197,6 +1207,68 @@ def _read_e216_aug() -> list[CaseRecord]:
     return records
 
 
+# E216 chair/desk (Phase 2, log308 §7): trans0/1/2 per case, E206 lowgeom PRG +
+# per-case fractional gravcomp arm, 3-shard CEM. Metrics from the cd eval rollout,
+# replay paths from the 3 shard manifests. No orig rows (cd eval scored aug only).
+E216CD_MANIFEST_DIR = REPO / "workspace/core4d/results/E216/chair_desk/s6_downstream/manifests"
+E216CD_ROLLOUT_TSV = REPO / "workspace/core4d/results/E216/chair_desk/s6_downstream/eval/aug/e216cd_trans_rollout.tsv"
+E216CD_SHARDS = [E216CD_MANIFEST_DIR / f"e216cd_priority_manifest.shard{s}.tsv" for s in ("A", "B", "C")]
+E216CD_DONE = {"run_complete_pending_eval", "cem_ok"}
+
+
+def _read_e216cd_aug() -> list[CaseRecord]:
+    """E216 chair/desk review set: trans0/1/2 per case (no orig). Metrics from the
+    cd eval rollout TSV; replay (ref trajectory) from the 3 shard manifests. E201
+    14-gate funnel layer in status (reusing the experiment-agnostic _e215_funnel)."""
+    if not E216CD_ROLLOUT_TSV.is_file():
+        return []
+    manifest: dict[tuple[str, str], dict[str, str]] = {}
+    for mf in E216CD_SHARDS:
+        if not mf.is_file():
+            continue
+        with mf.open("r", encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh, delimiter="\t"):
+                if (row.get("status") or "") in E216CD_DONE:
+                    manifest[(row.get("case_id", ""), row.get("aug_variant", ""))] = row
+    anns = load_annotations("E216CDAUG")
+    records: list[CaseRecord] = []
+    with E216CD_ROLLOUT_TSV.open("r", encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            case_id = (row.get("case_id") or "").strip()
+            variant = (row.get("aug_variant") or "").strip()
+            if not case_id or variant not in ("trans0", "trans1", "trans2"):
+                continue
+            mrow = manifest.get((case_id, variant), {})
+            outdir_npz = normalize_path(row.get("outdir_npz", "") or mrow.get("outdir_npz", ""))
+            scene_src = row.get("scene_act", "") or mrow.get("scene_act", "")
+            trajectory = normalize_path(mrow.get("trajectory", ""))
+            config_act = ""
+            if outdir_npz:
+                p = Path(outdir_npz)
+                for cand in (p.with_name(p.stem + "_outdir_full") / "config_act.yaml",
+                             p.parent / "config_act.yaml"):
+                    if cand.is_file():
+                        config_act = str(cand)
+                        break
+            scene_xml = resolve_scene("E216CD", case_id, normalize_path(scene_src))
+            numeric_pass, failed, layer = _e215_funnel(row, is_orig=False)
+            records.append(
+                CaseRecord(
+                    exp_id="E216CDAUG", arm=variant, case_id=case_id, variant=variant,
+                    object_key=(row.get("object_key") or "").strip(),
+                    retarget_variant_id=(row.get("base_variant") or "omnirt_v1").strip(),
+                    numeric_release_pass=numeric_pass, numeric_failure_modes=failed,
+                    gates={g: _as_bool(row.get(g, "")) for g in GATE_FIELDS},
+                    status=f"{layer} · g={mrow.get('gravcomp', row.get('gravcomp', ''))}",
+                    outdir_npz=outdir_npz, scene_xml=scene_xml, config_act=config_act,
+                    trajectory=trajectory, video="",
+                    annotation=anns.get(_ann_id(case_id, variant), {}),
+                    metrics={c: _as_float(row.get(c, "")) for c in METRIC_COLUMNS},
+                )
+            )
+    return records
+
+
 def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
     out: list[CaseRecord] = []
     for exp in exps:
@@ -1214,6 +1286,8 @@ def build_index(exps: tuple[str, ...] = DEFAULT_EXPS) -> list[CaseRecord]:
             out.extend(_read_e215_aug())
         elif exp == "E216AUG":
             out.extend(_read_e216_aug())
+        elif exp == "E216CDAUG":
+            out.extend(_read_e216cd_aug())
         else:
             out.extend(_read_exp(exp))
     return out
@@ -1267,7 +1341,7 @@ def _check(exps: tuple[str, ...] = DEFAULT_EXPS) -> int:
                 # review set against the index itself rather than the summary count.
                 evaluated = len(recs)
                 npass = sum(1 for r in recs if r.numeric_release_pass)
-        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E208AUG", "E209ARM", "E215AUG", "E216AUG", "E205"):
+        elif exp in ("E204ARM", "E206ARM", "E207ARM", "E208AUG", "E209ARM", "E215AUG", "E216AUG", "E216CDAUG", "E205"):
             # arm sweeps (E204ARM 3-arm, E206ARM/E209ARM 2-arm, E207ARM 4-arm,
             # E208AUG 6-arm, E215AUG 3-arm) and the
             # single-arm E205 view have no `evaluated`-style summary.json; cross-check
