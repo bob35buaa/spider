@@ -280,6 +280,13 @@ def main():
     ap.add_argument("--hand-radius", type=float, default=0.25,
                     help="world half-size framed by the hand close-up (m); larger = more "
                          "box context so the hand-object contact relationship is visible")
+    # enlarge the robot+object in each panel: <1 moves the camera closer (zoom in).
+    ap.add_argument("--dist-scale", type=float, default=1.0,
+                    help="multiplier on the shared camera distance; <1 enlarges the subject")
+    ap.add_argument("--layout", choices=["grid", "row"], default="grid",
+                    help="grid = 2x2; row = single horizontal strip of 4 panels")
+    ap.add_argument("--suffix", default="",
+                    help="appended to output filenames so new figures don't overwrite old ones")
     args = ap.parse_args()
 
     scene = args.scene
@@ -322,7 +329,7 @@ def main():
             tgt = (rmean + ov.mean(0)) / 2.0
             allv = np.concatenate([g[0] for g in robot] + [ov], 0)
             radius = max(radius, float(np.linalg.norm(allv - tgt, axis=1).max()))
-    dist = radius / np.tan(yfov / 2.0) * 1.10
+    dist = radius / np.tan(yfov / 2.0) * 1.10 * args.dist_scale
     print(f"[fig] ref_i={ref_i} facing={facing:.1f} az={np.degrees(az):.1f} dist={dist:.2f}")
 
     # render every panel; keep full-res image + projected right-hand / foot pixels
@@ -404,12 +411,15 @@ def main():
 
     def assemble(with_zoom, with_annot, name):
         gap = max(6, cw // 90)
-        grid = Image.new("RGBA", (2 * cw + gap, 2 * ch + gap), (255, 255, 255, 255))
-        for r, rowm in enumerate(GRID):
+        cells = GRID if args.layout == "grid" else [[m for row in GRID for m in row]]
+        nrow, ncol = len(cells), len(cells[0])
+        grid = Image.new("RGBA", (ncol * cw + (ncol - 1) * gap, nrow * ch + (nrow - 1) * gap),
+                         (255, 255, 255, 255))
+        for r, rowm in enumerate(cells):
             for c, m in enumerate(rowm):
                 panel = label_panel(panels[m][0], m, with_zoom, with_annot)
                 grid.alpha_composite(panel, (c * (cw + gap), r * (ch + gap)))
-        out = out_dir / f"{name}.png"
+        out = out_dir / f"{name}{args.suffix}.png"
         grid.convert("RGB").save(out)
         print(f"[ok] {out}")
 
